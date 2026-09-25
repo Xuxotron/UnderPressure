@@ -117,6 +117,7 @@ namespace UnderPressure.PowerGrid
             var clone = UnityEngine.Object.Instantiate(source);
             clone.name = "Under Pressure Energy Campaign Hover";
             clone.hideFlags = HideFlags.HideAndDontSave;
+            UnityEngine.Object.DontDestroyOnLoad(clone);
             var native = clone.GetComponent<HoverMenuMarketing>();
             if (native == null) return null;
             var replacement = clone.AddComponent<HoverMenuEnergyCampaign>();
@@ -132,6 +133,7 @@ namespace UnderPressure.PowerGrid
             var clone = UnityEngine.Object.Instantiate(source);
             clone.name = "Under Pressure Energy Campaign Selection";
             clone.hideFlags = HideFlags.HideAndDontSave;
+            UnityEngine.Object.DontDestroyOnLoad(clone);
             var native = clone.GetComponent<SelectMenuMarketing>();
             if (native == null) return null;
             var replacement = clone.AddComponent<SelectMenuEnergyCampaign>();
