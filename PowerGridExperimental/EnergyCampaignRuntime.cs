@@ -300,6 +300,19 @@ namespace UnderPressure.PowerGrid
         }
     }
 
+    [HarmonyPatch(typeof(SelectMenuRoomItem), "Update")]
+    internal static class EnergyCampaignSelectMenuUpdatePatch
+    {
+        private static readonly MethodInfo InWorldUpdate = AccessTools.Method(typeof(InWorldMenuBase), "Update");
+
+        private static bool Prefix(SelectMenuRoomItem __instance)
+        {
+            if (!(__instance is SelectMenuEnergyCampaign)) return true;
+            InWorldUpdate?.Invoke(__instance, null);
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(StatusIconMarketingCampaign), "Update")]
     internal static class EnergyCampaignStatusIconUpdatePatch
     {
