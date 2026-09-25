@@ -80,6 +80,8 @@ namespace UnderPressure.PowerGrid
         private static readonly Dictionary<RoomItem, EnergyCampaignController> Controllers = new Dictionary<RoomItem, EnergyCampaignController>();
         private static GameObject _hoverPrefab;
         private static GameObject _selectPrefab;
+        internal static GameObject HoverPrefab => _hoverPrefab;
+        internal static GameObject SelectPrefab => _selectPrefab;
 
         internal static EnergyCampaignController GetController(RoomItem transformer)
         {
@@ -198,8 +200,8 @@ namespace UnderPressure.PowerGrid
             if (!EnergyRoomItems.IsTransformer(transformer)) return true;
 
             var activeMenu = transformer.GetActiveMenu();
-            if (activeMenu is SelectMenuBase) return false;
-            if (activeMenu is HoverMenuBase) activeMenu.CloseMenu();
+            if (activeMenu is SelectMenuEnergyCampaign) return false;
+            if (activeMenu != null) activeMenu.CloseMenu();
 
             var controller = EnergyCampaignRuntime.GetController(transformer);
             if (controller?.State == null || controller.State.Active == EnergyCampaignKind.None)
@@ -210,7 +212,34 @@ namespace UnderPressure.PowerGrid
 
             var hud = HudField.GetValue(__instance) as HUD;
             var level = LevelField.GetValue(__instance) as Level;
-            var menu = hud?.CreateMenu<SelectMenuEnergyCampaign>(transformer.Definition.SelectMenuPrefab);
+            var menu = hud?.CreateMenu<SelectMenuEnergyCampaign>(EnergyCampaignRuntime.SelectPrefab);
+            menu?.Setup(transformer, level);
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(BuildEvents), "CursorHoverStart")]
+    internal static class EnergyTransformerHoverPatch
+    {
+        private static readonly FieldInfo HudField = AccessTools.Field(typeof(BuildEvents), "_hud");
+        private static readonly FieldInfo LevelField = AccessTools.Field(typeof(BuildEvents), "_level");
+
+        private static bool Prefix(BuildEvents __instance, ICursorSelectable __0)
+        {
+            var transformer = __0 as RoomItem;
+            if (!EnergyRoomItems.IsTransformer(transformer)) return true;
+
+            var activeMenu = transformer.GetActiveMenu();
+            if (activeMenu is SelectMenuEnergyCampaign) return false;
+            if (activeMenu != null) activeMenu.CloseMenu();
+
+            var controller = EnergyCampaignRuntime.GetController(transformer);
+            if (controller?.State == null || controller.State.Active == EnergyCampaignKind.None)
+                return false;
+
+            var hud = HudField.GetValue(__instance) as HUD;
+            var level = LevelField.GetValue(__instance) as Level;
+            var menu = hud?.CreateMenu<HoverMenuEnergyCampaign>(EnergyCampaignRuntime.HoverPrefab);
             menu?.Setup(transformer, level);
             return false;
         }
