@@ -42,6 +42,7 @@ namespace UnderPressure.PowerGrid
 
             FindExisting(database.RoomItems);
             MarketingDesk = FindMarketingDesk(marketingRoom);
+            var campaignTable = FindCampaignMenuSource(database.RoomItems);
             InstallDeskMaintenanceInteraction();
             var filingCabinet = FindItem(database.RoomItems, "filing cabinet", "filing", "archivador");
             var pharmacyMachine = FindPharmacyMachine(rooms);
@@ -104,7 +105,6 @@ namespace UnderPressure.PowerGrid
                 Set(Transformer, "_maintenanceModifer", 0f);
                 DisableOwnInteractions(Transformer);
                 Set(Transformer, "_upgrades", Array.Empty<SharedInstance<RoomItemUpgradeDefinition>>());
-                EnergyCampaignRuntime.ConfigureTransformerDefinition(Transformer, MarketingDesk);
                 TransformerShared = CreateWrapper(Transformer, TransformerSharedId, "UnderPressure Transformer");
                 additions.Add(TransformerShared);
             }
@@ -113,7 +113,7 @@ namespace UnderPressure.PowerGrid
             // contributes the same amount of heat without imitating the effect.
             Set(Transformer, "_roomModifiers", radiator.RoomModifiers);
             Set(Transformer, "_ignoredByJanitors", true);
-            EnergyCampaignRuntime.ConfigureTransformerDefinition(Transformer, MarketingDesk);
+            EnergyCampaignRuntime.ConfigureTransformerDefinition(Transformer, campaignTable);
 
             ElectricityGameplay.Configure(database.RoomItems, rooms);
 
@@ -302,6 +302,19 @@ namespace UnderPressure.PowerGrid
                             return item;
                     }
             return null;
+        }
+
+        private static RoomItemDefinition FindCampaignMenuSource(SharedInstance<RoomItemDefinition>[] items)
+        {
+            foreach (var shared in items)
+            {
+                var item = shared?.Instance;
+                if (item?.HoverMenuPrefab != null && item.SelectMenuPrefab != null &&
+                    item.HoverMenuPrefab.GetComponent<HoverMenuMarketing>() != null &&
+                    item.SelectMenuPrefab.GetComponent<SelectMenuMarketing>() != null)
+                    return item;
+            }
+            throw new InvalidOperationException("No se ha encontrado la mesa original con los dos menus de campana.");
         }
 
         private static RoomItemDefinition FindPharmacyMachine(SharedInstance<RoomDefinition>[] rooms)

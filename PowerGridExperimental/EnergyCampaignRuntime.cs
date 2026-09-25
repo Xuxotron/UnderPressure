@@ -113,7 +113,8 @@ namespace UnderPressure.PowerGrid
 
         private static GameObject BuildHoverPrefab(GameObject source)
         {
-            if (source == null) return null;
+            if (source == null || source.GetComponent<HoverMenuMarketing>() == null)
+                throw new InvalidOperationException("La plantilla hover no contiene HoverMenuMarketing.");
             var clone = UnityEngine.Object.Instantiate(source);
             clone.name = "Under Pressure Energy Campaign Hover";
             clone.hideFlags = HideFlags.HideAndDontSave;
@@ -124,12 +125,14 @@ namespace UnderPressure.PowerGrid
             CopyBaseFields(native, replacement);
             replacement.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"));
             UnityEngine.Object.DestroyImmediate(native);
+            clone.SetActive(false);
             return clone;
         }
 
         private static GameObject BuildSelectPrefab(GameObject source)
         {
-            if (source == null) return null;
+            if (source == null || source.GetComponent<SelectMenuMarketing>() == null)
+                throw new InvalidOperationException("La plantilla select no contiene SelectMenuMarketing.");
             var clone = UnityEngine.Object.Instantiate(source);
             clone.name = "Under Pressure Energy Campaign Selection";
             clone.hideFlags = HideFlags.HideAndDontSave;
@@ -140,7 +143,36 @@ namespace UnderPressure.PowerGrid
             CopyBaseFields(native, replacement);
             replacement.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"), Get<DynamicButton>(native, "_cancelButton"));
             UnityEngine.Object.DestroyImmediate(native);
+            clone.SetActive(false);
             return clone;
+        }
+
+        internal static HoverMenuEnergyCampaign CreateHoverMenu(HUD hud)
+        {
+            if (hud == null || _hoverPrefab == null) return null;
+            _hoverPrefab.SetActive(true);
+            try
+            {
+                return hud.CreateMenu<HoverMenuEnergyCampaign>(_hoverPrefab);
+            }
+            finally
+            {
+                _hoverPrefab.SetActive(false);
+            }
+        }
+
+        internal static SelectMenuEnergyCampaign CreateSelectMenu(HUD hud)
+        {
+            if (hud == null || _selectPrefab == null) return null;
+            _selectPrefab.SetActive(true);
+            try
+            {
+                return hud.CreateMenu<SelectMenuEnergyCampaign>(_selectPrefab);
+            }
+            finally
+            {
+                _selectPrefab.SetActive(false);
+            }
         }
 
         internal static string CampaignName(EnergyCampaignKind kind)
@@ -173,11 +205,14 @@ namespace UnderPressure.PowerGrid
 
         private static void CopyBaseFields(object source, object destination)
         {
-            for (var type = source.GetType().BaseType; type != null; type = type.BaseType)
+            // Copy UI configuration only. Unity's native object pointer and runtime
+            // menu state must belong to the replacement component itself.
+            for (var type = source.GetType().BaseType; type != null && type != typeof(MonoBehaviour); type = type.BaseType)
                 foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
                 {
-                    var target = AccessTools.Field(destination.GetType(), field.Name);
-                    if (target != null && target.FieldType.IsAssignableFrom(field.FieldType)) target.SetValue(destination, field.GetValue(source));
+                    if (field.IsStatic || field.IsInitOnly || field.IsNotSerialized ||
+                        (!field.IsPublic && !field.IsDefined(typeof(SerializeField), false))) continue;
+                    field.SetValue(destination, field.GetValue(source));
                 }
         }
 
@@ -214,7 +249,7 @@ namespace UnderPressure.PowerGrid
 
             var hud = HudField.GetValue(__instance) as HUD;
             var level = LevelField.GetValue(__instance) as Level;
-            var menu = hud?.CreateMenu<SelectMenuEnergyCampaign>(EnergyCampaignRuntime.SelectPrefab);
+            var menu = EnergyCampaignRuntime.CreateSelectMenu(hud);
             menu?.Setup(transformer, level);
             return false;
         }
@@ -241,7 +276,7 @@ namespace UnderPressure.PowerGrid
 
             var hud = HudField.GetValue(__instance) as HUD;
             var level = LevelField.GetValue(__instance) as Level;
-            var menu = hud?.CreateMenu<HoverMenuEnergyCampaign>(EnergyCampaignRuntime.HoverPrefab);
+            var menu = EnergyCampaignRuntime.CreateHoverMenu(hud);
             menu?.Setup(transformer, level);
             return false;
         }
@@ -283,8 +318,8 @@ namespace UnderPressure.PowerGrid
 
     internal sealed class HoverMenuEnergyCampaign : HoverMenuRoomItem
     {
-        private TMP_Text _campaignName;
-        private ProgressBarMaskable _progressBar;
+        [SerializeField] private TMP_Text _campaignName;
+        [SerializeField] private ProgressBarMaskable _progressBar;
         private EnergyCampaignController _campaign;
         internal void Configure(TMP_Text name, ProgressBarMaskable progress) { _campaignName = name; _progressBar = progress; }
         public override void Setup(RoomItem item, Level level)
@@ -316,9 +351,9 @@ namespace UnderPressure.PowerGrid
 
     internal sealed class SelectMenuEnergyCampaign : SelectMenuRoomItem
     {
-        private TMP_Text _campaignName;
-        private ProgressBarMaskable _progressBar;
-        private DynamicButton _cancelButton;
+        [SerializeField] private TMP_Text _campaignName;
+        [SerializeField] private ProgressBarMaskable _progressBar;
+        [SerializeField] private DynamicButton _cancelButton;
         private EnergyCampaignController _campaign;
         internal void Configure(TMP_Text name, ProgressBarMaskable progress, DynamicButton cancel) { _campaignName = name; _progressBar = progress; _cancelButton = cancel; }
         public override void Setup(RoomItem item, Level level)
