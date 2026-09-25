@@ -186,6 +186,36 @@ namespace UnderPressure.PowerGrid
         private static void Prefix(RoomItem __instance) => EnergyCampaignRuntime.ReleaseController(__instance);
     }
 
+    [HarmonyPatch(typeof(BuildEvents), "CursorSelectObject")]
+    internal static class EnergyTransformerSelectionPatch
+    {
+        private static readonly FieldInfo HudField = AccessTools.Field(typeof(BuildEvents), "_hud");
+        private static readonly FieldInfo LevelField = AccessTools.Field(typeof(BuildEvents), "_level");
+
+        private static bool Prefix(BuildEvents __instance, ICursorSelectable __0)
+        {
+            var transformer = __0 as RoomItem;
+            if (!EnergyRoomItems.IsTransformer(transformer)) return true;
+
+            var activeMenu = transformer.GetActiveMenu();
+            if (activeMenu is SelectMenuBase) return false;
+            if (activeMenu is HoverMenuBase) activeMenu.CloseMenu();
+
+            var controller = EnergyCampaignRuntime.GetController(transformer);
+            if (controller?.State == null || controller.State.Active == EnergyCampaignKind.None)
+            {
+                EnergyCampaignMenu.Open(transformer.OwningRoom);
+                return false;
+            }
+
+            var hud = HudField.GetValue(__instance) as HUD;
+            var level = LevelField.GetValue(__instance) as Level;
+            var menu = hud?.CreateMenu<SelectMenuEnergyCampaign>(transformer.Definition.SelectMenuPrefab);
+            menu?.Setup(transformer, level);
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(StatusIconMarketingCampaign), "Update")]
     internal static class EnergyCampaignStatusIconUpdatePatch
     {
