@@ -1,0 +1,60 @@
+key,ru,pl,ko,zh-hans,zh-hant
+mod.tab,Под давлением,Pod presją,압박 모드,压力模式,壓力模式
+mod.skip_intro,Пропускать начальные экраны,Pomiń ekrany początkowe,시작 화면 건너뛰기,跳过启动画面,略過啟動畫面
+mod.disable_tutorial,Отключить обучение,Wyłącz samouczek,튜토리얼 끄기,关闭教程,關閉教學
+mod.show_room_effectiveness,Показывать эффективность кабинета,Pokaż skuteczność pomieszczeń,진료실 효율 표시,显示房间效率,顯示房間效率
+mod.imperfect_staff,Неидеальные сотрудники,Niedoskonali pracownicy,불완전한 직원,不完美员工,不完美員工
+mod.show_electricity,Показывать расход электричества,Pokaż zużycie energii,전력 사용량 표시,显示耗电量,顯示耗電量
+mod.shared_room_templates,Общие шаблоны комнат,Współdziel szablony pomieszczeń,방 템플릿 공유,共享房间模板,共享房間範本
+mod.section.gameplay,Сложность и экономика,Trudność i ekonomia,난이도 및 경제,难度与经济,難度與經濟
+mod.section.economy,Экономическая сложность,Trudność ekonomiczna,경제 난이도,经济难度,經濟難度
+mod.section.reputation,Сложность репутации,Trudność reputacji,평판 난이도,声誉难度,聲譽難度
+mod.section.expansion,Сложность развития,Trudność rozwoju,확장 난이도,扩张难度,擴張難度
+mod.adaptive,Адаптивно,Adaptacyjna,적응형,自适应,自適應
+mod.global_difficulty,Общая сложность,Ogólna trudność,전체 난이도,全局难度,全域難度
+mod.patient_arrival,Частота прибытия пациентов,Częstotliwość przybywania pacjentów,환자 방문 빈도,患者到访频率,病患到訪頻率
+mod.health_decay,Ухудшение здоровья пациентов,Pogorszenie zdrowia pacjentów,환자 건강 악화,患者健康恶化,病患健康惡化
+mod.diagnosis_chance,Сложность диагностики,Trudność diagnozy,진단 난이도,诊断难度,診斷難度
+mod.treatment_chance,Риск неудачи лечения,Ryzyko niepowodzenia leczenia,치료 실패 위험,治疗失败风险,治療失敗風險
+mod.machine_wear,Износ оборудования,Zużycie maszyn,기계 마모,机器损耗,機器損耗
+mod.staff_salaries,Зарплаты сотрудников,Wynagrodzenia pracowników,직원 급여,员工薪资,員工薪資
+mod.hunger_thirst,Усиление голода и жажды,Szybszy wzrost głodu i pragnienia,배고픔과 목마름 증가,饥饿与口渴加剧,飢餓與口渴加劇
+mod.happiness,Быстрое падение счастья,Szybszy spadek zadowolenia,행복도 감소 가속,幸福度下降加快,幸福度下降加快
+mod.hygiene,Повышенные требования к гигиене,Bardziej wymagająca higiena,위생 요구 증가,卫生要求提高,衛生要求提高
+mod.patient_income,Сложность дохода с пациента,Trudność przychodów od pacjentów,환자 수입 난이도,患者收入难度,病患收入難度
+mod.applicant_wait,Интервал между кандидатами,Czas między kandydatami,지원자 대기 시간,应聘者等待时间,應徵者等待時間
+mod.electricity_bill,Счёт за электричество,Rachunek za energię,전기 요금,电费,電費
+item.electricity_month,Электричество: {0} в месяц,Energia: {0} miesięcznie,전기: 월 {0},电力：每月 {0},電力：每月 {0}
+item.electricity_use,Электричество: {0} за использование,Energia: {0} za użycie,전기: 사용당 {0},电力：每次使用 {0},電力：每次使用 {0}
+graph.electricity_bill,Счёт за электричество,Rachunek za energię,전기 요금,电费,電費
+room.object_power,Диагностика {0} | Лечение {1},Diagnoza {0} | Leczenie {1},진단 {0} | 치료 {1},诊断 {0} | 治疗 {1},診斷 {0} | 治療 {1}
+room.staff_power,Диагностика: {0}   Лечение: {1},Diagnoza: {0}   Leczenie: {1},진단: {0}   치료: {1},诊断：{0}   治疗：{1},診斷：{0}   治療：{1}
+view.diagnosis,Точность диагноза,Pewność diagnozy,진단 확실성,诊断确定度,診斷確定度
+view.treatment,Вероятность излечения,Szansa wyleczenia,치료 성공 확률,治愈概率,治癒機率
+view.electricity,Электрические объекты,Urządzenia elektryczne,전기 사용 물품,用电物品,用電物品
+room.diagnosis_power,Диагностика,Diagnoza,진단,诊断,診斷
+room.treatment_power,Лечение,Leczenie,치료,治疗,治療
+
+tooltip.mod_enabled,Включает или отключает все функции мода.,Włącza lub wyłącza wszystkie funkcje moda.,모드의 모든 기능을 켜거나 끕니다.,启用或关闭本模组的所有功能。,啟用或關閉本模組的所有功能。
+tooltip.skip_intro,Пропускает логотипы и юридическое уведомление при запуске.,Pomija logotypy i informacje prawne przy uruchamianiu.,시작할 때 로고와 법적 고지를 건너뜁니다.,启动时跳过徽标和法律声明。,啟動時略過標誌和法律聲明。
+tooltip.disable_tutorial,Пропускает обучение и его начальные задачи.,Pomija samouczek i jego cele początkowe.,안내 튜토리얼과 초기 목표를 건너뜁니다.,跳过引导教程及其初始目标。,略過引導教學及其初始目標。
+tooltip.show_room_effectiveness,Показывает эффективность диагностики и лечения в кабинетах.,Pokazuje skuteczność diagnozy i leczenia w pomieszczeniach.,진료실에 진단 및 치료 효율을 표시합니다.,在房间面板中显示诊断与治疗效率。,在房間面板中顯示診斷與治療效率。
+tooltip.imperfect_staff,У новых кандидатов всегда две хорошие черты и одна плохая.,Nowi kandydaci mają zawsze dwie dobre cechy i jedną złą.,새 지원자는 항상 긍정 특성 2개와 부정 특성 1개를 가집니다.,新应聘者固定拥有两个正面特质和一个负面特质。,新應徵者固定擁有兩個正面特質和一個負面特質。
+tooltip.show_electricity,Показывает расходы на электричество у объектов и на графике финансов.,Pokazuje koszty energii obiektów i na wykresie finansowym.,물품과 재정 그래프에 전기 비용을 표시합니다.,在物品信息和财务图表中显示电力成本。,在物品資訊和財務圖表中顯示電力成本。
+tooltip.shared_room_templates,Показывает глобальные шаблоны во всех слотах и разрешает ещё заблокированные элементы.,Pokazuje globalne szablony we wszystkich slotach i zezwala na jeszcze zablokowane elementy.,모든 저장 슬롯에서 전역 방 템플릿과 잠긴 항목을 사용할 수 있게 합니다.,在所有存档槽中显示全局房间模板并允许尚未解锁的内容。,在所有存檔槽中顯示全域房間範本並允許尚未解鎖的內容。
+tooltip.global_difficulty,Устанавливает одинаковое значение всех модификаторов сложности.,Ustawia tę samą wartość wszystkich modyfikatorów trudności.,모든 난이도 조정값을 같은 값으로 설정합니다.,将所有难度调整项设为相同数值。,將所有難度調整項設為相同數值。
+tooltip.staff_salaries,Одинаково повышает зарплаты и ожидания сотрудников.,Zwiększa jednakowo płace i oczekiwania płacowe.,직원 급여와 기대 급여를 같은 비율로 높입니다.,同比提高员工薪资和薪资期望。,同比提高員工薪資和薪資期望。
+tooltip.patient_income,Одинаково снижает платежи пациентов и терпимость к ценам.,Zmniejsza jednakowo opłaty pacjentów i tolerancję cenową.,환자 지불액과 가격 허용치를 같은 비율로 낮춥니다.,同比降低患者付款和价格容忍度。,同比降低病患付款和價格容忍度。
+tooltip.applicant_wait,Увеличивает интервал между появлением новых кандидатов.,Wydłuża czas między pojawianiem się nowych kandydatów.,새 지원자가 나타나는 간격을 늘립니다.,延长新应聘者出现的间隔。,延長新應徵者出現的間隔。
+tooltip.electricity_bill,Увеличивает ежемесячный счёт за электричество.,Zwiększa miesięczny rachunek za energię.,월 전기 요금을 높입니다.,提高每月电费。,提高每月電費。
+tooltip.hunger_thirst,Ускоряет рост голода и жажды пациентов.,Przyspiesza narastanie głodu i pragnienia pacjentów.,환자의 배고픔과 목마름이 더 빨리 증가합니다.,使患者的饥饿与口渴上升得更快。,使病患的飢餓與口渴上升得更快。
+tooltip.happiness,Ускоряет снижение счастья пациентов.,Przyspiesza spadek zadowolenia pacjentów.,환자의 행복도가 더 빨리 감소합니다.,使患者的幸福度下降得更快。,使病患的幸福度下降得更快。
+tooltip.hygiene,Ускоряет ухудшение гигиены.,Przyspiesza pogarszanie higieny.,위생 수치가 더 빨리 감소합니다.,使卫生状况恶化得更快。,使衛生狀況惡化得更快。
+tooltip.health_decay,Ускоряет ухудшение здоровья пациентов.,Przyspiesza pogarszanie zdrowia pacjentów.,환자의 건강이 더 빨리 악화됩니다.,使患者的健康恶化得更快。,使病患的健康惡化得更快。
+tooltip.diagnosis_chance,Снижает эффективность диагностики.,Zmniejsza skuteczność diagnozy.,진단 효율을 낮춥니다.,降低诊断效率。,降低診斷效率。
+tooltip.treatment_chance,Снижает вероятность успешного лечения.,Zmniejsza szansę powodzenia leczenia.,치료 성공 확률을 낮춥니다.,降低治疗成功概率。,降低治療成功機率。
+tooltip.patient_arrival,Увеличивает частоту прибытия пациентов.,Zwiększa częstotliwość przybywania pacjentów.,환자 방문 빈도를 높입니다.,提高患者到访频率。,提高病患到訪頻率。
+tooltip.machine_wear,Ускоряет износ оборудования.,Przyspiesza zużycie maszyn.,기계가 더 빨리 마모됩니다.,使机器损耗得更快。,使機器損耗得更快。
+tooltip.adaptive.economy,Настраивает шкалы по доступным деньгам. +1% за каждые 10000 $ до +100%.,Ustawia suwaki według dostępnej gotówki. +1% za każde 10000 $ do +100%.,보유 자금에 따라 조정합니다. 10000 $마다 +1%이며 최대 +100%입니다.,按可用现金调整。每 10000 $ 增加 1%且最高为 +100%。,按可用現金調整。每 10000 $ 增加 1%且最高為 +100%。
+tooltip.adaptive.reputation,Настраивает шкалы по репутации. +1% за очко до +100%.,Ustawia suwaki według reputacji. +1% za punkt do +100%.,평판에 따라 조정합니다. 1점마다 +1%이며 최대 +100%입니다.,按声誉调整。每点增加 1%且最高为 +100%。,按聲譽調整。每點增加 1%且最高為 +100%。
+tooltip.adaptive.expansion,Настраивает шкалы по уровню больницы. +5% за уровень до +100%.,Ustawia suwaki według poziomu szpitala. +5% za poziom do +100%.,병원 레벨에 따라 조정합니다. 레벨당 +5%이며 최대 +100%입니다.,按医院等级调整。每级增加 5%且最高为 +100%。,按醫院等級調整。每級增加 5%且最高為 +100%。

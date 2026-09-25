@@ -1,0 +1,32 @@
+# Build output and caches
+bin/
+obj/
+.codex_bin/
+.codex_obj/
+.codex_bin*/
+.codex_obj*/
+**/bin/
+**/obj/
+.vs/
+.idea/
+
+# Game/runtime dependencies and packaged loaders
+Libs/
+BepInEx_win_x64_*/
+*.dll
+*.pdb
+*.exe
+
+# Saves, recovery copies and runtime data
+Recovery/
+*.sav
+*.csav
+*.upsav
+*.bak
+*.log
+
+# IDE and OS files
+*.user
+*.suo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1852 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Reflection;
+using BepInEx;
+using FullInspector.Generated.SharedInstance;
+using HarmonyLib;
+using TH20;
+using TH20.UI;
+using UnityEngine;
+using UnityEngine.UI;
+using Object = UnityEngine.Object;
+
+namespace UnderPressure.PowerGrid
+{
+    [HarmonyPatch(typeof(DataViewButtons), "Setup")]
+    internal static class PowerGridDataViewSetupPatch
+    {
+        private static void Postfix(DataViewButtons __instance, DataViewManager __0)
+        {
+            var prototype = __instance.GetComponent<PowerGridPrototype>();
+            if (prototype == null) prototype = __instance.gameObject.AddComponent<PowerGridPrototype>();
+            prototype.Initialise(__instance, __0);
+        }
+    }
+
+    [HarmonyPatch(typeof(CursorSelect), "CursorUpdate")]
+    internal static class PowerGridBlockWorldSelectionPatch
+    {
+        private static bool Prefix()
+        {
+            // The electrical plane owns the scene mouse while its data view is open.
+            // This prevents the normal selection cursor from grabbing room items or people
+            // underneath a cable drag.
+            return !PowerGridPrototype.BlocksWorldSelection;
+        }
+    }
+
+    internal sealed class PowerGridPrototype : MonoBehaviour
+    {
+        private const int ElectricityMode = 602;
+        private const float PowerTileSize = 1f;
+        private const float PanelAnimationSpeed = 7f;
+        // The drawer is a sibling of the native HUD, whose parent is scaled at runtime.
+        // These values produce the 95 px visible height from the supplied reference and
+        // leave enough horizontal body for both complete text buttons.
+        private const float ToolPanelHeight = 106f;
+        private const float ToolPanelMinimumWidth = 148f;
+        private const float ToolPanelOverlap = 20f;
+        private static readonly FieldInfo ManagerModeField = AccessTools.Field(typeof(DataViewManager), "_mode");
+        private static readonly FieldInfo LevelField = AccessTools.Field(typeof(DataViewManager), "_level");
+        private static readonly Type RoomItemLayoutType = AccessTools.TypeByName("TH20.Level+RoomItemLayout");
+        private static readonly MethodInfo BuildRoomMethod = AccessTools.Method(typeof(Level), "BuildRoom");
+        private static readonly FieldInfo QueuePositionTextField =
+            AccessTools.Field(typeof(StatusIconQueuePosition), "_queuePositionText");
+        private static readonly FieldInfo StatusIconHudElementField =
+            AccessTools.Field(typeof(StatusIcon), "_inWorldHUDElement");
+
+        private readonly HashSet<PowerCoord> _cells = new HashSet<PowerCoord>();
+        private readonly Dictionary<PowerCoord, GameObject> _cellVisuals = new Dictionary<PowerCoord, GameObject>();
+        private readonly HashSet<PowerCoord> _generatorCells = new HashSet<PowerCoord>();
+        private readonly Dictionary<PowerCoord, int> _tilePowerValue = new Dictionary<PowerCoord, int>();
+        private readonly List<GameObject> _previewVisuals = new List<GameObject>();
+        private readonly List<GameObject> _pathAreaVisuals = new List<GameObject>();
+        private readonly List<GameObject> _flowVisuals = new List<GameObject>();
+        private readonly List<ElectricityCostIndicator> _electricityCostIndicators =
+            new List<ElectricityCostIndicator>();
+        private readonly HashSet<PowerCoord> _hiddenDeletePreview = new HashSet<PowerCoord>();
+        private DataViewButtons _owner;
+        private DataViewManager _manager;
+        private Level _level;
+        private static readonly Color PoweredColor = new Color(1f, 0.61f, 0.20f, 1f);
+        private static readonly Color PreviewAddColor = new Color(1f, 0.76f, 0.30f, 1f);
+        private static readonly Color DisconnectedColor = new Color(0.32f, 0.35f, 0.38f, 1f);
+        private static readonly Color GeneratorColor = new Color(0.58f, 1f, 0.08f, 1f);
+        private static readonly Color UnpoweredObjectColor = new Color(0.27f, 0.29f, 0.32f, 1f);
+        private GameObject _visualRoot;
+        private GameObject _generatorAreaVisual;
+        private RectTransform _toolPanel;
+        private CanvasGroup _toolPanelCanvas;
+        private DynamicButton _addButton;
+        private DynamicButton _deleteButton;
+        private DynamicButton _flowButton;
+        private Vector3 _panelClosedPosition;
+        private Vector3 _panelOpenPosition;
+        private float _panelOpenAmount;
+        private bool _electricityViewActive;
+        private bool _paintEnabled;
+        private bool _removeMode;
+        private bool _showFlow;
+        private bool _dragging;
+        private PowerCoord _dragStart;
+        private PowerCoord _dragEnd;
+        private bool _initialised;
+        private bool _networkDirty;
+        private bool _energyStateInitialised;
+        private int _storedEnergy;
+        private int _energyCapacity;
+        private int _savedEnergyCapacity;
+        private float _dailyEnergyRemainder;
+        private RectTransform _energyHudRoot;
+        private RectTransform _energyHudFill;
+        private TooltipSpawner _energyHudTooltip;
+
+        private sealed class ElectricityCostIndicator
+        {
+            internal GameObject Root;
+            internal InWorldHUDElement HudElement;
+        }
+        private bool _eventsSubscribed;
+        private bool _restoringExtraState;
+
+        internal static PowerGridPrototype Active { get; private set; }
+
+        internal static bool BlocksWorldSelection { get; private set; }
+
+        internal void Initialise(DataViewButtons owner, DataViewManager manager)
+        {
+            _owner = owner;
+            _manager = manager;
+            _level = LevelField?.GetValue(manager) as Level;
+            if (_level == null)
+            {
+                PowerGridPlugin.Log.LogWarning("No se pudo obtener el nivel para el prototipo electrico.");
+                return;
+            }
+            Active = this;
+            if (_visualRoot == null)
+            {
+                _visualRoot = new GameObject("UnderPressurePowerFloorRoot");
+                _visualRoot.hideFlags = HideFlags.HideAndDontSave;
+            }
+            if (!_initialised)
+            {
+                _initialised = true;
+                LoadExtraState();
+                SubscribeBuildEvents();
+                _networkDirty = true;
+                LogDefinitions();
+            }
+        }
+
+        private void Update()
+        {
+            if (_manager == null || _level == null || ManagerModeField == null) return;
+            if (_networkDirty) RebuildNetwork();
+            if (_toolPanel == null) TryCreateToolPanel();
+            if (_energyHudRoot == null) TryCreateEnergyHud();
+            RefreshEnergyHud();
+            var active = Convert.ToInt32(ManagerModeField.GetValue(_manager)) == ElectricityMode;
+            BlocksWorldSelection = active && _paintEnabled;
+            if (active != _electricityViewActive)
+            {
+                _electricityViewActive = active;
+                SetCommittedVisualsActive(active);
+                if (_generatorAreaVisual != null) _generatorAreaVisual.SetActive(active);
+                SetFlowVisualsActive(active && _showFlow);
+                if (active)
+                {
+                    if (_pathAreaVisuals.Count == 0) RefreshPathAreaVisuals();
+                    else SetPathAreaVisualsActive(true);
+                    RefreshElectricItemColors();
+                }
+                else
+                {
+                    SetPathAreaVisualsActive(false);
+                    CancelPainting();
+                }
+            }
+            AnimateToolPanel(active);
+            if (!active || !_paintEnabled) return;
+
+            var input = _level.InputManager;
+            if (input == null || input.IsMouseOverGuiOrDraggingScrollbar()) return;
+            if (!_dragging && input.GetMouseDownOnScene((MouseButton)0))
+            {
+                _dragging = true;
+                _dragStart = PowerCoord.FromWorldPosition(_level.CursorManager.WorldPosition);
+                _dragEnd = _dragStart;
+                RefreshPreview();
+            }
+            else if (_dragging && input.GetMouse((MouseButton)0))
+            {
+                var current = PowerCoord.FromWorldPosition(_level.CursorManager.WorldPosition);
+                if (current != _dragEnd)
+                {
+                    _dragEnd = current;
+                    RefreshPreview();
+                }
+            }
+            if (_dragging && input.GetMouseUp((MouseButton)0)) CommitDrag();
+            if (_dragging && input.GetMouseDown((MouseButton)1)) CancelDrag();
+        }
+
+        private void SelectTool(bool remove)
+        {
+            if (_paintEnabled && _removeMode == remove)
+            {
+                CancelPainting();
+                PowerGridPlugin.Log.LogInfo(remove
+                    ? "Herramienta de borrar suelo electrico desactivada."
+                    : "Herramienta de anadir suelo electrico desactivada.");
+                return;
+            }
+            _paintEnabled = true;
+            _removeMode = remove;
+            CancelDrag();
+            RefreshToolButtonColors();
+            PowerGridPlugin.Log.LogInfo(remove ? "Herramienta de borrar suelo electrico seleccionada."
+                : "Herramienta de anadir suelo electrico seleccionada.");
+        }
+
+        private void ToggleFlowDisplay()
+        {
+            _showFlow = !_showFlow;
+            if (_showFlow) RebuildFlowVisuals();
+            else DestroyFlowVisuals();
+            RefreshToolButtonColors();
+            PowerGridPlugin.Log.LogInfo(_showFlow
+                ? "Diagnostico de direccion y distancia electrica activado."
+                : "Diagnostico de direccion y distancia electrica desactivado.");
+        }
+
+        private void CommitDrag()
+        {
+            foreach (var coord in EnumerateLine(_dragStart, _dragEnd))
+            {
+                if (_removeMode)
+                {
+                    if (!_cells.Remove(coord)) continue;
+                    if (_cellVisuals.TryGetValue(coord, out var oldVisual)) Object.Destroy(oldVisual);
+                    _cellVisuals.Remove(coord);
+                    continue;
+                }
+                if (!IsValidCell(coord) || !_cells.Add(coord)) continue;
+                var visual = CreateTileVisual(coord, PoweredColor, "PowerFloorCell");
+                visual.SetActive(_electricityViewActive);
+                _cellVisuals.Add(coord, visual);
+            }
+            // Deleted visuals have already disappeared during the drag. Do not restore
+            // the entries which have just been removed from the electrical plane.
+            _hiddenDeletePreview.Clear();
+            CancelDrag();
+            RebuildNetwork();
+            PowerGridPlugin.Log.LogInfo($"Plano electrico: {_cells.Count} cuartos de baldosa.");
+        }
+
+        private string GetExtraDataPath(int? saveSlotOverride = null, string levelIdOverride = null)
+        {
+            var saveSystem = _level?.App?.SaveSystem;
+            var slot = saveSlotOverride ?? (saveSystem == null ? -1 : saveSystem.CurrentSaveSlot);
+            var levelId = string.IsNullOrEmpty(levelIdOverride)
+                ? (string.IsNullOrEmpty(_level?.UniqueID) ? "unknown-level" : _level.UniqueID)
+                : levelIdOverride;
+            foreach (var invalid in Path.GetInvalidFileNameChars()) levelId = levelId.Replace(invalid, '_');
+            var directory = Path.Combine(Paths.ConfigPath, "UnderPressure", "Saves", "Slot" + (slot + 1));
+            Directory.CreateDirectory(directory);
+            return Path.Combine(directory, levelId + ".upsav");
+        }
+
+        private void LoadExtraState()
+        {
+            try
+            {
+                EnergyCampaignSystem.ResetLevel(_level?.UniqueID);
+                var path = GetExtraDataPath();
+                if (!File.Exists(path)) return;
+                var lines = File.ReadAllLines(path);
+                if (lines.Length == 0 || lines[0] != "UNDERPRESSURE_SAVE_1")
+                {
+                    PowerGridPlugin.Log.LogWarning("Formato de guardado complementario desconocido: " + path);
+                    return;
+                }
+                var roomRecords = new Dictionary<int, ExtraRoomRecord>();
+                var staffJobRecords = new Dictionary<int, bool>();
+                for (var index = 1; index < lines.Length; ++index)
+                {
+                    var parts = lines[index].Split(',');
+                    if (parts.Length == 3 && parts[0] == "C" && int.TryParse(parts[1], out var x) &&
+                        int.TryParse(parts[2], out var y))
+                    {
+                        AddLoadedCable(new PowerCoord(x, y));
+                        continue;
+                    }
+                    if (parts.Length == 9 && parts[0] == "R" &&
+                        int.TryParse(parts[1], out var roomIndex) && int.TryParse(parts[2], out var plot) &&
+                        int.TryParse(parts[3], out var anchorX) && int.TryParse(parts[4], out var anchorY) &&
+                        int.TryParse(parts[5], out var width) && int.TryParse(parts[6], out var height))
+                    {
+                        roomRecords[roomIndex] = new ExtraRoomRecord(plot, anchorX, anchorY, width, height,
+                            parts[7], parts[8]);
+                        continue;
+                    }
+                    if (parts.Length == 9 && parts[0] == "I" &&
+                        int.TryParse(parts[1], out var itemRoomIndex) && Guid.TryParse(parts[2], out var guid) &&
+                        TryFloat(parts[3], out var localX) && TryFloat(parts[4], out var localY) &&
+                        TryFloat(parts[5], out var localZ) && TryFloat(parts[6], out var rotation) &&
+                        TryFloat(parts[7], out var maintenance) && roomRecords.TryGetValue(itemRoomIndex, out var roomRecord))
+                        roomRecord.Items.Add(new ExtraItemRecord(guid, new Vector3(localX, localY, localZ), rotation,
+                            maintenance, parts[8]));
+                    if (parts.Length == 3 && parts[0] == "S" && int.TryParse(parts[1], out var staffId) &&
+                        (parts[2] == "0" || parts[2] == "1"))
+                        staffJobRecords[staffId] = parts[2] == "1";
+                    if ((parts.Length == 3 || parts.Length == 4) && parts[0] == "E" && int.TryParse(parts[1], out var stored) &&
+                        int.TryParse(parts[2], out var capacity))
+                    {
+                        _storedEnergy = Math.Max(0, stored);
+                        _savedEnergyCapacity = Math.Max(0, capacity);
+                        _dailyEnergyRemainder = parts.Length == 4 && TryFloat(parts[3], out var remainder)
+                            ? Mathf.Clamp(remainder, 0f, 0.999999f)
+                            : 0f;
+                        _energyStateInitialised = true;
+                    }
+                    if (parts.Length == 7 && parts[0] == "P" && int.TryParse(parts[1], out var campaignX) &&
+                        int.TryParse(parts[2], out var campaignY) && int.TryParse(parts[3], out var activeCampaign) &&
+                        TryFloat(parts[4], out var hackProgress) && TryFloat(parts[5], out var debugProgress) &&
+                        TryFloat(parts[6], out var climateProgress))
+                        EnergyCampaignSystem.Load(_level?.UniqueID, campaignX, campaignY, activeCampaign,
+                            hackProgress, debugProgress, climateProgress);
+                    if (parts.Length == 9 && parts[0] == "P" && int.TryParse(parts[1], out campaignX) &&
+                        int.TryParse(parts[2], out campaignY) && int.TryParse(parts[3], out activeCampaign) &&
+                        TryFloat(parts[4], out hackProgress) && TryFloat(parts[5], out debugProgress) &&
+                        TryFloat(parts[6], out climateProgress) && int.TryParse(parts[7], out var durationMonths) &&
+                        int.TryParse(parts[8], out var remainingDays))
+                        EnergyCampaignSystem.Load(_level?.UniqueID, campaignX, campaignY, activeCampaign,
+                            hackProgress, debugProgress, climateProgress, durationMonths, remainingDays);
+                }
+                RestoreEnergyRooms(roomRecords);
+                RestoreStaffJobAssignments(staffJobRecords);
+                PowerGridPlugin.Log.LogInfo($"Guardado complementario cargado: {_cells.Count} cables, " +
+                                            $"{roomRecords.Count} salas y {staffJobRecords.Count} marcados ({path}).");
+            }
+            catch (Exception exception)
+            {
+                PowerGridPlugin.Log.LogError("No se pudo cargar el fichero extra de la red electrica: " + exception);
+            }
+        }
+
+        private void AddLoadedCable(PowerCoord coord)
+        {
+            if (!_cells.Add(coord)) return;
+            var visual = CreateTileVisual(coord, PoweredColor, "PowerFloorCell");
+            visual.SetActive(false);
+            _cellVisuals.Add(coord, visual);
+        }
+
+        internal void SaveExtraState(bool rotateBackups = false, int? saveSlotOverride = null,
+            Level savedLevel = null, string levelIdOverride = null)
+        {
+            if (_restoringExtraState || _level?.WorldState == null) return;
+            if (savedLevel != null && !ReferenceEquals(_level, savedLevel))
+            {
+                PowerGridPlugin.Log.LogWarning("Omitido .upsav: el nivel guardado no coincide con el nivel electrico activo.");
+                return;
+            }
+            try
+            {
+                var path = GetExtraDataPath(saveSlotOverride, levelIdOverride);
+                var ordered = new List<PowerCoord>(_cells);
+                ordered.Sort((left, right) => left.X != right.X
+                    ? left.X.CompareTo(right.X)
+                    : left.Y.CompareTo(right.Y));
+                var lines = new List<string>(ordered.Count + 32) { "UNDERPRESSURE_SAVE_1" };
+                foreach (var coord in ordered) lines.Add("C," + coord.X + "," + coord.Y);
+                lines.Add("E," + _storedEnergy + "," + _energyCapacity + "," + F(_dailyEnergyRemainder));
+                SaveEnergyRooms(lines);
+                SaveStaffJobAssignments(lines);
+                EnergyCampaignSystem.AppendSave(lines, _level);
+                if (rotateBackups) RotateBackups(path);
+                var temporary = path + ".tmp";
+                File.WriteAllLines(temporary, lines.ToArray());
+                File.Copy(temporary, path, true);
+                File.Delete(temporary);
+                PowerGridPlugin.Log.LogInfo($"Guardado complementario escrito: {_cells.Count} cables, salas, objetos " +
+                                            $"y marcados de personal ({path}).");
+            }
+            catch (Exception exception)
+            {
+                PowerGridPlugin.Log.LogError("No se pudo guardar el fichero extra de la red electrica: " + exception);
+            }
+        }
+
+        private static void RotateBackups(string path)
+        {
+            // Match the native rolling layout: current, .2.bak ... .6.bak.
+            var oldest = path + ".6.bak";
+            if (File.Exists(oldest)) File.Delete(oldest);
+            for (var index = 5; index >= 2; --index)
+            {
+                var source = path + "." + index + ".bak";
+                if (!File.Exists(source)) continue;
+                File.Move(source, path + "." + (index + 1) + ".bak");
+            }
+            if (File.Exists(path)) File.Move(path, path + ".2.bak");
+        }
+
+        internal static void ApplyBackup(SaveSystem saveSystem, string levelId)
+        {
+            if (saveSystem == null || string.IsNullOrEmpty(levelId)) return;
+            foreach (var invalid in Path.GetInvalidFileNameChars()) levelId = levelId.Replace(invalid, '_');
+            var directory = Path.Combine(Paths.ConfigPath, "UnderPressure", "Saves",
+                "Slot" + (saveSystem.CurrentSaveSlot + 1));
+            var path = Path.Combine(directory, levelId + ".upsav");
+            var firstBackup = path + ".2.bak";
+            if (!File.Exists(firstBackup)) return;
+            if (File.Exists(path)) File.Delete(path);
+            File.Move(firstBackup, path);
+            for (var index = 3; index <= 6; ++index)
+            {
+                var source = path + "." + index + ".bak";
+                if (!File.Exists(source)) continue;
+                File.Move(source, path + "." + (index - 1) + ".bak");
+            }
+            PowerGridPlugin.Log.LogInfo("Restaurada tambien la copia complementaria de UnderPressure: " + path);
+        }
+
+        private void SaveEnergyRooms(List<string> lines)
+        {
+            var roomIndex = 0;
+            foreach (var room in _level.WorldState.AllRooms)
+            {
+                if (room == null || !PowerPlantRoomRegistry.IsPowerPlant(room.Definition) || room.FloorPlan == null)
+                    continue;
+                var plan = room.FloorPlan;
+                var tiles = plan.Tiles;
+                var plot = _level.WorldState.GetHospitalPlotFromRoom(room);
+                var plotIndex = plot == null ? -1 : _level.WorldState.GetHospitalPlotIndex(plot);
+                var bits = new char[tiles.Length];
+                var bitIndex = 0;
+                for (var x = 0; x < tiles.GetLength(0); ++x)
+                for (var y = 0; y < tiles.GetLength(1); ++y)
+                    bits[bitIndex++] = tiles[x, y] ? '1' : '0';
+                lines.Add(string.Join(",", "R", roomIndex, plotIndex, plan.Anchor.X, plan.Anchor.Y,
+                    tiles.GetLength(0), tiles.GetLength(1), new string(bits), "ENERGY"));
+                foreach (var item in plan.Items)
+                {
+                    var definition = item?.Definition as RoomItemDefinition;
+                    if (definition == null) continue;
+                    var maintenance = item.MaintenanceLevel == null ? -1f : item.MaintenanceLevel.Value();
+                    var position = item.LocalPosition;
+                    lines.Add(string.Join(",", "I", roomIndex, definition.GUID.ToString("D"),
+                        F(position.x), F(position.y), F(position.z), F(item.Rotation), F(maintenance),
+                        definition.DebugTag ?? string.Empty));
+                }
+                ++roomIndex;
+            }
+        }
+
+        private void SaveStaffJobAssignments(List<string> lines)
+        {
+            var staffMembers = _level?.CharacterManager?.StaffMembers;
+            if (staffMembers == null) return;
+            foreach (var staff in staffMembers)
+            {
+                if (staff == null || staff.Definition == null ||
+                    staff.Definition._type != StaffDefinition.Type.Janitor) continue;
+                var enabled = true;
+                var exclusions = staff.JobExclusions;
+                if (exclusions != null)
+                    foreach (var exclusion in exclusions)
+                        if (PowerPlantRoomRegistry.IsEnergyJobDescription(exclusion))
+                        {
+                            enabled = false;
+                            break;
+                        }
+                lines.Add("S," + staff.ID + "," + (enabled ? "1" : "0"));
+            }
+        }
+
+        private void RestoreStaffJobAssignments(Dictionary<int, bool> records)
+        {
+            if (records.Count == 0) return;
+            var staffMembers = _level?.CharacterManager?.StaffMembers;
+            if (staffMembers == null) return;
+            foreach (var staff in staffMembers)
+            {
+                if (staff == null || !records.TryGetValue(staff.ID, out var enabled) || staff.JobExclusions == null)
+                    continue;
+                for (var index = staff.JobExclusions.Count - 1; index >= 0; --index)
+                    if (PowerPlantRoomRegistry.IsEnergyJobDescription(staff.JobExclusions[index]))
+                        staff.JobExclusions.RemoveAt(index);
+                if (!enabled) staff.JobExclusions.Add(PowerPlantRoomRegistry.CreateEnergyJobDescription());
+            }
+        }
+
+        private void RestoreEnergyRooms(Dictionary<int, ExtraRoomRecord> records)
+        {
+            if (records.Count == 0 || PowerPlantRoomRegistry.Definition == null) return;
+            _restoringExtraState = true;
+            try
+            {
+                foreach (var record in records.Values)
+                {
+                    if (EnergyRoomExists(record.AnchorX, record.AnchorY)) continue;
+                    if (record.PlotIndex < 0 || record.PlotIndex >= _level.WorldState.HospitalPlots.Count) continue;
+                    var hospitalMap = _level.WorldState.HospitalPlots[record.PlotIndex].HospitalMap;
+                    if (hospitalMap == null) continue;
+                    var tiles = record.CreateTiles();
+                    if (tiles == null) continue;
+                    if (RoomItemLayoutType == null || BuildRoomMethod == null) continue;
+                    var wrappers = new List<SharedInstance_TH20TH20_RoomItemDefinition>();
+                    var layoutListType = typeof(List<>).MakeGenericType(RoomItemLayoutType);
+                    var layouts = (IList)Activator.CreateInstance(layoutListType);
+                    foreach (var item in record.Items)
+                    {
+                        var wrapper = FindItemWrapper(item.Guid, item.DebugTag);
+                        if (wrapper == null) continue;
+                        wrappers.Add(wrapper);
+                        var layout = Activator.CreateInstance(RoomItemLayoutType);
+                        AccessTools.Field(RoomItemLayoutType, "ID").SetValue(layout, wrapper.ID);
+                        AccessTools.Field(RoomItemLayoutType, "LocalPosition").SetValue(layout, item.LocalPosition);
+                        AccessTools.Field(RoomItemLayoutType, "Rotation").SetValue(layout, item.Rotation);
+                        layouts.Add(layout);
+                    }
+                    BuildRoomMethod.Invoke(_level, new object[]
+                    {
+                        PowerPlantRoomRegistry.Definition, hospitalMap,
+                        new GridCoord(record.AnchorX, record.AnchorY), tiles, layouts, wrappers.ToArray(),
+                        new List<RoomItemDefinitionUGC>()
+                    });
+                    ApplySavedMaintenance(record);
+                }
+                PowerGridPlugin.Log.LogInfo($"Salas de energia restauradas desde el fichero extra: {records.Count}.");
+            }
+            finally
+            {
+                _restoringExtraState = false;
+            }
+        }
+
+        private bool EnergyRoomExists(int anchorX, int anchorY)
+        {
+            foreach (var room in _level.WorldState.AllRooms)
+                if (room != null && PowerPlantRoomRegistry.IsPowerPlant(room.Definition) &&
+                    room.FloorPlan != null && room.FloorPlan.Anchor.X == anchorX && room.FloorPlan.Anchor.Y == anchorY)
+                    return true;
+            return false;
+        }
+
+        private SharedInstance_TH20TH20_RoomItemDefinition FindItemWrapper(Guid guid, string debugTag)
+        {
+            var entries = _level.App?.Metagame?.RoomItemDatabase?.Instance?.RoomItems;
+            if (entries == null) return null;
+            foreach (var entry in entries)
+            {
+                var definition = entry?.Instance;
+                if (definition == null || (definition.GUID != guid && definition.DebugTag != debugTag)) continue;
+                return entry as SharedInstance_TH20TH20_RoomItemDefinition;
+            }
+            return null;
+        }
+
+        private void ApplySavedMaintenance(ExtraRoomRecord record)
+        {
+            Room restored = null;
+            foreach (var room in _level.WorldState.AllRooms)
+                if (room != null && PowerPlantRoomRegistry.IsPowerPlant(room.Definition) && room.FloorPlan != null &&
+                    room.FloorPlan.Anchor.X == record.AnchorX && room.FloorPlan.Anchor.Y == record.AnchorY)
+                {
+                    restored = room;
+                    break;
+                }
+            if (restored?.FloorPlan?.Items == null) return;
+            foreach (var saved in record.Items)
+            {
+                if (saved.Maintenance < 0f) continue;
+                foreach (var item in restored.FloorPlan.Items)
+                {
+                    var definition = item?.Definition as RoomItemDefinition;
+                    if (definition == null || item.MaintenanceLevel == null || definition.GUID != saved.Guid ||
+                        Vector3.Distance(item.LocalPosition, saved.LocalPosition) > 0.01f) continue;
+                    item.MaintenanceLevel.SetValue(saved.Maintenance, true);
+                    break;
+                }
+            }
+        }
+
+        private static string F(float value) => value.ToString("R", CultureInfo.InvariantCulture);
+        private static bool TryFloat(string value, out float result) =>
+            float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+
+        private void RefreshPreview()
+        {
+            DestroyPreview();
+            RestoreDeletePreview();
+            foreach (var coord in EnumerateLine(_dragStart, _dragEnd))
+            {
+                if (!_removeMode && !IsValidCell(coord)) continue;
+                if (_removeMode && !_cells.Contains(coord)) continue;
+                if (_removeMode)
+                {
+                    if (_cellVisuals.TryGetValue(coord, out var visual) && visual != null)
+                    {
+                        visual.SetActive(false);
+                        _hiddenDeletePreview.Add(coord);
+                    }
+                    continue;
+                }
+                _previewVisuals.Add(CreateTileVisual(coord, PreviewAddColor, "PowerFloorPreview"));
+            }
+        }
+
+        private static IEnumerable<PowerCoord> EnumerateLine(PowerCoord start, PowerCoord end)
+        {
+            var deltaX = end.X - start.X;
+            var deltaY = end.Y - start.Y;
+            if (Math.Abs(deltaX) >= Math.Abs(deltaY))
+            {
+                var step = deltaX < 0 ? -1 : 1;
+                for (var x = start.X;; x += step)
+                {
+                    yield return new PowerCoord(x, start.Y);
+                    if (x == end.X) break;
+                }
+            }
+            else
+            {
+                var step = deltaY < 0 ? -1 : 1;
+                for (var y = start.Y;; y += step)
+                {
+                    yield return new PowerCoord(start.X, y);
+                    if (y == end.Y) break;
+                }
+            }
+        }
+
+        private bool IsValidCell(PowerCoord coord)
+        {
+            // Generator floor is a source plane, never a cable plane. Connection is only
+            // cardinally adjacent to the lime area.
+            if (_generatorCells.Contains(coord)) return false;
+            var roomCoord = GridCoord.WorldPositionToGridCoord(coord.ToWorldPosition());
+            foreach (var map in _level.WorldState.HospitalMaps)
+            {
+                if (map == null || map.Plot == null || !map.Plot.Bought) continue;
+                var validArea = map.IndoorOrPathState;
+                if (validArea == null) continue;
+                var localX = roomCoord.X - map.Anchor.X;
+                var localY = roomCoord.Y - map.Anchor.Y;
+                if (localX < 0 || localY < 0 || localX >= validArea.GetLength(0) ||
+                    localY >= validArea.GetLength(1)) continue;
+                // Every 1x1 quarter of an authored indoor/path cell is valid. Restricting
+                // this to a centreline created alternating holes between native 2x2 cells.
+                if (validArea[localX, localY]) return true;
+            }
+            return false;
+        }
+
+        private GameObject CreateTileVisual(PowerCoord coord, Color color, string objectName)
+        {
+            var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            tile.name = objectName;
+            tile.transform.SetParent(_visualRoot.transform, false);
+            tile.transform.position = coord.ToWorldPosition() + new Vector3(0f, 0.06f, 0f);
+            tile.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            tile.transform.localScale = Vector3.one * PowerTileSize * 0.90f;
+            var collider = tile.GetComponent<Collider>();
+            if (collider != null) Object.Destroy(collider);
+            var renderer = tile.GetComponent<Renderer>();
+            // Use the game's own data-view material. Generic Unlit materials are rendered
+            // white by the hospital desaturation pass.
+            renderer.sharedMaterial = _manager.ValueMaterial;
+            var properties = new MaterialPropertyBlock();
+            properties.SetColor("_Color", color);
+            renderer.SetPropertyBlock(properties);
+            return tile;
+        }
+
+        private void TryCreateToolPanel()
+        {
+            if (_owner == null) return;
+            var electricityTransform = FindChildByName(_owner.transform, "Under Pressure Electricity View");
+            var electricity = electricityTransform == null ? null : electricityTransform.GetComponent<DynamicButton>();
+            if (electricity == null) return;
+            var grid = electricity.transform.parent as RectTransform;
+            var tab = grid?.parent as RectTransform;
+            if (grid == null || tab == null) return;
+
+            DynamicButton nativeTextButton;
+            if (!TryFindNativeTextButton(out nativeTextButton)) return;
+
+            var layout = grid.GetComponent<GridLayoutGroup>();
+            var cellWidth = layout != null ? layout.cellSize.x : 42f;
+            var cellHeight = layout != null ? layout.cellSize.y : 42f;
+            var spacingY = layout != null ? layout.spacing.y : 3f;
+            var gridHeight = cellHeight * 3f + spacingY * 2f;
+            var nativeButtonRect = nativeTextButton.transform as RectTransform;
+            var nativeSize = nativeButtonRect == null ? new Vector2(cellWidth * 2.4f, cellHeight) : nativeButtonRect.rect.size;
+            var buttonWidth = nativeSize.x > 10f ? nativeSize.x : cellWidth * 2.4f;
+            var buttonHeight = nativeSize.y > 10f ? nativeSize.y : cellHeight;
+            var verticalMargin = 3f;
+            var horizontalMargin = 9f;
+            var gap = 3f;
+            var maximumButtonHeight = (ToolPanelHeight - verticalMargin * 2f - gap) * 0.5f;
+            var toolButtonScale = Mathf.Min(0.86f, maximumButtonHeight / buttonHeight);
+            var visualButtonWidth = buttonWidth * toolButtonScale;
+            var visualButtonHeight = buttonHeight * toolButtonScale;
+            var visualIconWidth = cellWidth * toolButtonScale;
+            var panelWidth = Mathf.Max(ToolPanelMinimumWidth,
+                visualButtonWidth + visualIconWidth + gap + horizontalMargin * 2f);
+            var panelHeight = ToolPanelHeight;
+            var panelObject = new GameObject("Under Pressure Electricity Tools", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));
+            _toolPanel = panelObject.GetComponent<RectTransform>();
+            _toolPanel.SetParent(tab, false);
+            _toolPanel.anchorMin = _toolPanel.anchorMax = new Vector2(0.5f, 0.5f);
+            _toolPanel.pivot = new Vector2(0.5f, 0.5f);
+            _toolPanel.sizeDelta = new Vector2(panelWidth, panelHeight);
+
+            var panelImage = panelObject.GetComponent<Image>();
+            var backgroundTransform = tab.Find("Background") as RectTransform;
+            var nativeBackground = backgroundTransform == null ? null : backgroundTransform.GetComponent<Image>();
+            if (nativeBackground != null)
+            {
+                panelImage.sprite = nativeBackground.sprite;
+                panelImage.material = nativeBackground.material;
+                panelImage.type = nativeBackground.type;
+                panelImage.color = nativeBackground.color;
+            }
+            else panelImage.color = new Color(0f, 0.72f, 0.79f, 0.98f);
+
+            // The icon grid does not end at the visible edge of the enlarged HUD. Anchor
+            // the drawer to the actual rendered background corners instead.
+            var backgroundRight = grid.localPosition.x + grid.rect.xMax;
+            var backgroundBottom = grid.localPosition.y + grid.rect.yMin;
+            if (backgroundTransform != null)
+            {
+                var corners = new Vector3[4];
+                backgroundTransform.GetWorldCorners(corners);
+                backgroundRight = tab.InverseTransformPoint(corners[2]).x;
+                backgroundBottom = tab.InverseTransformPoint(corners[0]).y;
+            }
+            // Reference measurement: the drawer and main HUD share the same bottom edge.
+            // Its 96-unit height therefore grows upwards from this common baseline.
+            var panelY = backgroundBottom + panelHeight * 0.5f;
+            _panelClosedPosition = new Vector3(backgroundRight - panelWidth * 0.5f - ToolPanelOverlap,
+                panelY, 0f);
+            // The reference begins behind the final part of the native HUD, not after it.
+            // Keep that shared origin fixed and grow the drawer only towards the right.
+            _panelOpenPosition = new Vector3(backgroundRight + panelWidth * 0.5f - ToolPanelOverlap,
+                panelY, 0f);
+            _toolPanel.localPosition = _panelClosedPosition;
+            _toolPanel.SetAsFirstSibling();
+            _toolPanelCanvas = panelObject.GetComponent<CanvasGroup>();
+            _toolPanelCanvas.interactable = false;
+            _toolPanelCanvas.blocksRaycasts = false;
+
+            // Keep both text buttons in one vertical column and place the square
+            // diagnostic toggle directly beside Add, as requested.
+            var buttonX = -(visualIconWidth + gap) * 0.5f;
+            var flowButtonX = (visualButtonWidth + gap) * 0.5f;
+            _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "Add Power Floor", "Añadir",
+                buttonX, (visualButtonHeight + gap) * 0.5f, buttonWidth, buttonHeight, toolButtonScale, false);
+            _deleteButton = CreateToolButton(nativeTextButton, panelObject.transform, "Delete Power Floor", "Eliminar",
+                buttonX, -(visualButtonHeight + gap) * 0.5f, buttonWidth, buttonHeight, toolButtonScale, true);
+            _flowButton = CreateFlowButton(electricity, panelObject.transform, flowButtonX,
+                (visualButtonHeight + gap) * 0.5f, cellWidth, cellHeight, toolButtonScale);
+            RefreshToolButtonColors();
+        }
+
+        private void TryCreateEnergyHud()
+        {
+            var menu = _level?.HUD?.FindMenu<TimeAndStatsMenu>(false);
+            var menuRect = menu == null ? null : menu.transform as RectTransform;
+            if (menuRect == null) return;
+
+            var sprite = FindSprite("T_UI_D7_ER_Map_Battery_Icon");
+            if (sprite == null)
+            {
+                PowerGridPlugin.Log.LogWarning("No se encontro T_UI_D7_ER_Map_Battery_Icon para el HUD electrico.");
+                return;
+            }
+
+            var root = new GameObject("UnderPressure Stored Energy", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            root.layer = menu.gameObject.layer;
+            _energyHudRoot = root.GetComponent<RectTransform>();
+            _energyHudRoot.SetParent(menuRect, false);
+            _energyHudRoot.anchorMin = _energyHudRoot.anchorMax = new Vector2(0f, 0.5f);
+            _energyHudRoot.pivot = new Vector2(1f, 0.5f);
+            _energyHudRoot.anchoredPosition = new Vector2(-5f, 0f);
+            _energyHudRoot.sizeDelta = new Vector2(94f, 142f);
+            var hitArea = root.GetComponent<Image>();
+            hitArea.color = Color.clear;
+            hitArea.raycastTarget = true;
+
+            var fillObject = new GameObject("Charge Fill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            _energyHudFill = fillObject.GetComponent<RectTransform>();
+            _energyHudFill.SetParent(_energyHudRoot, false);
+            _energyHudFill.anchorMin = new Vector2(0.25f, 0.22f);
+            _energyHudFill.anchorMax = new Vector2(0.75f, 0.22f);
+            _energyHudFill.offsetMin = _energyHudFill.offsetMax = Vector2.zero;
+            fillObject.GetComponent<Image>().raycastTarget = false;
+
+            var iconObject = new GameObject("Battery Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var iconRect = iconObject.GetComponent<RectTransform>();
+            iconRect.SetParent(_energyHudRoot, false);
+            iconRect.anchorMin = iconRect.anchorMax = new Vector2(0.5f, 0.5f);
+            iconRect.pivot = new Vector2(0.5f, 0.5f);
+            iconRect.anchoredPosition = Vector2.zero;
+            iconRect.sizeDelta = new Vector2(146f, 92f);
+            iconRect.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            var icon = iconObject.GetComponent<Image>();
+            icon.sprite = sprite;
+            icon.preserveAspect = true;
+            icon.color = Color.white;
+            icon.raycastTarget = false;
+
+            var genericTooltip = AccessTools.Field(typeof(TimeAndStatsMenu), "_yearTooltipSpawner")
+                ?.GetValue(menu) as TooltipSpawner;
+            _energyHudTooltip = root.AddComponent<TooltipSpawner>();
+            if (genericTooltip != null)
+            {
+                _energyHudTooltip.HoverTime = genericTooltip.HoverTime;
+                _energyHudTooltip.Prefab = genericTooltip.Prefab;
+            }
+            _energyHudTooltip.AnchorToMouse = true;
+            _energyHudTooltip.AnchorOffset = new Vector3(18f, 18f, 0f);
+            _energyHudTooltip.SetDataProvider(tooltip =>
+            {
+                var daily = ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f;
+                tooltip.Text = "<color=#202020>Total: " +
+                               _energyCapacity.ToString(CultureInfo.InvariantCulture) + "</color>" +
+                               "\n<color=#E04898>Actual: " +
+                               _storedEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
+                               "\n<color=#258DB8>Diario: " +
+                               daily.ToString("0.##", CultureInfo.InvariantCulture) + "</color>";
+            });
+            RefreshEnergyHud();
+        }
+
+        private static Sprite FindSprite(string name)
+        {
+            foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
+                if (sprite != null && string.Equals(sprite.name, name, StringComparison.OrdinalIgnoreCase))
+                    return sprite;
+            return null;
+        }
+
+        private void RefreshEnergyHud()
+        {
+            if (_energyHudRoot == null || _energyHudFill == null) return;
+            var ratio = _energyCapacity <= 0 ? 0f : Mathf.Clamp01((float)_storedEnergy / _energyCapacity);
+            const float bottom = 0.22f;
+            const float top = 0.80f;
+            const float height = top - bottom;
+            _energyHudFill.anchorMin = new Vector2(0.25f, bottom);
+            _energyHudFill.anchorMax = new Vector2(0.75f, bottom + height * ratio);
+            var image = _energyHudFill.GetComponent<Image>();
+            if (image == null) return;
+            if (ratio < 0.33f)
+                image.color = Color.Lerp(new Color(0.86f, 0.08f, 0.07f, 0.95f),
+                    new Color(1f, 0.45f, 0.04f, 0.95f), ratio / 0.33f);
+            else if (ratio < 0.66f)
+                image.color = Color.Lerp(new Color(1f, 0.45f, 0.04f, 0.95f),
+                    new Color(1f, 0.86f, 0.04f, 0.95f), (ratio - 0.33f) / 0.33f);
+            else
+                image.color = Color.Lerp(new Color(1f, 0.86f, 0.04f, 0.95f),
+                    new Color(0.20f, 0.92f, 0.23f, 0.95f), (ratio - 0.66f) / 0.34f);
+        }
+
+        private DynamicButton CreateToolButton(DynamicButton template, Transform parent, string name,
+            string caption, float x, float y, float width, float height, float scale, bool remove)
+        {
+            var button = Instantiate(template, parent);
+            button.name = name;
+            button.gameObject.SetActive(true);
+            button.onPrimaryDown.RemoveAllListeners();
+            button.onPrimaryDown.AddListener(() => SelectTool(remove));
+            button.onSecondaryDown.RemoveAllListeners();
+            button.interactable = true;
+            button.SetTMPText(caption);
+            var tooltip = button.GetComponentInChildren<TooltipSpawner>(true);
+            if (tooltip != null) tooltip.enabled = false;
+
+            var rect = button.transform as RectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(x, y);
+            rect.sizeDelta = new Vector2(width, height);
+            // Scale the complete native hierarchy uniformly; do not resize individual
+            // sprites or text, which would deform the original button design.
+            rect.localScale = Vector3.one * scale;
+            return button;
+        }
+
+        private DynamicButton CreateFlowButton(DynamicButton template, Transform parent, float x, float y,
+            float width, float height, float scale)
+        {
+            var button = Instantiate(template, parent);
+            button.name = "Power Flow Diagnostic";
+            button.gameObject.SetActive(true);
+            button.onPrimaryDown.RemoveAllListeners();
+            button.onPrimaryDown.AddListener(ToggleFlowDisplay);
+            button.onSecondaryDown.RemoveAllListeners();
+            button.interactable = true;
+            var tooltip = button.GetComponentInChildren<TooltipSpawner>(true);
+            if (tooltip != null) tooltip.enabled = false;
+            ReplaceButtonIcon(button, "status_can't_navigate", "status_cant_navigate");
+
+            var rect = button.transform as RectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(x, y);
+            rect.sizeDelta = new Vector2(width, height);
+            rect.localScale = Vector3.one * scale;
+            return button;
+        }
+
+        private static void ReplaceButtonIcon(DynamicButton button, params string[] spriteNames)
+        {
+            Sprite sprite = null;
+            foreach (var spriteName in spriteNames)
+            {
+                foreach (var candidate in Resources.FindObjectsOfTypeAll<Sprite>())
+                    if (candidate != null && candidate.name.Equals(spriteName,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        sprite = candidate;
+                        break;
+                    }
+                if (sprite != null) break;
+            }
+            if (sprite == null)
+            {
+                PowerGridPlugin.Log.LogWarning("No se encontro el icono status_can't_navigate.");
+                return;
+            }
+
+            var targetGraphic = button.targetGraphic;
+            Image best = null;
+            var bestArea = float.MaxValue;
+            foreach (var image in button.GetComponentsInChildren<Image>(true))
+            {
+                if (image == targetGraphic || image.sprite == null) continue;
+                var size = image.rectTransform.rect.size;
+                var area = Mathf.Abs(size.x * size.y);
+                if (area <= 1f || area >= bestArea) continue;
+                bestArea = area;
+                best = image;
+            }
+            if (best != null) best.sprite = sprite;
+        }
+
+        private static bool TryFindNativeTextButton(out DynamicButton button)
+        {
+            button = null;
+            foreach (var hubButtons in Resources.FindObjectsOfTypeAll<HubMenuButtons>())
+            {
+                if (hubButtons == null || hubButtons.RoomsButtonAnimator == null) continue;
+                button = hubButtons.RoomsButtonAnimator.Button;
+                if (button == null) continue;
+                return true;
+            }
+            return false;
+        }
+
+        private void AnimateToolPanel(bool open)
+        {
+            if (_toolPanel == null) return;
+            _panelOpenAmount = Mathf.MoveTowards(_panelOpenAmount, open ? 1f : 0f,
+                Time.unscaledDeltaTime * PanelAnimationSpeed);
+            var eased = _panelOpenAmount * _panelOpenAmount * (3f - 2f * _panelOpenAmount);
+            _toolPanel.localPosition = Vector3.Lerp(_panelClosedPosition, _panelOpenPosition, eased);
+            if (_toolPanelCanvas != null)
+            {
+                var usable = open && _panelOpenAmount > 0.92f;
+                _toolPanelCanvas.interactable = usable;
+                _toolPanelCanvas.blocksRaycasts = usable;
+            }
+        }
+
+        private void RefreshToolButtonColors()
+        {
+            SetToolButtonState(_addButton, _paintEnabled && !_removeMode);
+            SetToolButtonState(_deleteButton, _paintEnabled && _removeMode);
+            SetToolButtonState(_flowButton, _showFlow);
+        }
+
+        private static void SetToolButtonState(DynamicButton button, bool selected)
+        {
+            if (button == null) return;
+            var animator = button.GetComponent<ButtonAnimator>();
+            if (animator != null)
+                animator.CurrentState = selected ? ButtonAnimator.State.Selected : ButtonAnimator.State.Selectable;
+        }
+
+        private static Transform FindChildByName(Transform root, string wantedName)
+        {
+            foreach (var child in root.GetComponentsInChildren<Transform>(true))
+                if (child.name == wantedName) return child;
+            return null;
+        }
+
+        private void SubscribeBuildEvents()
+        {
+            if (_eventsSubscribed || _level?.BuildEvents == null) return;
+            var events = _level.BuildEvents;
+            events.OnRoomAdded += OnRoomChanged;
+            events.OnRoomRemoved += OnRoomChanged;
+            events.OnRoomDeleted += OnRoomChanged;
+            events.OnNewRoomBuiltEvent += OnRoomChanged;
+            events.OnRoomBuiltEvent += OnRoomBuilt;
+            events.OnAcceptRoom += OnRoomGeometryChanged;
+            events.OnRoomDragEnd += OnRoomGeometryChanged;
+            events.OnMoveRoomEnd += OnMoveRoomEnd;
+            events.OnRoomItemAdded += OnRoomItemChanged;
+            events.OnRoomItemRemoved += OnRoomItemChanged;
+            events.OnRoomItemRotated += OnRoomItemRotated;
+            _eventsSubscribed = true;
+        }
+
+        private void UnsubscribeBuildEvents()
+        {
+            if (!_eventsSubscribed || _level?.BuildEvents == null) return;
+            var events = _level.BuildEvents;
+            events.OnRoomAdded -= OnRoomChanged;
+            events.OnRoomRemoved -= OnRoomChanged;
+            events.OnRoomDeleted -= OnRoomChanged;
+            events.OnNewRoomBuiltEvent -= OnRoomChanged;
+            events.OnRoomBuiltEvent -= OnRoomBuilt;
+            events.OnAcceptRoom -= OnRoomGeometryChanged;
+            events.OnRoomDragEnd -= OnRoomGeometryChanged;
+            events.OnMoveRoomEnd -= OnMoveRoomEnd;
+            events.OnRoomItemAdded -= OnRoomItemChanged;
+            events.OnRoomItemRemoved -= OnRoomItemChanged;
+            events.OnRoomItemRotated -= OnRoomItemRotated;
+            _eventsSubscribed = false;
+        }
+
+        private void OnRoomChanged(Room room) { _networkDirty = true; }
+        private void OnRoomBuilt(Room room, int cost) { _networkDirty = true; }
+        private void OnRoomGeometryChanged() { _networkDirty = true; }
+        private void OnMoveRoomEnd(bool moved, Vector3 position) { _networkDirty = true; }
+        private void OnRoomItemChanged(RoomItem item, FloorPlan plan) { _networkDirty = true; }
+        private void OnRoomItemRotated(RoomItem item) { _networkDirty = true; }
+
+        private void RebuildNetwork()
+        {
+            _networkDirty = false;
+            RebuildGeneratorCells();
+            RefreshEnergyCapacity();
+
+            // A generator plane and a cable plane are mutually exclusive.
+            var overlaps = new List<PowerCoord>();
+            foreach (var coord in _cells)
+                if (_generatorCells.Contains(coord)) overlaps.Add(coord);
+            foreach (var coord in overlaps)
+            {
+                _cells.Remove(coord);
+                if (_cellVisuals.TryGetValue(coord, out var visual) && visual != null) Object.Destroy(visual);
+                _cellVisuals.Remove(coord);
+            }
+
+            _tilePowerValue.Clear();
+            foreach (var generator in _generatorCells) _tilePowerValue[generator] = 0;
+            foreach (var cable in _cells) _tilePowerValue[cable] = -1;
+
+            var queue = new Queue<PowerCoord>();
+            foreach (var cable in _cells)
+            {
+                if (!HasAdjacentGenerator(cable)) continue;
+                _tilePowerValue[cable] = 1;
+                queue.Enqueue(cable);
+            }
+
+            while (queue.Count != 0)
+            {
+                var current = queue.Dequeue();
+                var nextDistance = _tilePowerValue[current] + 1;
+                VisitCableNeighbour(new PowerCoord(current.X - 1, current.Y), nextDistance, queue);
+                VisitCableNeighbour(new PowerCoord(current.X + 1, current.Y), nextDistance, queue);
+                VisitCableNeighbour(new PowerCoord(current.X, current.Y - 1), nextDistance, queue);
+                VisitCableNeighbour(new PowerCoord(current.X, current.Y + 1), nextDistance, queue);
+            }
+
+            foreach (var pair in _cellVisuals)
+            {
+                var powered = _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
+                SetVisualColor(pair.Value, powered ? PoweredColor : DisconnectedColor);
+            }
+            RebuildGeneratorVisual();
+            if (_showFlow) RebuildFlowVisuals();
+            if (_electricityViewActive) RefreshElectricItemColors();
+            PowerGridPlugin.Log.LogInfo($"Red recalculada por evento: {_generatorCells.Count} generadores, " +
+                                        $"{_cells.Count} cables.");
+        }
+
+        private void RefreshEnergyCapacity()
+        {
+            var capacity = 0;
+            if (_level?.WorldState?.AllRooms != null)
+                foreach (var room in _level.WorldState.AllRooms)
+                {
+                    var items = room?.FloorPlan?.Items;
+                    if (items == null) continue;
+                    foreach (var item in items)
+                    {
+                        if (item?.Definition == null) continue;
+                        if (ReferenceEquals(item.Definition, EnergyRoomItems.Transformer)) capacity += 2000;
+                        else if (ReferenceEquals(item.Definition, EnergyRoomItems.Battery)) capacity += 1000;
+                    }
+                }
+
+            if (!_energyStateInitialised)
+            {
+                _storedEnergy = capacity;
+                _energyStateInitialised = true;
+            }
+            else
+            {
+                var previousCapacity = _energyCapacity > 0 ? _energyCapacity : _savedEnergyCapacity;
+                if (capacity > previousCapacity) _storedEnergy += capacity - previousCapacity;
+                _storedEnergy = Mathf.Clamp(_storedEnergy, 0, capacity);
+            }
+            _energyCapacity = capacity;
+            _savedEnergyCapacity = capacity;
+            RefreshEnergyHud();
+        }
+
+        internal static void ConsumePerUseEnergy(FinanceManager manager, int amount)
+        {
+            var active = Active;
+            if (active == null || amount <= 0 || !ReferenceEquals(active._level?.FinanceManager, manager)) return;
+            active._storedEnergy = Math.Max(0, active._storedEnergy - amount);
+            active.RefreshEnergyHud();
+            active.RefreshElectricItemColors();
+            PowerGridPlugin.Log.LogInfo("Carga electrica consumida por usos: " + amount +
+                                        "; restante " + active._storedEnergy + "/" + active._energyCapacity + ".");
+        }
+
+        internal static void ConsumeDailyMonthlyEnergy(Level level)
+        {
+            var active = Active;
+            if (active == null || level == null || !ReferenceEquals(active._level, level)) return;
+            var monthly = ElectricityGameplay.GetMonthlyEnergyDemand(level);
+            if (monthly <= 0) return;
+            active._dailyEnergyRemainder += monthly / 30f;
+            var amount = Mathf.FloorToInt(active._dailyEnergyRemainder + 0.000001f);
+            if (amount <= 0) return;
+            active._dailyEnergyRemainder -= amount;
+            active._storedEnergy = Math.Max(0, active._storedEnergy - amount);
+            active.RefreshEnergyHud();
+            active.RefreshElectricItemColors();
+            PowerGridPlugin.Log.LogInfo("Consumo electrico diario: " + amount +
+                                        "; restante " + active._storedEnergy + "/" + active._energyCapacity + ".");
+        }
+
+        private void RebuildGeneratorCells()
+        {
+            _generatorCells.Clear();
+            if (_level?.WorldState?.AllRooms == null) return;
+            foreach (var room in _level.WorldState.AllRooms)
+            {
+                if (room == null || !PowerPlantRoomRegistry.IsPowerPlant(room.Definition)) continue;
+                var plan = room.FloorPlan;
+                var tiles = plan?.Tiles;
+                if (tiles == null) continue;
+                for (var x = 0; x < tiles.GetLength(0); ++x)
+                for (var y = 0; y < tiles.GetLength(1); ++y)
+                {
+                    if (!tiles[x, y]) continue;
+                    var gridX = plan.Anchor.X + x;
+                    var gridY = plan.Anchor.Y + y;
+                    _generatorCells.Add(new PowerCoord(gridX * 2 - 1, gridY * 2 - 1));
+                    _generatorCells.Add(new PowerCoord(gridX * 2, gridY * 2 - 1));
+                    _generatorCells.Add(new PowerCoord(gridX * 2 - 1, gridY * 2));
+                    _generatorCells.Add(new PowerCoord(gridX * 2, gridY * 2));
+                }
+            }
+        }
+
+        private bool HasAdjacentGenerator(PowerCoord cable)
+        {
+            return _generatorCells.Contains(new PowerCoord(cable.X - 1, cable.Y)) ||
+                   _generatorCells.Contains(new PowerCoord(cable.X + 1, cable.Y)) ||
+                   _generatorCells.Contains(new PowerCoord(cable.X, cable.Y - 1)) ||
+                   _generatorCells.Contains(new PowerCoord(cable.X, cable.Y + 1));
+        }
+
+        private void VisitCableNeighbour(PowerCoord neighbour, int distance, Queue<PowerCoord> queue)
+        {
+            if (!_cells.Contains(neighbour)) return;
+            if (_tilePowerValue.TryGetValue(neighbour, out var previous) && previous >= 0 && previous <= distance)
+                return;
+            _tilePowerValue[neighbour] = distance;
+            queue.Enqueue(neighbour);
+        }
+
+        private void RebuildGeneratorVisual()
+        {
+            DestroyAreaVisual(ref _generatorAreaVisual);
+            if (_generatorCells.Count == 0) return;
+            _generatorAreaVisual = CreateAreaVisual(_generatorCells, "PowerGeneratorArea", GeneratorColor, 0.07f);
+            _generatorAreaVisual.SetActive(_electricityViewActive);
+        }
+
+        private static void SetVisualColor(GameObject visual, Color color)
+        {
+            if (visual == null) return;
+            var renderer = visual.GetComponent<Renderer>();
+            if (renderer == null) return;
+            var properties = new MaterialPropertyBlock();
+            properties.SetColor("_Color", color);
+            renderer.SetPropertyBlock(properties);
+        }
+
+        private void RebuildFlowVisuals()
+        {
+            DestroyFlowVisuals();
+            if (!_showFlow) return;
+            foreach (var pair in _tilePowerValue)
+            {
+                if (pair.Value <= 0 || !_cells.Contains(pair.Key)) continue;
+                _flowVisuals.Add(CreateDistanceLabel(pair.Key, pair.Value));
+                if (TryGetPowerPredecessor(pair.Key, pair.Value, out var predecessor))
+                    _flowVisuals.Add(CreateFlowArrow(pair.Key, predecessor));
+            }
+            RebuildElectricityCostIndicators();
+            SetFlowVisualsActive(_electricityViewActive);
+        }
+
+        private void RebuildElectricityCostIndicators()
+        {
+            DestroyElectricityCostIndicators();
+            if (_level?.WorldState?.AllRooms == null || _level.StatusIconManager == null || _level.HUD == null)
+                return;
+
+            var template = _level.StatusIconManager.GetStatusIcon(StatusIcon.Type.QueuePosition);
+            if (template == null) return;
+            foreach (var room in _level.WorldState.AllRooms)
+            {
+                var items = room?.FloorPlan?.Items;
+                if (items == null) continue;
+                foreach (var item in items)
+                {
+                    if (!ElectricityGameplay.TryGetDisplayCost(item, out var cost, out var kind) ||
+                        item?.Visual?.GameObject == null) continue;
+                    var indicator = CreateElectricityCostIndicator(template, item, cost, kind);
+                    if (indicator != null) _electricityCostIndicators.Add(indicator);
+                }
+            }
+        }
+
+        private ElectricityCostIndicator CreateElectricityCostIndicator(StatusIcon template, RoomItem item, int cost,
+            ElectricityGameplay.CostKind kind)
+        {
+            var root = Object.Instantiate(template.gameObject);
+            root.name = "UnderPressureElectricityCost_" + cost;
+            root.SetActive(false);
+
+            var queueIcon = root.GetComponent<StatusIconQueuePosition>();
+            var hudElement = StatusIconHudElementField?.GetValue(queueIcon) as InWorldHUDElement;
+            var text = QueuePositionTextField?.GetValue(queueIcon) as Component;
+            if (queueIcon == null || hudElement == null || text == null)
+            {
+                Object.Destroy(root);
+                return null;
+            }
+
+            // Keep the exact queue-number visual while disabling its patient-specific update.
+            queueIcon.enabled = false;
+            AccessTools.Property(text.GetType(), "text")?.SetValue(text, cost.ToString(), null);
+            var badgeColor = kind == ElectricityGameplay.CostKind.Monthly
+                ? new Color(0.42f, 0.84f, 1f, 1f)
+                : new Color(0.90f, 0.28f, 0.62f, 1f);
+            foreach (var image in root.GetComponentsInChildren<Image>(true))
+            {
+                if (image == null) continue;
+                image.color = badgeColor;
+            }
+            hudElement.Position = ElectricityIndicatorPosition(item);
+            hudElement.CanBeHidden = false;
+            _level.HUD.AddElement(hudElement, _level.HUD.InWorldTransform);
+            root.SetActive(_electricityViewActive && _showFlow);
+            return new ElectricityCostIndicator { Root = root, HudElement = hudElement };
+        }
+
+        private static Vector3 ElectricityIndicatorPosition(RoomItem item)
+        {
+            var center = item.WorldCenter;
+            var top = center.y + 1.05f;
+            var visual = item.Visual?.GameObject;
+            if (visual != null)
+                foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
+                    if (renderer != null) top = Mathf.Max(top, renderer.bounds.max.y + 0.08f);
+            var definition = item.Definition as RoomItemDefinition;
+            var prefabName = definition?.GetPrefab(0)?.name;
+            // RI_OfficeDesk contains imported helper geometry above the visible desk.
+            // Compensate that known bad bound without disturbing correctly imported objects.
+            if (string.Equals(prefabName, "RI_OfficeDesk", StringComparison.OrdinalIgnoreCase)) top -= 0.34f;
+            return new Vector3(center.x, top, center.z);
+        }
+
+        private bool TryGetPowerPredecessor(PowerCoord coord, int distance, out PowerCoord predecessor)
+        {
+            var neighbours = new[]
+            {
+                new PowerCoord(coord.X - 1, coord.Y), new PowerCoord(coord.X + 1, coord.Y),
+                new PowerCoord(coord.X, coord.Y - 1), new PowerCoord(coord.X, coord.Y + 1)
+            };
+            foreach (var neighbour in neighbours)
+            {
+                if (distance == 1 && _generatorCells.Contains(neighbour))
+                {
+                    predecessor = neighbour;
+                    return true;
+                }
+                if (distance > 1 && _tilePowerValue.TryGetValue(neighbour, out var value) &&
+                    value == distance - 1)
+                {
+                    predecessor = neighbour;
+                    return true;
+                }
+            }
+            predecessor = default(PowerCoord);
+            return false;
+        }
+
+        private GameObject CreateDistanceLabel(PowerCoord coord, int distance)
+        {
+            var label = new GameObject("PowerDistance_" + distance, typeof(TextMesh));
+            label.transform.SetParent(_visualRoot.transform, false);
+            label.transform.position = coord.ToWorldPosition() + new Vector3(0f, 0.145f, 0f);
+            // Hospital entrances and the normal level viewpoint are generally to the
+            // south, so orient diagnostics to be read from that side.
+            label.transform.rotation = Quaternion.Euler(90f, 180f, 0f);
+            var text = label.GetComponent<TextMesh>();
+            text.text = distance.ToString();
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            text.fontStyle = FontStyle.Bold;
+            text.fontSize = 64;
+            text.characterSize = 0.075f;
+            text.color = Color.white;
+            return label;
+        }
+
+        private GameObject CreateFlowArrow(PowerCoord coord, PowerCoord predecessor)
+        {
+            var directionX = coord.X - predecessor.X;
+            var directionY = coord.Y - predecessor.Y;
+            var arrow = new GameObject("PowerFlowArrow");
+            arrow.transform.SetParent(_visualRoot.transform, false);
+            arrow.transform.position = coord.ToWorldPosition() +
+                                       new Vector3(directionX * -0.40f, 0.14f, directionY * -0.40f);
+            arrow.transform.rotation = Quaternion.Euler(0f,
+                Mathf.Atan2(directionX, directionY) * Mathf.Rad2Deg, 0f);
+
+            const float fillOffset = -0.018f;
+            CreateArrowOutline(arrow.transform, 0.30f, 0.36f, 0.70f, fillOffset);
+            CreateArrowTriangle(arrow.transform, "PowerFlowArrowFill", 0.21f, 0.252f,
+                fillOffset, PoweredColor);
+            return arrow;
+        }
+
+        private void CreateArrowOutline(Transform parent, float width, float height, float innerScale,
+            float innerOffset)
+        {
+            var outline = new GameObject("PowerFlowArrowBorder", typeof(MeshFilter), typeof(MeshRenderer));
+            outline.transform.SetParent(parent, false);
+            var halfWidth = width * 0.5f;
+            var halfHeight = height * 0.5f;
+            var innerWidth = halfWidth * innerScale;
+            var innerHeight = halfHeight * innerScale;
+            var mesh = new Mesh { name = "UnderPressurePowerFlowArrowBorder" };
+            mesh.vertices = new[]
+            {
+                new Vector3(0f, 0f, halfHeight),
+                new Vector3(-halfWidth, 0f, -halfHeight),
+                new Vector3(halfWidth, 0f, -halfHeight),
+                new Vector3(0f, 0f, innerHeight + innerOffset),
+                new Vector3(-innerWidth, 0f, -innerHeight + innerOffset),
+                new Vector3(innerWidth, 0f, -innerHeight + innerOffset)
+            };
+            mesh.triangles = new[]
+            {
+                0, 4, 1, 0, 3, 4,
+                1, 4, 5, 1, 5, 2,
+                2, 5, 3, 2, 3, 0
+            };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            outline.GetComponent<MeshFilter>().sharedMesh = mesh;
+            SetArrowRendererColor(outline.GetComponent<MeshRenderer>(), Color.white);
+        }
+
+        private void CreateArrowTriangle(Transform parent, string name, float width, float height,
+            float longitudinalOffset, Color color)
+        {
+            var triangle = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
+            triangle.transform.SetParent(parent, false);
+            triangle.transform.localPosition = new Vector3(0f, 0f, longitudinalOffset);
+            var halfWidth = width * 0.5f;
+            var halfHeight = height * 0.5f;
+            var mesh = new Mesh { name = "UnderPressure" + name };
+            mesh.vertices = new[]
+            {
+                new Vector3(0f, 0f, halfHeight),
+                new Vector3(-halfWidth, 0f, -halfHeight),
+                new Vector3(halfWidth, 0f, -halfHeight)
+            };
+            // Clockwise from above, so the visible face and normal point upwards.
+            mesh.triangles = new[] { 0, 2, 1 };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            triangle.GetComponent<MeshFilter>().sharedMesh = mesh;
+            SetArrowRendererColor(triangle.GetComponent<MeshRenderer>(), color);
+        }
+
+        private void SetArrowRendererColor(MeshRenderer renderer, Color color)
+        {
+            renderer.sharedMaterial = _manager.ValueMaterial;
+            var properties = new MaterialPropertyBlock();
+            properties.SetColor("_Color", color);
+            renderer.SetPropertyBlock(properties);
+        }
+
+        private void SetFlowVisualsActive(bool active)
+        {
+            foreach (var visual in _flowVisuals)
+                if (visual != null) visual.SetActive(active);
+            foreach (var indicator in _electricityCostIndicators)
+                if (indicator?.Root != null) indicator.Root.SetActive(active);
+        }
+
+        private void DestroyFlowVisuals()
+        {
+            foreach (var visual in _flowVisuals)
+            {
+                if (visual == null) continue;
+                foreach (var filter in visual.GetComponentsInChildren<MeshFilter>(true))
+                    if (filter != null && filter.sharedMesh != null)
+                        Object.Destroy(filter.sharedMesh);
+                Object.Destroy(visual);
+            }
+            _flowVisuals.Clear();
+            DestroyElectricityCostIndicators();
+        }
+
+        private void DestroyElectricityCostIndicators()
+        {
+            foreach (var indicator in _electricityCostIndicators)
+            {
+                if (indicator == null) continue;
+                if (indicator.HudElement != null && _level?.HUD != null)
+                    _level.HUD.RemoveElement(indicator.HudElement);
+                if (indicator.Root != null) Object.Destroy(indicator.Root);
+            }
+            _electricityCostIndicators.Clear();
+        }
+
+        private void RefreshElectricItemColors()
+        {
+            if (!_electricityViewActive || _level?.WorldState?.AllRooms == null) return;
+            foreach (var room in _level.WorldState.AllRooms)
+            {
+                var items = room?.FloorPlan?.Items;
+                if (items == null) continue;
+                foreach (var item in items)
+                {
+                    if (item?.Visual == null || !ElectricityGameplay.RequiresPower(item)) continue;
+                    item.Visual.SetValueMaterial(IsItemPoweredInternal(item) ? PoweredColor : UnpoweredObjectColor);
+                    item.Visual.EnableValueMaterial();
+                }
+            }
+        }
+
+        internal static bool IsPowered(RoomItem item)
+        {
+            var active = Active;
+            // Before the level data-view has created the grid controller, retain native
+            // behaviour instead of temporarily disabling every electrical object.
+            return active == null || item == null || active.IsItemPoweredInternal(item);
+        }
+
+        private bool IsItemPoweredInternal(RoomItem item)
+        {
+            if (_storedEnergy <= 0) return false;
+            var center = PowerCoord.FromWorldPosition(item.WorldCenter);
+            for (var offsetX = -1; offsetX <= 1; ++offsetX)
+            for (var offsetY = -1; offsetY <= 1; ++offsetY)
+            {
+                // Exactly the eight surrounding 1x1 electrical cells. A cable directly
+                // under the object is deliberately excluded.
+                if (offsetX == 0 && offsetY == 0) continue;
+                var neighbour = new PowerCoord(center.X + offsetX, center.Y + offsetY);
+                if (_tilePowerValue.TryGetValue(neighbour, out var distance) && distance > 0)
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool ConsumesElectricity(IRoomItemDefinition definition)
+        {
+            if (definition == null) return false;
+            // The transformer is part of the future generation system. It neither
+            // consumes power nor participates in the powered/unpowered tinting.
+            if (EnergyRoomItems.IsTransformer(definition)) return false;
+            if (definition.EnergyCost(0) > 0) return true;
+            foreach (var modifier in definition.InteractionAttributeModifiers ??
+                     Array.Empty<InteractionAttributeModifier>())
+            {
+                if (modifier == null) continue;
+                var reference = AccessTools.Field(typeof(InteractionAttributeModifier),
+                    "_financeModifier")?.GetValue(modifier);
+                if (reference == null) continue;
+                var type = reference.GetType();
+                FieldInfo instanceField = null;
+                while (type != null && instanceField == null)
+                {
+                    instanceField = type.GetField("Instance", BindingFlags.Instance |
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                    type = type.BaseType;
+                }
+                var finance = instanceField?.GetValue(reference) as FinanceModifier;
+                if (finance != null && finance.EnergyCost > 0) return true;
+            }
+            return false;
+        }
+
+        private void SetCommittedVisualsActive(bool active)
+        {
+            foreach (var visual in _cellVisuals.Values)
+                if (visual != null) visual.SetActive(active);
+        }
+
+        private void RefreshPathAreaVisuals()
+        {
+            DestroyPathAreaVisuals();
+            var added = new HashSet<PowerCoord>();
+            foreach (var map in _level.WorldState.HospitalMaps)
+            {
+                if (map == null || map.Plot == null || !map.Plot.Bought) continue;
+                var indoorOrPath = map.IndoorOrPathState;
+                var indoor = map.IndoorState;
+                if (indoorOrPath == null) continue;
+                for (var x = 0; x < indoorOrPath.GetLength(0); ++x)
+                for (var y = 0; y < indoorOrPath.GetLength(1); ++y)
+                {
+                    if (!indoorOrPath[x, y]) continue;
+                    if (indoor != null && x < indoor.GetLength(0) && y < indoor.GetLength(1) && indoor[x, y])
+                        continue;
+                    var gridX = map.Anchor.X + x;
+                    var gridY = map.Anchor.Y + y;
+                    added.Add(new PowerCoord(gridX * 2 - 1, gridY * 2 - 1));
+                    added.Add(new PowerCoord(gridX * 2, gridY * 2 - 1));
+                    added.Add(new PowerCoord(gridX * 2 - 1, gridY * 2));
+                    added.Add(new PowerCoord(gridX * 2, gridY * 2));
+                }
+            }
+            if (added.Count != 0)
+                _pathAreaVisuals.Add(CreateAreaVisual(added, "PowerPathArea", Color.white, 0.04f));
+        }
+
+        private GameObject CreateAreaVisual(IEnumerable<PowerCoord> coords, string objectName, Color color,
+            float height)
+        {
+            var vertices = new List<Vector3>();
+            var triangles = new List<int>();
+            var uvs = new List<Vector2>();
+            var half = PowerTileSize * 0.45f;
+            foreach (var coord in coords)
+            {
+                var center = coord.ToWorldPosition() + new Vector3(0f, height, 0f);
+                var first = vertices.Count;
+                vertices.Add(center + new Vector3(-half, 0f, -half));
+                vertices.Add(center + new Vector3(-half, 0f, half));
+                vertices.Add(center + new Vector3(half, 0f, half));
+                vertices.Add(center + new Vector3(half, 0f, -half));
+                uvs.Add(new Vector2(0f, 0f));
+                uvs.Add(new Vector2(0f, 1f));
+                uvs.Add(new Vector2(1f, 1f));
+                uvs.Add(new Vector2(1f, 0f));
+                triangles.Add(first);
+                triangles.Add(first + 1);
+                triangles.Add(first + 2);
+                triangles.Add(first);
+                triangles.Add(first + 2);
+                triangles.Add(first + 3);
+            }
+
+            var area = new GameObject(objectName, typeof(MeshFilter), typeof(MeshRenderer));
+            area.transform.SetParent(_visualRoot.transform, false);
+            var mesh = new Mesh { name = "UnderPressurePathAreaMesh" };
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            area.GetComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = area.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = _manager.ValueMaterial;
+            var properties = new MaterialPropertyBlock();
+            properties.SetColor("_Color", color);
+            renderer.SetPropertyBlock(properties);
+            return area;
+        }
+
+        private void SetPathAreaVisualsActive(bool active)
+        {
+            foreach (var visual in _pathAreaVisuals)
+                if (visual != null) visual.SetActive(active);
+        }
+
+        private void DestroyPathAreaVisuals()
+        {
+            foreach (var visual in _pathAreaVisuals)
+                DestroyAreaVisual(visual);
+            _pathAreaVisuals.Clear();
+        }
+
+        private static void DestroyAreaVisual(GameObject visual)
+        {
+            if (visual == null) return;
+            var filter = visual.GetComponent<MeshFilter>();
+            if (filter != null && filter.sharedMesh != null) Object.Destroy(filter.sharedMesh);
+            Object.Destroy(visual);
+        }
+
+        private static void DestroyAreaVisual(ref GameObject visual)
+        {
+            DestroyAreaVisual(visual);
+            visual = null;
+        }
+
+        private void CancelPainting()
+        {
+            _paintEnabled = false;
+            CancelDrag();
+            RefreshToolButtonColors();
+        }
+
+        private void CancelDrag()
+        {
+            _dragging = false;
+            RestoreDeletePreview();
+            DestroyPreview();
+        }
+
+        private void RestoreDeletePreview()
+        {
+            foreach (var coord in _hiddenDeletePreview)
+                if (_cellVisuals.TryGetValue(coord, out var visual) && visual != null)
+                    visual.SetActive(_electricityViewActive);
+            _hiddenDeletePreview.Clear();
+        }
+
+        private void DestroyPreview()
+        {
+            foreach (var preview in _previewVisuals)
+                if (preview != null) Object.Destroy(preview);
+            _previewVisuals.Clear();
+        }
+
+        private void LogDefinitions()
+        {
+            var rooms = _level.WorldState.AvailableRooms;
+            var items = _level.WorldState.AvailableRoomItems;
+            var generators = 0;
+            foreach (var item in items)
+            {
+                if (!item.GeneratesElectricity) continue;
+                generators++;
+                PowerGridPlugin.Log.LogInfo($"Generador nativo: {item}");
+            }
+            PowerGridPlugin.Log.LogInfo($"Diagnostico P0: {rooms.Count} salas, {items.Count} objetos, {generators} generadores nativos.");
+        }
+
+        private void OnDestroy()
+        {
+            if (ReferenceEquals(Active, this)) Active = null;
+            BlocksWorldSelection = false;
+            UnsubscribeBuildEvents();
+            DestroyPreview();
+            DestroyFlowVisuals();
+            DestroyPathAreaVisuals();
+            DestroyAreaVisual(ref _generatorAreaVisual);
+            foreach (var visual in _cellVisuals.Values)
+                if (visual != null) Object.Destroy(visual);
+            _cellVisuals.Clear();
+            _generatorCells.Clear();
+            _tilePowerValue.Clear();
+            if (_toolPanel != null) Object.Destroy(_toolPanel.gameObject);
+            if (_energyHudRoot != null) Object.Destroy(_energyHudRoot.gameObject);
+            if (_visualRoot != null) Object.Destroy(_visualRoot);
+        }
+
+        private sealed class ExtraRoomRecord
+        {
+            internal readonly int PlotIndex;
+            internal readonly int AnchorX;
+            internal readonly int AnchorY;
+            private readonly int _width;
+            private readonly int _height;
+            private readonly string _tiles;
+            internal readonly List<ExtraItemRecord> Items = new List<ExtraItemRecord>();
+
+            internal ExtraRoomRecord(int plotIndex, int anchorX, int anchorY, int width, int height,
+                string tiles, string marker)
+            {
+                PlotIndex = plotIndex;
+                AnchorX = anchorX;
+                AnchorY = anchorY;
+                _width = width;
+                _height = height;
+                _tiles = tiles;
+            }
+
+            internal bool[,] CreateTiles()
+            {
+                if (_width <= 0 || _height <= 0 || string.IsNullOrEmpty(_tiles) ||
+                    _tiles.Length != _width * _height) return null;
+                var result = new bool[_width, _height];
+                var index = 0;
+                for (var x = 0; x < _width; ++x)
+                for (var y = 0; y < _height; ++y)
+                    result[x, y] = _tiles[index++] == '1';
+                return result;
+            }
+        }
+
+        private sealed class ExtraItemRecord
+        {
+            internal readonly Guid Guid;
+            internal readonly Vector3 LocalPosition;
+            internal readonly float Rotation;
+            internal readonly float Maintenance;
+            internal readonly string DebugTag;
+
+            internal ExtraItemRecord(Guid guid, Vector3 localPosition, float rotation, float maintenance,
+                string debugTag)
+            {
+                Guid = guid;
+                LocalPosition = localPosition;
+                Rotation = rotation;
+                Maintenance = maintenance;
+                DebugTag = debugTag;
+            }
+        }
+
+        private struct PowerCoord : IEquatable<PowerCoord>
+        {
+            internal readonly int X;
+            internal readonly int Y;
+            internal PowerCoord(int x, int y) { X = x; Y = y; }
+            internal static PowerCoord FromWorldPosition(Vector3 position)
+            {
+                return new PowerCoord(Mathf.FloorToInt(position.x), Mathf.FloorToInt(position.z));
+            }
+            internal Vector3 ToWorldPosition() { return new Vector3(X + 0.5f, 0f, Y + 0.5f); }
+            public bool Equals(PowerCoord other) { return X == other.X && Y == other.Y; }
+            public override bool Equals(object obj) { return obj is PowerCoord other && Equals(other); }
+            public override int GetHashCode() { return unchecked((X * 397) ^ Y); }
+            public static bool operator ==(PowerCoord left, PowerCoord right) { return left.Equals(right); }
+            public static bool operator !=(PowerCoord left, PowerCoord right) { return !left.Equals(right); }
+        }
+    }
+
+    internal static class PowerGridExtraStateSavePatch
+    {
+        private static void Postfix(SaveSystem __instance, SaveData __0, string __1, int __2, bool __result)
+        {
+            var levelId = string.IsNullOrEmpty(__1) ? __0?.Level?.UniqueID : __1;
+            PowerGridPlugin.Log.LogInfo("Resultado del guardado nativo del nivel " +
+                                        (levelId ?? "<desconocido>") + ": " + __result);
+            if (__result)
+                PowerGridPrototype.Active?.SaveExtraState(true, __2, __0?.Level, levelId);
+            else
+                LogSerializationFailure(__instance, __0);
+        }
+
+        private static void LogSerializationFailure(SaveSystem saveSystem, SaveData saveData)
+        {
+            try
+            {
+                var serializer = AccessTools.Field(typeof(SaveSystem), "_serializerLevel")
+                    ?.GetValue(saveSystem) as FullSerializerSave.fsSerializer;
+                if (serializer == null || saveData == null) return;
+                FullSerializerSave.fsData ignored;
+                var result = serializer.TrySerialize(saveData, out ignored);
+                PowerGridPlugin.Log.LogError("Diagnostico exacto del serializador de nivel: " +
+                                             result.FormattedMessages);
+            }
+            catch (Exception exception)
+            {
+                PowerGridPlugin.Log.LogError("No se pudo obtener el diagnostico detallado del serializador: " + exception);
+            }
+        }
+    }
+
+    internal static class PowerGridExtraStateBackupPatch
+    {
+        private static void Postfix(SaveSystem __instance, string __0)
+        {
+            try { PowerGridPrototype.ApplyBackup(__instance, __0); }
+            catch (Exception exception)
+            {
+                PowerGridPlugin.Log.LogError("No se pudo restaurar la copia complementaria: " + exception);
+            }
+        }
+    }
+
+    // SaveSystem's static constructor depends on paths initialised by App during
+    // MainScript.Start. Referencing SaveSystem from the initial PatchAll runs that
+    // constructor too early and prevents the main menu from starting. Install the
+    // two save hooks only after MainScript.Start has completed successfully.
+    [HarmonyPatch(typeof(MainScript), "Start")]
+    internal static class PowerGridLateSavePatchBootstrap
+    {
+        private static void Postfix()
+        {
+            PowerGridLateSavePatches.Install();
+        }
+    }
+
+    internal static class PowerGridLateSavePatches
+    {
+        private static bool _installed;
+
+        internal static void Install()
+        {
+            if (_installed) return;
+
+            try
+            {
+                var harmony = new Harmony(PowerGridPlugin.PluginGuid);
+                var saveMethod = AccessTools.Method(typeof(SaveSystem), "SaveLevelImplementationInner");
+                var backupMethod = AccessTools.Method(typeof(SaveSystem), "ApplyBackupLevelSave");
+                if (saveMethod == null || backupMethod == null)
+                    throw new MissingMethodException("No se encontraron los puntos de guardado nativos.");
+
+                harmony.Patch(
+                    saveMethod,
+                    postfix: new HarmonyMethod(AccessTools.Method(typeof(PowerGridExtraStateSavePatch), "Postfix")));
+                harmony.Patch(
+                    backupMethod,
+                    postfix: new HarmonyMethod(AccessTools.Method(typeof(PowerGridExtraStateBackupPatch), "Postfix")));
+
+                _installed = true;
+                PowerGridPlugin.Log.LogInfo("Parches tardios de guardado .upsav instalados.");
+            }
+            catch (Exception exception)
+            {
+                PowerGridPlugin.Log.LogError("No se pudieron instalar los parches tardios de guardado: " + exception);
+            }
+        }
+    }
+}
