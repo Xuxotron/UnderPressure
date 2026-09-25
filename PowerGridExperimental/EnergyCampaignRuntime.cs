@@ -124,7 +124,7 @@ namespace UnderPressure.PowerGrid
             var replacement = clone.AddComponent<HoverMenuEnergyCampaign>();
             CopyBaseFields(native, replacement);
             replacement.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"));
-            UnityEngine.Object.DestroyImmediate(native);
+            native.enabled = false;
             clone.SetActive(false);
             return clone;
         }
@@ -142,9 +142,27 @@ namespace UnderPressure.PowerGrid
             var replacement = clone.AddComponent<SelectMenuEnergyCampaign>();
             CopyBaseFields(native, replacement);
             replacement.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"), Get<DynamicButton>(native, "_cancelButton"));
-            UnityEngine.Object.DestroyImmediate(native);
+            native.enabled = false;
             clone.SetActive(false);
             return clone;
+        }
+
+        internal static void BindNativeLayout(HoverMenuEnergyCampaign menu)
+        {
+            var native = menu != null ? menu.GetComponent<HoverMenuMarketing>() : null;
+            if (native == null) throw new InvalidOperationException("Falta la plantilla nativa del hover de campana.");
+            native.enabled = false;
+            CopyBaseFields(native, menu);
+            menu.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"));
+        }
+
+        internal static void BindNativeLayout(SelectMenuEnergyCampaign menu)
+        {
+            var native = menu != null ? menu.GetComponent<SelectMenuMarketing>() : null;
+            if (native == null) throw new InvalidOperationException("Falta la plantilla nativa de seleccion de campana.");
+            native.enabled = false;
+            CopyBaseFields(native, menu);
+            menu.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"), Get<DynamicButton>(native, "_cancelButton"));
         }
 
         internal static HoverMenuEnergyCampaign CreateHoverMenu(HUD hud)
@@ -324,6 +342,7 @@ namespace UnderPressure.PowerGrid
         internal void Configure(TMP_Text name, ProgressBarMaskable progress) { _campaignName = name; _progressBar = progress; }
         public override void Setup(RoomItem item, Level level)
         {
+            EnergyCampaignRuntime.BindNativeLayout(this);
             base.Setup(item, level);
             _campaign = EnergyCampaignRuntime.GetController(item);
             if (_campaign == null || _campaign.State.Active == EnergyCampaignKind.None)
@@ -358,6 +377,7 @@ namespace UnderPressure.PowerGrid
         internal void Configure(TMP_Text name, ProgressBarMaskable progress, DynamicButton cancel) { _campaignName = name; _progressBar = progress; _cancelButton = cancel; }
         public override void Setup(RoomItem item, Level level)
         {
+            EnergyCampaignRuntime.BindNativeLayout(this);
             base.Setup(item, level);
             _campaign = EnergyCampaignRuntime.GetController(item);
             if (_campaign == null || _campaign.State.Active == EnergyCampaignKind.None)
