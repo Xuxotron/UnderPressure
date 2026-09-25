@@ -94,14 +94,13 @@ namespace UnderPressure.PowerGrid
                     TransformerGuid,
                     "UnderPressure/Item/Transformer/Name", "Transformador", "Transformer",
                     "UnderPressure/Item/Transformer/Description",
-                    "Transformador autónomo que se deteriora lentamente y necesita mantenimiento periódico.",
-                    "Autonomous transformer that deteriorates slowly and requires periodic maintenance.");
+                    "Transformador de la Sala de energía desde el que se gestionan las campañas eléctricas.",
+                    "Energy Room transformer used to manage electrical campaigns.");
                 Set(Transformer, "_singlePlace", true);
                 Set(Transformer, "_generatesElectricity", false);
                 Set(Transformer, "_energyCost", 0);
                 Set(Transformer, "_interactionAttributeModifiers", Array.Empty<InteractionAttributeModifier>());
                 Set(Transformer, "_ignoredByJanitors", true);
-                // Its wear is applied exactly once per in-game day by the timeline patch below.
                 Set(Transformer, "_maintenanceModifer", 0f);
                 DisableOwnInteractions(Transformer);
                 Set(Transformer, "_upgrades", Array.Empty<SharedInstance<RoomItemUpgradeDefinition>>());
@@ -409,24 +408,11 @@ namespace UnderPressure.PowerGrid
     }
 
     [HarmonyPatch(typeof(Level), "OnTimelineUpdated")]
-    internal static class EnergyTransformerDailyWearPatch
+    internal static class EnergyDailyConsumptionPatch
     {
-        internal const float DormantJanitorRepairPerDay = 3f;
-
         private static void Postfix(Level __instance)
         {
-            if (__instance?.WorldState == null || EnergyRoomItems.Transformer == null) return;
-            var transformers = __instance.WorldState.GetRoomItemsOfType(EnergyRoomItems.Transformer);
-            if (transformers == null) return;
-            foreach (var transformer in transformers)
-            {
-                if (transformer?.MaintenanceLevel == null || transformer.HasBeenDestroyed()) continue;
-                // Replacement is now the maintenance loop: the transformer cannot be repaired.
-                // Keep the former 3% capability as a named dormant value for later reuse.
-                var wearMultiplier = 1f - EnergyCampaignSystem.GetEffect(__instance,
-                    EnergyCampaignKind.DebugCodeWithAi);
-                transformer.MaintenanceLevel.Modify(0.5f * Mathf.Clamp01(wearMultiplier), 1f);
-            }
+            if (__instance?.WorldState == null) return;
             PowerGridPrototype.ConsumeDailyMonthlyEnergy(__instance);
         }
     }
