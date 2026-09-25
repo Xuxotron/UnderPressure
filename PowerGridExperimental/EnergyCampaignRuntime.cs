@@ -106,8 +106,6 @@ namespace UnderPressure.PowerGrid
             if (transformer == null || reference == null) return;
             if (_hoverPrefab == null) _hoverPrefab = BuildHoverPrefab(reference.HoverMenuPrefab);
             if (_selectPrefab == null) _selectPrefab = BuildSelectPrefab(reference.SelectMenuPrefab);
-            if (_hoverPrefab != null) Set(transformer, "_hoverMenuPrefab", _hoverPrefab);
-            if (_selectPrefab != null) Set(transformer, "_selectMenuPrefab", _selectPrefab);
             Set(transformer, "_showStatusIcon", true);
         }
 
@@ -232,6 +230,10 @@ namespace UnderPressure.PowerGrid
         {
             var transformer = __0 as RoomItem;
             if (!EnergyRoomItems.IsTransformer(transformer)) return true;
+
+            var controller = EnergyCampaignRuntime.GetController(transformer);
+            if (controller?.State == null || controller.State.Active == EnergyCampaignKind.None)
+                return true;
 
             var activeMenu = transformer.GetActiveMenu();
             if (activeMenu != null)
