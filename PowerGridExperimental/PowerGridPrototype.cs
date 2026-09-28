@@ -43,6 +43,7 @@ namespace UnderPressure.PowerGrid
     {
         private const int ElectricityMode = 602;
         private const int DefaultContractedEnergy = 2000;
+        private const int LowVoltageMaximumLength = 5;
         private const float PowerTileSize = 1f;
         private const float PanelAnimationSpeed = 7f;
         // The drawer is a sibling of the native HUD, whose parent is scaled at runtime.
@@ -62,8 +63,15 @@ namespace UnderPressure.PowerGrid
 
         private readonly HashSet<PowerCoord> _cells = new HashSet<PowerCoord>();
         private readonly Dictionary<PowerCoord, GameObject> _cellVisuals = new Dictionary<PowerCoord, GameObject>();
+        private readonly HashSet<PowerCoord> _lowVoltageCells = new HashSet<PowerCoord>();
+        private readonly Dictionary<PowerCoord, GameObject> _lowVoltageVisuals =
+            new Dictionary<PowerCoord, GameObject>();
         private readonly HashSet<PowerCoord> _generatorCells = new HashSet<PowerCoord>();
         private readonly Dictionary<PowerCoord, int> _tilePowerValue = new Dictionary<PowerCoord, int>();
+        private readonly HashSet<PowerCoord> _panelCells = new HashSet<PowerCoord>();
+        private readonly HashSet<PowerCoord> _activePanelCells = new HashSet<PowerCoord>();
+        private readonly Dictionary<PowerCoord, int> _lowVoltagePowerValue =
+            new Dictionary<PowerCoord, int>();
         private readonly List<GameObject> _previewVisuals = new List<GameObject>();
         private readonly List<GameObject> _pathAreaVisuals = new List<GameObject>();
         private readonly List<GameObject> _flowVisuals = new List<GameObject>();
@@ -75,22 +83,26 @@ namespace UnderPressure.PowerGrid
         private Level _level;
         private static readonly Color PoweredColor = new Color(1f, 0.61f, 0.20f, 1f);
         private static readonly Color PreviewAddColor = new Color(1f, 0.76f, 0.30f, 1f);
+        private static readonly Color LowVoltageColor = new Color(1f, 0.86f, 0.08f, 1f);
+        private static readonly Color LowVoltagePreviewColor = new Color(1f, 0.94f, 0.30f, 1f);
+        private static readonly Color PanelCellColor = new Color(0.08f, 0.78f, 0.72f, 1f);
         private static readonly Color DisconnectedColor = new Color(0.32f, 0.35f, 0.38f, 1f);
         private static readonly Color GeneratorColor = new Color(0.58f, 1f, 0.08f, 1f);
         private static readonly Color UnpoweredObjectColor = new Color(0.27f, 0.29f, 0.32f, 1f);
         private GameObject _visualRoot;
         private GameObject _generatorAreaVisual;
+        private GameObject _panelAreaVisual;
         private RectTransform _toolPanel;
         private CanvasGroup _toolPanelCanvas;
         private DynamicButton _addButton;
+        private DynamicButton _lowVoltageButton;
         private DynamicButton _deleteButton;
         private DynamicButton _flowButton;
         private Vector3 _panelClosedPosition;
         private Vector3 _panelOpenPosition;
         private float _panelOpenAmount;
         private bool _electricityViewActive;
-        private bool _paintEnabled;
-        private bool _removeMode;
+        private ToolMode _toolMode;
         private bool _showFlow;
         private bool _dragging;
         private PowerCoord _dragStart;
@@ -119,6 +131,14 @@ namespace UnderPressure.PowerGrid
         }
         private bool _eventsSubscribed;
         private bool _restoringExtraState;
+
+        private enum ToolMode
+        {
+            None,
+            HighVoltage,
+            LowVoltage,
+            Remove
+        }
 
         internal static PowerGridPrototype Active { get; private set; }
 
@@ -158,12 +178,13 @@ namespace UnderPressure.PowerGrid
             if (_energyHudRoot == null) TryCreateEnergyHud();
             RefreshEnergyHud();
             var active = Convert.ToInt32(ManagerModeField.GetValue(_manager)) == ElectricityMode;
-            BlocksWorldSelection = active && _paintEnabled;
+            BlocksWorldSelection = active && _toolMode != ToolMode.None;
             if (active != _electricityViewActive)
             {
                 _electricityViewActive = active;
                 SetCommittedVisualsActive(active);
                 if (_generatorAreaVisual != null) _generatorAreaVisual.SetActive(active);
+                if (_panelAreaVisual != null) _panelAreaVisual.SetActive(active);
                 SetFlowVisualsActive(active && _showFlow);
                 if (active)
                 {
@@ -178,7 +199,7 @@ namespace UnderPressure.PowerGrid
                 }
             }
             AnimateToolPanel(active);
-            if (!active || !_paintEnabled) return;
+            if (!active || _toolMode == ToolMode.None) return;
 
             var input = _level.InputManager;
             if (input == null || input.IsMouseOverGuiOrDraggingScrollbar()) return;
@@ -202,22 +223,18 @@ namespace UnderPressure.PowerGrid
             if (_dragging && input.GetMouseDown((MouseButton)1)) CancelDrag();
         }
 
-        private void SelectTool(bool remove)
+        private void SelectTool(ToolMode mode)
         {
-            if (_paintEnabled && _removeMode == remove)
+            if (_toolMode == mode)
             {
                 CancelPainting();
-                PowerGridPlugin.Log.LogInfo(remove
-                    ? "Herramienta de borrar suelo electrico desactivada."
-                    : "Herramienta de anadir suelo electrico desactivada.");
+                PowerGridPlugin.Log.LogInfo("Herramienta de cableado desactivada.");
                 return;
             }
-            _paintEnabled = true;
-            _removeMode = remove;
+            _toolMode = mode;
             CancelDrag();
             RefreshToolButtonColors();
-            PowerGridPlugin.Log.LogInfo(remove ? "Herramienta de borrar suelo electrico seleccionada."
-                : "Herramienta de anadir suelo electrico seleccionada.");
+            PowerGridPlugin.Log.LogInfo("Herramienta electrica seleccionada: " + mode + ".");
         }
 
         private void ToggleFlowDisplay()
@@ -233,26 +250,39 @@ namespace UnderPressure.PowerGrid
 
         private void CommitDrag()
         {
-            foreach (var coord in EnumerateLine(_dragStart, _dragEnd))
+            var planned = BuildValidDrag();
+            foreach (var coord in planned)
             {
-                if (_removeMode)
+                if (_toolMode == ToolMode.Remove)
                 {
-                    if (!_cells.Remove(coord)) continue;
-                    if (_cellVisuals.TryGetValue(coord, out var oldVisual)) Object.Destroy(oldVisual);
-                    _cellVisuals.Remove(coord);
+                    RemoveCable(coord, _cells, _cellVisuals);
+                    RemoveCable(coord, _lowVoltageCells, _lowVoltageVisuals);
                     continue;
                 }
-                if (!IsValidCell(coord) || !_cells.Add(coord)) continue;
-                var visual = CreateTileVisual(coord, PoweredColor, "PowerFloorCell");
+                var lowVoltage = _toolMode == ToolMode.LowVoltage;
+                var cells = lowVoltage ? _lowVoltageCells : _cells;
+                var visuals = lowVoltage ? _lowVoltageVisuals : _cellVisuals;
+                if (!cells.Add(coord)) continue;
+                var visual = CreateTileVisual(coord, lowVoltage ? LowVoltageColor : PoweredColor,
+                    lowVoltage ? "LowVoltageCell" : "HighVoltageCell");
                 visual.SetActive(_electricityViewActive);
-                _cellVisuals.Add(coord, visual);
+                visuals.Add(coord, visual);
             }
             // Deleted visuals have already disappeared during the drag. Do not restore
             // the entries which have just been removed from the electrical plane.
             _hiddenDeletePreview.Clear();
             CancelDrag();
             RebuildNetwork();
-            PowerGridPlugin.Log.LogInfo($"Plano electrico: {_cells.Count} cuartos de baldosa.");
+            PowerGridPlugin.Log.LogInfo($"Plano electrico: {_cells.Count} cables Alto V. y " +
+                                        $"{_lowVoltageCells.Count} cables Bajo V.");
+        }
+
+        private static void RemoveCable(PowerCoord coord, HashSet<PowerCoord> cells,
+            Dictionary<PowerCoord, GameObject> visuals)
+        {
+            if (!cells.Remove(coord)) return;
+            if (visuals.TryGetValue(coord, out var oldVisual)) Object.Destroy(oldVisual);
+            visuals.Remove(coord);
         }
 
         private string GetExtraDataPath(int? saveSlotOverride = null, string levelIdOverride = null)
@@ -294,7 +324,13 @@ namespace UnderPressure.PowerGrid
                     if (parts.Length == 3 && parts[0] == "C" && int.TryParse(parts[1], out var x) &&
                         int.TryParse(parts[2], out var y))
                     {
-                        AddLoadedCable(new PowerCoord(x, y));
+                        AddLoadedCable(new PowerCoord(x, y), false);
+                        continue;
+                    }
+                    if (parts.Length == 3 && parts[0] == "L" && int.TryParse(parts[1], out x) &&
+                        int.TryParse(parts[2], out y))
+                    {
+                        AddLoadedCable(new PowerCoord(x, y), true);
                         continue;
                     }
                     if (parts.Length == 9 && parts[0] == "R" &&
@@ -369,7 +405,8 @@ namespace UnderPressure.PowerGrid
                 RestoreEnergyRooms(roomRecords);
                 RestoreStaffJobAssignments(staffJobRecords);
                 global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
-                PowerGridPlugin.Log.LogInfo($"Guardado complementario cargado: {_cells.Count} cables, " +
+                PowerGridPlugin.Log.LogInfo($"Guardado complementario cargado: {_cells.Count} Alto V., " +
+                                            $"{_lowVoltageCells.Count} Bajo V., " +
                                             $"{roomRecords.Count} salas y {staffJobRecords.Count} marcados ({path}).");
             }
             catch (Exception exception)
@@ -378,12 +415,15 @@ namespace UnderPressure.PowerGrid
             }
         }
 
-        private void AddLoadedCable(PowerCoord coord)
+        private void AddLoadedCable(PowerCoord coord, bool lowVoltage)
         {
-            if (!_cells.Add(coord)) return;
-            var visual = CreateTileVisual(coord, PoweredColor, "PowerFloorCell");
+            var cells = lowVoltage ? _lowVoltageCells : _cells;
+            var visuals = lowVoltage ? _lowVoltageVisuals : _cellVisuals;
+            if (!cells.Add(coord)) return;
+            var visual = CreateTileVisual(coord, lowVoltage ? LowVoltageColor : PoweredColor,
+                lowVoltage ? "LowVoltageCell" : "HighVoltageCell");
             visual.SetActive(false);
-            _cellVisuals.Add(coord, visual);
+            visuals.Add(coord, visual);
         }
 
         internal void SaveExtraState(bool rotateBackups = false, int? saveSlotOverride = null,
@@ -402,8 +442,13 @@ namespace UnderPressure.PowerGrid
                 ordered.Sort((left, right) => left.X != right.X
                     ? left.X.CompareTo(right.X)
                     : left.Y.CompareTo(right.Y));
-                var lines = new List<string>(ordered.Count + 32) { "UNDERPRESSURE_SAVE_1" };
+                var orderedLow = new List<PowerCoord>(_lowVoltageCells);
+                orderedLow.Sort((left, right) => left.X != right.X
+                    ? left.X.CompareTo(right.X)
+                    : left.Y.CompareTo(right.Y));
+                var lines = new List<string>(ordered.Count + orderedLow.Count + 32) { "UNDERPRESSURE_SAVE_1" };
                 foreach (var coord in ordered) lines.Add("C," + coord.X + "," + coord.Y);
+                foreach (var coord in orderedLow) lines.Add("L," + coord.X + "," + coord.Y);
                 lines.Add("E2," + _contractedEnergy + "," + _batteryEnergy + "," + _lastDailyEnergy + "," +
                           _lastTaskEnergy + "," + _currentDayTaskEnergy + "," + F(_dailyEnergyRemainder) + "," +
                           (_gridOverloaded ? "1" : "0"));
@@ -416,7 +461,8 @@ namespace UnderPressure.PowerGrid
                 File.WriteAllLines(temporary, lines.ToArray());
                 File.Copy(temporary, path, true);
                 File.Delete(temporary);
-                PowerGridPlugin.Log.LogInfo($"Guardado complementario escrito: {_cells.Count} cables, salas, objetos " +
+                PowerGridPlugin.Log.LogInfo($"Guardado complementario escrito: {_cells.Count} Alto V., " +
+                                            $"{_lowVoltageCells.Count} Bajo V., salas, objetos " +
                                             $"y marcados de personal ({path}).");
             }
             catch (Exception exception)
@@ -628,22 +674,111 @@ namespace UnderPressure.PowerGrid
         {
             DestroyPreview();
             RestoreDeletePreview();
-            foreach (var coord in EnumerateLine(_dragStart, _dragEnd))
+            foreach (var coord in BuildValidDrag())
             {
-                if (!_removeMode && !IsValidCell(coord)) continue;
-                if (_removeMode && !_cells.Contains(coord)) continue;
-                if (_removeMode)
+                if (_toolMode == ToolMode.Remove)
                 {
                     if (_cellVisuals.TryGetValue(coord, out var visual) && visual != null)
                     {
                         visual.SetActive(false);
                         _hiddenDeletePreview.Add(coord);
                     }
+                    if (_lowVoltageVisuals.TryGetValue(coord, out visual) && visual != null)
+                    {
+                        visual.SetActive(false);
+                        _hiddenDeletePreview.Add(coord);
+                    }
                     continue;
                 }
-                _previewVisuals.Add(CreateTileVisual(coord, PreviewAddColor, "PowerFloorPreview"));
+                var lowVoltage = _toolMode == ToolMode.LowVoltage;
+                _previewVisuals.Add(CreateTileVisual(coord,
+                    lowVoltage ? LowVoltagePreviewColor : PreviewAddColor,
+                    lowVoltage ? "LowVoltagePreview" : "HighVoltagePreview"));
             }
         }
+
+        private List<PowerCoord> BuildValidDrag()
+        {
+            var result = new List<PowerCoord>();
+            if (_toolMode == ToolMode.Remove)
+            {
+                foreach (var coord in EnumerateLine(_dragStart, _dragEnd))
+                    if (_cells.Contains(coord) || _lowVoltageCells.Contains(coord)) result.Add(coord);
+                return result;
+            }
+
+            var lowVoltage = _toolMode == ToolMode.LowVoltage;
+            var existing = lowVoltage ? _lowVoltageCells : _cells;
+            var simulated = new HashSet<PowerCoord>(existing);
+            foreach (var coord in EnumerateLine(_dragStart, _dragEnd))
+            {
+                if (simulated.Contains(coord)) continue;
+                if (!CanAddCable(coord, simulated, lowVoltage)) break;
+                simulated.Add(coord);
+                result.Add(coord);
+            }
+            return result;
+        }
+
+        private bool CanAddCable(PowerCoord coord, HashSet<PowerCoord> sameVoltage, bool lowVoltage)
+        {
+            if (!IsValidCell(coord) || _cells.Contains(coord) || _lowVoltageCells.Contains(coord)) return false;
+            var neighbours = CardinalNeighbours(coord);
+            var attached = 0;
+            PowerCoord attachedTo = default(PowerCoord);
+            foreach (var neighbour in neighbours)
+            {
+                if (!sameVoltage.Contains(neighbour)) continue;
+                attached++;
+                attachedTo = neighbour;
+            }
+            // One predecessor creates a single path. Two neighbours would merge paths or
+            // close a loop; extending a cell which already has two neighbours would branch it.
+            if (attached > 1 || (attached == 1 && CountCardinalNeighbours(attachedTo, sameVoltage) >= 2))
+                return false;
+            if (!lowVoltage) return true;
+
+            var withCandidate = new HashSet<PowerCoord>(sameVoltage) { coord };
+            var distance = DistanceFromActivePanel(coord, withCandidate);
+            return distance > 0 && distance <= LowVoltageMaximumLength;
+        }
+
+        private int DistanceFromActivePanel(PowerCoord start, HashSet<PowerCoord> lowCells)
+        {
+            var visited = new HashSet<PowerCoord> { start };
+            var queue = new Queue<PowerCoord>();
+            var distances = new Queue<int>();
+            queue.Enqueue(start);
+            distances.Enqueue(1);
+            while (queue.Count != 0)
+            {
+                var current = queue.Dequeue();
+                var distance = distances.Dequeue();
+                foreach (var neighbour in CardinalNeighbours(current))
+                {
+                    if (_activePanelCells.Contains(neighbour)) return distance;
+                    if (distance >= LowVoltageMaximumLength || !lowCells.Contains(neighbour) ||
+                        !visited.Add(neighbour)) continue;
+                    queue.Enqueue(neighbour);
+                    distances.Enqueue(distance + 1);
+                }
+            }
+            return -1;
+        }
+
+        private static int CountCardinalNeighbours(PowerCoord coord, HashSet<PowerCoord> cells)
+        {
+            var count = 0;
+            foreach (var neighbour in CardinalNeighbours(coord))
+                if (cells.Contains(neighbour)) count++;
+            return count;
+        }
+
+        private static PowerCoord[] CardinalNeighbours(PowerCoord coord) => new[]
+        {
+            new PowerCoord(coord.X - 1, coord.Y), new PowerCoord(coord.X + 1, coord.Y),
+            new PowerCoord(coord.X, coord.Y - 1), new PowerCoord(coord.X, coord.Y + 1)
+        };
 
         private static IEnumerable<PowerCoord> EnumerateLine(PowerCoord start, PowerCoord end)
         {
@@ -673,7 +808,7 @@ namespace UnderPressure.PowerGrid
         {
             // Generator floor is a source plane, never a cable plane. Connection is only
             // cardinally adjacent to the lime area.
-            if (_generatorCells.Contains(coord)) return false;
+            if (_generatorCells.Contains(coord) || _panelCells.Contains(coord)) return false;
             var roomCoord = GridCoord.WorldPositionToGridCoord(coord.ToWorldPosition());
             foreach (var map in _level.WorldState.HospitalMaps)
             {
@@ -736,7 +871,7 @@ namespace UnderPressure.PowerGrid
             var verticalMargin = 3f;
             var horizontalMargin = 9f;
             var gap = 3f;
-            var maximumButtonHeight = (ToolPanelHeight - verticalMargin * 2f - gap) * 0.5f;
+            var maximumButtonHeight = (ToolPanelHeight - verticalMargin * 2f - gap * 2f) / 3f;
             var toolButtonScale = Mathf.Min(0.86f, maximumButtonHeight / buttonHeight);
             var visualButtonWidth = buttonWidth * toolButtonScale;
             var visualButtonHeight = buttonHeight * toolButtonScale;
@@ -790,16 +925,22 @@ namespace UnderPressure.PowerGrid
             _toolPanelCanvas.interactable = false;
             _toolPanelCanvas.blocksRaycasts = false;
 
-            // Keep both text buttons in one vertical column and place the square
-            // diagnostic toggle directly beside Add, as requested.
+            // Keep the three text buttons tightly packed in one column. The diagnostic
+            // toggle remains beside the high-voltage tool.
             var buttonX = -(visualIconWidth + gap) * 0.5f;
             var flowButtonX = (visualButtonWidth + gap) * 0.5f;
-            _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "Add Power Floor", "Añadir",
-                buttonX, (visualButtonHeight + gap) * 0.5f, buttonWidth, buttonHeight, toolButtonScale, false);
-            _deleteButton = CreateToolButton(nativeTextButton, panelObject.transform, "Delete Power Floor", "Eliminar",
-                buttonX, -(visualButtonHeight + gap) * 0.5f, buttonWidth, buttonHeight, toolButtonScale, true);
+            var rowStep = visualButtonHeight + gap;
+            var highCaption = EnergyLocalization.Create("UnderPressure/UI/HighVoltage", "Alto V.", "High V.").Translation;
+            var lowCaption = EnergyLocalization.Create("UnderPressure/UI/LowVoltage", "Bajo V.", "Low V.").Translation;
+            var deleteCaption = EnergyLocalization.Create("UnderPressure/UI/DeleteCable", "Eliminar", "Delete").Translation;
+            _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "High Voltage Cable", highCaption,
+                buttonX, rowStep, buttonWidth, buttonHeight, toolButtonScale, ToolMode.HighVoltage);
+            _lowVoltageButton = CreateToolButton(nativeTextButton, panelObject.transform, "Low Voltage Cable", lowCaption,
+                buttonX, 0f, buttonWidth, buttonHeight, toolButtonScale, ToolMode.LowVoltage);
+            _deleteButton = CreateToolButton(nativeTextButton, panelObject.transform, "Delete Power Cable", deleteCaption,
+                buttonX, -rowStep, buttonWidth, buttonHeight, toolButtonScale, ToolMode.Remove);
             _flowButton = CreateFlowButton(electricity, panelObject.transform, flowButtonX,
-                (visualButtonHeight + gap) * 0.5f, cellWidth, cellHeight, toolButtonScale);
+                rowStep, cellWidth, cellHeight, toolButtonScale);
             RefreshToolButtonColors();
         }
 
@@ -949,13 +1090,13 @@ namespace UnderPressure.PowerGrid
         }
 
         private DynamicButton CreateToolButton(DynamicButton template, Transform parent, string name,
-            string caption, float x, float y, float width, float height, float scale, bool remove)
+            string caption, float x, float y, float width, float height, float scale, ToolMode mode)
         {
             var button = Instantiate(template, parent);
             button.name = name;
             button.gameObject.SetActive(true);
             button.onPrimaryDown.RemoveAllListeners();
-            button.onPrimaryDown.AddListener(() => SelectTool(remove));
+            button.onPrimaryDown.AddListener(() => SelectTool(mode));
             button.onSecondaryDown.RemoveAllListeners();
             button.interactable = true;
             button.SetTMPText(caption);
@@ -1061,8 +1202,9 @@ namespace UnderPressure.PowerGrid
 
         private void RefreshToolButtonColors()
         {
-            SetToolButtonState(_addButton, _paintEnabled && !_removeMode);
-            SetToolButtonState(_deleteButton, _paintEnabled && _removeMode);
+            SetToolButtonState(_addButton, _toolMode == ToolMode.HighVoltage);
+            SetToolButtonState(_lowVoltageButton, _toolMode == ToolMode.LowVoltage);
+            SetToolButtonState(_deleteButton, _toolMode == ToolMode.Remove);
             SetToolButtonState(_flowButton, _showFlow);
         }
 
@@ -1128,18 +1270,21 @@ namespace UnderPressure.PowerGrid
         {
             _networkDirty = false;
             RebuildGeneratorCells();
+            RebuildPanelCells();
             RefreshEnergyCapacity();
 
-            // A generator plane and a cable plane are mutually exclusive.
+            // Sources, panels and both cable voltages are mutually exclusive per cell.
             var overlaps = new List<PowerCoord>();
             foreach (var coord in _cells)
-                if (_generatorCells.Contains(coord)) overlaps.Add(coord);
+                if (_generatorCells.Contains(coord) || _panelCells.Contains(coord)) overlaps.Add(coord);
             foreach (var coord in overlaps)
-            {
-                _cells.Remove(coord);
-                if (_cellVisuals.TryGetValue(coord, out var visual) && visual != null) Object.Destroy(visual);
-                _cellVisuals.Remove(coord);
-            }
+                RemoveCable(coord, _cells, _cellVisuals);
+            overlaps.Clear();
+            foreach (var coord in _lowVoltageCells)
+                if (_generatorCells.Contains(coord) || _panelCells.Contains(coord) || _cells.Contains(coord))
+                    overlaps.Add(coord);
+            foreach (var coord in overlaps)
+                RemoveCable(coord, _lowVoltageCells, _lowVoltageVisuals);
 
             _tilePowerValue.Clear();
             foreach (var generator in _generatorCells) _tilePowerValue[generator] = 0;
@@ -1157,10 +1302,35 @@ namespace UnderPressure.PowerGrid
             {
                 var current = queue.Dequeue();
                 var nextDistance = _tilePowerValue[current] + 1;
-                VisitCableNeighbour(new PowerCoord(current.X - 1, current.Y), nextDistance, queue);
-                VisitCableNeighbour(new PowerCoord(current.X + 1, current.Y), nextDistance, queue);
-                VisitCableNeighbour(new PowerCoord(current.X, current.Y - 1), nextDistance, queue);
-                VisitCableNeighbour(new PowerCoord(current.X, current.Y + 1), nextDistance, queue);
+                foreach (var neighbour in CardinalNeighbours(current))
+                    VisitCableNeighbour(neighbour, nextDistance, queue, _cells, _tilePowerValue, int.MaxValue);
+            }
+
+            _activePanelCells.Clear();
+            foreach (var panel in _panelCells)
+                foreach (var neighbour in CardinalNeighbours(panel))
+                    if (_tilePowerValue.TryGetValue(neighbour, out var highDistance) && highDistance > 0)
+                    {
+                        _activePanelCells.Add(panel);
+                        break;
+                    }
+
+            _lowVoltagePowerValue.Clear();
+            foreach (var cable in _lowVoltageCells) _lowVoltagePowerValue[cable] = -1;
+            queue.Clear();
+            foreach (var cable in _lowVoltageCells)
+            {
+                if (!HasAdjacentActivePanel(cable)) continue;
+                _lowVoltagePowerValue[cable] = 1;
+                queue.Enqueue(cable);
+            }
+            while (queue.Count != 0)
+            {
+                var current = queue.Dequeue();
+                var nextDistance = _lowVoltagePowerValue[current] + 1;
+                foreach (var neighbour in CardinalNeighbours(current))
+                    VisitCableNeighbour(neighbour, nextDistance, queue, _lowVoltageCells,
+                        _lowVoltagePowerValue, LowVoltageMaximumLength);
             }
 
             foreach (var pair in _cellVisuals)
@@ -1169,11 +1339,19 @@ namespace UnderPressure.PowerGrid
                               _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
                 SetVisualColor(pair.Value, powered ? PoweredColor : DisconnectedColor);
             }
+            foreach (var pair in _lowVoltageVisuals)
+            {
+                var powered = !_gridOverloaded &&
+                              _lowVoltagePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
+                SetVisualColor(pair.Value, powered ? LowVoltageColor : DisconnectedColor);
+            }
             RebuildGeneratorVisual();
+            RebuildPanelVisual();
             if (_showFlow) RebuildFlowVisuals();
             if (_electricityViewActive) RefreshElectricItemColors();
-            PowerGridPlugin.Log.LogInfo($"Red recalculada por evento: {_generatorCells.Count} generadores, " +
-                                        $"{_cells.Count} cables.");
+            PowerGridPlugin.Log.LogInfo($"Red recalculada: {_generatorCells.Count} fuentes, " +
+                                        $"{_activePanelCells.Count}/{_panelCells.Count} cuadros activos, " +
+                                        $"{_cells.Count} Alto V. y {_lowVoltageCells.Count} Bajo V.");
         }
 
         private void RefreshEnergyCapacity()
@@ -1242,6 +1420,13 @@ namespace UnderPressure.PowerGrid
                 var powered = !_gridOverloaded && _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
                 SetVisualColor(pair.Value, powered ? PoweredColor : DisconnectedColor);
             }
+            foreach (var pair in _lowVoltageVisuals)
+            {
+                if (pair.Value == null) continue;
+                var powered = !_gridOverloaded &&
+                              _lowVoltagePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
+                SetVisualColor(pair.Value, powered ? LowVoltageColor : DisconnectedColor);
+            }
         }
 
         private void RebuildGeneratorCells()
@@ -1276,13 +1461,35 @@ namespace UnderPressure.PowerGrid
                    _generatorCells.Contains(new PowerCoord(cable.X, cable.Y + 1));
         }
 
-        private void VisitCableNeighbour(PowerCoord neighbour, int distance, Queue<PowerCoord> queue)
+        private static void VisitCableNeighbour(PowerCoord neighbour, int distance, Queue<PowerCoord> queue,
+            HashSet<PowerCoord> cells, Dictionary<PowerCoord, int> powerValues, int maximumDistance)
         {
-            if (!_cells.Contains(neighbour)) return;
-            if (_tilePowerValue.TryGetValue(neighbour, out var previous) && previous >= 0 && previous <= distance)
+            if (distance > maximumDistance || !cells.Contains(neighbour)) return;
+            if (powerValues.TryGetValue(neighbour, out var previous) && previous >= 0 && previous <= distance)
                 return;
-            _tilePowerValue[neighbour] = distance;
+            powerValues[neighbour] = distance;
             queue.Enqueue(neighbour);
+        }
+
+        private bool HasAdjacentActivePanel(PowerCoord cable)
+        {
+            foreach (var neighbour in CardinalNeighbours(cable))
+                if (_activePanelCells.Contains(neighbour)) return true;
+            return false;
+        }
+
+        private void RebuildPanelCells()
+        {
+            _panelCells.Clear();
+            if (_level?.WorldState == null || EnergyRoomItems.Panel == null) return;
+            var panels = _level.WorldState.GetRoomItemsOfType(EnergyRoomItems.Panel);
+            if (panels == null) return;
+            foreach (var panel in panels)
+            {
+                if (!EnergyRoomItems.IsPanel(panel)) continue;
+                var facing = panel.GridRotation.DirectionVector();
+                _panelCells.Add(PowerCoord.FromWorldPosition(panel.WorldPosition + facing * 0.5f));
+            }
         }
 
         private void RebuildGeneratorVisual()
@@ -1291,6 +1498,14 @@ namespace UnderPressure.PowerGrid
             if (_generatorCells.Count == 0) return;
             _generatorAreaVisual = CreateAreaVisual(_generatorCells, "PowerGeneratorArea", GeneratorColor, 0.07f);
             _generatorAreaVisual.SetActive(_electricityViewActive);
+        }
+
+        private void RebuildPanelVisual()
+        {
+            DestroyAreaVisual(ref _panelAreaVisual);
+            if (_panelCells.Count == 0) return;
+            _panelAreaVisual = CreateAreaVisual(_panelCells, "ElectricalPanelCells", PanelCellColor, 0.08f);
+            _panelAreaVisual.SetActive(_electricityViewActive);
         }
 
         private static void SetVisualColor(GameObject visual, Color color)
@@ -1311,8 +1526,17 @@ namespace UnderPressure.PowerGrid
             {
                 if (pair.Value <= 0 || !_cells.Contains(pair.Key)) continue;
                 _flowVisuals.Add(CreateDistanceLabel(pair.Key, pair.Value));
-                if (TryGetPowerPredecessor(pair.Key, pair.Value, out var predecessor))
-                    _flowVisuals.Add(CreateFlowArrow(pair.Key, predecessor));
+                if (TryGetPowerPredecessor(pair.Key, pair.Value, _tilePowerValue, _generatorCells,
+                        out var predecessor))
+                    _flowVisuals.Add(CreateFlowArrow(pair.Key, predecessor, PoweredColor));
+            }
+            foreach (var pair in _lowVoltagePowerValue)
+            {
+                if (pair.Value <= 0 || !_lowVoltageCells.Contains(pair.Key)) continue;
+                _flowVisuals.Add(CreateDistanceLabel(pair.Key, pair.Value));
+                if (TryGetPowerPredecessor(pair.Key, pair.Value, _lowVoltagePowerValue, _activePanelCells,
+                        out var predecessor))
+                    _flowVisuals.Add(CreateFlowArrow(pair.Key, predecessor, LowVoltageColor));
             }
             RebuildElectricityCostIndicators();
             SetFlowVisualsActive(_electricityViewActive);
@@ -1390,7 +1614,8 @@ namespace UnderPressure.PowerGrid
             return new Vector3(center.x, top, center.z);
         }
 
-        private bool TryGetPowerPredecessor(PowerCoord coord, int distance, out PowerCoord predecessor)
+        private static bool TryGetPowerPredecessor(PowerCoord coord, int distance,
+            Dictionary<PowerCoord, int> powerValues, HashSet<PowerCoord> sources, out PowerCoord predecessor)
         {
             var neighbours = new[]
             {
@@ -1399,12 +1624,12 @@ namespace UnderPressure.PowerGrid
             };
             foreach (var neighbour in neighbours)
             {
-                if (distance == 1 && _generatorCells.Contains(neighbour))
+                if (distance == 1 && sources.Contains(neighbour))
                 {
                     predecessor = neighbour;
                     return true;
                 }
-                if (distance > 1 && _tilePowerValue.TryGetValue(neighbour, out var value) &&
+                if (distance > 1 && powerValues.TryGetValue(neighbour, out var value) &&
                     value == distance - 1)
                 {
                     predecessor = neighbour;
@@ -1434,7 +1659,7 @@ namespace UnderPressure.PowerGrid
             return label;
         }
 
-        private GameObject CreateFlowArrow(PowerCoord coord, PowerCoord predecessor)
+        private GameObject CreateFlowArrow(PowerCoord coord, PowerCoord predecessor, Color color)
         {
             var directionX = coord.X - predecessor.X;
             var directionY = coord.Y - predecessor.Y;
@@ -1448,7 +1673,7 @@ namespace UnderPressure.PowerGrid
             const float fillOffset = -0.018f;
             CreateArrowOutline(arrow.transform, 0.30f, 0.36f, 0.70f, fillOffset);
             CreateArrowTriangle(arrow.transform, "PowerFlowArrowFill", 0.21f, 0.252f,
-                fillOffset, PoweredColor);
+                fillOffset, color);
             return arrow;
         }
 
@@ -1575,6 +1800,10 @@ namespace UnderPressure.PowerGrid
         private bool IsItemPoweredInternal(RoomItem item)
         {
             if (_gridOverloaded) return false;
+            if (!ElectricityGameplay.TryGetDisplayCost(item, out _, out var kind)) return true;
+            var powerValues = kind == ElectricityGameplay.CostKind.Monthly
+                ? _lowVoltagePowerValue
+                : _tilePowerValue;
             var center = PowerCoord.FromWorldPosition(item.WorldCenter);
             for (var offsetX = -1; offsetX <= 1; ++offsetX)
             for (var offsetY = -1; offsetY <= 1; ++offsetY)
@@ -1583,7 +1812,7 @@ namespace UnderPressure.PowerGrid
                 // under the object is deliberately excluded.
                 if (offsetX == 0 && offsetY == 0) continue;
                 var neighbour = new PowerCoord(center.X + offsetX, center.Y + offsetY);
-                if (_tilePowerValue.TryGetValue(neighbour, out var distance) && distance > 0)
+                if (powerValues.TryGetValue(neighbour, out var distance) && distance > 0)
                     return true;
             }
             return false;
@@ -1620,6 +1849,8 @@ namespace UnderPressure.PowerGrid
         private void SetCommittedVisualsActive(bool active)
         {
             foreach (var visual in _cellVisuals.Values)
+                if (visual != null) visual.SetActive(active);
+            foreach (var visual in _lowVoltageVisuals.Values)
                 if (visual != null) visual.SetActive(active);
         }
 
@@ -1725,7 +1956,7 @@ namespace UnderPressure.PowerGrid
 
         private void CancelPainting()
         {
-            _paintEnabled = false;
+            _toolMode = ToolMode.None;
             CancelDrag();
             RefreshToolButtonColors();
         }
@@ -1740,8 +1971,12 @@ namespace UnderPressure.PowerGrid
         private void RestoreDeletePreview()
         {
             foreach (var coord in _hiddenDeletePreview)
+            {
                 if (_cellVisuals.TryGetValue(coord, out var visual) && visual != null)
                     visual.SetActive(_electricityViewActive);
+                if (_lowVoltageVisuals.TryGetValue(coord, out visual) && visual != null)
+                    visual.SetActive(_electricityViewActive);
+            }
             _hiddenDeletePreview.Clear();
         }
 
@@ -1775,11 +2010,19 @@ namespace UnderPressure.PowerGrid
             DestroyFlowVisuals();
             DestroyPathAreaVisuals();
             DestroyAreaVisual(ref _generatorAreaVisual);
+            DestroyAreaVisual(ref _panelAreaVisual);
             foreach (var visual in _cellVisuals.Values)
                 if (visual != null) Object.Destroy(visual);
             _cellVisuals.Clear();
+            foreach (var visual in _lowVoltageVisuals.Values)
+                if (visual != null) Object.Destroy(visual);
+            _lowVoltageVisuals.Clear();
+            _lowVoltageCells.Clear();
             _generatorCells.Clear();
+            _panelCells.Clear();
+            _activePanelCells.Clear();
             _tilePowerValue.Clear();
+            _lowVoltagePowerValue.Clear();
             if (_toolPanel != null) Object.Destroy(_toolPanel.gameObject);
             if (_energyHudRoot != null) Object.Destroy(_energyHudRoot.gameObject);
             if (_visualRoot != null) Object.Destroy(_visualRoot);

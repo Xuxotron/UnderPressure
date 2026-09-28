@@ -45,16 +45,19 @@ namespace UnderPressure.PowerGrid
             var campaignTable = FindCampaignMenuSource(database.RoomItems);
             InstallDeskMaintenanceInteraction();
             var filingCabinet = FindItem(database.RoomItems, "filing cabinet", "filing", "archivador");
+            var wallItem = FindWallItem(database.RoomItems);
             var pharmacyMachine = FindPharmacyMachine(rooms);
             var batteryVisual = FindBatteryVisual(metagame);
             var radiator = FindItem(database.RoomItems, "radiator");
 
-            if (MarketingDesk == null || filingCabinet == null || pharmacyMachine == null ||
-                batteryVisual == null || radiator == null)
+            if (MarketingDesk == null || filingCabinet == null || wallItem == null || pharmacyMachine == null ||
+                batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudieron localizar todos los objetos base de la Sala de energia: " +
-                    $"desk={MarketingDesk != null}, filing={filingCabinet != null}, pharmacy={pharmacyMachine != null}, " +
-                    $"battery={batteryVisual != null}, radiator={radiator != null}.");
+                    $"desk={MarketingDesk != null}, filing={filingCabinet != null}, wall={wallItem != null}, " +
+                    $"pharmacy={pharmacyMachine != null}, " +
+                    $"battery={batteryVisual != null}, radiator={radiator != null}, " +
+                    $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}.");
                 return false;
             }
 
@@ -81,9 +84,25 @@ namespace UnderPressure.PowerGrid
                     PanelGuid,
                     "UnderPressure/Item/ElectricalPanel/Name", "Cuadro eléctrico", "Electrical Panel",
                     "UnderPressure/Item/ElectricalPanel/Description",
-                    "Cuadro de distribución de la Sala de energía.",
-                    "Distribution panel for the Energy Room.");
+                    "Convierte la alimentación de alta tensión en una salida de baja tensión.",
+                    "Converts high-voltage power into a low-voltage output.");
+                CopyWallPlacement(Panel, wallItem);
+                Set(Panel, "_prefab", PowerGridPlugin.PowerPanelPrefab);
+                Set(Panel, "_blueprintPrefab", PowerGridPlugin.PowerPanelPrefab);
+                Set(Panel, "_canBePlacedIn", Array.Empty<RoomDefinition.Type>());
+                Set(Panel, "_cantBePlacedIn", Array.Empty<RoomDefinition.Type>());
                 Set(Panel, "_singlePlace", false);
+                Set(Panel, "_hasCollision", false);
+                Set(Panel, "_affectsNavigation", false);
+                Set(Panel, "_energyCost", 0);
+                Set(Panel, "_generatesElectricity", false);
+                Set(Panel, "_ignoredByJanitors", true);
+                Set(Panel, "_maintenanceModifer", 0f);
+                Set(Panel, "_prestige", 0f);
+                Set(Panel, "_hospitalLevelPoints", 0f);
+                Set(Panel, "_roomModifiers", Array.Empty<RoomModifier>());
+                Set(Panel, "_interactionAttributeModifiers", Array.Empty<InteractionAttributeModifier>());
+                Set(Panel, "_upgrades", Array.Empty<SharedInstance<RoomItemUpgradeDefinition>>());
                 DisableOwnInteractions(Panel);
                 PanelShared = CreateWrapper(Panel, PanelSharedId, "UnderPressure Electrical Panel");
                 additions.Add(PanelShared);
@@ -156,6 +175,14 @@ namespace UnderPressure.PowerGrid
         {
             var item = definition as RoomItemDefinition;
             return item != null && (ReferenceEquals(item, Transformer) || item.DebugTag == TransformerTag);
+        }
+
+        internal static bool IsPanel(RoomItem item) => item != null && IsPanel(item.Definition);
+
+        internal static bool IsPanel(IRoomItemDefinition definition)
+        {
+            var item = definition as RoomItemDefinition;
+            return item != null && (ReferenceEquals(item, Panel) || item.DebugTag == PanelTag);
         }
 
         internal static bool IsCustomDefinition(IRoomItemDefinition definition)
@@ -360,6 +387,35 @@ namespace UnderPressure.PowerGrid
                     if (Contains(identity, term)) return item;
             }
             return null;
+        }
+
+        private static RoomItemDefinition FindWallItem(SharedInstance<RoomItemDefinition>[] items)
+        {
+            RoomItemDefinition fallback = null;
+            foreach (var shared in items)
+            {
+                var item = shared?.Instance;
+                if (item == null || !item.PlaceOnWall || !item.OccupyWallOnly) continue;
+                if (fallback == null) fallback = item;
+                var identity = Identity(item);
+                if (Contains(identity, "poster") || Contains(identity, "picture") ||
+                    Contains(identity, "painting")) return item;
+            }
+            return fallback;
+        }
+
+        private static void CopyWallPlacement(RoomItemDefinition target, RoomItemDefinition source)
+        {
+            Set(target, "_placeOnWall", source.PlaceOnWall);
+            Set(target, "_occupyWallOnly", source.OccupyWallOnly);
+            Set(target, "_allowOnCorner", source.AllowOnCorner);
+            Set(target, "_gridSnap", source.GridSnap);
+            Set(target, "_rotationSnap", source.RotationSnap);
+            Set(target, "_defaultRotation", source.DefaultRotation);
+            Set(target, "_wallMagnetism", source.WallMagnetism);
+            Set(target, "_wallMagnetismRotation", source.WallMagnetismRotation);
+            Set(target, "_wallMagnetismDistance", source.WallMagnetismDistance);
+            Set(target, "_fixedWallPlacement", source.FixedWallPlacement);
         }
 
         private static string Identity(RoomItemDefinition item)

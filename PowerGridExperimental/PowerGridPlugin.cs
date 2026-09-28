@@ -18,6 +18,7 @@ namespace UnderPressure.PowerGrid
 
         internal static ManualLogSource Log { get; private set; }
         internal static Sprite BatterySprite { get; private set; }
+        internal static GameObject PowerPanelPrefab { get; private set; }
         private Harmony _harmony;
         private AssetBundle _uiAssetBundle;
 
@@ -43,7 +44,7 @@ namespace UnderPressure.PowerGrid
                 if (sprite == null || !string.Equals(sprite.name, "bateria", StringComparison.OrdinalIgnoreCase))
                     continue;
                 BatterySprite = sprite;
-                return;
+                break;
             }
 
             var pluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -55,9 +56,13 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("assets/underpressure/ui/bateria.png");
+            if (BatterySprite == null)
+                BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("assets/underpressure/ui/bateria.png");
             if (BatterySprite == null)
                 Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
+            PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>("assets/powerpanel/powerpanel.prefab");
+            if (PowerPanelPrefab == null)
+                Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
         }
     }
 }
