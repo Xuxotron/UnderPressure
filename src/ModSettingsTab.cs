@@ -71,6 +71,8 @@ namespace UnderPressure
         private TMP_Text _imperfectStaffLabel;
         private Toggle _electricityToggle;
         private TMP_Text _electricityLabel;
+        private Toggle _separateReputationPrestigeToggle;
+        private TMP_Text _separateReputationPrestigeLabel;
         private Toggle _permanentMachineWearToggle;
         private TMP_Text _permanentMachineWearLabel;
         private Toggle _visualLightingToggle;
@@ -237,10 +239,22 @@ namespace UnderPressure
                 _disableTutorialToggle.isOn = UnderPressurePlugin.ShouldDisableTutorial;
                 _disableTutorialToggle.onValueChanged.AddListener(SetDisableTutorial);
             }
+            var separateReputationPrestigeRow = Instantiate(settingRow, rightSection);
+            separateReputationPrestigeRow.name = "Separate Reputation And Prestige";
+            RemoveLocalisers(separateReputationPrestigeRow);
+            SetStretchRow((RectTransform)separateReputationPrestigeRow, -102f, 45f, 12f);
+            _separateReputationPrestigeToggle = separateReputationPrestigeRow.GetComponentInChildren<Toggle>(true);
+            _separateReputationPrestigeLabel = separateReputationPrestigeRow.GetComponentInChildren<TMP_Text>(true);
+            if (_separateReputationPrestigeToggle != null)
+            {
+                _separateReputationPrestigeToggle.onValueChanged.RemoveAllListeners();
+                _separateReputationPrestigeToggle.isOn = UnderPressurePlugin.ShouldSeparateReputationAndPrestige;
+                _separateReputationPrestigeToggle.onValueChanged.AddListener(SetSeparateReputationAndPrestige);
+            }
             var autoLoadLastSaveRow = Instantiate(settingRow, rightSection);
             autoLoadLastSaveRow.name = "Auto Load Last Level";
             RemoveLocalisers(autoLoadLastSaveRow);
-            SetStretchRow((RectTransform)autoLoadLastSaveRow, -102f, 45f, 12f);
+            SetStretchRow((RectTransform)autoLoadLastSaveRow, -147f, 45f, 12f);
             _autoLoadLastSaveToggle = autoLoadLastSaveRow.GetComponentInChildren<Toggle>(true);
             _autoLoadLastSaveLabel = autoLoadLastSaveRow.GetComponentInChildren<TMP_Text>(true);
             if (_autoLoadLastSaveToggle != null)
@@ -300,7 +314,7 @@ namespace UnderPressure
             var visualLightingRow = Instantiate(settingRow, rightSection);
             visualLightingRow.name = "Hospital Lighting";
             RemoveLocalisers(visualLightingRow);
-            SetStretchRow((RectTransform)visualLightingRow, -147f, 45f, 12f);
+            SetStretchRow((RectTransform)visualLightingRow, -192f, 45f, 12f);
             _visualLightingToggle = visualLightingRow.GetComponentInChildren<Toggle>(true);
             _visualLightingLabel = visualLightingRow.GetComponentInChildren<TMP_Text>(true);
             if (_visualLightingToggle != null)
@@ -311,6 +325,8 @@ namespace UnderPressure
             }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
+            ConfigureRowTooltip(separateReputationPrestigeRow, _separateReputationPrestigeLabel,
+                "tooltip.separate_reputation_prestige");
             ConfigureRowTooltip(autoLoadLastSaveRow, _autoLoadLastSaveLabel,
                 "tooltip.auto_load_last_save");
             ConfigureRowTooltip(effectivenessRow, _roomEffectivenessLabel,
@@ -322,8 +338,8 @@ namespace UnderPressure
             ConfigureRowTooltip(visualLightingRow, _visualLightingLabel,
                 "tooltip.visual_lighting");
             var uiRect = (RectTransform)section;
-            SetHalfSectionRect(uiRect, -8f, 211f, true);
-            SetHalfSectionRect((RectTransform)rightSection, -8f, 211f, false);
+            SetHalfSectionRect(uiRect, -8f, 256f, true);
+            SetHalfSectionRect((RectTransform)rightSection, -8f, 256f, false);
             StretchBackground(section);
             StretchBackground(rightSection);
             BuildGameplaySection(content, nativeVideoRow, section);
@@ -335,12 +351,12 @@ namespace UnderPressure
             if (nativeVideoRow == null)
                 return;
 
-            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -235f, 82f);
+            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -280f, 82f);
             CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
                 UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -333f,
+                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -378f,
                 new[]
                 {
                     new SliderSpec("mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting),
@@ -349,7 +365,7 @@ namespace UnderPressure
                     new SliderSpec("mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting)
                 });
             var reputation = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -633f,
+                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -678f,
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
@@ -358,7 +374,7 @@ namespace UnderPressure
                     new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -933f,
+                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -978f,
                 new[]
                 {
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
@@ -369,7 +385,7 @@ namespace UnderPressure
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1225f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1270f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,
@@ -688,6 +704,11 @@ namespace UnderPressure
             ElectricityFeatures.NotifySettingChanged();
         }
 
+        private static void SetSeparateReputationAndPrestige(bool value)
+        {
+            UnderPressurePlugin.SeparateReputationPrestigeSetting.Value = value;
+        }
+
         private static void SetPermanentMachineWear(bool value)
         {
             UnderPressurePlugin.PermanentMachineWearSetting.Value = value;
@@ -751,6 +772,8 @@ namespace UnderPressure
                 _imperfectStaffLabel.text = ModLocalization.Get("mod.imperfect_staff");
             if (_electricityLabel != null)
                 _electricityLabel.text = ModLocalization.Get("mod.show_electricity");
+            if (_separateReputationPrestigeLabel != null)
+                _separateReputationPrestigeLabel.text = ModLocalization.Get("mod.separate_reputation_prestige");
             if (_permanentMachineWearLabel != null)
                 _permanentMachineWearLabel.text = ModLocalization.Get("mod.permanent_machine_wear");
             if (_visualLightingLabel != null)

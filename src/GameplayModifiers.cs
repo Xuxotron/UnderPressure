@@ -25,8 +25,18 @@ namespace UnderPressure
     [HarmonyPatch(typeof(CharacterManager), "CalculateSpawnTime")]
     internal static class PatientArrivalPatch
     {
-        private static void Postfix(ref float __result)
+        private static readonly FieldInfo PrestigeTrackerField =
+            AccessTools.Field(typeof(CharacterManager), "_prestigeTracker");
+
+        private static void Postfix(CharacterManager __instance, ref float __result)
         {
+            if (UnderPressurePlugin.ShouldSeparateReputationAndPrestige)
+            {
+                var prestige = PrestigeTrackerField?.GetValue(__instance) as PrestigeTracker;
+                var prestigeArrivalRate = prestige?.Data?.PatientArrivalRate ?? 1f;
+                if (prestigeArrivalRate > 0f)
+                    __result *= prestigeArrivalRate;
+            }
             var factor = GameplayModifier.Factor(UnderPressurePlugin.PatientArrivalSetting.Value);
             __result = factor <= 0f ? float.MaxValue : __result / factor;
         }
@@ -268,6 +278,17 @@ namespace UnderPressure
     [HarmonyPatch(typeof(JobApplicantPool.Config), "GetTimeUntilNextApplicant")]
     internal static class ApplicantWaitPatch
     {
+        private static readonly FieldInfo BaseApplicantTimeField =
+            AccessTools.Field(typeof(JobApplicantPool.Config), "TimeUntilNextApplicant");
+
+        private static bool Prefix(JobApplicantPool.Config __instance, ref float __result)
+        {
+            if (!UnderPressurePlugin.ShouldSeparateReputationAndPrestige || BaseApplicantTimeField == null)
+                return true;
+            __result = (float)BaseApplicantTimeField.GetValue(__instance);
+            return false;
+        }
+
         private static void Postfix(ref float __result)
         {
             __result *= Mathf.Max(0.25f,

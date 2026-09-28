@@ -22,6 +22,7 @@ namespace UnderPressure
         internal static ConfigEntry<bool> ShowRoomEffectivenessSetting { get; private set; }
         internal static ConfigEntry<bool> ImperfectStaffSetting { get; private set; }
         internal static ConfigEntry<bool> ShowElectricitySetting { get; private set; }
+        internal static ConfigEntry<bool> SeparateReputationPrestigeSetting { get; private set; }
         internal static ConfigEntry<bool> PermanentMachineWearSetting { get; private set; }
         internal static ConfigEntry<bool> VisualLightingSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
@@ -54,6 +55,8 @@ namespace UnderPressure
             IsModEnabled && ImperfectStaffSetting != null && ImperfectStaffSetting.Value;
         internal static bool ShouldShowElectricity =>
             IsModEnabled && ShowElectricitySetting != null && ShowElectricitySetting.Value;
+        internal static bool ShouldSeparateReputationAndPrestige =>
+            IsModEnabled && SeparateReputationPrestigeSetting != null && SeparateReputationPrestigeSetting.Value;
         internal static bool ShouldUsePermanentMachineWear =>
             IsModEnabled && PermanentMachineWearSetting != null && PermanentMachineWearSetting.Value;
         internal static bool ShouldUseVisualLighting =>
@@ -97,6 +100,9 @@ namespace UnderPressure
             ShowElectricitySetting = Config.Bind(
                 "Interfaz", "ShowElectricity", false,
                 "Sustituye Activos materiales por la factura eléctrica en la gráfica y muestra el gasto en objetos.");
+            SeparateReputationPrestigeSetting = Config.Bind(
+                "Jugabilidad", "SeparateReputationAndPrestige", true,
+                "La reputación solo afecta a la llegada de pacientes y el prestigio solo a las plazas de candidatos.");
             PermanentMachineWearSetting = Config.Bind(
                 "Jugabilidad", "PermanentMachineWear", false,
                 "Cada 100 puntos porcentuales reparados reducen en un 1% el estado máximo reparable de esa máquina.");
