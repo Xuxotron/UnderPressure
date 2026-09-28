@@ -172,6 +172,7 @@ namespace UnderPressure
             __instance.RootTransform.gameObject.SetActive(false);
             app.MetagameMapScene.RootObject.SetActive(false);
             ReadyToStartField.SetValue(__instance, true);
+            __instance.StateMachine.Update();
             SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, false);
 
             UnderPressurePlugin.Log.LogInfo(
