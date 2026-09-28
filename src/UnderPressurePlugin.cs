@@ -73,7 +73,7 @@ namespace UnderPressure
                 "Inicio",
                 "AutoLoadLastSave",
                 true,
-                "Carga el hospital guardado más reciente después de restaurar la carrera, sin pasar por el mapa de campaña ni el selector de hospital.");
+                "Busca el hospital guardado más reciente entre todas las campañas y lo carga sin mostrar la pantalla inicial, el mapa de campaña ni el selector de hospital.");
             DisableTutorialSetting = Config.Bind(
                 "Inicio",
                 "DisableTutorial",

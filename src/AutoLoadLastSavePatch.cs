@@ -8,22 +8,67 @@ namespace UnderPressure
     [HarmonyPatch(typeof(App), "LoadAndShowOpeningScreen")]
     internal static class SkipFrontEndForAutoLoadPatch
     {
+        private static readonly FieldInfo MostRecentLevelSavesField =
+            AccessTools.Field(typeof(SaveSystem), "_mMostRecentSave");
+        private static readonly FieldInfo MostRecentMetagameSlotField =
+            AccessTools.Field(typeof(SaveSystem), "_mostRecentMetagameSaveSlotIndex");
+
+        internal static bool KeepLoadingScreenVisible { get; private set; }
+        internal static SaveFileHeader SelectedLevelSave { get; private set; }
+        internal static int SelectedSaveSlot { get; private set; } = -1;
+
         private static void Postfix(App __instance, ref IEnumerator __result)
         {
-            if (!UnderPressurePlugin.ShouldAutoLoadLastSave ||
-                __instance?.SaveSystem == null ||
-                __instance.SaveSystem.MostRecentMetagameSaveSlotIndex < 0)
+            if (!UnderPressurePlugin.ShouldAutoLoadLastSave || __instance?.SaveSystem == null)
                 return;
 
-            __result = RunWithNativeFrontEndSkip(__result);
+            if (!TrySelectMostRecentHospital(__instance.SaveSystem))
+            {
+                UnderPressurePlugin.Log.LogInfo(
+                    "Autocarga omitida: ninguna campaña contiene hospitales guardados.");
+                return;
+            }
+
+            var originalMetagameSlot = __instance.SaveSystem.MostRecentMetagameSaveSlotIndex;
+            MostRecentMetagameSlotField.SetValue(__instance.SaveSystem, SelectedSaveSlot);
+            __result = RunWithNativeFrontEndSkip(__instance.SaveSystem, originalMetagameSlot, __result);
         }
 
-        private static IEnumerator RunWithNativeFrontEndSkip(IEnumerator original)
+        private static bool TrySelectMostRecentHospital(SaveSystem saveSystem)
+        {
+            SelectedLevelSave = null;
+            SelectedSaveSlot = -1;
+
+            var savesBySlot = MostRecentLevelSavesField?.GetValue(saveSystem) as SaveFileHeader[];
+            if (savesBySlot == null)
+                return false;
+
+            for (var slot = 0; slot < savesBySlot.Length; ++slot)
+            {
+                var candidate = savesBySlot[slot];
+                if (candidate == null || candidate.IsBroken ||
+                    saveSystem.GetMetagameSaveHeaderForSlot(slot) == null)
+                    continue;
+
+                if (SelectedLevelSave != null && candidate.Date <= SelectedLevelSave.Date)
+                    continue;
+
+                SelectedLevelSave = candidate;
+                SelectedSaveSlot = slot;
+            }
+
+            return SelectedLevelSave != null;
+        }
+
+        private static IEnumerator RunWithNativeFrontEndSkip(
+            SaveSystem saveSystem, int originalMetagameSlot, IEnumerator original)
         {
             var previousValue = DebugVars.SkipFrontEnd.Value;
             DebugVars.SkipFrontEnd.Value = true;
+            KeepLoadingScreenVisible = true;
             UnderPressurePlugin.Log.LogInfo(
-                "Omitiendo visualmente la pantalla inicial mediante el flujo nativo SkipFrontEnd.");
+                $"Hospital más reciente global: slot {SelectedSaveSlot + 1}, " +
+                $"nivel {SelectedLevelSave.LevelID}, fecha {SelectedLevelSave.Date:O}.");
             try
             {
                 yield return original;
@@ -31,7 +76,24 @@ namespace UnderPressure
             finally
             {
                 DebugVars.SkipFrontEnd.Value = previousValue;
+                MostRecentMetagameSlotField.SetValue(saveSystem, originalMetagameSlot);
             }
+        }
+
+        internal static void ReleaseLoadingScreen(App app, bool hide)
+        {
+            KeepLoadingScreenVisible = false;
+            if (hide)
+                app?.LoadSaveProgressScreen?.Hide();
+        }
+    }
+
+    [HarmonyPatch(typeof(LoadSaveProgressScreen), "Hide")]
+    internal static class KeepLoadingScreenVisiblePatch
+    {
+        private static bool Prefix()
+        {
+            return !SkipFrontEndForAutoLoadPatch.KeepLoadingScreenVisible;
         }
     }
 
@@ -64,14 +126,16 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     "Autocarga cancelada: la carrera terminó de cargar sin todos los estados necesarios.");
+                SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, true);
                 return true;
             }
 
-            var saveHeader = saveSystem.MostRecentSave;
+            var saveHeader = SkipFrontEndForAutoLoadPatch.SelectedLevelSave;
             if (saveHeader == null || string.IsNullOrEmpty(saveHeader.LevelID))
             {
                 UnderPressurePlugin.Log.LogInfo(
                     "Autocarga omitida: la ranura de carrera no contiene hospitales guardados.");
+                SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, true);
                 return true;
             }
 
@@ -80,6 +144,7 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     $"Autocarga cancelada: no existe LevelConfig para el nivel guardado '{saveHeader.LevelID}'.");
+                SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, true);
                 return true;
             }
 
@@ -87,6 +152,7 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     $"Autocarga cancelada: la cabecera del nivel '{saveHeader.LevelID}' no se puede cargar.");
+                SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, true);
                 return true;
             }
 
@@ -95,6 +161,7 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     "Autocarga cancelada: no está disponible MetagameStateData.");
+                SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, true);
                 return true;
             }
 
@@ -102,7 +169,10 @@ namespace UnderPressure
             stateData.OnLoadRestartLevel = false;
             stateData.OnLoadSaveOldLevel = true;
             app.LoadSaveProgressScreen.Show(levelConfig);
+            __instance.RootTransform.gameObject.SetActive(false);
+            app.MetagameMapScene.RootObject.SetActive(false);
             ReadyToStartField.SetValue(__instance, true);
+            SkipFrontEndForAutoLoadPatch.ReleaseLoadingScreen(app, false);
 
             UnderPressurePlugin.Log.LogInfo(
                 $"Carga directa preparada para {saveHeader.LevelID}; se cancela la apertura del mapa de campaña.");
