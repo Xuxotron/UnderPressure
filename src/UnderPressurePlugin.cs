@@ -22,7 +22,8 @@ namespace UnderPressure
         internal static ConfigEntry<bool> ShowRoomEffectivenessSetting { get; private set; }
         internal static ConfigEntry<bool> ImperfectStaffSetting { get; private set; }
         internal static ConfigEntry<bool> ShowElectricitySetting { get; private set; }
-        internal static ConfigEntry<bool> SharedRoomTemplatesSetting { get; private set; }
+        internal static ConfigEntry<bool> PermanentMachineWearSetting { get; private set; }
+        internal static ConfigEntry<bool> VisualLightingSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveReputationSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveExpansionSetting { get; private set; }
@@ -39,6 +40,7 @@ namespace UnderPressure
         internal static ConfigEntry<int> PatientIncomeSetting { get; private set; }
         internal static ConfigEntry<int> ApplicantWaitSetting { get; private set; }
         internal static ConfigEntry<int> ElectricityBillSetting { get; private set; }
+        internal static ConfigFile ModConfig { get; private set; }
         internal static bool IsModEnabled => EnabledSetting == null || EnabledSetting.Value;
         internal static bool ShouldSkipIntroScreens =>
             IsModEnabled && (SkipIntroScreensSetting == null || SkipIntroScreensSetting.Value);
@@ -52,13 +54,16 @@ namespace UnderPressure
             IsModEnabled && ImperfectStaffSetting != null && ImperfectStaffSetting.Value;
         internal static bool ShouldShowElectricity =>
             IsModEnabled && ShowElectricitySetting != null && ShowElectricitySetting.Value;
-        internal static bool ShouldShareRoomTemplates =>
-            IsModEnabled && (SharedRoomTemplatesSetting == null || SharedRoomTemplatesSetting.Value);
+        internal static bool ShouldUsePermanentMachineWear =>
+            IsModEnabled && PermanentMachineWearSetting != null && PermanentMachineWearSetting.Value;
+        internal static bool ShouldUseVisualLighting =>
+            IsModEnabled && VisualLightingSetting != null && VisualLightingSetting.Value;
         internal static ManualLogSource Log { get; private set; }
 
         private void Awake()
         {
             Log = Logger;
+            ModConfig = Config;
             EnabledSetting = Config.Bind(
                 "General",
                 "Enabled",
@@ -92,9 +97,12 @@ namespace UnderPressure
             ShowElectricitySetting = Config.Bind(
                 "Interfaz", "ShowElectricity", false,
                 "Sustituye Activos materiales por la factura eléctrica en la gráfica y muestra el gasto en objetos.");
-            SharedRoomTemplatesSetting = Config.Bind(
-                "Interfaz", "SharedRoomTemplates", true,
-                "Muestra las plantillas globales de salas en cualquier slot, aunque sus elementos aún no estén desbloqueados en esa partida.");
+            PermanentMachineWearSetting = Config.Bind(
+                "Jugabilidad", "PermanentMachineWear", false,
+                "Cada 100 puntos porcentuales reparados reducen en un 1% el estado máximo reparable de esa máquina.");
+            VisualLightingSetting = Config.Bind(
+                "Visual", "HospitalLighting", false,
+                "Oscurece los interiores y añade iluminación visual procedente de ventanas y lámparas compatibles.");
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
             AdaptiveReputationSetting = Config.Bind("Dificultad adaptable", "Reputation", false,

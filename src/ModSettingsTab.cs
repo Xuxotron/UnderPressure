@@ -71,8 +71,10 @@ namespace UnderPressure
         private TMP_Text _imperfectStaffLabel;
         private Toggle _electricityToggle;
         private TMP_Text _electricityLabel;
-        private Toggle _sharedRoomTemplatesToggle;
-        private TMP_Text _sharedRoomTemplatesLabel;
+        private Toggle _permanentMachineWearToggle;
+        private TMP_Text _permanentMachineWearLabel;
+        private Toggle _visualLightingToggle;
+        private TMP_Text _visualLightingLabel;
         private Toggle _masterToggle;
         private TMP_Text _tabLabel;
         private TMP_Text _nativeSliderLabel;
@@ -235,22 +237,10 @@ namespace UnderPressure
                 _disableTutorialToggle.isOn = UnderPressurePlugin.ShouldDisableTutorial;
                 _disableTutorialToggle.onValueChanged.AddListener(SetDisableTutorial);
             }
-            var sharedTemplatesRow = Instantiate(settingRow, rightSection);
-            sharedTemplatesRow.name = "Shared Room Templates";
-            RemoveLocalisers(sharedTemplatesRow);
-            SetStretchRow((RectTransform)sharedTemplatesRow, -102f, 45f, 12f);
-            _sharedRoomTemplatesToggle = sharedTemplatesRow.GetComponentInChildren<Toggle>(true);
-            _sharedRoomTemplatesLabel = sharedTemplatesRow.GetComponentInChildren<TMP_Text>(true);
-            if (_sharedRoomTemplatesToggle != null)
-            {
-                _sharedRoomTemplatesToggle.onValueChanged.RemoveAllListeners();
-                _sharedRoomTemplatesToggle.isOn = UnderPressurePlugin.ShouldShareRoomTemplates;
-                _sharedRoomTemplatesToggle.onValueChanged.AddListener(SetSharedRoomTemplates);
-            }
             var autoLoadLastSaveRow = Instantiate(settingRow, rightSection);
             autoLoadLastSaveRow.name = "Auto Load Last Level";
             RemoveLocalisers(autoLoadLastSaveRow);
-            SetStretchRow((RectTransform)autoLoadLastSaveRow, -147f, 45f, 12f);
+            SetStretchRow((RectTransform)autoLoadLastSaveRow, -102f, 45f, 12f);
             _autoLoadLastSaveToggle = autoLoadLastSaveRow.GetComponentInChildren<Toggle>(true);
             _autoLoadLastSaveLabel = autoLoadLastSaveRow.GetComponentInChildren<TMP_Text>(true);
             if (_autoLoadLastSaveToggle != null)
@@ -295,19 +285,45 @@ namespace UnderPressure
                 _electricityToggle.isOn = UnderPressurePlugin.ShouldShowElectricity;
                 _electricityToggle.onValueChanged.AddListener(SetShowElectricity);
             }
+            var permanentWearRow = Instantiate(settingRow, section);
+            permanentWearRow.name = "Permanent Machine Wear";
+            RemoveLocalisers(permanentWearRow);
+            SetStretchRow((RectTransform)permanentWearRow, -147f, 45f, 12f);
+            _permanentMachineWearToggle = permanentWearRow.GetComponentInChildren<Toggle>(true);
+            _permanentMachineWearLabel = permanentWearRow.GetComponentInChildren<TMP_Text>(true);
+            if (_permanentMachineWearToggle != null)
+            {
+                _permanentMachineWearToggle.onValueChanged.RemoveAllListeners();
+                _permanentMachineWearToggle.isOn = UnderPressurePlugin.ShouldUsePermanentMachineWear;
+                _permanentMachineWearToggle.onValueChanged.AddListener(SetPermanentMachineWear);
+            }
+            var visualLightingRow = Instantiate(settingRow, rightSection);
+            visualLightingRow.name = "Hospital Lighting";
+            RemoveLocalisers(visualLightingRow);
+            SetStretchRow((RectTransform)visualLightingRow, -147f, 45f, 12f);
+            _visualLightingToggle = visualLightingRow.GetComponentInChildren<Toggle>(true);
+            _visualLightingLabel = visualLightingRow.GetComponentInChildren<TMP_Text>(true);
+            if (_visualLightingToggle != null)
+            {
+                _visualLightingToggle.onValueChanged.RemoveAllListeners();
+                _visualLightingToggle.isOn = UnderPressurePlugin.ShouldUseVisualLighting;
+                _visualLightingToggle.onValueChanged.AddListener(SetVisualLighting);
+            }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
-            ConfigureRowTooltip(sharedTemplatesRow, _sharedRoomTemplatesLabel,
-                "tooltip.shared_room_templates");
             ConfigureRowTooltip(autoLoadLastSaveRow, _autoLoadLastSaveLabel,
                 "tooltip.auto_load_last_save");
             ConfigureRowTooltip(effectivenessRow, _roomEffectivenessLabel,
                 "tooltip.show_room_effectiveness");
             ConfigureRowTooltip(imperfectRow, _imperfectStaffLabel, "tooltip.imperfect_staff");
             ConfigureRowTooltip(electricityRow, _electricityLabel, "tooltip.show_electricity");
+            ConfigureRowTooltip(permanentWearRow, _permanentMachineWearLabel,
+                "tooltip.permanent_machine_wear");
+            ConfigureRowTooltip(visualLightingRow, _visualLightingLabel,
+                "tooltip.visual_lighting");
             var uiRect = (RectTransform)section;
-            SetHalfSectionRect(uiRect, -8f, 166f, true);
-            SetHalfSectionRect((RectTransform)rightSection, -8f, 166f, false);
+            SetHalfSectionRect(uiRect, -8f, 211f, true);
+            SetHalfSectionRect((RectTransform)rightSection, -8f, 211f, false);
             StretchBackground(section);
             StretchBackground(rightSection);
             BuildGameplaySection(content, nativeVideoRow, section);
@@ -319,12 +335,12 @@ namespace UnderPressure
             if (nativeVideoRow == null)
                 return;
 
-            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -190f, 82f);
+            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -235f, 82f);
             CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
                 UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -288f,
+                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -333f,
                 new[]
                 {
                     new SliderSpec("mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting),
@@ -333,7 +349,7 @@ namespace UnderPressure
                     new SliderSpec("mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting)
                 });
             var reputation = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -588f,
+                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -633f,
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
@@ -342,7 +358,7 @@ namespace UnderPressure
                     new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -888f,
+                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -933f,
                 new[]
                 {
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
@@ -353,7 +369,7 @@ namespace UnderPressure
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1180f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1225f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,
@@ -672,9 +688,16 @@ namespace UnderPressure
             ElectricityFeatures.NotifySettingChanged();
         }
 
-        private static void SetSharedRoomTemplates(bool value)
+        private static void SetPermanentMachineWear(bool value)
         {
-            UnderPressurePlugin.SharedRoomTemplatesSetting.Value = value;
+            UnderPressurePlugin.PermanentMachineWearSetting.Value = value;
+            PermanentMachineWearSystem.NotifySettingChanged();
+        }
+
+        private static void SetVisualLighting(bool value)
+        {
+            UnderPressurePlugin.VisualLightingSetting.Value = value;
+            HospitalLightingPrototype.NotifySettingChanged();
         }
 
         private static void SetMasterEnabled(bool value)
@@ -682,6 +705,7 @@ namespace UnderPressure
             UnderPressurePlugin.EnabledSetting.Value = value;
             RoomPowerDisplay.NotifySettingChanged();
             ElectricityFeatures.NotifySettingChanged();
+            HospitalLightingPrototype.NotifySettingChanged();
         }
 
         private void ShowModTab()
@@ -727,8 +751,10 @@ namespace UnderPressure
                 _imperfectStaffLabel.text = ModLocalization.Get("mod.imperfect_staff");
             if (_electricityLabel != null)
                 _electricityLabel.text = ModLocalization.Get("mod.show_electricity");
-            if (_sharedRoomTemplatesLabel != null)
-                _sharedRoomTemplatesLabel.text = ModLocalization.Get("mod.shared_room_templates");
+            if (_permanentMachineWearLabel != null)
+                _permanentMachineWearLabel.text = ModLocalization.Get("mod.permanent_machine_wear");
+            if (_visualLightingLabel != null)
+                _visualLightingLabel.text = ModLocalization.Get("mod.visual_lighting");
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);

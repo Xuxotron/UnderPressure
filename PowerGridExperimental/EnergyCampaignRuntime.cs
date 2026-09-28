@@ -80,6 +80,10 @@ namespace UnderPressure.PowerGrid
         private static readonly Dictionary<RoomItem, EnergyCampaignController> Controllers = new Dictionary<RoomItem, EnergyCampaignController>();
         private static GameObject _hoverPrefab;
         private static GameObject _selectPrefab;
+        private static Vector2 _selectAnchorMin;
+        private static Vector2 _selectAnchorMax;
+        private static Vector2 _selectPivot;
+        private static Vector2 _selectSize;
         internal static GameObject HoverPrefab => _hoverPrefab;
         internal static GameObject SelectPrefab => _selectPrefab;
 
@@ -133,6 +137,14 @@ namespace UnderPressure.PowerGrid
         {
             if (source == null || source.GetComponent<SelectMenuMarketing>() == null)
                 throw new InvalidOperationException("La plantilla select no contiene SelectMenuMarketing.");
+            var sourceRect = source.GetComponent<RectTransform>();
+            if (sourceRect != null)
+            {
+                _selectAnchorMin = sourceRect.anchorMin;
+                _selectAnchorMax = sourceRect.anchorMax;
+                _selectPivot = sourceRect.pivot;
+                _selectSize = sourceRect.sizeDelta;
+            }
             var clone = UnityEngine.Object.Instantiate(source);
             clone.name = "Under Pressure Energy Campaign Selection";
             clone.hideFlags = HideFlags.HideAndDontSave;
@@ -163,6 +175,17 @@ namespace UnderPressure.PowerGrid
             native.enabled = false;
             CopyBaseFields(native, menu);
             menu.Configure(Get<TMP_Text>(native, "_campaignName"), Get<ProgressBarMaskable>(native, "_progressBar"), Get<DynamicButton>(native, "_cancelButton"));
+            UnityEngine.Object.DestroyImmediate(native);
+        }
+
+        internal static void ApplyNativeSelectRect(SelectMenuEnergyCampaign menu)
+        {
+            var rect = menu != null ? menu.GetComponent<RectTransform>() : null;
+            if (rect == null) return;
+            rect.anchorMin = _selectAnchorMin;
+            rect.anchorMax = _selectAnchorMax;
+            rect.pivot = _selectPivot;
+            rect.sizeDelta = _selectSize;
         }
 
         internal static HoverMenuEnergyCampaign CreateHoverMenu(HUD hud)
@@ -303,12 +326,9 @@ namespace UnderPressure.PowerGrid
     [HarmonyPatch(typeof(SelectMenuRoomItem), "Update")]
     internal static class EnergyCampaignSelectMenuUpdatePatch
     {
-        private static readonly MethodInfo InWorldUpdate = AccessTools.Method(typeof(InWorldMenuBase), "Update");
-
         private static bool Prefix(SelectMenuRoomItem __instance)
         {
             if (!(__instance is SelectMenuEnergyCampaign)) return true;
-            InWorldUpdate?.Invoke(__instance, null);
             return false;
         }
     }
@@ -392,6 +412,7 @@ namespace UnderPressure.PowerGrid
         {
             EnergyCampaignRuntime.BindNativeLayout(this);
             base.Setup(item, level);
+            EnergyCampaignRuntime.ApplyNativeSelectRect(this);
             _campaign = EnergyCampaignRuntime.GetController(item);
             if (_campaign == null || _campaign.State.Active == EnergyCampaignKind.None)
             {

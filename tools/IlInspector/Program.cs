@@ -1,11 +1,21 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
-var assembly = AssemblyDefinition.ReadAssembly(args[0]);
-foreach (var spec in args.Skip(1))
+if (args.Length == 0)
 {
+    PrintUsage();
+    return;
+}
+
+try
+{
+    using var assembly = AssemblyDefinition.ReadAssembly(args[0]);
+    var specs = NormalizeSpecs(args.Skip(1).ToArray());
+    foreach (var spec in specs)
+    {
     if (spec.StartsWith("^"))
     {
         var query = spec[1..];
@@ -47,6 +57,12 @@ foreach (var spec in args.Skip(1))
         continue;
     }
     var separator = spec.LastIndexOf("::", StringComparison.Ordinal);
+    if (separator <= 0 || separator + 2 >= spec.Length)
+    {
+        Console.Error.WriteLine($"CONSULTA NO VALIDA: {spec}");
+        Console.Error.WriteLine("Use @Tipo, ?texto, ^texto, Tipo::Metodo o: type Tipo / method Tipo Metodo.");
+        continue;
+    }
     var typeName = spec[..separator];
     var methodName = spec[(separator + 2)..];
     var type = assembly.MainModule.Types.SelectMany(AllTypes).FirstOrDefault(t => t.FullName == typeName);
@@ -62,7 +78,42 @@ foreach (var spec in args.Skip(1))
         foreach (var instruction in method.Body.Instructions)
             Console.WriteLine($"{instruction.Offset:X4}: {instruction.OpCode,-12} {Format(instruction.Operand)}");
     }
+    }
 }
+catch (Exception exception)
+{
+    Console.Error.WriteLine($"NO SE PUDO INSPECCIONAR: {exception.Message}");
+}
+
+static IEnumerable<string> NormalizeSpecs(string[] raw)
+{
+    for (var index = 0; index < raw.Length; index++)
+    {
+        var value = raw[index];
+        if (value.Equals("type", StringComparison.OrdinalIgnoreCase))
+        {
+            if (++index < raw.Length) yield return "@" + raw[index];
+            else Console.Error.WriteLine("FALTA EL NOMBRE DEL TIPO.");
+        }
+        else if (value.Equals("method", StringComparison.OrdinalIgnoreCase))
+        {
+            if (index + 2 < raw.Length)
+                yield return raw[++index] + "::" + raw[++index];
+            else
+            {
+                Console.Error.WriteLine("FALTAN EL TIPO O EL METODO.");
+                yield break;
+            }
+        }
+        else
+        {
+            yield return value;
+        }
+    }
+}
+
+static void PrintUsage() => Console.Error.WriteLine(
+    "Uso: IlInspector <Assembly.dll> [@Tipo | ?texto | ^texto | Tipo::Metodo | type Tipo | method Tipo Metodo]");
 
 static System.Collections.Generic.IEnumerable<TypeDefinition> AllTypes(TypeDefinition type)
 {

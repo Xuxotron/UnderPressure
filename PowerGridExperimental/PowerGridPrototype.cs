@@ -273,8 +273,13 @@ namespace UnderPressure.PowerGrid
             try
             {
                 EnergyCampaignSystem.ResetLevel(_level?.UniqueID);
+                global::UnderPressure.PermanentMachineWearSystem.BeginLoad(_level);
                 var path = GetExtraDataPath();
-                if (!File.Exists(path)) return;
+                if (!File.Exists(path))
+                {
+                    global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
+                    return;
+                }
                 var lines = File.ReadAllLines(path);
                 if (lines.Length == 0 || lines[0] != "UNDERPRESSURE_SAVE_1")
                 {
@@ -343,6 +348,10 @@ namespace UnderPressure.PowerGrid
                         _gridOverloaded = parts[7] == "1";
                         _energyStateInitialised = true;
                     }
+                    if (parts.Length == 3 && parts[0] == "W" && int.TryParse(parts[1], out var wearItemId) &&
+                        TryFloat(parts[2], out var repairedPoints))
+                        global::UnderPressure.PermanentMachineWearSystem.LoadRecord(
+                            _level, wearItemId, repairedPoints);
                     if (parts.Length == 7 && parts[0] == "P" && int.TryParse(parts[1], out var campaignX) &&
                         int.TryParse(parts[2], out var campaignY) && int.TryParse(parts[3], out var activeCampaign) &&
                         TryFloat(parts[4], out var hackProgress) && TryFloat(parts[5], out var debugProgress) &&
@@ -359,6 +368,7 @@ namespace UnderPressure.PowerGrid
                 }
                 RestoreEnergyRooms(roomRecords);
                 RestoreStaffJobAssignments(staffJobRecords);
+                global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
                 PowerGridPlugin.Log.LogInfo($"Guardado complementario cargado: {_cells.Count} cables, " +
                                             $"{roomRecords.Count} salas y {staffJobRecords.Count} marcados ({path}).");
             }
@@ -400,6 +410,7 @@ namespace UnderPressure.PowerGrid
                 SaveEnergyRooms(lines);
                 SaveStaffJobAssignments(lines);
                 EnergyCampaignSystem.AppendSave(lines, _level);
+                global::UnderPressure.PermanentMachineWearSystem.AppendSaveRecords(lines, _level);
                 if (rotateBackups) RotateBackups(path);
                 var temporary = path + ".tmp";
                 File.WriteAllLines(temporary, lines.ToArray());
