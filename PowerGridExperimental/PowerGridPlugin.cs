@@ -115,10 +115,10 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            // Keep the model on the same side as its reserved access tile. One tested
-            // position left it a full tile away and the opposite correction moved it a
-            // full tile through the wall; their midpoint places its rear face on the wall.
-            visualRoot.localPosition = new Vector3(0f, 0f, 0.012733f);
+            // This imported root is scaled by 39.37008, so 0.0254 local units equal one
+            // complete world tile. Move the last tested position only a quarter tile
+            // towards the reserved access cell: 0.25 / 39.37008 = 0.00635 local units.
+            visualRoot.localPosition = new Vector3(0f, 0f, 0.031783f);
 
             // The imported faces point into the wall. Flip each mesh around its own centre
             // so the door remains in front of the box instead of exchanging their depths.
