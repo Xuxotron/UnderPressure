@@ -52,28 +52,28 @@ namespace UnderPressure
     }
 
     /// <summary>
-    /// Continues from the newest level save only after the native career load has
-    /// completed.  Scheduling the level through MetagameStateData preserves the
-    /// same state transition used by MetagameStatePlayer.LaunchHospital without
-    /// depending on either campaign-map menu.
+    /// Continues from the newest level save when the native campaign map opens.
+    /// At that point the career is fully restored, but its fade-in has not begun.
+    /// Scheduling the level through MetagameStateData preserves the same state
+    /// transition used by MetagameStatePlayer.LaunchHospital without displaying
+    /// or depending on either campaign-map menu.
     /// </summary>
-    [HarmonyPatch(typeof(GameModeCareer), "PostLoad")]
+    [HarmonyPatch(typeof(MetagameMap), "Open")]
     internal static class AutoLoadLastSavePatch
     {
         private static bool _attempted;
 
-        private static void Postfix(GameModeCareer __instance)
+        private static void Postfix(MetagameMap __instance)
         {
             if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
                 return;
 
             _attempted = true;
 
-            var metagameMap = __instance?.MetagameMap;
-            var app = metagameMap?.App;
+            var app = __instance?.App;
             var saveSystem = app?.SaveSystem;
-            var metagame = metagameMap?.Metagame;
-            var stateMachine = metagameMap?.StateMachine;
+            var metagame = __instance?.Metagame;
+            var stateMachine = __instance?.StateMachine;
             if (app == null || saveSystem == null || metagame == null || stateMachine == null)
             {
                 UnderPressurePlugin.Log.LogWarning(
