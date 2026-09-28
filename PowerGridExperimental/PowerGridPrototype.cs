@@ -7,6 +7,7 @@ using System.Reflection;
 using BepInEx;
 using FullInspector.Generated.SharedInstance;
 using HarmonyLib;
+using TMPro;
 using TH20;
 using TH20.UI;
 using UnityEngine;
@@ -102,6 +103,8 @@ namespace UnderPressure.PowerGrid
         private float _dailyEnergyRemainder;
         private RectTransform _energyHudRoot;
         private RectTransform _energyHudFill;
+        private TMP_Text _energyHudFirstValue;
+        private TMP_Text _energyHudSecondValue;
         private TooltipSpawner _energyHudTooltip;
 
         private sealed class ElectricityCostIndicator
@@ -766,10 +769,10 @@ namespace UnderPressure.PowerGrid
             var menuRect = menu == null ? null : menu.transform as RectTransform;
             if (menuRect == null) return;
 
-            var sprite = FindSprite("T_UI_D7_ER_Map_Battery_Icon");
+            var sprite = PowerGridPlugin.BatterySprite;
             if (sprite == null)
             {
-                PowerGridPlugin.Log.LogWarning("No se encontro T_UI_D7_ER_Map_Battery_Icon para el HUD electrico.");
+                PowerGridPlugin.Log.LogWarning("No se encontro el sprite bateria para el HUD electrico.");
                 return;
             }
 
@@ -780,33 +783,44 @@ namespace UnderPressure.PowerGrid
             _energyHudRoot.SetParent(menuRect, false);
             _energyHudRoot.anchorMin = _energyHudRoot.anchorMax = new Vector2(0f, 0.5f);
             _energyHudRoot.pivot = new Vector2(1f, 0.5f);
-            _energyHudRoot.anchoredPosition = new Vector2(-5f, 0f);
-            _energyHudRoot.sizeDelta = new Vector2(94f, 142f);
+            _energyHudRoot.anchoredPosition = new Vector2(-6f, -4f);
+            _energyHudRoot.sizeDelta = new Vector2(156f, 92f);
             var hitArea = root.GetComponent<Image>();
             hitArea.color = Color.clear;
             hitArea.raycastTarget = true;
 
-            var fillObject = new GameObject("Charge Fill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var fillObject = new GameObject("Battery Charge Fill", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(Image));
             _energyHudFill = fillObject.GetComponent<RectTransform>();
             _energyHudFill.SetParent(_energyHudRoot, false);
-            _energyHudFill.anchorMin = new Vector2(0.25f, 0.22f);
-            _energyHudFill.anchorMax = new Vector2(0.75f, 0.22f);
-            _energyHudFill.offsetMin = _energyHudFill.offsetMax = Vector2.zero;
-            fillObject.GetComponent<Image>().raycastTarget = false;
+            _energyHudFill.anchorMin = _energyHudFill.anchorMax = new Vector2(0.5f, 0.5f);
+            _energyHudFill.pivot = new Vector2(0f, 0.5f);
+            _energyHudFill.anchoredPosition = new Vector2(-65f, -12f);
+            _energyHudFill.sizeDelta = new Vector2(0f, 48f);
+            var fillImage = fillObject.GetComponent<Image>();
+            fillImage.color = new Color(0.86f, 0.08f, 0.07f, 0.95f);
+            fillImage.raycastTarget = false;
 
-            var iconObject = new GameObject("Battery Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var iconObject = new GameObject("Battery Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             var iconRect = iconObject.GetComponent<RectTransform>();
             iconRect.SetParent(_energyHudRoot, false);
             iconRect.anchorMin = iconRect.anchorMax = new Vector2(0.5f, 0.5f);
             iconRect.pivot = new Vector2(0.5f, 0.5f);
-            iconRect.anchoredPosition = Vector2.zero;
-            iconRect.sizeDelta = new Vector2(146f, 92f);
-            iconRect.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            iconRect.anchoredPosition = new Vector2(0f, -12f);
+            iconRect.sizeDelta = new Vector2(146f, 65f);
             var icon = iconObject.GetComponent<Image>();
             icon.sprite = sprite;
             icon.preserveAspect = true;
             icon.color = Color.white;
             icon.raycastTarget = false;
+
+            var textTemplate = menu.GetComponentInChildren<TMP_Text>(true);
+            _energyHudFirstValue = CreateEnergyHudText(_energyHudRoot, textTemplate, "Battery First Value",
+                new Vector2(-39f, 31f), new Vector2(62f, 25f), "0");
+            CreateEnergyHudText(_energyHudRoot, textTemplate, "Battery Value Separator",
+                new Vector2(0f, 31f), new Vector2(18f, 25f), "/");
+            _energyHudSecondValue = CreateEnergyHudText(_energyHudRoot, textTemplate, "Battery Second Value",
+                new Vector2(39f, 31f), new Vector2(62f, 25f), "0");
 
             var genericTooltip = AccessTools.Field(typeof(TimeAndStatsMenu), "_yearTooltipSpawner")
                 ?.GetValue(menu) as TooltipSpawner;
@@ -831,23 +845,41 @@ namespace UnderPressure.PowerGrid
             RefreshEnergyHud();
         }
 
-        private static Sprite FindSprite(string name)
+        private static TMP_Text CreateEnergyHudText(Transform parent, TMP_Text template, string name,
+            Vector2 position, Vector2 size, string initialText)
         {
-            foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
-                if (sprite != null && string.Equals(sprite.name, name, StringComparison.OrdinalIgnoreCase))
-                    return sprite;
-            return null;
+            var textObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer));
+            var rect = textObject.GetComponent<RectTransform>();
+            rect.SetParent(parent, false);
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+
+            var text = textObject.AddComponent<TextMeshProUGUI>();
+            if (template != null)
+            {
+                text.font = template.font;
+                text.fontSharedMaterial = template.fontSharedMaterial;
+            }
+            text.text = initialText;
+            text.fontSize = 20f;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = TextAlignmentOptions.Center;
+            text.color = Color.white;
+            text.enableWordWrapping = false;
+            text.overflowMode = TextOverflowModes.Overflow;
+            text.raycastTarget = false;
+            text.outlineColor = new Color32(35, 50, 38, 255);
+            text.outlineWidth = 0.18f;
+            return text;
         }
 
         private void RefreshEnergyHud()
         {
             if (_energyHudRoot == null || _energyHudFill == null) return;
             var ratio = _energyCapacity <= 0 ? 0f : Mathf.Clamp01((float)_storedEnergy / _energyCapacity);
-            const float bottom = 0.22f;
-            const float top = 0.80f;
-            const float height = top - bottom;
-            _energyHudFill.anchorMin = new Vector2(0.25f, bottom);
-            _energyHudFill.anchorMax = new Vector2(0.75f, bottom + height * ratio);
+            _energyHudFill.sizeDelta = new Vector2(120f * ratio, 48f);
             var image = _energyHudFill.GetComponent<Image>();
             if (image == null) return;
             if (ratio < 0.33f)
