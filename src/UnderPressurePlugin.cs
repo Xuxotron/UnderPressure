@@ -25,6 +25,7 @@ namespace UnderPressure
         internal static ConfigEntry<bool> SeparateReputationPrestigeSetting { get; private set; }
         internal static ConfigEntry<bool> PermanentMachineWearSetting { get; private set; }
         internal static ConfigEntry<bool> VisualLightingSetting { get; private set; }
+        internal static ConfigEntry<bool> UnlockLampsSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveReputationSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveExpansionSetting { get; private set; }
@@ -61,6 +62,8 @@ namespace UnderPressure
             IsModEnabled && PermanentMachineWearSetting != null && PermanentMachineWearSetting.Value;
         internal static bool ShouldUseVisualLighting =>
             IsModEnabled && VisualLightingSetting != null && VisualLightingSetting.Value;
+        internal static bool ShouldUnlockLamps =>
+            IsModEnabled && UnlockLampsSetting != null && UnlockLampsSetting.Value;
         internal static ManualLogSource Log { get; private set; }
 
         private void Awake()
@@ -109,6 +112,9 @@ namespace UnderPressure
             VisualLightingSetting = Config.Bind(
                 "Visual", "HospitalLighting", false,
                 "Oscurece los interiores y añade iluminación visual procedente de ventanas y lámparas compatibles.");
+            UnlockLampsSetting = Config.Bind(
+                "Jugabilidad", "UnlockLamps", false,
+                "Desbloquea las lámparas de Consulta, Psiquiatría, Sala de personal y Marketing y permite colocarlas en cualquier sala.");
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
             AdaptiveReputationSetting = Config.Bind("Dificultad adaptable", "Reputation", false,

@@ -117,10 +117,11 @@ namespace UnderPressure.PowerGrid
                     BatteryGuid,
                     "UnderPressure/Item/EnergyBattery/Name", "Batería", "Battery",
                     "UnderPressure/Item/EnergyBattery/Description",
-                    "Batería para la Sala de energía. Todavía no almacena electricidad.",
-                    "Battery for the Energy Room. It does not store electricity yet.");
+                    "Batería para la Sala de energía. Almacena hasta 200 de energía y se recarga cada día.",
+                    "Battery for the Energy Room. Stores up to 200 energy and recharges every day.");
                 Set(Battery, "_prefab", batteryVisual.GetPrefab(0));
                 Set(Battery, "_blueprintPrefab", batteryVisual.GetBlueprintPrefab(0) ?? batteryVisual.GetPrefab(0));
+                Set(Battery, "_cost", 2000);
                 Set(Battery, "_singlePlace", false);
                 DisableOwnInteractions(Battery);
                 BatteryShared = CreateWrapper(Battery, BatterySharedId, "UnderPressure Energy Battery");
@@ -146,7 +147,7 @@ namespace UnderPressure.PowerGrid
                 Set(Panel, "_hasCollision", true);
                 Set(Panel, "_occupyWallOnly", false);
                 Set(Panel, "_affectsNavigation", false);
-                Set(Panel, "_energyCost", 0);
+                Set(Panel, "_energyCost", 300);
                 Set(Panel, "_generatesElectricity", false);
                 Set(Panel, "_ignoredByJanitors", true);
                 Set(Panel, "_maintenanceModifer", 0f);
@@ -180,8 +181,9 @@ namespace UnderPressure.PowerGrid
                 additions.Add(TransformerShared);
             }
 
-            // Use the native radiator's exact room modifiers so the transformer
-            // contributes the same amount of heat without imitating the effect.
+            // Use the native radiator's exact room modifiers so both Energy Room
+            // objects contribute the same amount of heat without imitating the effect.
+            Set(Battery, "_roomModifiers", radiator.RoomModifiers);
             Set(Transformer, "_roomModifiers", radiator.RoomModifiers);
             Set(Transformer, "_ignoredByJanitors", true);
             EnergyCampaignRuntime.ConfigureTransformerDefinition(Transformer, campaignTable);
@@ -221,6 +223,14 @@ namespace UnderPressure.PowerGrid
         internal static bool IsTransformer(RoomItem item)
         {
             return item != null && ReferenceEquals(item.Definition, Transformer);
+        }
+
+        internal static bool IsBattery(RoomItem item) => item != null && IsBattery(item.Definition);
+
+        internal static bool IsBattery(IRoomItemDefinition definition)
+        {
+            var item = definition as RoomItemDefinition;
+            return item != null && (ReferenceEquals(item, Battery) || item.DebugTag == BatteryTag);
         }
 
         internal static bool IsTransformer(IRoomItemDefinition definition)

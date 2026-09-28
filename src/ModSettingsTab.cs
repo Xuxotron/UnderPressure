@@ -77,6 +77,8 @@ namespace UnderPressure
         private TMP_Text _permanentMachineWearLabel;
         private Toggle _visualLightingToggle;
         private TMP_Text _visualLightingLabel;
+        private Toggle _unlockLampsToggle;
+        private TMP_Text _unlockLampsLabel;
         private Toggle _masterToggle;
         private TMP_Text _tabLabel;
         private TMP_Text _nativeSliderLabel;
@@ -323,6 +325,18 @@ namespace UnderPressure
                 _visualLightingToggle.isOn = UnderPressurePlugin.ShouldUseVisualLighting;
                 _visualLightingToggle.onValueChanged.AddListener(SetVisualLighting);
             }
+            var unlockLampsRow = Instantiate(settingRow, section);
+            unlockLampsRow.name = "Unlock Lamps";
+            RemoveLocalisers(unlockLampsRow);
+            SetStretchRow((RectTransform)unlockLampsRow, -192f, 45f, 12f);
+            _unlockLampsToggle = unlockLampsRow.GetComponentInChildren<Toggle>(true);
+            _unlockLampsLabel = unlockLampsRow.GetComponentInChildren<TMP_Text>(true);
+            if (_unlockLampsToggle != null)
+            {
+                _unlockLampsToggle.onValueChanged.RemoveAllListeners();
+                _unlockLampsToggle.isOn = UnderPressurePlugin.ShouldUnlockLamps;
+                _unlockLampsToggle.onValueChanged.AddListener(SetUnlockLamps);
+            }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
             ConfigureRowTooltip(separateReputationPrestigeRow, _separateReputationPrestigeLabel,
@@ -337,6 +351,8 @@ namespace UnderPressure
                 "tooltip.permanent_machine_wear");
             ConfigureRowTooltip(visualLightingRow, _visualLightingLabel,
                 "tooltip.visual_lighting");
+            ConfigureRowTooltip(unlockLampsRow, _unlockLampsLabel,
+                "tooltip.unlock_lamps");
             var uiRect = (RectTransform)section;
             SetHalfSectionRect(uiRect, -8f, 256f, true);
             SetHalfSectionRect((RectTransform)rightSection, -8f, 256f, false);
@@ -721,6 +737,11 @@ namespace UnderPressure
             HospitalLightingPrototype.NotifySettingChanged();
         }
 
+        private static void SetUnlockLamps(bool value)
+        {
+            UnderPressurePlugin.UnlockLampsSetting.Value = value;
+        }
+
         private static void SetMasterEnabled(bool value)
         {
             UnderPressurePlugin.EnabledSetting.Value = value;
@@ -778,6 +799,8 @@ namespace UnderPressure
                 _permanentMachineWearLabel.text = ModLocalization.Get("mod.permanent_machine_wear");
             if (_visualLightingLabel != null)
                 _visualLightingLabel.text = ModLocalization.Get("mod.visual_lighting");
+            if (_unlockLampsLabel != null)
+                _unlockLampsLabel.text = ModLocalization.Get("mod.unlock_lamps");
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);
