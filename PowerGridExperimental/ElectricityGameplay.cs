@@ -282,7 +282,16 @@ namespace UnderPressure.PowerGrid
             // The campaign discounts the money paid, not the physical demand. The native
             // recurring monthly value must survive payment; only the per-use accumulator resets.
             MonthlyEnergyField?.SetValue(__instance, __state.OriginalMonthly);
-            PowerGridPrototype.ConsumePerUseEnergy(__instance, __state.PerUseEnergy);
+        }
+    }
+
+    [HarmonyPatch(typeof(FinanceManager), "ModifyBalanceFromObjectInteraction")]
+    internal static class DailyTaskEnergyPatch
+    {
+        private static void Postfix(FinanceManager __instance, FinanceModifier __2)
+        {
+            if (__2 == null || __2.EnergyCost <= 0) return;
+            PowerGridPrototype.RecordTaskEnergy(__instance, __2.EnergyCost);
         }
     }
 

@@ -42,6 +42,7 @@ namespace UnderPressure.PowerGrid
     internal sealed class PowerGridPrototype : MonoBehaviour
     {
         private const int ElectricityMode = 602;
+        private const int DefaultContractedEnergy = 2000;
         private const float PowerTileSize = 1f;
         private const float PanelAnimationSpeed = 7f;
         // The drawer is a sibling of the native HUD, whose parent is scaled at runtime.
@@ -97,10 +98,14 @@ namespace UnderPressure.PowerGrid
         private bool _initialised;
         private bool _networkDirty;
         private bool _energyStateInitialised;
-        private int _storedEnergy;
+        private int _contractedEnergy;
+        private int _batteryEnergy;
         private int _energyCapacity;
-        private int _savedEnergyCapacity;
+        private int _lastDailyEnergy;
+        private int _lastTaskEnergy;
+        private int _currentDayTaskEnergy;
         private float _dailyEnergyRemainder;
+        private bool _gridOverloaded;
         private RectTransform _energyHudRoot;
         private RectTransform _energyHudFill;
         private TMP_Text _energyHudFirstValue;
@@ -309,11 +314,33 @@ namespace UnderPressure.PowerGrid
                     if ((parts.Length == 3 || parts.Length == 4) && parts[0] == "E" && int.TryParse(parts[1], out var stored) &&
                         int.TryParse(parts[2], out var capacity))
                     {
-                        _storedEnergy = Math.Max(0, stored);
-                        _savedEnergyCapacity = Math.Max(0, capacity);
+                        // Legacy saves stored a depleting reserve. Preserve their former total
+                        // as the first contracted service value and begin the new daily model cleanly.
+                        _contractedEnergy = Math.Max(DefaultContractedEnergy, capacity);
+                        _batteryEnergy = 0;
+                        _lastDailyEnergy = Mathf.Max(0,
+                            Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f));
+                        _lastTaskEnergy = 0;
+                        _currentDayTaskEnergy = 0;
                         _dailyEnergyRemainder = parts.Length == 4 && TryFloat(parts[3], out var remainder)
                             ? Mathf.Clamp(remainder, 0f, 0.999999f)
                             : 0f;
+                        _gridOverloaded = false;
+                        _energyStateInitialised = true;
+                    }
+                    if (parts.Length == 8 && parts[0] == "E2" &&
+                        int.TryParse(parts[1], out var contracted) && int.TryParse(parts[2], out var batteries) &&
+                        int.TryParse(parts[3], out var dailyEnergy) && int.TryParse(parts[4], out var taskEnergy) &&
+                        int.TryParse(parts[5], out var currentTasks) && TryFloat(parts[6], out var dailyRemainder) &&
+                        (parts[7] == "0" || parts[7] == "1"))
+                    {
+                        _contractedEnergy = Math.Max(0, contracted);
+                        _batteryEnergy = Math.Max(0, batteries);
+                        _lastDailyEnergy = Math.Max(0, dailyEnergy);
+                        _lastTaskEnergy = Math.Max(0, taskEnergy);
+                        _currentDayTaskEnergy = Math.Max(0, currentTasks);
+                        _dailyEnergyRemainder = Mathf.Clamp(dailyRemainder, 0f, 0.999999f);
+                        _gridOverloaded = parts[7] == "1";
                         _energyStateInitialised = true;
                     }
                     if (parts.Length == 7 && parts[0] == "P" && int.TryParse(parts[1], out var campaignX) &&
@@ -367,7 +394,9 @@ namespace UnderPressure.PowerGrid
                     : left.Y.CompareTo(right.Y));
                 var lines = new List<string>(ordered.Count + 32) { "UNDERPRESSURE_SAVE_1" };
                 foreach (var coord in ordered) lines.Add("C," + coord.X + "," + coord.Y);
-                lines.Add("E," + _storedEnergy + "," + _energyCapacity + "," + F(_dailyEnergyRemainder));
+                lines.Add("E2," + _contractedEnergy + "," + _batteryEnergy + "," + _lastDailyEnergy + "," +
+                          _lastTaskEnergy + "," + _currentDayTaskEnergy + "," + F(_dailyEnergyRemainder) + "," +
+                          (_gridOverloaded ? "1" : "0"));
                 SaveEnergyRooms(lines);
                 SaveStaffJobAssignments(lines);
                 EnergyCampaignSystem.AppendSave(lines, _level);
@@ -834,13 +863,14 @@ namespace UnderPressure.PowerGrid
             _energyHudTooltip.AnchorOffset = new Vector3(18f, 18f, 0f);
             _energyHudTooltip.SetDataProvider(tooltip =>
             {
-                var daily = ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f;
-                tooltip.Text = "<color=#202020>Total: " +
-                               _energyCapacity.ToString(CultureInfo.InvariantCulture) + "</color>" +
-                               "\n<color=#E04898>Actual: " +
-                               _storedEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
+                tooltip.Text = "<color=#202020>Energía: " +
+                               _contractedEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
+                               "\n<color=#E04898>Baterías: " +
+                               _batteryEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
                                "\n<color=#258DB8>Diario: " +
-                               daily.ToString("0.##", CultureInfo.InvariantCulture) + "</color>";
+                               DisplayedDailyEnergy().ToString(CultureInfo.InvariantCulture) + "</color>" +
+                               "\n<color=#E88124>Tareas: " +
+                               _lastTaskEnergy.ToString(CultureInfo.InvariantCulture) + "</color>";
             });
             RefreshEnergyHud();
         }
@@ -878,8 +908,15 @@ namespace UnderPressure.PowerGrid
         private void RefreshEnergyHud()
         {
             if (_energyHudRoot == null || _energyHudFill == null) return;
-            var ratio = _energyCapacity <= 0 ? 0f : Mathf.Clamp01((float)_storedEnergy / _energyCapacity);
+            var dailyConsumption = DisplayedDailyEnergy() + _lastTaskEnergy;
+            var ratio = _energyCapacity <= 0
+                ? 0f
+                : Mathf.Clamp01(1f - (float)dailyConsumption / _energyCapacity);
             _energyHudFill.sizeDelta = new Vector2(120f * ratio, 48f);
+            if (_energyHudFirstValue != null)
+                _energyHudFirstValue.text = _energyCapacity.ToString(CultureInfo.InvariantCulture);
+            if (_energyHudSecondValue != null)
+                _energyHudSecondValue.text = dailyConsumption.ToString(CultureInfo.InvariantCulture);
             var image = _energyHudFill.GetComponent<Image>();
             if (image == null) return;
             if (ratio < 0.33f)
@@ -891,6 +928,12 @@ namespace UnderPressure.PowerGrid
             else
                 image.color = Color.Lerp(new Color(1f, 0.86f, 0.04f, 0.95f),
                     new Color(0.20f, 0.92f, 0.23f, 0.95f), (ratio - 0.66f) / 0.34f);
+        }
+
+        private int DisplayedDailyEnergy()
+        {
+            if (_energyStateInitialised) return Math.Max(0, _lastDailyEnergy);
+            return Mathf.Max(0, Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f));
         }
 
         private DynamicButton CreateToolButton(DynamicButton template, Transform parent, string name,
@@ -1110,7 +1153,8 @@ namespace UnderPressure.PowerGrid
 
             foreach (var pair in _cellVisuals)
             {
-                var powered = _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
+                var powered = !_gridOverloaded &&
+                              _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
                 SetVisualColor(pair.Value, powered ? PoweredColor : DisconnectedColor);
             }
             RebuildGeneratorVisual();
@@ -1122,45 +1166,31 @@ namespace UnderPressure.PowerGrid
 
         private void RefreshEnergyCapacity()
         {
-            var capacity = 0;
-            if (_level?.WorldState?.AllRooms != null)
-                foreach (var room in _level.WorldState.AllRooms)
-                {
-                    var items = room?.FloorPlan?.Items;
-                    if (items == null) continue;
-                    foreach (var item in items)
-                    {
-                        if (item?.Definition == null) continue;
-                        if (ReferenceEquals(item.Definition, EnergyRoomItems.Transformer)) capacity += 2000;
-                        else if (ReferenceEquals(item.Definition, EnergyRoomItems.Battery)) capacity += 1000;
-                    }
-                }
-
             if (!_energyStateInitialised)
             {
-                _storedEnergy = capacity;
+                _contractedEnergy = DefaultContractedEnergy;
+                _batteryEnergy = 0;
+                _lastDailyEnergy = Mathf.Max(0,
+                    Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f));
+                _lastTaskEnergy = 0;
+                _currentDayTaskEnergy = 0;
+                _gridOverloaded = false;
                 _energyStateInitialised = true;
             }
-            else
-            {
-                var previousCapacity = _energyCapacity > 0 ? _energyCapacity : _savedEnergyCapacity;
-                if (capacity > previousCapacity) _storedEnergy += capacity - previousCapacity;
-                _storedEnergy = Mathf.Clamp(_storedEnergy, 0, capacity);
-            }
-            _energyCapacity = capacity;
-            _savedEnergyCapacity = capacity;
+
+            // Battery capacity remains zero until battery placement and wear are implemented.
+            // Keep it as a separate value now so the HUD and daily capacity model do not need
+            // another structural change when that system arrives.
+            _batteryEnergy = 0;
+            _energyCapacity = Math.Max(0, _contractedEnergy) + Math.Max(0, _batteryEnergy);
             RefreshEnergyHud();
         }
 
-        internal static void ConsumePerUseEnergy(FinanceManager manager, int amount)
+        internal static void RecordTaskEnergy(FinanceManager manager, int amount)
         {
             var active = Active;
             if (active == null || amount <= 0 || !ReferenceEquals(active._level?.FinanceManager, manager)) return;
-            active._storedEnergy = Math.Max(0, active._storedEnergy - amount);
-            active.RefreshEnergyHud();
-            active.RefreshElectricItemColors();
-            PowerGridPlugin.Log.LogInfo("Carga electrica consumida por usos: " + amount +
-                                        "; restante " + active._storedEnergy + "/" + active._energyCapacity + ".");
+            active._currentDayTaskEnergy += amount;
         }
 
         internal static void ConsumeDailyMonthlyEnergy(Level level)
@@ -1168,16 +1198,38 @@ namespace UnderPressure.PowerGrid
             var active = Active;
             if (active == null || level == null || !ReferenceEquals(active._level, level)) return;
             var monthly = ElectricityGameplay.GetMonthlyEnergyDemand(level);
-            if (monthly <= 0) return;
-            active._dailyEnergyRemainder += monthly / 30f;
-            var amount = Mathf.FloorToInt(active._dailyEnergyRemainder + 0.000001f);
-            if (amount <= 0) return;
-            active._dailyEnergyRemainder -= amount;
-            active._storedEnergy = Math.Max(0, active._storedEnergy - amount);
+            active._dailyEnergyRemainder += Math.Max(0, monthly) / 30f;
+            var dailyEnergy = Mathf.FloorToInt(active._dailyEnergyRemainder + 0.000001f);
+            active._dailyEnergyRemainder -= dailyEnergy;
+            active._lastDailyEnergy = Math.Max(0, dailyEnergy);
+            active._lastTaskEnergy = Math.Max(0, active._currentDayTaskEnergy);
+            active._currentDayTaskEnergy = 0;
+            active._energyCapacity = Math.Max(0, active._contractedEnergy) + Math.Max(0, active._batteryEnergy);
+            var dailyConsumption = active._lastDailyEnergy + active._lastTaskEnergy;
+            var wasOverloaded = active._gridOverloaded;
+            active._gridOverloaded = dailyConsumption > active._energyCapacity;
             active.RefreshEnergyHud();
             active.RefreshElectricItemColors();
-            PowerGridPlugin.Log.LogInfo("Consumo electrico diario: " + amount +
-                                        "; restante " + active._storedEnergy + "/" + active._energyCapacity + ".");
+            active.RefreshNetworkOutageVisuals();
+            if (active._gridOverloaded != wasOverloaded)
+                PowerGridPlugin.Log.LogWarning(active._gridOverloaded
+                    ? "Red electrica caida: el consumo diario " + dailyConsumption +
+                      " supera la energia disponible " + active._energyCapacity + "."
+                    : "Red electrica recuperada al comenzar el nuevo dia.");
+            else
+                PowerGridPlugin.Log.LogInfo("Consumo electrico diario: " + dailyConsumption + "/" +
+                                            active._energyCapacity + " (Diario " + active._lastDailyEnergy +
+                                            ", Tareas " + active._lastTaskEnergy + ").");
+        }
+
+        private void RefreshNetworkOutageVisuals()
+        {
+            foreach (var pair in _cellVisuals)
+            {
+                if (pair.Value == null) continue;
+                var powered = !_gridOverloaded && _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
+                SetVisualColor(pair.Value, powered ? PoweredColor : DisconnectedColor);
+            }
         }
 
         private void RebuildGeneratorCells()
@@ -1510,7 +1562,7 @@ namespace UnderPressure.PowerGrid
 
         private bool IsItemPoweredInternal(RoomItem item)
         {
-            if (_storedEnergy <= 0) return false;
+            if (_gridOverloaded) return false;
             var center = PowerCoord.FromWorldPosition(item.WorldCenter);
             for (var offsetX = -1; offsetX <= 1; ++offsetX)
             for (var offsetY = -1; offsetY <= 1; ++offsetY)
