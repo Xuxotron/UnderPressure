@@ -1518,6 +1518,28 @@ namespace UnderPressure.PowerGrid
                                             ", Tareas " + active._lastTaskEnergy + ").");
         }
 
+        internal static bool TryGetBatteryCharge(RoomItem item, out float progress, out int roundedMaximum)
+        {
+            progress = 0f;
+            roundedMaximum = 0;
+            var active = Active;
+            if (active == null || item == null || !EnergyRoomItems.IsBattery(item) ||
+                !ReferenceEquals(active._level, item.Level)) return false;
+
+            if (!active._batteryStates.TryGetValue(item.ID, out var state))
+            {
+                active.ReconcileBatteryStates();
+                if (!active._batteryStates.TryGetValue(item.ID, out state)) return false;
+            }
+
+            var maximum = Math.Max(0, state.MaximumHundredths);
+            roundedMaximum = (maximum + EnergyHundredths - 1) / EnergyHundredths;
+            progress = maximum == 0
+                ? 0f
+                : Mathf.Clamp01(state.ChargeHundredths / (float)maximum);
+            return true;
+        }
+
         private void ReconcileBatteryStates(IList<LoadedBatteryRecord> loaded = null)
         {
             var current = new List<RoomItem>();
@@ -1704,9 +1726,14 @@ namespace UnderPressure.PowerGrid
             foreach (var panel in panels)
             {
                 if (!EnergyRoomItems.IsPanel(panel)) continue;
-                var facing = panel.GridRotation.DirectionVector();
-                _panelCells.Add(PowerCoord.FromWorldPosition(panel.WorldPosition + facing * 0.5f));
+                _panelCells.Add(GetPanelCell(panel));
             }
+        }
+
+        private static PowerCoord GetPanelCell(RoomItem panel)
+        {
+            var facing = panel.GridRotation.DirectionVector();
+            return PowerCoord.FromWorldPosition(panel.WorldPosition + facing * 0.5f);
         }
 
         private void RebuildGeneratorVisual()
@@ -1993,14 +2020,31 @@ namespace UnderPressure.PowerGrid
         private void RefreshElectricItemColors()
         {
             if (!_electricityViewActive || _level?.WorldState?.AllRooms == null) return;
+
+            // Panels may be mounted in rooms or corridors, so colour them from the
+            // WorldState collection instead of relying on a room floor-plan owner.
+            var panels = EnergyRoomItems.Panel == null
+                ? null
+                : _level.WorldState.GetRoomItemsOfType(EnergyRoomItems.Panel);
+            if (panels != null)
+                foreach (var panel in panels)
+                {
+                    if (!EnergyRoomItems.IsPanel(panel) || panel.Visual == null) continue;
+                    var powered = !_gridOverloaded && _activePanelCells.Contains(GetPanelCell(panel));
+                    panel.Visual.SetValueMaterial(powered ? PoweredColor : UnpoweredObjectColor);
+                    panel.Visual.EnableValueMaterial();
+                }
+
             foreach (var room in _level.WorldState.AllRooms)
             {
                 var items = room?.FloorPlan?.Items;
                 if (items == null) continue;
                 foreach (var item in items)
                 {
-                    if (item?.Visual == null || !ElectricityGameplay.RequiresPower(item)) continue;
-                    item.Visual.SetValueMaterial(IsItemPoweredInternal(item) ? PoweredColor : UnpoweredObjectColor);
+                    if (item?.Visual == null || EnergyRoomItems.IsPanel(item) ||
+                        !ElectricityGameplay.RequiresPower(item)) continue;
+                    var powered = IsItemPoweredInternal(item);
+                    item.Visual.SetValueMaterial(powered ? PoweredColor : UnpoweredObjectColor);
                     item.Visual.EnableValueMaterial();
                 }
             }
@@ -2017,6 +2061,7 @@ namespace UnderPressure.PowerGrid
         private bool IsItemPoweredInternal(RoomItem item)
         {
             if (_gridOverloaded) return false;
+            if (EnergyRoomItems.IsPanel(item)) return _activePanelCells.Contains(GetPanelCell(item));
             if (!ElectricityGameplay.TryGetDisplayCost(item, out _, out var kind)) return true;
             var powerValues = kind == ElectricityGameplay.CostKind.Monthly
                 ? _lowVoltagePowerValue
@@ -2282,7 +2327,7 @@ namespace UnderPressure.PowerGrid
         private sealed class BatteryState
         {
             internal RoomItem Item;
-            internal readonly int MaximumHundredths;
+            internal int MaximumHundredths;
             internal int ChargeHundredths;
 
             internal BatteryState(RoomItem item, int maximumHundredths, int chargeHundredths)

@@ -115,10 +115,10 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            // This imported root is scaled by 39.37008, so 0.0254 local units equal one
-            // complete world tile. Move the last tested position only a quarter tile
-            // towards the reserved access cell: 0.25 / 39.37008 = 0.00635 local units.
-            visualRoot.localPosition = new Vector3(0f, 0f, 0.031783f);
+            // This imported root is scaled by 39.37008. Move the complete visual hierarchy
+            // another 0.2 world units towards the wall, keeping meshes and animation sockets
+            // aligned: 0.031783 - (0.2 / 39.37008) = 0.026703 local units.
+            visualRoot.localPosition = new Vector3(0f, 0f, 0.026703f);
 
             // The imported faces point into the wall. Flip each mesh around its own centre
             // so the door remains in front of the box instead of exchanging their depths.
