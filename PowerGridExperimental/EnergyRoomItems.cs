@@ -9,6 +9,15 @@ using UnityEngine;
 
 namespace UnderPressure.PowerGrid
 {
+    [HarmonyPatch(typeof(RoomItemDefinition), nameof(RoomItemDefinition.AllowCollisionOutsideRoom))]
+    internal static class ElectricalPanelRoomBoundaryPatch
+    {
+        private static void Postfix(RoomItemDefinition __instance, ref bool __result)
+        {
+            if (EnergyRoomItems.IsPanel(__instance)) __result = true;
+        }
+    }
+
     internal static class EnergyRoomItems
     {
         // AssetIDMapping reserves wrapper ID - 1 for the wrapped instance. Keep

@@ -115,9 +115,10 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            // The locker rig left the replacement meshes 1.1 m away from the wall. The
-            // outer box is 7.6 cm deep, so this places its rear face exactly on the wall.
-            visualRoot.localPosition = new Vector3(0f, 0f, 0.012733f);
+            // Wall items are anchored one tile in front of the wall. Keep the corrected
+            // mesh orientation, but move the visual itself back by that tile so the box
+            // is flush with the wall while its reserved access tile stays in front.
+            visualRoot.localPosition = new Vector3(0f, 0f, -0.012667f);
 
             // The imported faces point into the wall. Flip each mesh around its own centre
             // so the door remains in front of the box instead of exchanging their depths.
