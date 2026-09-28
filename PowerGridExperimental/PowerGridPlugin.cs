@@ -115,10 +115,10 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            // Wall items are anchored one tile in front of the wall. Keep the corrected
-            // mesh orientation, but move the visual itself back by that tile so the box
-            // is flush with the wall while its reserved access tile stays in front.
-            visualRoot.localPosition = new Vector3(0f, 0f, -0.012667f);
+            // The wall lies in the positive local-Z direction from the placement anchor.
+            // The previous correction used the opposite sign; from that tested position
+            // this is exactly two tiles wallwards, leaving the access tile in front.
+            visualRoot.localPosition = new Vector3(0f, 0f, 0.038133f);
 
             // The imported faces point into the wall. Flip each mesh around its own centre
             // so the door remains in front of the box instead of exchanging their depths.
@@ -131,6 +131,12 @@ namespace UnderPressure.PowerGrid
                                        new Vector3(scaledCentre.x * 2f, 0f, scaledCentre.z * 2f);
                 meshTransform.localPosition += centreCorrection;
                 meshTransform.localRotation *= Quaternion.Euler(0f, 180f, 0f);
+
+                // The locker rig leaves the box base 4.5 cm farther out than the lid.
+                // Mirror that separation so the base sits against the wall and the lid
+                // remains in front, ready for its later opening animation.
+                if (string.Equals(filter.name, "ChafCaja05", StringComparison.Ordinal))
+                    meshTransform.localPosition += new Vector3(0f, 0f, 0.002318f);
             }
         }
 

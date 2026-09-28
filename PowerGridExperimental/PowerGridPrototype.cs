@@ -85,6 +85,7 @@ namespace UnderPressure.PowerGrid
         private static readonly Color PreviewAddColor = new Color(1f, 0.76f, 0.30f, 1f);
         private static readonly Color LowVoltageColor = new Color(1f, 0.86f, 0.08f, 1f);
         private static readonly Color LowVoltagePreviewColor = new Color(1f, 0.94f, 0.30f, 1f);
+        private static readonly Color LowVoltageDisconnectedColor = new Color(0.62f, 0.65f, 0.68f, 1f);
         private static readonly Color PanelCellColor = new Color(0.08f, 0.78f, 0.72f, 1f);
         private static readonly Color DisconnectedColor = new Color(0.32f, 0.35f, 0.38f, 1f);
         private static readonly Color GeneratorColor = new Color(0.58f, 1f, 0.08f, 1f);
@@ -199,10 +200,16 @@ namespace UnderPressure.PowerGrid
                 }
             }
             AnimateToolPanel(active);
-            if (!active || _toolMode == ToolMode.None) return;
+            if (!active) return;
 
             var input = _level.InputManager;
             if (input == null || input.IsMouseOverGuiOrDraggingScrollbar()) return;
+            if (Input.GetKeyDown(KeyCode.Delete))
+            {
+                DeleteCableUnderCursor();
+                return;
+            }
+            if (_toolMode == ToolMode.None) return;
             if (!_dragging && input.GetMouseDownOnScene((MouseButton)0))
             {
                 _dragging = true;
@@ -283,6 +290,18 @@ namespace UnderPressure.PowerGrid
             if (!cells.Remove(coord)) return;
             if (visuals.TryGetValue(coord, out var oldVisual)) Object.Destroy(oldVisual);
             visuals.Remove(coord);
+        }
+
+        private void DeleteCableUnderCursor()
+        {
+            var coord = PowerCoord.FromWorldPosition(_level.CursorManager.WorldPosition);
+            var existed = _cells.Contains(coord) || _lowVoltageCells.Contains(coord);
+            if (!existed) return;
+            CancelDrag();
+            RemoveCable(coord, _cells, _cellVisuals);
+            RemoveCable(coord, _lowVoltageCells, _lowVoltageVisuals);
+            RebuildNetwork();
+            PowerGridPlugin.Log.LogInfo("Cable electrico eliminado con Suprimir.");
         }
 
         private string GetExtraDataPath(int? saveSlotOverride = null, string levelIdOverride = null)
@@ -744,7 +763,9 @@ namespace UnderPressure.PowerGrid
 
             var withCandidate = new HashSet<PowerCoord>(sameVoltage) { coord };
             var distance = DistanceFromActivePanel(coord, withCandidate);
-            return distance > 0 && distance <= LowVoltageMaximumLength;
+            // A disconnected low-voltage layout may be prepared anywhere. Once it reaches
+            // an active panel, the normal five-cell limit becomes mandatory.
+            return distance < 0 || distance <= LowVoltageMaximumLength;
         }
 
         private bool CanReconnectDisconnectedEnds(PowerCoord first, PowerCoord second,
@@ -792,8 +813,7 @@ namespace UnderPressure.PowerGrid
                 foreach (var neighbour in CardinalNeighbours(current))
                 {
                     if (_activePanelCells.Contains(neighbour)) return distance;
-                    if (distance >= LowVoltageMaximumLength || !lowCells.Contains(neighbour) ||
-                        !visited.Add(neighbour)) continue;
+                    if (!lowCells.Contains(neighbour) || !visited.Add(neighbour)) continue;
                     queue.Enqueue(neighbour);
                     distances.Enqueue(distance + 1);
                 }
@@ -1378,7 +1398,7 @@ namespace UnderPressure.PowerGrid
             {
                 var powered = !_gridOverloaded &&
                               _lowVoltagePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
-                SetVisualColor(pair.Value, powered ? LowVoltageColor : DisconnectedColor);
+                SetVisualColor(pair.Value, powered ? LowVoltageColor : LowVoltageDisconnectedColor);
             }
             RebuildGeneratorVisual();
             RebuildPanelVisual();
@@ -1460,7 +1480,7 @@ namespace UnderPressure.PowerGrid
                 if (pair.Value == null) continue;
                 var powered = !_gridOverloaded &&
                               _lowVoltagePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
-                SetVisualColor(pair.Value, powered ? LowVoltageColor : DisconnectedColor);
+                SetVisualColor(pair.Value, powered ? LowVoltageColor : LowVoltageDisconnectedColor);
             }
         }
 

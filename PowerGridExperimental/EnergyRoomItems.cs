@@ -18,6 +18,44 @@ namespace UnderPressure.PowerGrid
         }
     }
 
+    [HarmonyPatch(typeof(CursorRoomItem), "CursorUpdate")]
+    internal static class EnergyDeskRotationSnapPatch
+    {
+        private static readonly FieldInfo DefinitionField = AccessTools.Field(typeof(CursorRoomItem), "_definition");
+        private static readonly FieldInfo FloorPlanField = AccessTools.Field(typeof(CursorRoomItem), "_floorPlan");
+        private static readonly FieldInfo RotationSnapField =
+            AccessTools.Field(typeof(RoomItemDefinition), "_rotationSnap");
+
+        private static void Prefix(CursorRoomItem __instance, out float __state)
+        {
+            __state = float.NaN;
+            var definition = DefinitionField?.GetValue(__instance) as RoomItemDefinition;
+            var floorPlan = FloorPlanField?.GetValue(__instance) as FloorPlan;
+            if (definition == null || floorPlan?.Definition == null || RotationSnapField == null ||
+                !ReferenceEquals(definition, EnergyRoomItems.MarketingDesk) ||
+                !PowerPlantRoomRegistry.IsPowerPlant(floorPlan.Definition)) return;
+            __state = definition.RotationSnap;
+            RotationSnapField.SetValue(definition, 90f);
+        }
+
+        private static void Postfix(float __state)
+        {
+            Restore(__state);
+        }
+
+        private static Exception Finalizer(Exception __exception, float __state)
+        {
+            Restore(__state);
+            return __exception;
+        }
+
+        private static void Restore(float previous)
+        {
+            if (float.IsNaN(previous) || EnergyRoomItems.MarketingDesk == null || RotationSnapField == null) return;
+            RotationSnapField.SetValue(EnergyRoomItems.MarketingDesk, previous);
+        }
+    }
+
     internal static class EnergyRoomItems
     {
         // AssetIDMapping reserves wrapper ID - 1 for the wrapped instance. Keep
