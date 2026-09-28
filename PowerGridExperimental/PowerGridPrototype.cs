@@ -824,7 +824,7 @@ namespace UnderPressure.PowerGrid
             _energyHudFill.SetParent(_energyHudRoot, false);
             _energyHudFill.anchorMin = _energyHudFill.anchorMax = new Vector2(0.5f, 0.5f);
             _energyHudFill.pivot = new Vector2(0f, 0.5f);
-            _energyHudFill.anchoredPosition = new Vector2(-65f, -12f);
+            _energyHudFill.anchoredPosition = new Vector2(-65f, -10f);
             _energyHudFill.sizeDelta = new Vector2(0f, 48f);
             var fillImage = fillObject.GetComponent<Image>();
             fillImage.color = new Color(0.86f, 0.08f, 0.07f, 0.95f);
@@ -865,11 +865,11 @@ namespace UnderPressure.PowerGrid
             {
                 tooltip.Text = "<color=#202020>Energía: " +
                                _contractedEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
-                               "\n<color=#E04898>Baterías: " +
+                               "\n<color=#E88124>Baterías: " +
                                _batteryEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
                                "\n<color=#258DB8>Diario: " +
                                DisplayedDailyEnergy().ToString(CultureInfo.InvariantCulture) + "</color>" +
-                               "\n<color=#E88124>Tareas: " +
+                               "\n<color=#E04898>Tareas: " +
                                _lastTaskEnergy.ToString(CultureInfo.InvariantCulture) + "</color>";
             });
             RefreshEnergyHud();
@@ -928,6 +928,7 @@ namespace UnderPressure.PowerGrid
             else
                 image.color = Color.Lerp(new Color(1f, 0.86f, 0.04f, 0.95f),
                     new Color(0.20f, 0.92f, 0.23f, 0.95f), (ratio - 0.66f) / 0.34f);
+            if (_energyHudSecondValue != null) _energyHudSecondValue.color = image.color;
         }
 
         private int DisplayedDailyEnergy()

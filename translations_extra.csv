@@ -1,6 +1,7 @@
 key,ru,pl,ko,zh-hans,zh-hant
 mod.tab,Под давлением,Pod presją,압박 모드,压力模式,壓力模式
 mod.skip_intro,Пропускать начальные экраны,Pomiń ekrany początkowe,시작 화면 건너뛰기,跳过启动画面,略過啟動畫面
+mod.auto_load_last_save,Загружать последний уровень,Wczytaj ostatni poziom,마지막 레벨 불러오기,加载上次关卡,載入上次關卡
 mod.disable_tutorial,Отключить обучение,Wyłącz samouczek,튜토리얼 끄기,关闭教程,關閉教學
 mod.show_room_effectiveness,Показывать эффективность кабинета,Pokaż skuteczność pomieszczeń,진료실 효율 표시,显示房间效率,顯示房間效率
 mod.imperfect_staff,Неидеальные сотрудники,Niedoskonali pracownicy,불완전한 직원,不完美员工,不完美員工
@@ -37,6 +38,7 @@ room.treatment_power,Лечение,Leczenie,치료,治疗,治療
 
 tooltip.mod_enabled,Включает или отключает все функции мода.,Włącza lub wyłącza wszystkie funkcje moda.,모드의 모든 기능을 켜거나 끕니다.,启用或关闭本模组的所有功能。,啟用或關閉本模組的所有功能。
 tooltip.skip_intro,Пропускает логотипы и юридическое уведомление при запуске.,Pomija logotypy i informacje prawne przy uruchamianiu.,시작할 때 로고와 법적 고지를 건너뜁니다.,启动时跳过徽标和法律声明。,啟動時略過標誌和法律聲明。
+tooltip.auto_load_last_save,Автоматически загружает последний сохранённый госпиталь при запуске.,Automatycznie wczytuje ostatnio zapisany szpital przy uruchomieniu.,시작할 때 가장 최근에 저장한 병원을 자동으로 불러옵니다.,启动时自动加载最近保存的医院。,啟動時自動載入最近儲存的醫院。
 tooltip.disable_tutorial,Пропускает обучение и его начальные задачи.,Pomija samouczek i jego cele początkowe.,안내 튜토리얼과 초기 목표를 건너뜁니다.,跳过引导教程及其初始目标。,略過引導教學及其初始目標。
 tooltip.show_room_effectiveness,Показывает эффективность диагностики и лечения в кабинетах.,Pokazuje skuteczność diagnozy i leczenia w pomieszczeniach.,진료실에 진단 및 치료 효율을 표시합니다.,在房间面板中显示诊断与治疗效率。,在房間面板中顯示診斷與治療效率。
 tooltip.imperfect_staff,У новых кандидатов всегда две хорошие черты и одна плохая.,Nowi kandydaci mają zawsze dwie dobre cechy i jedną złą.,새 지원자는 항상 긍정 특성 2개와 부정 특성 1개를 가집니다.,新应聘者固定拥有两个正面特质和一个负面特质。,新應徵者固定擁有兩個正面特質和一個負面特質。

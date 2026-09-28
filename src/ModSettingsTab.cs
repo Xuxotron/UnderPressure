@@ -61,6 +61,8 @@ namespace UnderPressure
         private ButtonAnimator _tabAnimator;
         private Toggle _skipIntroToggle;
         private TMP_Text _skipIntroLabel;
+        private Toggle _autoLoadLastSaveToggle;
+        private TMP_Text _autoLoadLastSaveLabel;
         private Toggle _disableTutorialToggle;
         private TMP_Text _disableTutorialLabel;
         private Toggle _roomEffectivenessToggle;
@@ -245,6 +247,18 @@ namespace UnderPressure
                 _sharedRoomTemplatesToggle.isOn = UnderPressurePlugin.ShouldShareRoomTemplates;
                 _sharedRoomTemplatesToggle.onValueChanged.AddListener(SetSharedRoomTemplates);
             }
+            var autoLoadLastSaveRow = Instantiate(settingRow, rightSection);
+            autoLoadLastSaveRow.name = "Auto Load Last Level";
+            RemoveLocalisers(autoLoadLastSaveRow);
+            SetStretchRow((RectTransform)autoLoadLastSaveRow, -147f, 45f, 12f);
+            _autoLoadLastSaveToggle = autoLoadLastSaveRow.GetComponentInChildren<Toggle>(true);
+            _autoLoadLastSaveLabel = autoLoadLastSaveRow.GetComponentInChildren<TMP_Text>(true);
+            if (_autoLoadLastSaveToggle != null)
+            {
+                _autoLoadLastSaveToggle.onValueChanged.RemoveAllListeners();
+                _autoLoadLastSaveToggle.isOn = UnderPressurePlugin.ShouldAutoLoadLastSave;
+                _autoLoadLastSaveToggle.onValueChanged.AddListener(SetAutoLoadLastSave);
+            }
             var effectivenessRow = Instantiate(settingRow, section);
             effectivenessRow.name = "Show Room Effectiveness";
             RemoveLocalisers(effectivenessRow);
@@ -285,6 +299,8 @@ namespace UnderPressure
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
             ConfigureRowTooltip(sharedTemplatesRow, _sharedRoomTemplatesLabel,
                 "tooltip.shared_room_templates");
+            ConfigureRowTooltip(autoLoadLastSaveRow, _autoLoadLastSaveLabel,
+                "tooltip.auto_load_last_save");
             ConfigureRowTooltip(effectivenessRow, _roomEffectivenessLabel,
                 "tooltip.show_room_effectiveness");
             ConfigureRowTooltip(imperfectRow, _imperfectStaffLabel, "tooltip.imperfect_staff");
@@ -634,6 +650,11 @@ namespace UnderPressure
             UnderPressurePlugin.DisableTutorialSetting.Value = value;
         }
 
+        private static void SetAutoLoadLastSave(bool value)
+        {
+            UnderPressurePlugin.AutoLoadLastSaveSetting.Value = value;
+        }
+
         private static void SetShowRoomEffectiveness(bool value)
         {
             UnderPressurePlugin.ShowRoomEffectivenessSetting.Value = value;
@@ -696,6 +717,8 @@ namespace UnderPressure
                 _masterToggle.isOn = UnderPressurePlugin.IsModEnabled;
             if (_skipIntroLabel != null)
                 _skipIntroLabel.text = ModLocalization.Get("mod.skip_intro");
+            if (_autoLoadLastSaveLabel != null)
+                _autoLoadLastSaveLabel.text = ModLocalization.Get("mod.auto_load_last_save");
             if (_disableTutorialLabel != null)
                 _disableTutorialLabel.text = ModLocalization.Get("mod.disable_tutorial");
             if (_roomEffectivenessLabel != null)
