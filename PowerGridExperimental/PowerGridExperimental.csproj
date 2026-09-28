@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net471</TargetFramework>
-    <AssemblyName>UnderPressure.PowerGrid</AssemblyName>
+    <AssemblyName>UnderPressure.Energy</AssemblyName>
     <RootNamespace>UnderPressure.PowerGrid</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -63,8 +63,8 @@
   </ItemGroup>
 
   <Target Name="DeployExperimental" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true' And Exists('D:\Games\Two Point Hospital\BepInEx\plugins')">
-    <MakeDir Directories="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure.PowerGrid" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure.PowerGrid" />
-    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pdb" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure.PowerGrid" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+    <MakeDir Directories="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pdb" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
   </Target>
 </Project>
