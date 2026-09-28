@@ -17,6 +17,7 @@ namespace UnderPressure
 
         internal static ConfigEntry<bool> EnabledSetting { get; private set; }
         internal static ConfigEntry<bool> SkipIntroScreensSetting { get; private set; }
+        internal static ConfigEntry<bool> AutoLoadLastSaveSetting { get; private set; }
         internal static ConfigEntry<bool> DisableTutorialSetting { get; private set; }
         internal static ConfigEntry<bool> ShowRoomEffectivenessSetting { get; private set; }
         internal static ConfigEntry<bool> ImperfectStaffSetting { get; private set; }
@@ -41,6 +42,8 @@ namespace UnderPressure
         internal static bool IsModEnabled => EnabledSetting == null || EnabledSetting.Value;
         internal static bool ShouldSkipIntroScreens =>
             IsModEnabled && (SkipIntroScreensSetting == null || SkipIntroScreensSetting.Value);
+        internal static bool ShouldAutoLoadLastSave =>
+            IsModEnabled && AutoLoadLastSaveSetting != null && AutoLoadLastSaveSetting.Value;
         internal static bool ShouldDisableTutorial =>
             IsModEnabled && DisableTutorialSetting != null && DisableTutorialSetting.Value;
         internal static bool ShouldShowRoomEffectiveness =>
@@ -66,6 +69,11 @@ namespace UnderPressure
                 "SkipIntroScreens",
                 true,
                 "Omite el vídeo, el logo y el aviso legal iniciales para mostrar directamente la carga.");
+            AutoLoadLastSaveSetting = Config.Bind(
+                "Inicio",
+                "AutoLoadLastSave",
+                true,
+                "Carga el hospital guardado más reciente después de restaurar la carrera, sin pasar por el mapa de campaña ni el selector de hospital.");
             DisableTutorialSetting = Config.Bind(
                 "Inicio",
                 "DisableTutorial",
