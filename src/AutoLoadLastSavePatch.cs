@@ -12,6 +12,8 @@ namespace UnderPressure
             AccessTools.Field(typeof(SaveSystem), "_mMostRecentSave");
         private static readonly FieldInfo MostRecentMetagameSlotField =
             AccessTools.Field(typeof(SaveSystem), "_mostRecentMetagameSaveSlotIndex");
+        private static readonly FieldInfo RoomTemplatesInitialisedField =
+            AccessTools.Field(typeof(RoomTemplatesManager), "_initialised");
 
         internal static bool KeepLoadingScreenVisible { get; private set; }
         internal static SaveFileHeader SelectedLevelSave { get; private set; }
@@ -31,7 +33,7 @@ namespace UnderPressure
 
             var originalMetagameSlot = __instance.SaveSystem.MostRecentMetagameSaveSlotIndex;
             MostRecentMetagameSlotField.SetValue(__instance.SaveSystem, SelectedSaveSlot);
-            __result = RunWithNativeFrontEndSkip(__instance.SaveSystem, originalMetagameSlot, __result);
+            __result = RunWithNativeFrontEndSkip(__instance, originalMetagameSlot, __result);
         }
 
         private static bool TrySelectMostRecentHospital(SaveSystem saveSystem)
@@ -61,9 +63,11 @@ namespace UnderPressure
         }
 
         private static IEnumerator RunWithNativeFrontEndSkip(
-            SaveSystem saveSystem, int originalMetagameSlot, IEnumerator original)
+            App app, int originalMetagameSlot, IEnumerator original)
         {
+            var saveSystem = app.SaveSystem;
             var previousValue = DebugVars.SkipFrontEnd.Value;
+            InitialiseRoomTemplatesForSkippedFrontEnd(app);
             DebugVars.SkipFrontEnd.Value = true;
             KeepLoadingScreenVisible = true;
             UnderPressurePlugin.Log.LogInfo(
@@ -77,6 +81,31 @@ namespace UnderPressure
             {
                 DebugVars.SkipFrontEnd.Value = previousValue;
                 MostRecentMetagameSlotField.SetValue(saveSystem, originalMetagameSlot);
+            }
+        }
+
+        private static void InitialiseRoomTemplatesForSkippedFrontEnd(App app)
+        {
+            try
+            {
+                var manager = app?.RoomTemplatesManager;
+                if (manager == null || app.SaveSystem == null) return;
+                if (RoomTemplatesInitialisedField?.GetValue(manager) is bool initialised && initialised) return;
+
+                // This is the exact pair normally executed by
+                // OpeningScreen.ShowNormalContent. SkipFrontEnd bypasses that method, so
+                // perform it before Career begins loading rather than racing the level.
+                app.SaveSystem.LoadRoomTemplatesSaveData(manager);
+                manager.RestoreFromSave(app);
+                var loaded = 0;
+                foreach (var group in manager.RoomTemplates.Values) loaded += group.Count;
+                UnderPressurePlugin.Log.LogInfo(
+                    "Plantillas de salas restauradas antes de la autocarga: " + loaded + ".");
+            }
+            catch (System.Exception exception)
+            {
+                UnderPressurePlugin.Log.LogError(
+                    "No se pudieron restaurar las plantillas antes de la autocarga: " + exception);
             }
         }
 

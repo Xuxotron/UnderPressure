@@ -51,13 +51,15 @@ namespace UnderPressure.PowerGrid
             var radiator = FindItem(database.RoomItems, "radiator");
 
             if (MarketingDesk == null || filingCabinet == null || wallItem == null || pharmacyMachine == null ||
-                batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null)
+                batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null ||
+                PowerGridPlugin.PowerPanelSprite == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudieron localizar todos los objetos base de la Sala de energia: " +
                     $"desk={MarketingDesk != null}, filing={filingCabinet != null}, wall={wallItem != null}, " +
                     $"pharmacy={pharmacyMachine != null}, " +
                     $"battery={batteryVisual != null}, radiator={radiator != null}, " +
-                    $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}.");
+                    $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}, " +
+                    $"panelIcon={PowerGridPlugin.PowerPanelSprite != null}.");
                 return false;
             }
 
@@ -89,6 +91,8 @@ namespace UnderPressure.PowerGrid
                 CopyWallPlacement(Panel, wallItem);
                 Set(Panel, "_prefab", PowerGridPlugin.PowerPanelPrefab);
                 Set(Panel, "_blueprintPrefab", PowerGridPlugin.PowerPanelPrefab);
+                Set(Panel, "_icon", PowerGridPlugin.PowerPanelSprite);
+                Set(Panel, "_iconWithoutBacking", PowerGridPlugin.PowerPanelSprite);
                 Set(Panel, "_canBePlacedIn", Array.Empty<RoomDefinition.Type>());
                 Set(Panel, "_cantBePlacedIn", Array.Empty<RoomDefinition.Type>());
                 Set(Panel, "_singlePlace", false);

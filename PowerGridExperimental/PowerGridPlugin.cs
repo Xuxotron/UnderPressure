@@ -18,6 +18,7 @@ namespace UnderPressure.PowerGrid
 
         internal static ManualLogSource Log { get; private set; }
         internal static Sprite BatterySprite { get; private set; }
+        internal static Sprite PowerPanelSprite { get; private set; }
         internal static GameObject PowerPanelPrefab { get; private set; }
         private Harmony _harmony;
         private AssetBundle _uiAssetBundle;
@@ -48,7 +49,8 @@ namespace UnderPressure.PowerGrid
             }
 
             var pluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var bundlePath = Path.Combine(pluginDirectory ?? string.Empty, "Assets", "underpressure_powerpanel");
+            var assetsDirectory = Path.Combine(pluginDirectory ?? string.Empty, "Assets");
+            var bundlePath = Path.Combine(assetsDirectory, "underpressure_powerpanel");
             _uiAssetBundle = AssetBundle.LoadFromFile(bundlePath);
             if (_uiAssetBundle == null)
             {
@@ -63,6 +65,34 @@ namespace UnderPressure.PowerGrid
             PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>("assets/powerpanel/powerpanel.prefab");
             if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
+            else
+            {
+                // The source FBX uses centimetres. Its Unity prefab was saved with the
+                // scene position and a 0.3937008 root scale; compare against the native
+                // nurse locker hierarchy (the animation reference) to restore metres.
+                PowerPanelPrefab.transform.localPosition = Vector3.zero;
+                PowerPanelPrefab.transform.localRotation = Quaternion.identity;
+                PowerPanelPrefab.transform.localScale = Vector3.one * 39.37008f;
+            }
+
+            var panelIconPath = Path.Combine(assetsDirectory, "panelenergy.png");
+            if (File.Exists(panelIconPath))
+            {
+                var texture = new Texture2D(2, 2, TextureFormat.ARGB32, false)
+                {
+                    name = "panelenergy",
+                    hideFlags = HideFlags.DontUnloadUnusedAsset
+                };
+                if (ImageConversion.LoadImage(texture, File.ReadAllBytes(panelIconPath), false))
+                {
+                    PowerPanelSprite = Sprite.Create(texture,
+                        new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+                    PowerPanelSprite.name = "panelenergy";
+                    PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                }
+                else Logger.LogError("No se pudo decodificar el icono del cuadro electrico.");
+            }
+            else Logger.LogError("No se encontro el icono del cuadro electrico: " + panelIconPath);
         }
     }
 }
