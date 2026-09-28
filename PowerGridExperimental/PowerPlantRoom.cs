@@ -404,6 +404,8 @@ namespace UnderPressure.PowerGrid
             FirstLevelMarketingEnabled = level != null && level.UniqueID == "901";
             if (Definition == null) return;
 
+            EnsureRoomTemplateBucket(level);
+
             EnsureRequirementItemsAvailable(worldState, _doorRequirement);
             EnsureRequirementItemsAvailable(worldState, _deskRequirement);
             EnsureRequirementItemsAvailable(worldState, _batteryRequirement);
@@ -436,6 +438,14 @@ namespace UnderPressure.PowerGrid
             if (level != null && level.UniqueID == "901" && _marketingRoom != null)
                 foreach (var requirement in _marketingRoom.GetRequiredItems() ?? Array.Empty<RequiredItem>())
                     EnsureRequirementItemsAvailable(worldState, requirement);
+        }
+
+        private static void EnsureRoomTemplateBucket(Level level)
+        {
+            var templates = level?.App?.RoomTemplatesManager?.RoomTemplates;
+            var powerPlantType = (RoomDefinition.Type)RoomTypeValue;
+            if (templates == null || templates.ContainsKey(powerPlantType)) return;
+            templates.Add(powerPlantType, new Dictionary<string, RoomTemplate>());
         }
 
         private static void EnsureRequirementItemsAvailable(WorldState worldState, RequiredItem requirement)
