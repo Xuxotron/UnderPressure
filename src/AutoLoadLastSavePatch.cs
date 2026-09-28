@@ -1,8 +1,56 @@
+using System.Collections;
+using System.Reflection;
 using HarmonyLib;
 using TH20;
 
 namespace UnderPressure
 {
+    [HarmonyPatch(typeof(OpeningScreen), "StartFadeIn")]
+    internal static class AutoContinueOpeningScreenPatch
+    {
+        private static readonly FieldInfo AppField = AccessTools.Field(typeof(OpeningScreen), "_app");
+        private static readonly MethodInfo ContinueMethod =
+            AccessTools.Method(typeof(OpeningScreen), "OnContinuePressed");
+        private static bool _attempted;
+
+        private static void Postfix(OpeningScreen __instance, ref IEnumerator __result)
+        {
+            if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
+                return;
+
+            __result = ContinueAfterFadeIn(__instance, __result);
+        }
+
+        private static IEnumerator ContinueAfterFadeIn(OpeningScreen openingScreen, IEnumerator fadeIn)
+        {
+            yield return fadeIn;
+
+            if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
+                yield break;
+
+            _attempted = true;
+            var app = AppField?.GetValue(openingScreen) as App;
+            var saveSystem = app?.SaveSystem;
+            if (saveSystem == null || saveSystem.MostRecentMetagameSaveSlotIndex < 0)
+            {
+                UnderPressurePlugin.Log.LogInfo(
+                    "Autocarga omitida: no existe ninguna carrera guardada.");
+                yield break;
+            }
+
+            if (ContinueMethod == null)
+            {
+                UnderPressurePlugin.Log.LogWarning(
+                    "Autocarga cancelada: no se encontró OpeningScreen.OnContinuePressed.");
+                yield break;
+            }
+
+            UnderPressurePlugin.Log.LogInfo(
+                $"Iniciando la carrera guardada en el slot {saveSystem.MostRecentMetagameSaveSlotIndex + 1}.");
+            ContinueMethod.Invoke(openingScreen, null);
+        }
+    }
+
     /// <summary>
     /// Continues from the newest level save only after the native career load has
     /// completed.  Scheduling the level through MetagameStateData preserves the
