@@ -12,6 +12,7 @@ namespace UnderPressure
         private const string FallbackLanguage = "en";
         private static readonly Dictionary<string, Dictionary<string, string>> Values =
             new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly PropertyInfo CurrentLanguageCodeProperty = ResolveLanguageCodeProperty();
         private static bool _loaded;
 
         internal static string Get(string key)
@@ -32,9 +33,7 @@ namespace UnderPressure
         {
             try
             {
-                var manager = AccessTools.TypeByName("I2.Loc.LocalizationManager");
-                var property = AccessTools.Property(manager, "CurrentLanguageCode");
-                var code = property?.GetValue(null, null) as string;
+                var code = CurrentLanguageCodeProperty?.GetValue(null, null) as string;
                 if (string.IsNullOrEmpty(code))
                     return FallbackLanguage;
                 var normalized = code.Replace('_', '-').ToLowerInvariant();
@@ -52,6 +51,19 @@ namespace UnderPressure
             catch
             {
                 return FallbackLanguage;
+            }
+        }
+
+        private static PropertyInfo ResolveLanguageCodeProperty()
+        {
+            try
+            {
+                var manager = AccessTools.TypeByName("I2.Loc.LocalizationManager");
+                return manager == null ? null : AccessTools.Property(manager, "CurrentLanguageCode");
+            }
+            catch
+            {
+                return null;
             }
         }
 

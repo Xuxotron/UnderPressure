@@ -115,10 +115,10 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            // The wall lies in the positive local-Z direction from the placement anchor.
-            // The previous correction used the opposite sign; from that tested position
-            // this is exactly two tiles wallwards, leaving the access tile in front.
-            visualRoot.localPosition = new Vector3(0f, 0f, 0.038133f);
+            // Keep the model on the same side as its reserved access tile. One tested
+            // position left it a full tile away and the opposite correction moved it a
+            // full tile through the wall; their midpoint places its rear face on the wall.
+            visualRoot.localPosition = new Vector3(0f, 0f, 0.012733f);
 
             // The imported faces point into the wall. Flip each mesh around its own centre
             // so the door remains in front of the box instead of exchanging their depths.
