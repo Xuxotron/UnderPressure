@@ -1,53 +1,36 @@
 using System.Collections;
-using System.Reflection;
 using HarmonyLib;
 using TH20;
 
 namespace UnderPressure
 {
-    [HarmonyPatch(typeof(OpeningScreen), "StartFadeIn")]
-    internal static class AutoContinueOpeningScreenPatch
+    [HarmonyPatch(typeof(App), "LoadAndShowOpeningScreen")]
+    internal static class SkipFrontEndForAutoLoadPatch
     {
-        private static readonly FieldInfo AppField = AccessTools.Field(typeof(OpeningScreen), "_app");
-        private static readonly MethodInfo ContinueMethod =
-            AccessTools.Method(typeof(OpeningScreen), "OnContinuePressed");
-        private static bool _attempted;
-
-        private static void Postfix(OpeningScreen __instance, ref IEnumerator __result)
+        private static void Postfix(App __instance, ref IEnumerator __result)
         {
-            if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
+            if (!UnderPressurePlugin.ShouldAutoLoadLastSave ||
+                __instance?.SaveSystem == null ||
+                __instance.SaveSystem.MostRecentMetagameSaveSlotIndex < 0)
                 return;
 
-            __result = ContinueAfterFadeIn(__instance, __result);
+            __result = RunWithNativeFrontEndSkip(__result);
         }
 
-        private static IEnumerator ContinueAfterFadeIn(OpeningScreen openingScreen, IEnumerator fadeIn)
+        private static IEnumerator RunWithNativeFrontEndSkip(IEnumerator original)
         {
-            yield return fadeIn;
-
-            if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
-                yield break;
-
-            _attempted = true;
-            var app = AppField?.GetValue(openingScreen) as App;
-            var saveSystem = app?.SaveSystem;
-            if (saveSystem == null || saveSystem.MostRecentMetagameSaveSlotIndex < 0)
-            {
-                UnderPressurePlugin.Log.LogInfo(
-                    "Autocarga omitida: no existe ninguna carrera guardada.");
-                yield break;
-            }
-
-            if (ContinueMethod == null)
-            {
-                UnderPressurePlugin.Log.LogWarning(
-                    "Autocarga cancelada: no se encontró OpeningScreen.OnContinuePressed.");
-                yield break;
-            }
-
+            var previousValue = DebugVars.SkipFrontEnd.Value;
+            DebugVars.SkipFrontEnd.Value = true;
             UnderPressurePlugin.Log.LogInfo(
-                $"Iniciando la carrera guardada en el slot {saveSystem.MostRecentMetagameSaveSlotIndex + 1}.");
-            ContinueMethod.Invoke(openingScreen, null);
+                "Omitiendo visualmente la pantalla inicial mediante el flujo nativo SkipFrontEnd.");
+            try
+            {
+                yield return original;
+            }
+            finally
+            {
+                DebugVars.SkipFrontEnd.Value = previousValue;
+            }
         }
     }
 
@@ -63,7 +46,7 @@ namespace UnderPressure
     {
         private static bool _attempted;
 
-        private static void Postfix(MetagameMap __instance)
+        private static void Prefix(MetagameMap __instance)
         {
             if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
                 return;
@@ -115,9 +98,10 @@ namespace UnderPressure
             stateData.LoadLevel = levelConfig;
             stateData.OnLoadRestartLevel = false;
             stateData.OnLoadSaveOldLevel = true;
+            app.LoadSaveProgressScreen.Show(levelConfig);
 
             UnderPressurePlugin.Log.LogInfo(
-                $"Autocarga preparada para el hospital guardado más reciente: {saveHeader.LevelID}.");
+                $"Carga directa preparada para el hospital guardado más reciente: {saveHeader.LevelID}.");
         }
     }
 }
