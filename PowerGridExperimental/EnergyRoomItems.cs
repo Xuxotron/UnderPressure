@@ -96,7 +96,8 @@ namespace UnderPressure.PowerGrid
                 Set(Panel, "_canBePlacedIn", Array.Empty<RoomDefinition.Type>());
                 Set(Panel, "_cantBePlacedIn", Array.Empty<RoomDefinition.Type>());
                 Set(Panel, "_singlePlace", false);
-                Set(Panel, "_hasCollision", false);
+                Set(Panel, "_hasCollision", true);
+                Set(Panel, "_occupyWallOnly", false);
                 Set(Panel, "_affectsNavigation", false);
                 Set(Panel, "_energyCost", 0);
                 Set(Panel, "_generatesElectricity", false);

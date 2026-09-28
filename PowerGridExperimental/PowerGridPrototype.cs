@@ -724,17 +724,21 @@ namespace UnderPressure.PowerGrid
         {
             if (!IsValidCell(coord) || _cells.Contains(coord) || _lowVoltageCells.Contains(coord)) return false;
             var neighbours = CardinalNeighbours(coord);
-            var attached = 0;
-            PowerCoord attachedTo = default(PowerCoord);
+            var attachedNeighbours = new List<PowerCoord>(2);
             foreach (var neighbour in neighbours)
             {
                 if (!sameVoltage.Contains(neighbour)) continue;
-                attached++;
-                attachedTo = neighbour;
+                attachedNeighbours.Add(neighbour);
             }
-            // One predecessor creates a single path. Two neighbours would merge paths or
-            // close a loop; extending a cell which already has two neighbours would branch it.
-            if (attached > 1 || (attached == 1 && CountCardinalNeighbours(attachedTo, sameVoltage) >= 2))
+
+            if (attachedNeighbours.Count > 2)
+                return false;
+            if (attachedNeighbours.Count == 1 &&
+                CountCardinalNeighbours(attachedNeighbours[0], sameVoltage) >= 2)
+                return false;
+            if (attachedNeighbours.Count == 2 &&
+                !CanReconnectDisconnectedEnds(attachedNeighbours[0], attachedNeighbours[1], sameVoltage,
+                    lowVoltage))
                 return false;
             if (!lowVoltage) return true;
 
@@ -742,6 +746,37 @@ namespace UnderPressure.PowerGrid
             var distance = DistanceFromActivePanel(coord, withCandidate);
             return distance > 0 && distance <= LowVoltageMaximumLength;
         }
+
+        private bool CanReconnectDisconnectedEnds(PowerCoord first, PowerCoord second,
+            HashSet<PowerCoord> sameVoltage, bool lowVoltage)
+        {
+            // A bridge may only consume two genuine ends. This keeps the no-branch rule.
+            if (CountCardinalNeighbours(first, sameVoltage) > 1 ||
+                CountCardinalNeighbours(second, sameVoltage) > 1)
+                return false;
+
+            // Joining two cells of the same component would close a loop.
+            var visited = new HashSet<PowerCoord> { first };
+            var queue = new Queue<PowerCoord>();
+            queue.Enqueue(first);
+            while (queue.Count != 0)
+            {
+                var current = queue.Dequeue();
+                foreach (var neighbour in CardinalNeighbours(current))
+                {
+                    if (!sameVoltage.Contains(neighbour) || !visited.Add(neighbour)) continue;
+                    if (neighbour.Equals(second)) return false;
+                    queue.Enqueue(neighbour);
+                }
+            }
+
+            // The exception exists specifically to repair an unpowered (grey) section.
+            var values = lowVoltage ? _lowVoltagePowerValue : _tilePowerValue;
+            return IsDisconnected(first, values) || IsDisconnected(second, values);
+        }
+
+        private static bool IsDisconnected(PowerCoord coord, Dictionary<PowerCoord, int> values) =>
+            values.TryGetValue(coord, out var value) && value <= 0;
 
         private int DistanceFromActivePanel(PowerCoord start, HashSet<PowerCoord> lowCells)
         {

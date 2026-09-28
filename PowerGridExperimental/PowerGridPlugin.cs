@@ -4,6 +4,7 @@ using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
+using TH20;
 using UnityEngine;
 
 namespace UnderPressure.PowerGrid
@@ -73,6 +74,16 @@ namespace UnderPressure.PowerGrid
                 PowerPanelPrefab.transform.localPosition = Vector3.zero;
                 PowerPanelPrefab.transform.localRotation = Quaternion.identity;
                 PowerPanelPrefab.transform.localScale = Vector3.one * 39.37008f;
+                ConfigurePowerPanelVisual(PowerPanelPrefab);
+
+                // Reserve the complete floor tile in front of the panel for its future
+                // maintenance animation. Build bounds are expressed in item-space by the
+                // game and therefore remain exactly one tile despite the imported FBX scale.
+                var buildBounds = PowerPanelPrefab.GetComponent<ItemBuildBoundsComponent>() ??
+                                  PowerPanelPrefab.AddComponent<ItemBuildBoundsComponent>();
+                buildBounds.center = new Vector3(0f, 0.5f, 0.5f);
+                buildBounds.size = Vector3.one;
+                buildBounds.Solid = true;
             }
 
             var panelIconPath = Path.Combine(assetsDirectory, "panelenergy.png");
@@ -93,6 +104,45 @@ namespace UnderPressure.PowerGrid
                 else Logger.LogError("No se pudo decodificar el icono del cuadro electrico.");
             }
             else Logger.LogError("No se encontro el icono del cuadro electrico: " + panelIconPath);
+        }
+
+        private static void ConfigurePowerPanelVisual(GameObject prefab)
+        {
+            var visualRoot = FindChild(prefab.transform, "A_Prop_Nurse_Locker_V1");
+            if (visualRoot == null)
+            {
+                Log.LogError("El prefab del cuadro electrico no contiene su raiz visual.");
+                return;
+            }
+
+            // The locker rig left the replacement meshes 1.1 m away from the wall. The
+            // outer box is 7.6 cm deep, so this places its rear face exactly on the wall.
+            visualRoot.localPosition = new Vector3(0f, 0f, 0.012733f);
+
+            // The imported faces point into the wall. Flip each mesh around its own centre
+            // so the door remains in front of the box instead of exchanging their depths.
+            foreach (var filter in visualRoot.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null) continue;
+                var meshTransform = filter.transform;
+                var scaledCentre = Vector3.Scale(filter.sharedMesh.bounds.center, meshTransform.localScale);
+                var centreCorrection = meshTransform.localRotation *
+                                       new Vector3(scaledCentre.x * 2f, 0f, scaledCentre.z * 2f);
+                meshTransform.localPosition += centreCorrection;
+                meshTransform.localRotation *= Quaternion.Euler(0f, 180f, 0f);
+            }
+        }
+
+        private static Transform FindChild(Transform root, string name)
+        {
+            if (root == null) return null;
+            if (string.Equals(root.name, name, StringComparison.Ordinal)) return root;
+            for (var i = 0; i < root.childCount; i++)
+            {
+                var found = FindChild(root.GetChild(i), name);
+                if (found != null) return found;
+            }
+            return null;
         }
     }
 }
