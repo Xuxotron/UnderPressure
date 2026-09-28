@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Reflection;
 using HarmonyLib;
 using TH20;
 
@@ -44,12 +45,14 @@ namespace UnderPressure
     [HarmonyPatch(typeof(MetagameMap), "Open")]
     internal static class AutoLoadLastSavePatch
     {
+        private static readonly FieldInfo ReadyToStartField =
+            AccessTools.Field(typeof(MetagameMap), "<IsReadyToStart>k__BackingField");
         private static bool _attempted;
 
-        private static void Prefix(MetagameMap __instance)
+        private static bool Prefix(MetagameMap __instance)
         {
             if (_attempted || !UnderPressurePlugin.ShouldAutoLoadLastSave)
-                return;
+                return true;
 
             _attempted = true;
 
@@ -61,7 +64,7 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     "Autocarga cancelada: la carrera terminó de cargar sin todos los estados necesarios.");
-                return;
+                return true;
             }
 
             var saveHeader = saveSystem.MostRecentSave;
@@ -69,7 +72,7 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogInfo(
                     "Autocarga omitida: la ranura de carrera no contiene hospitales guardados.");
-                return;
+                return true;
             }
 
             var levelConfig = metagame.LevelList?.GetLevelConfigByID(saveHeader.LevelID);
@@ -77,14 +80,14 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     $"Autocarga cancelada: no existe LevelConfig para el nivel guardado '{saveHeader.LevelID}'.");
-                return;
+                return true;
             }
 
             if (app.ShowMessageBoxIfSaveHeaderCantLoad(saveHeader, levelConfig))
             {
                 UnderPressurePlugin.Log.LogWarning(
                     $"Autocarga cancelada: la cabecera del nivel '{saveHeader.LevelID}' no se puede cargar.");
-                return;
+                return true;
             }
 
             var stateData = stateMachine.GetStateMachineData<MetagameStateData>();
@@ -92,16 +95,18 @@ namespace UnderPressure
             {
                 UnderPressurePlugin.Log.LogWarning(
                     "Autocarga cancelada: no está disponible MetagameStateData.");
-                return;
+                return true;
             }
 
             stateData.LoadLevel = levelConfig;
             stateData.OnLoadRestartLevel = false;
             stateData.OnLoadSaveOldLevel = true;
             app.LoadSaveProgressScreen.Show(levelConfig);
+            ReadyToStartField.SetValue(__instance, true);
 
             UnderPressurePlugin.Log.LogInfo(
-                $"Carga directa preparada para el hospital guardado más reciente: {saveHeader.LevelID}.");
+                $"Carga directa preparada para {saveHeader.LevelID}; se cancela la apertura del mapa de campaña.");
+            return false;
         }
     }
 }
