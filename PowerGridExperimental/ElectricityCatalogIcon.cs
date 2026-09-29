@@ -42,15 +42,16 @@ namespace UnderPressure.PowerGrid
         private void CreateImage(Sprite sprite)
         {
             var iconObject = new GameObject("UnderPressure Electricity Icon", typeof(RectTransform),
-                typeof(CanvasRenderer), typeof(LayoutElement), typeof(Image));
+                typeof(CanvasRenderer), typeof(Image));
             var rect = (RectTransform)iconObject.transform;
-            rect.SetParent(transform, false);
-            iconObject.GetComponent<LayoutElement>().ignoreLayout = true;
+            var background = GetComponent<RibbonItemRow>()?.BackgroundImage;
+            rect.SetParent(background != null ? background.rectTransform : transform, false);
             rect.anchorMin = Vector2.one;
             rect.anchorMax = Vector2.one;
             rect.pivot = Vector2.one;
-            rect.anchoredPosition = new Vector2(-7f, -7f);
-            rect.sizeDelta = new Vector2(sprite.rect.width * Scale, sprite.rect.height * Scale);
+            rect.anchoredPosition = new Vector2(-5f, -5f);
+            rect.sizeDelta = sprite.rect.size;
+            rect.localScale = Vector3.one * Scale;
 
             _image = iconObject.GetComponent<Image>();
             _image.preserveAspect = true;

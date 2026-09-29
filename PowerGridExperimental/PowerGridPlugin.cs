@@ -115,11 +115,6 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            // This imported root is scaled by 39.37008. Its positive local Z points from the
-            // tile centre towards the wall, so the complete hierarchy must move in that
-            // direction: 0.031783 + (0.2 / 39.37008) = 0.036863 local units.
-            visualRoot.localPosition = new Vector3(0f, 0f, 0.036863f);
-
             // The imported faces point into the wall. Flip each mesh around its own centre
             // so the door remains in front of the box instead of exchanging their depths.
             foreach (var filter in visualRoot.GetComponentsInChildren<MeshFilter>(true))
@@ -137,6 +132,19 @@ namespace UnderPressure.PowerGrid
                 // remains in front, ready for its later opening animation.
                 if (string.Equals(filter.name, "ChafCaja05", StringComparison.Ordinal))
                     meshTransform.localPosition += new Vector3(0f, 0f, 0.002318f);
+            }
+
+            // Wall-mounted items use local Z=0 as the wall plane and positive Z as the
+            // occupied tile. Align the rearmost rendered surface to that plane instead of
+            // accumulating guessed offsets. Moving the visual root also keeps every rig
+            // socket aligned with the meshes.
+            var renderers = visualRoot.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length > 0)
+            {
+                var minimumZ = float.PositiveInfinity;
+                foreach (var renderer in renderers)
+                    minimumZ = Mathf.Min(minimumZ, renderer.bounds.min.z);
+                visualRoot.position += Vector3.forward * -minimumZ;
             }
         }
 

@@ -1,4 +1,11 @@
 key,en,es,fr,de,it,pt
+hud.variables.title,Active variables,Variables activas,,,,
+hud.variables.adjustment,Setting,Ajuste,,,,
+hud.variables.result,Result,Resultado,,,,
+hud.variables.economy,Economy (balance),Economía (saldo),,,,
+hud.variables.reputation,Reputation,Reputación,,,,
+hud.variables.expansion,Expansion (level),Expansión (nivel),,,,
+hud.variables.manual,Manual,Manual,,,,
 policy.preventive_maintenance,Minimum condition for preventive repair,Estado mínimo para reparación preventiva,État minimal pour réparation préventive,Mindestzustand für vorbeugende Reparatur,Condizione minima per la riparazione preventiva,Estado mínimo para reparação preventiva
 mod.tab,Under Pressure,Bajo Presión,Sous pression,Unter Druck,Sotto pressione,Sob pressão
 mod.skip_intro,Skip intro screens,Omitir pantallas iniciales,Ignorer les écrans d'introduction,Intro-Bildschirme überspringen,Salta schermate iniziali,Ignorar ecrãs iniciais

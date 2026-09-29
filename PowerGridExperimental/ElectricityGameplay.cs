@@ -136,16 +136,20 @@ namespace UnderPressure.PowerGrid
         private static int EnsurePerUseCost(RoomItemDefinition item, int value)
         {
             var changed = 0;
+            var found = false;
             foreach (var modifier in item.InteractionAttributeModifiers ?? Array.Empty<InteractionAttributeModifier>())
             {
                 var finance = GetFinanceModifier(modifier);
-                if (finance == null || finance.EnergyCost == value) continue;
+                if (finance == null) continue;
+                found = true;
+                if (finance.EnergyCost == value) continue;
                 finance.EnergyCost = value;
                 changed++;
             }
-            if (changed > 0)
+            if (found)
             {
-                PowerGridPlugin.Log.LogInfo("Consumo electrico por uso " + value + ": " + Identity(item));
+                if (changed > 0)
+                    PowerGridPlugin.Log.LogInfo("Consumo electrico por uso " + value + ": " + Identity(item));
                 return changed;
             }
 

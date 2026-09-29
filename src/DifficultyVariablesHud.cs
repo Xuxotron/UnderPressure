@@ -1,0 +1,200 @@
+using System;
+using System.Reflection;
+using System.Text;
+using HarmonyLib;
+using TMPro;
+using TH20;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace UnderPressure
+{
+    [HarmonyPatch(typeof(TimeAndStatsMenu), "Setup")]
+    internal static class DifficultyVariablesHudPatch
+    {
+        private static readonly FieldInfo BalanceTextField =
+            AccessTools.Field(typeof(TimeAndStatsMenu), "_balanceText");
+
+        private static void Postfix(TimeAndStatsMenu __instance, Level __0)
+        {
+            var balanceText = BalanceTextField?.GetValue(__instance) as TMP_Text;
+            if (balanceText == null || __0 == null) return;
+            var display = balanceText.GetComponent<DifficultyVariablesHud>() ??
+                          balanceText.gameObject.AddComponent<DifficultyVariablesHud>();
+            display.Initialise(__0, balanceText);
+        }
+    }
+
+    internal sealed class DifficultyVariablesHud : MonoBehaviour, IPointerClickHandler
+    {
+        private Level _level;
+        private TMP_Text _balanceText;
+        private GameObject _panel;
+        private TMP_Text _labels;
+        private TMP_Text _adjustments;
+        private TMP_Text _results;
+        private float _refreshTimer;
+
+        internal void Initialise(Level level, TMP_Text balanceText)
+        {
+            _level = level;
+            _balanceText = balanceText;
+            _balanceText.raycastTarget = true;
+            if (_panel == null) BuildPanel();
+            Refresh();
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData == null || eventData.button != PointerEventData.InputButton.Left || _panel == null)
+                return;
+            _panel.SetActive(!_panel.activeSelf);
+            if (_panel.activeSelf) Refresh();
+        }
+
+        private void Update()
+        {
+            if (_panel == null || !_panel.activeSelf) return;
+            _refreshTimer -= Time.unscaledDeltaTime;
+            if (_refreshTimer <= 0f) Refresh();
+        }
+
+        private void BuildPanel()
+        {
+            _panel = new GameObject("UnderPressure Difficulty Variables", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+            var rect = (RectTransform)_panel.transform;
+            rect.SetParent(_balanceText.rectTransform, false);
+            rect.anchorMin = Vector2.one;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(1f, 0f);
+            rect.anchoredPosition = new Vector2(0f, 8f);
+            rect.sizeDelta = new Vector2(510f, 420f);
+
+            var background = _panel.GetComponent<Image>();
+            var nativeBackground = _balanceText.GetComponentInParent<Image>();
+            if (nativeBackground != null)
+            {
+                background.sprite = nativeBackground.sprite;
+                background.type = nativeBackground.type;
+            }
+            background.color = new Color(0.10f, 0.14f, 0.14f, 0.96f);
+            background.raycastTarget = false;
+            var outline = _panel.GetComponent<Outline>();
+            outline.effectColor = new Color(0.88f, 0.92f, 0.90f, 0.9f);
+            outline.effectDistance = new Vector2(2f, -2f);
+
+            _labels = CreateColumn("Variables", 16f, 22f, 280f, TextAlignmentOptions.TopLeft);
+            _adjustments = CreateColumn("Adjustments", 296f, 22f, 92f, TextAlignmentOptions.TopRight);
+            _results = CreateColumn("Results", 394f, 22f, 98f, TextAlignmentOptions.TopRight);
+            _panel.SetActive(false);
+        }
+
+        private TMP_Text CreateColumn(string name, float x, float y, float width,
+            TextAlignmentOptions alignment)
+        {
+            var child = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(TextMeshProUGUI));
+            var rect = (RectTransform)child.transform;
+            rect.SetParent(_panel.transform, false);
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(x, -y);
+            rect.sizeDelta = new Vector2(width, 380f);
+            var text = child.GetComponent<TextMeshProUGUI>();
+            text.font = _balanceText.font;
+            text.fontSharedMaterial = _balanceText.fontSharedMaterial;
+            text.fontSize = 18f;
+            text.enableAutoSizing = false;
+            text.enableWordWrapping = false;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.alignment = alignment;
+            text.color = Color.white;
+            text.raycastTarget = false;
+            text.richText = true;
+            text.lineSpacing = 2f;
+            return text;
+        }
+
+        private void Refresh()
+        {
+            _refreshTimer = 0.25f;
+            if (_level == null || _labels == null) return;
+
+            var labels = new StringBuilder();
+            var adjustments = new StringBuilder();
+            var results = new StringBuilder();
+            AddHeading(labels, adjustments, results, ModLocalization.Get("hud.variables.title"),
+                ModLocalization.Get("hud.variables.adjustment"), ModLocalization.Get("hud.variables.result"));
+
+            var economySource = Mathf.Clamp(_level.FinanceManager.Balance / 10000, 0, 100);
+            AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.economy"),
+                UnderPressurePlugin.AdaptiveEconomySetting.Value, economySource);
+            Add(labels, adjustments, results, "mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.StaffSalariesSetting.Value));
+            Add(labels, adjustments, results, "mod.patient_income", UnderPressurePlugin.PatientIncomeSetting.Value,
+                GameplayModifier.DifficultyFactor(UnderPressurePlugin.PatientIncomeSetting.Value));
+            Add(labels, adjustments, results, "mod.applicant_wait", UnderPressurePlugin.ApplicantWaitSetting.Value,
+                Mathf.Max(0.25f, GameplayModifier.Factor(UnderPressurePlugin.ApplicantWaitSetting.Value)));
+            Add(labels, adjustments, results, "mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.ElectricityBillSetting.Value));
+
+            var reputationSource = Mathf.Clamp(Mathf.RoundToInt(
+                _level.ReputationTracker.OverallReputation * 100f), 0, 100);
+            AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.reputation"),
+                UnderPressurePlugin.AdaptiveReputationSetting.Value, reputationSource);
+            Add(labels, adjustments, results, "mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.HungerThirstSetting.Value));
+            Add(labels, adjustments, results, "mod.happiness", UnderPressurePlugin.HappinessSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.HappinessSetting.Value));
+            Add(labels, adjustments, results, "mod.hygiene", UnderPressurePlugin.HygieneSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.HygieneSetting.Value));
+            Add(labels, adjustments, results, "mod.health_decay", UnderPressurePlugin.HealthDecaySetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.HealthDecaySetting.Value));
+
+            var expansionSource = Mathf.Clamp(_level.PrestigeTracker.Level * 5, 0, 100);
+            AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.expansion"),
+                UnderPressurePlugin.AdaptiveExpansionSetting.Value, expansionSource);
+            Add(labels, adjustments, results, "mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting.Value,
+                GameplayModifier.DifficultyFactor(UnderPressurePlugin.DiagnosisChanceSetting.Value));
+            Add(labels, adjustments, results, "mod.treatment_chance", UnderPressurePlugin.TreatmentChanceSetting.Value,
+                GameplayModifier.DifficultyFactor(UnderPressurePlugin.TreatmentChanceSetting.Value));
+            Add(labels, adjustments, results, "mod.patient_arrival", UnderPressurePlugin.PatientArrivalSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.PatientArrivalSetting.Value));
+            Add(labels, adjustments, results, "mod.machine_wear", UnderPressurePlugin.MachineWearSetting.Value,
+                GameplayModifier.Factor(UnderPressurePlugin.MachineWearSetting.Value));
+
+            _labels.text = labels.ToString();
+            _adjustments.text = adjustments.ToString();
+            _results.text = results.ToString();
+        }
+
+        private static void AddHeading(StringBuilder labels, StringBuilder adjustments,
+            StringBuilder results, string label, string adjustment, string result)
+        {
+            labels.Append("<b>").Append(label).AppendLine("</b>");
+            adjustments.Append("<b>").Append(adjustment).AppendLine("</b>");
+            results.Append("<b>").Append(result).AppendLine("</b>");
+        }
+
+        private static void AddGroup(StringBuilder labels, StringBuilder adjustments,
+            StringBuilder results, string label, bool adaptive, int source)
+        {
+            labels.Append("<color=#59D5F5><b>").Append(label).AppendLine("</b></color>");
+            adjustments.AppendLine(adaptive ? Signed(source) : ModLocalization.Get("hud.variables.manual"));
+            results.AppendLine();
+        }
+
+        private static void Add(StringBuilder labels, StringBuilder adjustments,
+            StringBuilder results, string key, int adjustment, float factor)
+        {
+            labels.Append("  ").AppendLine(ModLocalization.Get(key));
+            adjustments.AppendLine(Signed(adjustment));
+            results.Append((factor * 100f).ToString("0.#")).AppendLine("%");
+        }
+
+        private static string Signed(int value) => value > 0 ? "+" + value + "%" : value + "%";
+    }
+}
