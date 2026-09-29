@@ -146,6 +146,12 @@ namespace UnderPressure.PowerGrid
                     minimumZ = Mathf.Min(minimumZ, renderer.bounds.min.z);
                 visualRoot.position += Vector3.forward * -minimumZ;
             }
+
+            // The imported locker sockets place the item origin 0.4 m inside the occupied
+            // tile. Move the complete hierarchy away from the tile centre and towards its
+            // wall. This is a world-space distance; the 39.37008 import scale must not be
+            // applied to it a second time.
+            visualRoot.position -= Vector3.forward * 0.4f;
         }
 
         private static Transform FindChild(Transform root, string name)

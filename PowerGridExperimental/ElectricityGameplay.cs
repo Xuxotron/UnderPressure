@@ -285,10 +285,16 @@ namespace UnderPressure.PowerGrid
 
         private static void Prefix(FinanceManager __instance, out BillState __state)
         {
-            var monthly = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
+            var level = LevelField?.GetValue(__instance) as Level;
+            var trackedMonthly = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
+            var monthly = level?.WorldState?.AllRooms == null
+                ? trackedMonthly
+                : ElectricityGameplay.GetMonthlyEnergyDemand(level);
+            if (monthly != trackedMonthly)
+                PowerGridPlugin.Log.LogWarning("Factura mensual corregida desde " + trackedMonthly +
+                                               " a " + monthly + " según los objetos colocados.");
             var perUse = PerUseEnergyField == null ? 0 : (int)PerUseEnergyField.GetValue(__instance);
             __state = new BillState { OriginalMonthly = monthly, PerUseEnergy = Math.Max(0, perUse) };
-            var level = LevelField?.GetValue(__instance) as Level;
             var multiplier = 1f - EnergyCampaignSystem.GetEffect(level, EnergyCampaignKind.HackPowerCompany);
             monthly = Mathf.RoundToInt(monthly * Mathf.Clamp01(multiplier));
             perUse = Mathf.RoundToInt(perUse * Mathf.Clamp01(multiplier));

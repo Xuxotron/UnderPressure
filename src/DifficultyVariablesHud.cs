@@ -70,7 +70,7 @@ namespace UnderPressure
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(1f, 0f);
             rect.anchoredPosition = new Vector2(0f, 8f);
-            rect.sizeDelta = new Vector2(510f, 420f);
+            rect.sizeDelta = new Vector2(620f, 420f);
 
             var background = _panel.GetComponent<Image>();
             var nativeBackground = _balanceText.GetComponentInParent<Image>();
@@ -85,9 +85,9 @@ namespace UnderPressure
             outline.effectColor = new Color(0.88f, 0.92f, 0.90f, 0.9f);
             outline.effectDistance = new Vector2(2f, -2f);
 
-            _labels = CreateColumn("Variables", 16f, 22f, 280f, TextAlignmentOptions.TopLeft);
-            _adjustments = CreateColumn("Adjustments", 296f, 22f, 92f, TextAlignmentOptions.TopRight);
-            _results = CreateColumn("Results", 394f, 22f, 98f, TextAlignmentOptions.TopRight);
+            _labels = CreateColumn("Variables", 16f, 22f, 360f, TextAlignmentOptions.TopLeft);
+            _adjustments = CreateColumn("Adjustments", 382f, 22f, 100f, TextAlignmentOptions.TopRight);
+            _results = CreateColumn("Results", 490f, 22f, 112f, TextAlignmentOptions.TopRight);
             _panel.SetActive(false);
         }
 
@@ -106,10 +106,10 @@ namespace UnderPressure
             var text = child.GetComponent<TextMeshProUGUI>();
             text.font = _balanceText.font;
             text.fontSharedMaterial = _balanceText.fontSharedMaterial;
-            text.fontSize = 18f;
+            text.fontSize = 16f;
             text.enableAutoSizing = false;
             text.enableWordWrapping = false;
-            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.overflowMode = TextOverflowModes.Overflow;
             text.alignment = alignment;
             text.color = Color.white;
             text.raycastTarget = false;
