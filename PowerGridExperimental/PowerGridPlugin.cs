@@ -51,7 +51,7 @@ namespace UnderPressure.PowerGrid
 
             var pluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             var assetsDirectory = Path.Combine(pluginDirectory ?? string.Empty, "Assets");
-            var bundlePath = Path.Combine(assetsDirectory, "underpressure_powerpanel");
+            var bundlePath = Path.Combine(assetsDirectory, "underpressure");
             _uiAssetBundle = AssetBundle.LoadFromFile(bundlePath);
             if (_uiAssetBundle == null)
             {
@@ -68,13 +68,9 @@ namespace UnderPressure.PowerGrid
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
             {
-                // The source FBX uses centimetres. Its Unity prefab was saved with the
-                // scene position and a 0.3937008 root scale; compare against the native
-                // nurse locker hierarchy (the animation reference) to restore metres.
                 PowerPanelPrefab.transform.localPosition = Vector3.zero;
                 PowerPanelPrefab.transform.localRotation = Quaternion.identity;
-                PowerPanelPrefab.transform.localScale = Vector3.one * 39.37008f;
-                ConfigurePowerPanelVisual(PowerPanelPrefab);
+                PowerPanelPrefab.transform.localScale = Vector3.one;
 
                 // Reserve the complete floor tile in front of the panel for its future
                 // maintenance animation. Build bounds are expressed in item-space by the
@@ -106,64 +102,5 @@ namespace UnderPressure.PowerGrid
             else Logger.LogError("No se encontro el icono del cuadro electrico: " + panelIconPath);
         }
 
-        private static void ConfigurePowerPanelVisual(GameObject prefab)
-        {
-            var visualRoot = FindChild(prefab.transform, "A_Prop_Nurse_Locker_V1");
-            if (visualRoot == null)
-            {
-                Log.LogError("El prefab del cuadro electrico no contiene su raiz visual.");
-                return;
-            }
-
-            // The imported faces point into the wall. Flip each mesh around its own centre
-            // so the door remains in front of the box instead of exchanging their depths.
-            foreach (var filter in visualRoot.GetComponentsInChildren<MeshFilter>(true))
-            {
-                if (filter.sharedMesh == null) continue;
-                var meshTransform = filter.transform;
-                var scaledCentre = Vector3.Scale(filter.sharedMesh.bounds.center, meshTransform.localScale);
-                var centreCorrection = meshTransform.localRotation *
-                                       new Vector3(scaledCentre.x * 2f, 0f, scaledCentre.z * 2f);
-                meshTransform.localPosition += centreCorrection;
-                meshTransform.localRotation *= Quaternion.Euler(0f, 180f, 0f);
-
-                // The locker rig leaves the box base 4.5 cm farther out than the lid.
-                // Mirror that separation so the base sits against the wall and the lid
-                // remains in front, ready for its later opening animation.
-                if (string.Equals(filter.name, "ChafCaja05", StringComparison.Ordinal))
-                    meshTransform.localPosition += new Vector3(0f, 0f, 0.002318f);
-            }
-
-            // Wall-mounted items use local Z=0 as the wall plane and positive Z as the
-            // occupied tile. Align the rearmost rendered surface to that plane instead of
-            // accumulating guessed offsets. Moving the visual root also keeps every rig
-            // socket aligned with the meshes.
-            var renderers = visualRoot.GetComponentsInChildren<Renderer>(true);
-            if (renderers.Length > 0)
-            {
-                var minimumZ = float.PositiveInfinity;
-                foreach (var renderer in renderers)
-                    minimumZ = Mathf.Min(minimumZ, renderer.bounds.min.z);
-                visualRoot.position += Vector3.forward * -minimumZ;
-            }
-
-            // The imported locker sockets place the item origin 0.4 m inside the occupied
-            // tile. Move the complete hierarchy away from the tile centre and towards its
-            // wall. This is a world-space distance; the 39.37008 import scale must not be
-            // applied to it a second time.
-            visualRoot.position -= Vector3.forward * 0.4f;
-        }
-
-        private static Transform FindChild(Transform root, string name)
-        {
-            if (root == null) return null;
-            if (string.Equals(root.name, name, StringComparison.Ordinal)) return root;
-            for (var i = 0; i < root.childCount; i++)
-            {
-                var found = FindChild(root.GetChild(i), name);
-                if (found != null) return found;
-            }
-            return null;
-        }
     }
 }
