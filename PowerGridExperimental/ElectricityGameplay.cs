@@ -65,6 +65,20 @@ namespace UnderPressure.PowerGrid
             return false;
         }
 
+        internal static bool ShowsElectricityIcon(IRoomItemDefinition definition)
+        {
+            if (!_configured || definition == null || EnergyRoomItems.IsTransformer(definition) ||
+                EnergyRoomItems.IsBattery(definition)) return false;
+            if (EnergyRoomItems.IsPanel(definition) || definition.EnergyCost(0) > 0) return true;
+            foreach (var modifier in definition.InteractionAttributeModifiers ??
+                     Array.Empty<InteractionAttributeModifier>())
+            {
+                var finance = GetFinanceModifier(modifier);
+                if (finance != null && finance.EnergyCost > 0) return true;
+            }
+            return false;
+        }
+
         internal enum CostKind
         {
             None,
