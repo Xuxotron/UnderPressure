@@ -43,7 +43,8 @@ namespace UnderPressure
         private static readonly HashSet<Room> KnownRooms = new HashSet<Room>();
         private static readonly HashSet<RoomItem> KnownItems = new HashSet<RoomItem>();
         private static readonly HashSet<Patient> KnownPatients = new HashSet<Patient>();
-        private static readonly HashSet<int> RoomLightingMaterialsUpdated = new HashSet<int>();
+        private static readonly Dictionary<int, RoomLightingMaterialState> RoomLightingMaterialStates =
+            new Dictionary<int, RoomLightingMaterialState>();
         private static readonly Dictionary<RoomLightingManager, DirectionalLightState>
             OriginalDirectionalLightStates = new Dictionary<RoomLightingManager, DirectionalLightState>();
         private static readonly Dictionary<HospitalMap, GameObject> CeilingObjects =
@@ -145,7 +146,6 @@ namespace UnderPressure
             _materialFormatLogged = false;
             _windowAnchorLogged = false;
             LoggedDiagnosticMaterials.Clear();
-            RoomLightingMaterialsUpdated.Clear();
             if (Enabled) ApplyRoomLightingToLoadedMaterials();
         }
 
@@ -155,6 +155,7 @@ namespace UnderPressure
             if (Enabled) ApplyRoomLightingToLoadedMaterials();
             if (!Enabled)
             {
+                RestoreRoomLightingMaterials();
                 RemoveAllCeilings();
             }
             foreach (var room in KnownRooms)
@@ -325,13 +326,39 @@ namespace UnderPressure
         private static void ApplyRoomLighting(Material material)
         {
             if (material == null || !material.HasProperty("_ApplyRoomLighting")) return;
-            if (!RoomLightingMaterialsUpdated.Add(material.GetInstanceID())) return;
+            var id = material.GetInstanceID();
+            if (RoomLightingMaterialStates.TryGetValue(id, out var previous))
+            {
+                if (ReferenceEquals(previous.Material, material)) return;
+                RoomLightingMaterialStates.Remove(id);
+            }
+            RoomLightingMaterialStates.Add(id, new RoomLightingMaterialState
+            {
+                Material = material,
+                ApplyRoomLighting = material.GetFloat("_ApplyRoomLighting"),
+                ApplyRoomLightingOff = material.IsKeywordEnabled("_APPLYROOMLIGHTING_OFF")
+            });
 
             material.SetFloat("_ApplyRoomLighting", LightingParameters.MaterialRoomLighting);
             if (LightingParameters.MaterialRoomLighting > 0.5f)
                 material.DisableKeyword("_APPLYROOMLIGHTING_OFF");
             else
                 material.EnableKeyword("_APPLYROOMLIGHTING_OFF");
+        }
+
+        private static void RestoreRoomLightingMaterials()
+        {
+            foreach (var state in RoomLightingMaterialStates.Values)
+            {
+                var material = state.Material;
+                if (material == null || !material.HasProperty("_ApplyRoomLighting")) continue;
+                material.SetFloat("_ApplyRoomLighting", state.ApplyRoomLighting);
+                if (state.ApplyRoomLightingOff)
+                    material.EnableKeyword("_APPLYROOMLIGHTING_OFF");
+                else
+                    material.DisableKeyword("_APPLYROOMLIGHTING_OFF");
+            }
+            RoomLightingMaterialStates.Clear();
         }
 
         private static void AppendColor(Material material, string property, ref string values)
@@ -439,7 +466,9 @@ namespace UnderPressure
                 {
                     Direction = roomDirection is Vector3 direction ? direction : Vector3.forward,
                     Rotation = interiorLight != null ? interiorLight.transform.rotation : Quaternion.identity,
-                    CullingMask = interiorLight != null ? interiorLight.cullingMask : 0
+                    CullingMask = interiorLight != null ? interiorLight.cullingMask : 0,
+                    Shadows = interiorLight != null ? interiorLight.shadows : LightShadows.None,
+                    ShadowStrength = interiorLight != null ? interiorLight.shadowStrength : 0f
                 });
             }
 
@@ -469,6 +498,8 @@ namespace UnderPressure
             {
                 interiorLight.transform.rotation = state.Rotation;
                 interiorLight.cullingMask = state.CullingMask;
+                interiorLight.shadows = state.Shadows;
+                interiorLight.shadowStrength = state.ShadowStrength;
             }
             OriginalDirectionalLightStates.Remove(manager);
         }
@@ -560,7 +591,15 @@ namespace UnderPressure
         {
             foreach (var pair in CeilingObjects)
             {
-                if (pair.Value != null) UnityEngine.Object.Destroy(pair.Value);
+                if (pair.Value == null) continue;
+                pair.Value.SetActive(false);
+                var renderer = pair.Value.GetComponent<MeshRenderer>();
+                if (renderer != null) renderer.enabled = false;
+                var filter = pair.Value.GetComponent<MeshFilter>();
+                var mesh = filter != null ? filter.sharedMesh : null;
+                if (filter != null) filter.sharedMesh = null;
+                if (mesh != null) UnityEngine.Object.Destroy(mesh);
+                UnityEngine.Object.Destroy(pair.Value);
             }
             CeilingObjects.Clear();
         }
@@ -707,7 +746,10 @@ namespace UnderPressure
         {
             var socket = patient?.Visual?.HeadSocket;
             var child = FindDirectChild(socket, LightHeadedLightName);
-            if (child != null) UnityEngine.Object.Destroy(child.gameObject);
+            if (child == null) return;
+            child.GetComponent<PrototypeClippableLightOwner>()?.Unregister();
+            child.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(child.gameObject);
         }
 
         private static void EnsureTestLampLight(RoomItem item)
@@ -828,6 +870,15 @@ namespace UnderPressure
             internal Vector3 Direction;
             internal Quaternion Rotation;
             internal int CullingMask;
+            internal LightShadows Shadows;
+            internal float ShadowStrength;
+        }
+
+        private struct RoomLightingMaterialState
+        {
+            internal Material Material;
+            internal float ApplyRoomLighting;
+            internal bool ApplyRoomLightingOff;
         }
     }
 
@@ -871,12 +922,16 @@ namespace UnderPressure
             _light = light;
         }
 
-        private void OnDestroy()
+        internal void Unregister()
         {
             if (_manager != null && _light != null &&
                 HospitalLightingPrototype.IsRegistered(_manager, _light))
                 _manager.UnregisterClippableLight(_light);
+            _manager = null;
+            _light = null;
         }
+
+        private void OnDestroy() => Unregister();
     }
 
     [HarmonyPatch(typeof(Room), "Initialise")]

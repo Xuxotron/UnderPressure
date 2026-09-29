@@ -42,9 +42,10 @@ namespace UnderPressure.PowerGrid
         private void CreateImage(Sprite sprite)
         {
             var iconObject = new GameObject("UnderPressure Electricity Icon", typeof(RectTransform),
-                typeof(CanvasRenderer), typeof(Image));
+                typeof(CanvasRenderer), typeof(LayoutElement), typeof(Image));
             var rect = (RectTransform)iconObject.transform;
             rect.SetParent(transform, false);
+            iconObject.GetComponent<LayoutElement>().ignoreLayout = true;
             rect.anchorMin = Vector2.one;
             rect.anchorMax = Vector2.one;
             rect.pivot = Vector2.one;

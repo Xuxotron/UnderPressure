@@ -42,7 +42,8 @@ namespace UnderPressure.PowerGrid
     internal sealed class PowerGridPrototype : MonoBehaviour
     {
         private const int ElectricityMode = 602;
-        private const int DefaultContractedEnergy = 2000;
+        private const int DefaultContractedEnergy = 1000;
+        private const int LegacyDefaultContractedEnergy = 2000;
         private const int EnergyHundredths = 100;
         private const int BatteryMaximumHundredths = 200 * EnergyHundredths;
         private const int LowVoltageMaximumLength = 5;
@@ -380,7 +381,7 @@ namespace UnderPressure.PowerGrid
                     {
                         // Legacy saves stored a depleting reserve. Preserve their former total
                         // as the first contracted service value and begin the new daily model cleanly.
-                        _contractedEnergy = Math.Max(DefaultContractedEnergy, capacity);
+                        _contractedEnergy = NormaliseContractedEnergy(capacity);
                         _batteryEnergyHundredths = 0;
                         _lastDailyEnergy = Mathf.Max(0,
                             Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f));
@@ -398,7 +399,7 @@ namespace UnderPressure.PowerGrid
                         int.TryParse(parts[5], out var currentTasks) && TryFloat(parts[6], out var dailyRemainder) &&
                         (parts[7] == "0" || parts[7] == "1"))
                     {
-                        _contractedEnergy = Math.Max(0, contracted);
+                        _contractedEnergy = NormaliseContractedEnergy(contracted);
                         _batteryEnergyHundredths = Math.Max(0, batteries) * EnergyHundredths;
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
@@ -412,7 +413,7 @@ namespace UnderPressure.PowerGrid
                         int.TryParse(parts[3], out taskEnergy) && int.TryParse(parts[4], out currentTasks) &&
                         TryFloat(parts[5], out dailyRemainder) && (parts[6] == "0" || parts[6] == "1"))
                     {
-                        _contractedEnergy = Math.Max(0, contracted);
+                        _contractedEnergy = NormaliseContractedEnergy(contracted);
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
@@ -1176,7 +1177,25 @@ namespace UnderPressure.PowerGrid
         {
             if (_energyStateInitialised) return Math.Max(0, _lastDailyEnergy);
             return Mathf.Max(0, Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f) +
-                _cells.Count);
+                CountPoweredHighVoltageCables());
+        }
+
+        private int CountPoweredHighVoltageCables()
+        {
+            if (_gridOverloaded) return 0;
+            var powered = 0;
+            foreach (var coord in _cells)
+                if (_tilePowerValue.TryGetValue(coord, out var distance) && distance > 0)
+                    ++powered;
+            return powered;
+        }
+
+        private static int NormaliseContractedEnergy(int stored)
+        {
+            // Contract changes are not exposed yet, so 2000 can only be the former default.
+            return stored == LegacyDefaultContractedEnergy
+                ? DefaultContractedEnergy
+                : Math.Max(0, stored);
         }
 
         private static string FormatEnergy(int hundredths)
@@ -1457,7 +1476,8 @@ namespace UnderPressure.PowerGrid
                 _contractedEnergy = DefaultContractedEnergy;
                 _batteryEnergyHundredths = 0;
                 _lastDailyEnergy = Mathf.Max(0,
-                    Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f) + _cells.Count);
+                    Mathf.FloorToInt(ElectricityGameplay.GetMonthlyEnergyDemand(_level) / 30f) +
+                    CountPoweredHighVoltageCables());
                 _lastTaskEnergy = 0;
                 _currentDayTaskEnergy = 0;
                 _gridOverloaded = false;
@@ -1487,7 +1507,7 @@ namespace UnderPressure.PowerGrid
             active._dailyEnergyRemainder += Math.Max(0, monthly) / 30f;
             var monthlyDailyEnergy = Mathf.FloorToInt(active._dailyEnergyRemainder + 0.000001f);
             active._dailyEnergyRemainder -= monthlyDailyEnergy;
-            var dailyEnergy = monthlyDailyEnergy + active._cells.Count;
+            var dailyEnergy = monthlyDailyEnergy + active.CountPoweredHighVoltageCables();
             active._lastDailyEnergy = Math.Max(0, dailyEnergy);
             active._lastTaskEnergy = Math.Max(0, active._currentDayTaskEnergy);
             active._currentDayTaskEnergy = 0;

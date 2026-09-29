@@ -75,7 +75,8 @@ namespace UnderPressure
         private static void Postfix(FinanceManager __instance, OriginalBills __state)
         {
             BillField.SetValue(__instance, __state.Bill);
-            PerUseField.SetValue(__instance, __state.PerUse);
+            // PayEnergyBill deliberately clears the per-use accumulator. Restoring it here
+            // charged every previous task again on the following month.
         }
     }
 
