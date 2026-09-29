@@ -68,10 +68,6 @@ namespace UnderPressure.PowerGrid
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
             {
-                PowerPanelPrefab.transform.localPosition = Vector3.zero;
-                PowerPanelPrefab.transform.localRotation = Quaternion.identity;
-                PowerPanelPrefab.transform.localScale = Vector3.one;
-
                 // Reserve the complete floor tile in front of the panel for its future
                 // maintenance animation. Build bounds are expressed in item-space by the
                 // game and therefore remain exactly one tile despite the imported FBX scale.
