@@ -60,7 +60,7 @@ namespace UnderPressure.PowerGrid
             }
 
             if (BatterySprite == null)
-                BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("assets/underpressure/ui/bateria.png");
+                BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
             if (BatterySprite == null)
                 Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
             PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>("assets/powerpanel/powerpanel.prefab");
@@ -82,24 +82,16 @@ namespace UnderPressure.PowerGrid
                 buildBounds.Solid = true;
             }
 
-            var panelIconPath = Path.Combine(assetsDirectory, "panelenergy.png");
-            if (File.Exists(panelIconPath))
+            var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>("Assets/PowerPanel/powerpanel icon.png");
+            if (panelIconTexture != null)
             {
-                var texture = new Texture2D(2, 2, TextureFormat.ARGB32, false)
-                {
-                    name = "panelenergy",
-                    hideFlags = HideFlags.DontUnloadUnusedAsset
-                };
-                if (ImageConversion.LoadImage(texture, File.ReadAllBytes(panelIconPath), false))
-                {
-                    PowerPanelSprite = Sprite.Create(texture,
-                        new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
-                    PowerPanelSprite.name = "panelenergy";
-                    PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                }
-                else Logger.LogError("No se pudo decodificar el icono del cuadro electrico.");
+                PowerPanelSprite = Sprite.Create(panelIconTexture,
+                    new Rect(0f, 0f, panelIconTexture.width, panelIconTexture.height),
+                    new Vector2(0.5f, 0.5f), 100f);
+                PowerPanelSprite.name = "powerpanel icon";
+                PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
             }
-            else Logger.LogError("No se encontro el icono del cuadro electrico: " + panelIconPath);
+            else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
         }
 
     }

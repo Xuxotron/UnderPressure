@@ -5,7 +5,7 @@ using UnityEngine;
 
 public static class BuildBatteryAsset
 {
-    private const string SpritePath = "Assets/UnderPressure/UI/bateria.png";
+    private const string SpritePath = "Assets/UI/bateria.png";
     private const string BundleName = "underpressure";
     private const string BuildMarker = "BUILD_BATTERY_ASSET";
 
