@@ -132,39 +132,40 @@ namespace UnderPressure
             var economySource = Mathf.Clamp(_level.FinanceManager.Balance / 10000, 0, 100);
             AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.economy"),
                 UnderPressurePlugin.AdaptiveEconomySetting.Value, economySource);
-            Add(labels, adjustments, results, "mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.StaffSalariesSetting.Value));
-            Add(labels, adjustments, results, "mod.patient_income", UnderPressurePlugin.PatientIncomeSetting.Value,
-                GameplayModifier.DifficultyFactor(UnderPressurePlugin.PatientIncomeSetting.Value));
-            Add(labels, adjustments, results, "mod.applicant_wait", UnderPressurePlugin.ApplicantWaitSetting.Value,
-                Mathf.Max(0.25f, GameplayModifier.Factor(UnderPressurePlugin.ApplicantWaitSetting.Value)));
-            Add(labels, adjustments, results, "mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.ElectricityBillSetting.Value));
+            AddStandard(labels, adjustments, results, "mod.staff_salaries",
+                UnderPressurePlugin.StaffSalariesSetting, false);
+            AddStandard(labels, adjustments, results, "mod.patient_income",
+                UnderPressurePlugin.PatientIncomeSetting, true);
+            var applicantWait = AdaptiveDifficulty.GetValue(UnderPressurePlugin.ApplicantWaitSetting, _level);
+            Add(labels, adjustments, results, "mod.applicant_wait", applicantWait,
+                Mathf.Max(0.25f, GameplayModifier.Factor(applicantWait)));
+            AddStandard(labels, adjustments, results, "mod.electricity_bill",
+                UnderPressurePlugin.ElectricityBillSetting, false);
 
             var reputationSource = Mathf.Clamp(Mathf.RoundToInt(
                 _level.ReputationTracker.OverallReputation * 100f), 0, 100);
             AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.reputation"),
                 UnderPressurePlugin.AdaptiveReputationSetting.Value, reputationSource);
-            Add(labels, adjustments, results, "mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.HungerThirstSetting.Value));
-            Add(labels, adjustments, results, "mod.happiness", UnderPressurePlugin.HappinessSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.HappinessSetting.Value));
-            Add(labels, adjustments, results, "mod.hygiene", UnderPressurePlugin.HygieneSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.HygieneSetting.Value));
-            Add(labels, adjustments, results, "mod.health_decay", UnderPressurePlugin.HealthDecaySetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.HealthDecaySetting.Value));
+            AddStandard(labels, adjustments, results, "mod.hunger_thirst",
+                UnderPressurePlugin.HungerThirstSetting, false);
+            AddStandard(labels, adjustments, results, "mod.happiness",
+                UnderPressurePlugin.HappinessSetting, false);
+            AddStandard(labels, adjustments, results, "mod.hygiene",
+                UnderPressurePlugin.HygieneSetting, false);
+            AddStandard(labels, adjustments, results, "mod.health_decay",
+                UnderPressurePlugin.HealthDecaySetting, false);
 
             var expansionSource = Mathf.Clamp(_level.PrestigeTracker.Level * 5, 0, 100);
             AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.expansion"),
                 UnderPressurePlugin.AdaptiveExpansionSetting.Value, expansionSource);
-            Add(labels, adjustments, results, "mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting.Value,
-                GameplayModifier.DifficultyFactor(UnderPressurePlugin.DiagnosisChanceSetting.Value));
-            Add(labels, adjustments, results, "mod.treatment_chance", UnderPressurePlugin.TreatmentChanceSetting.Value,
-                GameplayModifier.DifficultyFactor(UnderPressurePlugin.TreatmentChanceSetting.Value));
-            Add(labels, adjustments, results, "mod.patient_arrival", UnderPressurePlugin.PatientArrivalSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.PatientArrivalSetting.Value));
-            Add(labels, adjustments, results, "mod.machine_wear", UnderPressurePlugin.MachineWearSetting.Value,
-                GameplayModifier.Factor(UnderPressurePlugin.MachineWearSetting.Value));
+            AddStandard(labels, adjustments, results, "mod.diagnosis_chance",
+                UnderPressurePlugin.DiagnosisChanceSetting, true);
+            AddStandard(labels, adjustments, results, "mod.treatment_chance",
+                UnderPressurePlugin.TreatmentChanceSetting, true);
+            AddStandard(labels, adjustments, results, "mod.patient_arrival",
+                UnderPressurePlugin.PatientArrivalSetting, false);
+            AddStandard(labels, adjustments, results, "mod.machine_wear",
+                UnderPressurePlugin.MachineWearSetting, false);
 
             _labels.text = labels.ToString();
             _adjustments.text = adjustments.ToString();
@@ -193,6 +194,16 @@ namespace UnderPressure
             labels.Append("  ").AppendLine(ModLocalization.Get(key));
             adjustments.AppendLine(Signed(adjustment));
             results.Append((factor * 100f).ToString("0.#")).AppendLine("%");
+        }
+
+        private void AddStandard(StringBuilder labels, StringBuilder adjustments,
+            StringBuilder results, string key, BepInEx.Configuration.ConfigEntry<int> setting,
+            bool inverse)
+        {
+            var value = AdaptiveDifficulty.GetValue(setting, _level);
+            Add(labels, adjustments, results, key, value, inverse
+                ? GameplayModifier.DifficultyFactor(value)
+                : GameplayModifier.Factor(value));
         }
 
         private static string Signed(int value) => value > 0 ? "+" + value + "%" : value + "%";

@@ -41,7 +41,8 @@ namespace UnderPressure
         {
             if (!UnderPressurePlugin.IsModEnabled) return amount;
             return Mathf.Max(0, Mathf.RoundToInt(amount *
-                GameplayModifier.Factor(UnderPressurePlugin.ElectricityBillSetting.Value)));
+                GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.ElectricityBillSetting))));
         }
 
         internal static void NotifySettingChanged() => ElectricityGraphDisplay.NotifySettingChanged();

@@ -336,7 +336,8 @@ namespace UnderPressure
                 ++count;
             }
             return count == 0 ? 0f : Mathf.Clamp01(total / count / 100f *
-                GameplayModifier.DifficultyFactor(UnderPressurePlugin.DiagnosisChanceSetting.Value));
+                GameplayModifier.DifficultyFactor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.DiagnosisChanceSetting, _room?.Level)));
         }
 
         private float CalculateAverageTreatment()
@@ -362,7 +363,8 @@ namespace UnderPressure
                 ++count;
             }
             return count == 0 ? 0f : Mathf.Clamp01(total / count / 100f *
-                GameplayModifier.DifficultyFactor(UnderPressurePlugin.TreatmentChanceSetting.Value));
+                GameplayModifier.DifficultyFactor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.TreatmentChanceSetting, _room?.Level)));
         }
 
         private float GetBestDiagnosisItemMultiplier()

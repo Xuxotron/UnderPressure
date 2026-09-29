@@ -73,7 +73,7 @@ namespace UnderPressure
 
         internal static float GetWearPercent(RoomItem item)
         {
-            if (item == null || !ReferenceEquals(item.Level, _level) ||
+            if (!IsMachine(item) || !ReferenceEquals(item.Level, _level) ||
                 !RepairedPoints.TryGetValue(item.ID, out var points))
                 return 0f;
             return Mathf.Clamp(Mathf.Floor(points / RepairedPointsPerWearPercent), 0f,
@@ -82,7 +82,7 @@ namespace UnderPressure
 
         internal static void AddRepairedPoints(RoomItem item, float amount)
         {
-            if (!Enabled || item?.MaintenanceLevel == null || amount <= Epsilon)
+            if (!Enabled || !IsMachine(item) || amount <= Epsilon)
                 return;
 
             EnsureLevel(item.Level);
@@ -93,7 +93,7 @@ namespace UnderPressure
 
         internal static void ApplyCap(RoomItem item)
         {
-            if (!Enabled || item?.MaintenanceLevel == null)
+            if (!Enabled || !IsMachine(item))
                 return;
             var floor = GetWearPercent(item);
             if (item.MaintenanceLevel.Value() + Epsilon < floor)
@@ -121,11 +121,16 @@ namespace UnderPressure
                 return result;
 
             for (var index = 0; index < entities.Count; ++index)
-                if (entities[index] is RoomItem item && ReferenceEquals(item.Level, level) &&
+                if (entities[index] is RoomItem item && IsMachine(item) &&
+                    ReferenceEquals(item.Level, level) &&
                     !item.HasBeenDestroyed())
                     result[item.ID] = item;
             return result;
         }
+
+        internal static bool IsMachine(RoomItem item) =>
+            item?.MaintenanceLevel != null && item.Definition != null &&
+            item.Definition.MaintenanceDescription == JobMaintenance.JobDescription.BrokenMachine;
     }
 
     [HarmonyPatch(typeof(StaffRecordManager), "OnRoomItemMaintenanceComplete")]
@@ -134,7 +139,7 @@ namespace UnderPressure
         private static void Postfix(RoomItem __0, JobMaintenance __2)
         {
             var item = __0;
-            if (item?.MaintenanceLevel == null || __2 == null)
+            if (!PermanentMachineWearSystem.IsMachine(item) || __2 == null)
                 return;
             PermanentMachineWearSystem.AddRepairedPoints(item,
                 Mathf.Max(0f, __2.InitialMaintenanceValue - item.MaintenanceLevel.Value()));
@@ -146,7 +151,8 @@ namespace UnderPressure
     {
         private static void Postfix(RoomItem __instance, ref bool __result)
         {
-            if (!PermanentMachineWearSystem.Enabled || __instance?.MaintenanceLevel == null)
+            if (!PermanentMachineWearSystem.Enabled ||
+                !PermanentMachineWearSystem.IsMachine(__instance))
                 return;
             __result = __instance.MaintenanceLevel.Value() <=
                        PermanentMachineWearSystem.GetWearPercent(__instance) + 0.0001f;
@@ -172,7 +178,8 @@ namespace UnderPressure
 
         private static void Postfix(RoomItem __0, float __state)
         {
-            if (!PermanentMachineWearSystem.Enabled || __0?.MaintenanceLevel == null || float.IsNaN(__state))
+            if (!PermanentMachineWearSystem.Enabled ||
+                !PermanentMachineWearSystem.IsMachine(__0) || float.IsNaN(__state))
                 return;
             var floor = PermanentMachineWearSystem.GetWearPercent(__0);
             var effectiveAfter = Mathf.Max(__0.MaintenanceLevel.Value(), floor);
@@ -216,7 +223,7 @@ namespace UnderPressure
             if (!PermanentMachineWearSystem.Enabled || __instance == null)
                 return;
             var item = RoomItemField?.GetValue(__instance) as RoomItem;
-            if (item?.MaintenanceLevel == null)
+            if (!PermanentMachineWearSystem.IsMachine(item))
                 return;
             var wear = PermanentMachineWearSystem.GetWearPercent(item);
             if (wear > 0f && item.MaintenanceLevel.Value() <= wear + 0.0001f)
@@ -288,9 +295,15 @@ namespace UnderPressure
             if (_fill == null || _bar == null || _item == null)
                 return;
 
-            var wear = PermanentMachineWearSystem.Enabled
+            var enabled = PermanentMachineWearSystem.Enabled &&
+                          PermanentMachineWearSystem.IsMachine(_item);
+            var wear = enabled
                 ? PermanentMachineWearSystem.GetWearPercent(_item)
                 : 0f;
+            _bar.LabelText = enabled
+                ? string.Format(ModLocalization.Get("item.permanent_wear"),
+                    Mathf.RoundToInt(wear))
+                : string.Empty;
             _fill.gameObject.SetActive(wear > 0f && _bar.gameObject.activeInHierarchy);
             if (wear <= 0f || _rect == null)
                 return;

@@ -26,6 +26,12 @@ namespace UnderPressure
         private static void Prefix(Level __instance) => AdaptiveDifficulty.Detach(__instance);
     }
 
+    [HarmonyPatch(typeof(Level), "InitialiseGameEvents")]
+    internal static class AdaptiveDifficultyLevelInitialisedPatch
+    {
+        private static void Postfix(Level __instance) => AdaptiveDifficulty.Attach(__instance);
+    }
+
     internal static class AdaptiveDifficulty
     {
         private sealed class Subscription
@@ -38,6 +44,7 @@ namespace UnderPressure
 
         private static readonly Dictionary<Level, Subscription> Active =
             new Dictionary<Level, Subscription>();
+        private static Level CurrentLevel;
 
         internal static void Attach(Level level)
         {
@@ -51,6 +58,7 @@ namespace UnderPressure
             level.ReputationTracker.OnReputationChangedEvent += subscription.ReputationChanged;
             level.PrestigeTracker.OnPrestigeChangedEvent += subscription.LevelChanged;
             Active.Add(level, subscription);
+            CurrentLevel = level;
             ApplyAll(level);
         }
 
@@ -64,6 +72,31 @@ namespace UnderPressure
             if (level.PrestigeTracker != null)
                 level.PrestigeTracker.OnPrestigeChangedEvent -= subscription.LevelChanged;
             Active.Remove(level);
+            if (ReferenceEquals(CurrentLevel, level))
+                CurrentLevel = null;
+        }
+
+        internal static int GetValue(BepInEx.Configuration.ConfigEntry<int> setting,
+            Level level = null)
+        {
+            if (setting == null)
+                return 0;
+
+            level ??= CurrentLevel;
+            if (level == null)
+                return setting.Value;
+
+            if (UnderPressurePlugin.AdaptiveEconomySetting?.Value == true &&
+                IsEconomySetting(setting) && level.FinanceManager != null)
+                return EconomyValue(level);
+            if (UnderPressurePlugin.AdaptiveReputationSetting?.Value == true &&
+                IsReputationSetting(setting) && level.ReputationTracker != null)
+                return ReputationValue(level);
+            if (UnderPressurePlugin.AdaptiveExpansionSetting?.Value == true &&
+                IsExpansionSetting(setting) && level.PrestigeTracker != null)
+                return ExpansionValue(level);
+
+            return setting.Value;
         }
 
         internal static void RefreshAll()
@@ -83,7 +116,7 @@ namespace UnderPressure
             if (UnderPressurePlugin.AdaptiveEconomySetting == null ||
                 !UnderPressurePlugin.AdaptiveEconomySetting.Value) return;
             // 0 at no cash, +100 at one million; debt never creates a bonus.
-            var value = Mathf.Clamp(level.FinanceManager.Balance / 10000, 0, 100);
+            var value = EconomyValue(level);
             Set(value, UnderPressurePlugin.StaffSalariesSetting,
                 UnderPressurePlugin.PatientIncomeSetting, UnderPressurePlugin.ApplicantWaitSetting,
                 UnderPressurePlugin.ElectricityBillSetting);
@@ -94,7 +127,7 @@ namespace UnderPressure
             if (UnderPressurePlugin.AdaptiveReputationSetting == null ||
                 !UnderPressurePlugin.AdaptiveReputationSetting.Value) return;
             // Reputation is normalised 0..1 internally: every displayed point adds 1%.
-            var value = Mathf.Clamp(Mathf.RoundToInt(level.ReputationTracker.OverallReputation * 100f), 0, 100);
+            var value = ReputationValue(level);
             Set(value, UnderPressurePlugin.HungerThirstSetting, UnderPressurePlugin.HappinessSetting,
                 UnderPressurePlugin.HygieneSetting, UnderPressurePlugin.HealthDecaySetting);
         }
@@ -104,7 +137,7 @@ namespace UnderPressure
             if (UnderPressurePlugin.AdaptiveExpansionSetting == null ||
                 !UnderPressurePlugin.AdaptiveExpansionSetting.Value) return;
             // Level 20 is the game's last hospital-level achievement and is a useful hard cap.
-            var value = Mathf.Clamp(level.PrestigeTracker.Level * 5, 0, 100);
+            var value = ExpansionValue(level);
             Set(value, UnderPressurePlugin.DiagnosisChanceSetting,
                 UnderPressurePlugin.TreatmentChanceSetting, UnderPressurePlugin.PatientArrivalSetting,
                 UnderPressurePlugin.MachineWearSetting);
@@ -116,5 +149,32 @@ namespace UnderPressure
                 if (setting != null && setting.Value != value)
                     setting.Value = value;
         }
+
+        private static int EconomyValue(Level level) =>
+            Mathf.Clamp(level.FinanceManager.Balance / 10000, 0, 100);
+
+        private static int ReputationValue(Level level) => Mathf.Clamp(Mathf.RoundToInt(
+            level.ReputationTracker.OverallReputation * 100f), 0, 100);
+
+        private static int ExpansionValue(Level level) =>
+            Mathf.Clamp(level.PrestigeTracker.Level * 5, 0, 100);
+
+        private static bool IsEconomySetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
+            ReferenceEquals(setting, UnderPressurePlugin.StaffSalariesSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.PatientIncomeSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.ApplicantWaitSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.ElectricityBillSetting);
+
+        private static bool IsReputationSetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
+            ReferenceEquals(setting, UnderPressurePlugin.HungerThirstSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.HappinessSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.HygieneSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.HealthDecaySetting);
+
+        private static bool IsExpansionSetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
+            ReferenceEquals(setting, UnderPressurePlugin.DiagnosisChanceSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.TreatmentChanceSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.PatientArrivalSetting) ||
+            ReferenceEquals(setting, UnderPressurePlugin.MachineWearSetting);
     }
 }

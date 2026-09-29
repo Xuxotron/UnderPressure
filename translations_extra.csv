@@ -1,5 +1,6 @@
 key,ru,pl,ko,zh-hans,zh-hant
 policy.preventive_maintenance,Минимальное состояние для профилактического ремонта,Minimalny stan naprawy zapobiegawczej,예방 수리를 위한 최소 상태,预防性维修的最低状态,預防性維修的最低狀態
+item.permanent_wear,,,,,
 mod.tab,Под давлением,Pod presją,압박 모드,压力模式,壓力模式
 mod.skip_intro,Пропускать начальные экраны,Pomiń ekrany początkowe,시작 화면 건너뛰기,跳过启动画面,略過啟動畫面
 mod.auto_load_last_save,Загружать последний уровень,Wczytaj ostatni poziom,마지막 레벨 불러오기,加载上次关卡,載入上次關卡

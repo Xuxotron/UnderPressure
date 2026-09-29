@@ -37,7 +37,8 @@ namespace UnderPressure
                 if (prestigeArrivalRate > 0f)
                     __result *= prestigeArrivalRate;
             }
-            var factor = GameplayModifier.Factor(UnderPressurePlugin.PatientArrivalSetting.Value);
+            var factor = GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                UnderPressurePlugin.PatientArrivalSetting));
             __result = factor <= 0f ? float.MaxValue : __result / factor;
         }
     }
@@ -48,7 +49,8 @@ namespace UnderPressure
         private static void Postfix(CharacterAttributes.Type __0, ref float __result)
         {
             if (string.Equals(__0.ToString(), "Health", StringComparison.OrdinalIgnoreCase))
-                __result *= GameplayModifier.Factor(UnderPressurePlugin.HealthDecaySetting.Value);
+                __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.HealthDecaySetting));
         }
     }
 
@@ -57,7 +59,8 @@ namespace UnderPressure
         internal static void Apply(ref DiagnosisCalculationBreakdown result)
         {
             result.Certainty = Mathf.Clamp(result.Certainty *
-                GameplayModifier.DifficultyFactor(UnderPressurePlugin.DiagnosisChanceSetting.Value), 0f, 100f);
+                GameplayModifier.DifficultyFactor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.DiagnosisChanceSetting)), 0f, 100f);
         }
     }
 
@@ -82,7 +85,8 @@ namespace UnderPressure
     {
         private static void Postfix(ref TreatmentCalculationBreakdown __result)
         {
-            var factor = GameplayModifier.DifficultyFactor(UnderPressurePlugin.TreatmentChanceSetting.Value);
+            var factor = GameplayModifier.DifficultyFactor(AdaptiveDifficulty.GetValue(
+                UnderPressurePlugin.TreatmentChanceSetting));
             __result.MinChanceOfSuccess = Mathf.Clamp(__result.MinChanceOfSuccess * factor, 0f, 100f);
             __result.ChanceOfSuccess = Mathf.Clamp(__result.ChanceOfSuccess * factor, 0f, 100f);
         }
@@ -103,7 +107,7 @@ namespace UnderPressure
             if (item == null || float.IsNaN(__state)) return;
             var delta = item.MaintenanceLevel.Value() - __state;
             var percentage = UnderPressurePlugin.IsModEnabled
-                ? UnderPressurePlugin.MachineWearSetting.Value
+                ? AdaptiveDifficulty.GetValue(UnderPressurePlugin.MachineWearSetting)
                 : 0;
             if (delta > 0f && percentage != 0)
                 item.MaintenanceLevel.Modify(delta * percentage / 100f, 1f);
@@ -114,7 +118,8 @@ namespace UnderPressure
     internal static class EmployeeSalaryPatch
     {
         internal static float SalaryFactor => Mathf.Max(0.01f,
-            GameplayModifier.Factor(UnderPressurePlugin.StaffSalariesSetting.Value));
+            GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                UnderPressurePlugin.StaffSalariesSetting)));
 
         private static void Postfix(ref int __result)
         {
@@ -166,69 +171,11 @@ namespace UnderPressure
         }
     }
 
-    [HarmonyPatch(typeof(InspectorSubItemStaffInfo), "ResetPayRiseSlider")]
-    internal static class StaffSalarySliderRangePatch
-    {
-        internal static readonly FieldInfo SliderField =
-            AccessTools.Field(typeof(InspectorSubItemStaffInfo), "_payRiseSlider");
-        internal static readonly FieldInfo StaffField =
-            AccessTools.Field(typeof(InspectorSubItemStaffInfo), "_staff");
-
-        private static void Postfix(InspectorSubItemStaffInfo __instance)
-        {
-            if (!UnderPressurePlugin.IsModEnabled ||
-                UnderPressurePlugin.StaffSalariesSetting.Value == 0) return;
-            var slider = SliderField.GetValue(__instance) as UnityEngine.UI.Slider;
-            var staff = StaffField.GetValue(__instance) as Staff;
-            if (slider == null || staff == null) return;
-
-            // Native max is based on desired salary, already scaled by our salary
-            // factor. Show the current salary on an absolute scale instead of
-            // pinning it to an end, with at least one further salary's room.
-            var current = staff.GetSalary();
-            var nativeMaximum = slider.maxValue;
-            slider.minValue = 0f;
-            slider.maxValue = Mathf.Max(current * 2f, nativeMaximum);
-            slider.value = current;
-        }
-    }
-
-    [HarmonyPatch(typeof(InspectorSubItemStaffInfo), "OnPayRiseConfirm")]
-    internal static class StaffSalarySliderConfirmPatch
-    {
-        private static bool Prefix(InspectorSubItemStaffInfo __instance)
-        {
-            var slider = StaffSalarySliderRangePatch.SliderField.GetValue(__instance) as UnityEngine.UI.Slider;
-            var staff = StaffSalarySliderRangePatch.StaffField.GetValue(__instance) as Staff;
-            return slider != null && staff != null && slider.value > staff.GetSalary();
-        }
-    }
-
-    [HarmonyPatch(typeof(InspectorSubItemStaffInfo), "Update")]
-    internal static class StaffSalarySliderButtonPatch
-    {
-        private static readonly FieldInfo ConfirmField =
-            AccessTools.Field(typeof(InspectorSubItemStaffInfo), "_payRiseConfirmButtonAnimator");
-        private static readonly FieldInfo TextField =
-            AccessTools.Field(typeof(InspectorSubItemStaffInfo), "_salaryText");
-
-        private static void Postfix(InspectorSubItemStaffInfo __instance)
-        {
-            var slider = StaffSalarySliderRangePatch.SliderField.GetValue(__instance) as UnityEngine.UI.Slider;
-            var staff = StaffSalarySliderRangePatch.StaffField.GetValue(__instance) as Staff;
-            if (slider == null || staff == null || slider.value > staff.GetSalary()) return;
-            var button = ConfirmField.GetValue(__instance) as TH20.UI.ButtonAnimator;
-            if (button != null) button.CurrentState = (TH20.UI.ButtonAnimator.State)2;
-            var label = TextField.GetValue(__instance) as TMPro.TMP_Text;
-            if (label != null) label.color = Color.white;
-        }
-    }
-
     [HarmonyPatch(typeof(FinanceManager), "get_LocalMarketRateModifier")]
     internal static class PatientIncomePatch
     {
         internal static float IncomeFactor => GameplayModifier.DifficultyFactor(
-            UnderPressurePlugin.PatientIncomeSetting.Value);
+            AdaptiveDifficulty.GetValue(UnderPressurePlugin.PatientIncomeSetting));
 
         private static void Postfix(ref float __result) => __result *= IncomeFactor;
     }
@@ -292,7 +239,8 @@ namespace UnderPressure
         private static void Postfix(ref float __result)
         {
             __result *= Mathf.Max(0.25f,
-                GameplayModifier.Factor(UnderPressurePlugin.ApplicantWaitSetting.Value));
+                GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.ApplicantWaitSetting)));
         }
     }
 
@@ -303,9 +251,11 @@ namespace UnderPressure
         {
             if (string.Equals(__0, "Hunger", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(__0, "Thirst", StringComparison.OrdinalIgnoreCase))
-                __result *= GameplayModifier.Factor(UnderPressurePlugin.HungerThirstSetting.Value);
+                __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.HungerThirstSetting));
             else if (string.Equals(__0, "Happiness", StringComparison.OrdinalIgnoreCase))
-                __result *= GameplayModifier.Factor(UnderPressurePlugin.HappinessSetting.Value);
+                __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.HappinessSetting));
         }
     }
 
@@ -314,7 +264,8 @@ namespace UnderPressure
     {
         private static void Postfix(ref float __result)
         {
-            __result *= GameplayModifier.Factor(UnderPressurePlugin.HappinessSetting.Value);
+            __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                UnderPressurePlugin.HappinessSetting));
         }
     }
 
@@ -336,7 +287,7 @@ namespace UnderPressure
             if (attribute == null) return;
             var delta = attribute.Value() - __state;
             var percentage = UnderPressurePlugin.IsModEnabled
-                ? UnderPressurePlugin.HygieneSetting.Value
+                ? AdaptiveDifficulty.GetValue(UnderPressurePlugin.HygieneSetting)
                 : 0;
             if (delta < 0f && percentage != 0)
                 attribute.Modify(delta * percentage / 100f, 1f);
