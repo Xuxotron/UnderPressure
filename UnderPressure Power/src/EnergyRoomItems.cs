@@ -141,7 +141,8 @@ namespace UnderPressure.PowerGrid
                 Set(Panel, "_hasCollision", true);
                 Set(Panel, "_occupyWallOnly", false);
                 Set(Panel, "_affectsNavigation", false);
-                Set(Panel, "_energyCost", 300);
+                Set(Panel, "_energyCost",
+                    ElectricityGameplay.GetConfiguredConsumption(PowerGridPlugin.PowerPanelPrefab.name));
                 Set(Panel, "_generatesElectricity", false);
                 Set(Panel, "_ignoredByJanitors", true);
                 Set(Panel, "_maintenanceModifer", 0f);
@@ -172,8 +173,8 @@ namespace UnderPressure.PowerGrid
                 additions.Add(TransformerShared);
             }
 
-            // Use the native radiator's exact room modifiers so both Energy Room
-            // objects contribute the same amount of heat without imitating the effect.
+            // Se reutilizan los modificadores exactos del radiador original para que ambos objetos
+            // de la Sala de energía generen el mismo calor sin imitar el efecto manualmente.
             Set(Battery, "_roomModifiers", radiator.RoomModifiers);
             Set(Transformer, "_roomModifiers", radiator.RoomModifiers);
             Set(Transformer, "_ignoredByJanitors", true);

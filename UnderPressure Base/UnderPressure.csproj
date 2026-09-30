@@ -5,11 +5,9 @@
     <RootNamespace>UnderPressure</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
-    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**;.codex_obj\**;.codex_bin\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="obj\**\*.cs;bin\**\*.cs;.codex_obj\**\*.cs;.codex_bin\**\*.cs" />
     <Reference Include="Assembly-CSharp">
       <HintPath>..\Libs\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
@@ -57,10 +55,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="translations.csv">
+    <None Include="..\translations.csv" Link="translations.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="translations_extra.csv">
+    <None Include="..\translations_extra.csv" Link="translations_extra.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -69,7 +67,7 @@
     <MakeDir Directories="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
     <Copy SourceFiles="$(TargetDir)$(AssemblyName).pdb" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
-    <Copy SourceFiles="$(ProjectDir)translations.csv" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
-    <Copy SourceFiles="$(ProjectDir)translations_extra.csv" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
+    <Copy SourceFiles="$(ProjectDir)..\translations.csv" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
+    <Copy SourceFiles="$(ProjectDir)..\translations_extra.csv" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
   </Target>
 </Project>

@@ -8,8 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\UnderPressure.csproj" />
-    <Compile Remove="UnityAssetSource\**\*.cs" />
+    <ProjectReference Include="..\UnderPressure Base\UnderPressure.csproj" />
     <Reference Include="Assembly-CSharp">
       <HintPath>..\Libs\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
@@ -74,9 +73,7 @@
 
   <Target Name="DeployExperimental" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true' And Exists('D:\Games\Two Point Hospital\BepInEx\plugins')">
     <MakeDir Directories="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
-    <MakeDir Directories="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure\Assets" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
     <Copy SourceFiles="$(TargetDir)$(AssemblyName).pdb" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
-    <Copy SourceFiles="$(ProjectDir)Assets\underpressure" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure\Assets" />
   </Target>
 </Project>

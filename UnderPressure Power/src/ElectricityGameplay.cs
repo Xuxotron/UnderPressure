@@ -9,6 +9,12 @@ using UnityEngine;
 
 namespace UnderPressure.PowerGrid
 {
+    internal enum Cost
+    {
+        Mensual,
+        Tarea
+    }
+
     internal static class ElectricityGameplay
     {
         private static readonly FieldInfo EnergyCostField = AccessTools.Field(typeof(RoomItemDefinition), "_energyCost");
@@ -29,23 +35,49 @@ namespace UnderPressure.PowerGrid
             {
                 var item = shared?.Instance;
                 if (item == null || EnergyRoomItems.IsTransformer(item)) continue;
-                var identity = Identity(item);
-
-                // Specific-use appliances take precedence over the generic monitor rule.
-                // A vending machine may contain a transform called Screen, but its requested
-                // tariff is 50 rather than the 100 used by computer workstations.
-                if (IsVendingMachine(item, identity))
-                    changed += SetMonthlyCost(item, 50);
-                else if (IsRequestedComputerDesk(item))
-                    changed += SetMonthlyCost(item, 100);
-
-                if (IsHandDryer(identity)) perUseChanged += EnsurePerUseCost(item, 5);
+                if (!TryGetConfiguredRule(item, out var consumption, out var billing, out _)) continue;
+                if (billing == Cost.Mensual)
+                {
+                    changed += SetMonthlyCost(item, consumption);
+                }
+                else
+                {
+                    perUseChanged += EnsurePerUseCost(item, consumption);
+                }
             }
 
             _configured = true;
             PowerGridPlugin.Log.LogInfo("Reglas electricas aplicadas: " + changed +
                                         " costes mensuales actualizados y " + perUseChanged +
                                         " costes por uso actualizados.");
+        }
+
+        internal static bool TryGetConfiguredRule(IRoomItemDefinition definition, out int consumption,
+            out Cost billing, out float height)
+        {
+            consumption = 0;
+            billing = Cost.Mensual;
+            height = 0f;
+            var item = definition as RoomItemDefinition;
+            var prefabName = item?.GetPrefab(0)?.name;
+            if (string.IsNullOrEmpty(prefabName)) return false;
+            foreach (var rule in ElectricObjectCatalog.Objects)
+            {
+                if (!string.Equals(prefabName, rule.Prefab, StringComparison.OrdinalIgnoreCase)) continue;
+                consumption = rule.Consumo;
+                billing = rule.Cobro;
+                height = rule.Altura;
+                return true;
+            }
+            return false;
+        }
+
+        internal static int GetConfiguredConsumption(string prefabName)
+        {
+            foreach (var rule in ElectricObjectCatalog.Objects)
+                if (string.Equals(rule.Prefab, prefabName, StringComparison.OrdinalIgnoreCase))
+                    return rule.Consumo;
+            throw new InvalidOperationException("No existe una regla eléctrica para " + prefabName);
         }
 
         internal static bool RequiresPower(RoomItem item) =>
@@ -153,9 +185,9 @@ namespace UnderPressure.PowerGrid
                 return changed;
             }
 
-            // Some appliances (the native hand dryer among them) have a usable interaction
-            // but no finance modifier at all. Attach the tariff to that exact interaction so
-            // display, billing and power requirements all continue to use the same global data.
+            // Algunos aparatos, entre ellos el secamanos original, tienen una interacción válida
+            // pero carecen de modificador financiero. Se asigna el consumo a esa interacción para
+            // que la visualización, la facturación y el suministro consulten los mismos datos.
             InteractionDefinition interaction = null;
             foreach (var candidate in item.Interactions ?? Array.Empty<InteractionDefinition>())
                 if (candidate != null && !candidate.Deprecated)
@@ -195,28 +227,6 @@ namespace UnderPressure.PowerGrid
             return 1;
         }
 
-        private static bool IsRequestedComputerDesk(RoomItemDefinition item)
-        {
-            var prefab = item?.GetPrefab(0);
-            if (prefab == null) return false;
-            return string.Equals(prefab.name, "RI_Reception", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(prefab.name, "RI_Ward_Nurse_Station", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(prefab.name, "RI_OfficeDesk", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsVendingMachine(RoomItemDefinition item, string identity)
-        {
-            if (Contains(identity, "vending") || Contains(identity, "drink machine") ||
-                Contains(identity, "snack machine")) return true;
-            foreach (var modifier in item.InteractionAttributeModifiers ?? Array.Empty<InteractionAttributeModifier>())
-            {
-                var finance = GetFinanceModifier(modifier);
-                if (finance != null && (finance.Type == FinanceModifier.EType.VendingMachine_Drink ||
-                                        finance.Type == FinanceModifier.EType.VendingMachine_Snack)) return true;
-            }
-            return false;
-        }
-
         private static FinanceModifier GetFinanceModifier(InteractionAttributeModifier modifier)
         {
             if (modifier == null) return null;
@@ -233,10 +243,6 @@ namespace UnderPressure.PowerGrid
             return null;
         }
 
-        private static bool IsHandDryer(string identity) =>
-            Contains(identity, "hand dryer") || Contains(identity, "handdryer") ||
-            Contains(identity, "hand_dryer") || Contains(identity, "secamanos");
-
         private static string Identity(RoomItemDefinition item)
         {
             var prefab = item.GetPrefab(0);
@@ -244,8 +250,6 @@ namespace UnderPressure.PowerGrid
                    (prefab == null ? string.Empty : prefab.name);
         }
 
-        private static bool Contains(string value, string term) =>
-            !string.IsNullOrEmpty(value) && value.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     [HarmonyPatch(typeof(ObjectInteraction), "IsAvailable")]
@@ -304,8 +308,8 @@ namespace UnderPressure.PowerGrid
 
         private static void Postfix(FinanceManager __instance, BillState __state)
         {
-            // The campaign discounts the money paid, not the physical demand. The native
-            // recurring monthly value must survive payment; only the per-use accumulator resets.
+            // La campaña reduce el dinero pagado, no la demanda física. El valor mensual
+            // recurrente debe conservarse tras el cobro; solo se reinicia el acumulador por uso.
             MonthlyEnergyField?.SetValue(__instance, __state.OriginalMonthly);
         }
     }

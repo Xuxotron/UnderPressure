@@ -1878,11 +1878,8 @@ namespace UnderPressure.PowerGrid
             if (visual != null)
                 foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
                     if (renderer != null) top = Mathf.Max(top, renderer.bounds.max.y + 0.08f);
-            var definition = item.Definition as RoomItemDefinition;
-            var prefabName = definition?.GetPrefab(0)?.name;
-            // RI_OfficeDesk contains imported helper geometry above the visible desk.
-            // Compensate that known bad bound without disturbing correctly imported objects.
-            if (string.Equals(prefabName, "RI_OfficeDesk", StringComparison.OrdinalIgnoreCase)) top -= 0.34f;
+            if (ElectricityGameplay.TryGetConfiguredRule(item.Definition, out _, out _, out var height))
+                top += height;
             return new Vector3(center.x, top, center.z);
         }
 
