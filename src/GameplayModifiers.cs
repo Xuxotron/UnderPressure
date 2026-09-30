@@ -27,16 +27,40 @@ namespace UnderPressure
     {
         private static readonly FieldInfo PrestigeTrackerField =
             AccessTools.Field(typeof(CharacterManager), "_prestigeTracker");
+        private static readonly FieldInfo ReputationTrackerField =
+            AccessTools.Field(typeof(CharacterManager), "_reputationTracker");
+        private static readonly FieldInfo ConfigField =
+            AccessTools.Field(typeof(CharacterManager), "_config");
+        private static readonly FieldInfo ReputationMinimumField =
+            AccessTools.Field(typeof(CharacterManager.Config), "_reputationArrivalRateMultiplierMin");
+        private static readonly FieldInfo ReputationMaximumField =
+            AccessTools.Field(typeof(CharacterManager.Config), "_reputationArrivalRateMultiplierMax");
 
         private static void Postfix(CharacterManager __instance, ref float __result)
         {
             if (UnderPressurePlugin.ShouldSeparateReputationAndPrestige)
             {
+                // Elimina únicamente el multiplicador nativo de prestigio.
                 var prestige = PrestigeTrackerField?.GetValue(__instance) as PrestigeTracker;
-                var prestigeArrivalRate = prestige?.Data?.PatientArrivalRate ?? 1f;
-                if (prestigeArrivalRate > 0f)
-                    __result *= prestigeArrivalRate;
+                var prestigeFactor = prestige?.Data?.PatientArrivalRate ?? 1f;
+                if (prestigeFactor > 0f)
+                    __result *= prestigeFactor;
+
+                // Duplica la bonificación de reputación sin reducir nunca la frecuencia base.
+                var reputation = ReputationTrackerField?.GetValue(__instance) as ReputationTracker;
+                var config = ConfigField?.GetValue(__instance) as CharacterManager.Config;
+                var minimum = ReputationMinimumField != null && config != null
+                    ? (float)ReputationMinimumField.GetValue(config) : 1f;
+                var maximum = ReputationMaximumField != null && config != null
+                    ? (float)ReputationMaximumField.GetValue(config) : 2f;
+                var normalFactor = Mathf.Lerp(minimum, maximum,
+                    reputation?.OverallReputation ?? 0f);
+                var reinforcedFactor = minimum + 2f * (normalFactor - minimum);
+                if (normalFactor > 0f && reinforcedFactor > 0f)
+                    __result *= normalFactor / reinforcedFactor;
             }
+
+            // Bajo Presión modifica al final la frecuencia ya calculada por el juego.
             var factor = GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
                 UnderPressurePlugin.PatientArrivalSetting));
             __result = factor <= 0f ? float.MaxValue : __result / factor;
@@ -127,16 +151,45 @@ namespace UnderPressure
         }
     }
 
-    [HarmonyPatch(typeof(Staff), "GetDesiredSalary")]
+    [HarmonyPatch(typeof(GameAlgorithms), "CalculateDesiredSalary", new[]
+    {
+        typeof(StaffDefinition), typeof(int), typeof(float), typeof(List<QualificationSlot>),
+        typeof(CharacterTraits), typeof(float)
+    })]
     internal static class EmployeeDesiredSalaryPatch
     {
         private static void Postfix(ref int __result)
         {
+            if (StaffBaseSalaryStoragePatch.IsStoringBaseSalary) return;
             __result = Mathf.Max(0, Mathf.RoundToInt(__result * EmployeeSalaryPatch.SalaryFactor));
         }
     }
 
-    // Salary sliders and pay-review actions pass displayed amounts; storage remains unscaled.
+    // El constructor debe guardar el sueldo base; todas las lecturas públicas se escalan después.
+    [HarmonyPatch]
+    internal static class StaffBaseSalaryStoragePatch
+    {
+        [ThreadStatic]
+        private static int _storageDepth;
+
+        internal static bool IsStoringBaseSalary => _storageDepth > 0;
+
+        private static MethodBase TargetMethod() => AccessTools.Constructor(typeof(Staff), new[]
+        {
+            typeof(JobApplicant), typeof(Level), typeof(VisualManager), typeof(int),
+            typeof(Vector3), typeof(bool)
+        });
+
+        private static void Prefix() => ++_storageDepth;
+
+        private static Exception Finalizer(Exception __exception)
+        {
+            if (_storageDepth > 0) --_storageDepth;
+            return __exception;
+        }
+    }
+
+    // Los controles pasan importes visibles; el almacenamiento interno permanece sin escalar.
     [HarmonyPatch]
     internal static class DisplayedSalaryInputPatch
     {
@@ -147,6 +200,7 @@ namespace UnderPressure
             yield return AccessTools.Method(typeof(StaffMenuPayReviewRow), "IncreasePay");
             yield return AccessTools.Method(typeof(StaffMenuPayReviewRow), "SatisfyPayRequest");
             yield return AccessTools.Method(typeof(StaffMenuPayReviewRow), "Revert");
+            yield return AccessTools.Method(typeof(Staff), "Promote");
         }
 
         private static void SetDisplayedSalary(Staff staff, int amount, bool silent)
@@ -168,6 +222,45 @@ namespace UnderPressure
                 }
                 yield return instruction;
             }
+        }
+    }
+
+    [HarmonyPatch(typeof(InspectorSubItemStaffInfo), "Update")]
+    internal static class AdaptiveSalaryInspectorRefreshPatch
+    {
+        private static readonly FieldInfo SliderField =
+            AccessTools.Field(typeof(InspectorSubItemStaffInfo), "_payRiseSlider");
+        private static readonly FieldInfo StaffField =
+            AccessTools.Field(typeof(InspectorSubItemStaffInfo), "_staff");
+        private static readonly MethodInfo ResetSliderMethod =
+            AccessTools.Method(typeof(InspectorSubItemStaffInfo), "ResetPayRiseSlider");
+
+        private static void Prefix(InspectorSubItemStaffInfo __instance)
+        {
+            var slider = SliderField?.GetValue(__instance) as UnityEngine.UI.Slider;
+            var staff = StaffField?.GetValue(__instance) as Staff;
+            if (slider == null || staff == null || ResetSliderMethod == null ||
+                slider.normalizedValue > 0.0001f) return;
+            if (!Mathf.Approximately(slider.minValue, staff.GetSalary()))
+                ResetSliderMethod.Invoke(__instance, null);
+        }
+    }
+
+    [HarmonyPatch(typeof(StaffMenuPayReviewRow), "Refresh")]
+    internal static class AdaptiveSalaryReviewRefreshPatch
+    {
+        private static readonly FieldInfo StaffField =
+            AccessTools.Field(typeof(StaffMenuRowBase), "<Staff>k__BackingField");
+        private static readonly FieldInfo MaximumSalaryField =
+            AccessTools.Field(typeof(StaffMenuPayReviewRow), "_maxSalary");
+
+        private static void Prefix(StaffMenuPayReviewRow __instance)
+        {
+            var staff = StaffField?.GetValue(__instance) as Staff;
+            if (staff == null || MaximumSalaryField == null) return;
+            var maximum = Mathf.RoundToInt(staff.GetDesiredSalary() *
+                (1f + GameAlgorithms.Config.MaxDesiredSalary));
+            MaximumSalaryField.SetValue(__instance, maximum);
         }
     }
 

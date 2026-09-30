@@ -456,7 +456,6 @@ namespace UnderPressure
             {
                 setting.Value = value;
                 SetAdaptiveState(group, value);
-                AdaptiveDifficulty.RefreshAll();
             });
             _adaptiveGroups.Add(group);
             SetAdaptiveState(group, setting.Value);
@@ -470,7 +469,20 @@ namespace UnderPressure
                 if (binding == null) continue;
                 binding.Slider.interactable = !adaptive;
                 if (binding.RowCanvas != null) binding.RowCanvas.alpha = adaptive ? 0.48f : 1f;
+                SetSliderDisplay(binding, adaptive
+                    ? AdaptiveDifficulty.GetValue(binding.Setting)
+                    : binding.Setting.Value);
             }
+        }
+
+        private static void SetSliderDisplay(SliderBinding binding, int value)
+        {
+            if (binding.Slider.value != value)
+                binding.Slider.SetValueWithoutNotify(value);
+            if (binding.ValueLabel != null)
+                binding.ValueLabel.text = FormatPercentage(value);
+            SetNativeFillColour(binding.Slider.fillRect != null
+                ? binding.Slider.fillRect.GetComponent<Image>() : null, value);
         }
 
         private SliderBinding CreateSliderRow(Transform section, Transform nativeVideoRow, string localizationKey,
@@ -819,6 +831,9 @@ namespace UnderPressure
         private void LateUpdate()
         {
             SetTabCaption();
+            foreach (var group in _adaptiveGroups)
+                if (group.Setting.Value)
+                    SetAdaptiveState(group, true);
         }
 
         private void SetTabCaption()

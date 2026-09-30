@@ -105,7 +105,7 @@ namespace UnderPressure
                 "Sustituye Activos materiales por la factura eléctrica en la gráfica y muestra el gasto en objetos.");
             SeparateReputationPrestigeSetting = Config.Bind(
                 "Jugabilidad", "SeparateReputationAndPrestige", true,
-                "La reputación solo afecta a la llegada de pacientes y el prestigio solo a las plazas de candidatos.");
+                "La reputación aumenta por sí sola la llegada de pacientes con bonificación doble; el prestigio solo aumenta las plazas de candidatos.");
             PermanentMachineWearSetting = Config.Bind(
                 "Jugabilidad", "PermanentMachineWear", false,
                 "Cada 100 puntos porcentuales reparados reducen en un 1% el estado máximo reparable de esa máquina.");
