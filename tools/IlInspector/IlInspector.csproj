@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
-  <ItemGroup><Reference Include="Mono.Cecil"><HintPath>..\..\BepInEx_win_x64_5.4.23.5\BepInEx\core\Mono.Cecil.dll</HintPath></Reference></ItemGroup>
+  <ItemGroup><Reference Include="Mono.Cecil"><HintPath>..\..\Libs\Mono.Cecil.dll</HintPath></Reference></ItemGroup>
 </Project>
