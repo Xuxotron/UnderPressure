@@ -2069,7 +2069,11 @@ namespace UnderPressure.PowerGrid
                     if (item?.Visual == null || EnergyRoomItems.IsPanel(item) ||
                         !ElectricityGameplay.RequiresPower(item)) continue;
                     var powered = IsItemPoweredInternal(item);
-                    item.Visual.SetValueMaterial(powered ? PoweredColor : UnpoweredObjectColor);
+                    ElectricityGameplay.TryGetDisplayCost(item, out _, out var kind);
+                    var poweredColor = kind == ElectricityGameplay.CostKind.Monthly
+                        ? LowVoltageColor
+                        : PoweredColor;
+                    item.Visual.SetValueMaterial(powered ? poweredColor : UnpoweredObjectColor);
                     item.Visual.EnableValueMaterial();
                 }
             }
