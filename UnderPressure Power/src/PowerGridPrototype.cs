@@ -2073,7 +2073,10 @@ namespace UnderPressure.PowerGrid
                     var poweredColor = kind == ElectricityGameplay.CostKind.Monthly
                         ? LowVoltageColor
                         : PoweredColor;
-                    item.Visual.SetValueMaterial(powered ? poweredColor : UnpoweredObjectColor);
+                    var disconnectedColor = kind == ElectricityGameplay.CostKind.Monthly
+                        ? LowVoltageDisconnectedColor
+                        : UnpoweredObjectColor;
+                    item.Visual.SetValueMaterial(powered ? poweredColor : disconnectedColor);
                     item.Visual.EnableValueMaterial();
                 }
             }
