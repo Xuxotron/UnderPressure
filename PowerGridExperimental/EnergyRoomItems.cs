@@ -115,8 +115,8 @@ namespace UnderPressure.PowerGrid
             {
                 Battery = CloneBase(filingCabinet, BatteryTag,
                     BatteryGuid,
-                    "UnderPressure/Item/EnergyBattery/Name", "Batería", "Battery",
-                    "UnderPressure/Item/EnergyBattery/Description",
+                    "energy.battery.name", "Batería", "Battery",
+                    "energy.battery.description",
                     "Batería para la Sala de energía. Almacena hasta 200 de energía y se recarga cada día.",
                     "Battery for the Energy Room. Stores up to 200 energy and recharges every day.");
                 Set(Battery, "_prefab", batteryVisual.GetPrefab(0));

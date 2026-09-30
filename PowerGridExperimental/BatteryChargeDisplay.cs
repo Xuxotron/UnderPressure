@@ -11,7 +11,7 @@ namespace UnderPressure.PowerGrid
     internal sealed class BatteryChargeDisplay : MonoBehaviour
     {
         private static readonly LocalisedString MaximumCapacityText = EnergyLocalization.Create(
-            "UnderPressure/UI/BatteryMaximumCapacity", "Capacidad máxima", "Maximum capacity");
+            "energy.battery.maximum_capacity", "Capacidad máxima", "Maximum capacity");
 
         private RoomItem _item;
         private ProgressBarMaskable _bar;

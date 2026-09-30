@@ -1019,8 +1019,8 @@ namespace UnderPressure.PowerGrid
             var buttonX = -(visualIconWidth + gap) * 0.5f;
             var flowButtonX = (visualButtonWidth + gap) * 0.5f;
             var rowStep = visualButtonHeight + gap;
-            var highCaption = EnergyLocalization.Create("UnderPressure/UI/HighVoltage", "Alto V.", "High V.").Translation;
-            var lowCaption = EnergyLocalization.Create("UnderPressure/UI/LowVoltage", "Bajo V.", "Low V.").Translation;
+            var highCaption = EnergyLocalization.Create("energy.high_voltage", "Alto V.", "High V.").Translation;
+            var lowCaption = EnergyLocalization.Create("energy.low_voltage", "Bajo V.", "Low V.").Translation;
             var deleteCaption = EnergyLocalization.Create("UnderPressure/UI/DeleteCable", "Eliminar", "Delete").Translation;
             _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "High Voltage Cable", highCaption,
                 buttonX, rowStep, buttonWidth, buttonHeight, toolButtonScale, ToolMode.HighVoltage);

@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace UnderPressure
 {
-    internal static class ModLocalization
+    public static class ModLocalization
     {
         private const string FallbackLanguage = "en";
         private static readonly Dictionary<string, Dictionary<string, string>> Values =
@@ -15,18 +15,23 @@ namespace UnderPressure
         private static readonly PropertyInfo CurrentLanguageCodeProperty = ResolveLanguageCodeProperty();
         private static bool _loaded;
 
-        internal static string Get(string key)
+        public static string Get(string key)
+        {
+            return Get(key, CurrentLanguageCode(), key);
+        }
+
+        public static string Get(string key, string languageCode, string fallback)
         {
             EnsureLoaded();
             if (!Values.TryGetValue(key, out var translations))
-                return key;
+                return fallback;
 
-            var language = CurrentLanguageCode();
+            var language = NormalizeLanguageCode(languageCode);
             if (translations.TryGetValue(language, out var value) && !string.IsNullOrEmpty(value))
                 return value;
             if (translations.TryGetValue(FallbackLanguage, out value) && !string.IsNullOrEmpty(value))
                 return value;
-            return key;
+            return fallback;
         }
 
         private static string CurrentLanguageCode()
@@ -36,22 +41,28 @@ namespace UnderPressure
                 var code = CurrentLanguageCodeProperty?.GetValue(null, null) as string;
                 if (string.IsNullOrEmpty(code))
                     return FallbackLanguage;
-                var normalized = code.Replace('_', '-').ToLowerInvariant();
-                if (normalized.StartsWith("zh", StringComparison.Ordinal))
-                {
-                    if (normalized.Contains("tw") || normalized.Contains("hk") ||
-                        normalized.Contains("mo") || normalized.Contains("hant") ||
-                        normalized.Contains("traditional"))
-                        return "zh-hant";
-                    return "zh-hans";
-                }
-                var separator = normalized.IndexOf('-');
-                return separator > 0 ? normalized.Substring(0, separator) : normalized;
+                return NormalizeLanguageCode(code);
             }
             catch
             {
                 return FallbackLanguage;
             }
+        }
+
+        private static string NormalizeLanguageCode(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return FallbackLanguage;
+            var normalized = code.Replace('_', '-').ToLowerInvariant();
+            if (normalized.StartsWith("zh", StringComparison.Ordinal))
+            {
+                if (normalized.Contains("tw") || normalized.Contains("hk") ||
+                    normalized.Contains("mo") || normalized.Contains("hant") ||
+                    normalized.Contains("traditional"))
+                    return "zh-hant";
+                return "zh-hans";
+            }
+            var separator = normalized.IndexOf('-');
+            return separator > 0 ? normalized.Substring(0, separator) : normalized;
         }
 
         private static PropertyInfo ResolveLanguageCodeProperty()

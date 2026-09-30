@@ -75,8 +75,8 @@ tooltip.machine_wear,Make machines wear out faster.,Acelera el desgaste de las m
 tooltip.adaptive.economy,Set these bars from available cash. +1% per 10000 $ up to +100%.,Ajusta estas barras según el dinero disponible. +1% por cada 10.000 $ hasta +100%.,Règle ces barres selon les fonds disponibles. +1 % par tranche de 10 000 $ jusqu'à +100 %.,Passt diese Regler dem verfügbaren Geld an. +1 % je 10.000 $ bis +100 %.,Regola queste barre in base al denaro disponibile. +1% ogni 10.000 $ fino a +100%.,Ajusta estas barras ao dinheiro disponível. +1% por cada 10.000 $ até +100%.
 tooltip.adaptive.reputation,Set these bars from reputation. +1% per point up to +100%.,Ajusta estas barras según la reputación. +1% por punto hasta +100%.,Règle ces barres selon la réputation. +1 % par point jusqu'à +100 %.,Passt diese Regler dem Ruf an. +1 % je Punkt bis +100 %.,Regola queste barre in base alla reputazione. +1% per punto fino a +100%.,Ajusta estas barras à reputação. +1% por ponto até +100%.
 tooltip.adaptive.expansion,Set these bars from hospital level. +5% per level up to +100%.,Ajusta estas barras según el nivel del hospital. +5% por nivel hasta +100%.,Règle ces barres selon le niveau de l'hôpital. +5 % par niveau jusqu'à +100 %.,Passt diese Regler der Krankenhausstufe an. +5 % je Stufe bis +100 %.,Regola queste barre in base al livello dell'ospedale. +5% per livello fino a +100%.,Ajusta estas barras ao nível do hospital. +5% por nível até +100%.
-UnderPressure/Item/EnergyBattery/Name,Battery,Batería,,,,
-UnderPressure/Item/EnergyBattery/Description,Battery for the Energy Room. Stores up to 200 energy and recharges every day.,Batería para la Sala de energía. Almacena hasta 200 de energía y se recarga cada día.,,,,
-UnderPressure/UI/BatteryMaximumCapacity,Maximum capacity,Capacidad máxima,,,,
-UnderPressure/UI/HighVoltage,High V.,Alto V.,,,,
-UnderPressure/UI/LowVoltage,Low V.,Bajo V.,,,,
+energy.battery.name,Battery,Batería,,,,
+energy.battery.description,Battery for the Energy Room. Stores up to 200 energy and recharges every day.,Batería para la Sala de energía. Almacena hasta 200 de energía y se recarga cada día.,,,,
+energy.battery.maximum_capacity,Maximum capacity,Capacidad máxima,,,,
+energy.high_voltage,High V.,Alto V.,,,,
+energy.low_voltage,Low V.,Bajo V.,,,,
