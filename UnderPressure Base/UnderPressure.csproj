@@ -5,6 +5,9 @@
     <RootNamespace>UnderPressure</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
+    <GameOutputPath>D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure\</GameOutputPath>
+    <OutputPath Condition="'$(SkipDeploy)' != 'true'">$(GameOutputPath)</OutputPath>
+    <AppendTargetFrameworkToOutputPath Condition="'$(SkipDeploy)' != 'true'">false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -63,11 +66,4 @@
     </None>
   </ItemGroup>
 
-  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true' And Exists('D:\Games\Two Point Hospital\BepInEx\plugins')">
-    <MakeDir Directories="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
-    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pdb" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
-    <Copy SourceFiles="$(ProjectDir)..\translations.csv" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
-    <Copy SourceFiles="$(ProjectDir)..\translations_extra.csv" DestinationFolder="D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure" />
-  </Target>
 </Project>
