@@ -347,6 +347,7 @@ namespace UnderPressure.PowerGrid
                 var roomRecords = new Dictionary<int, ExtraRoomRecord>();
                 var staffJobRecords = new Dictionary<int, bool>();
                 var batteryRecords = new List<LoadedBatteryRecord>();
+                var taskEnergyWasAppliedImmediately = false;
                 for (var index = 1; index < lines.Length; ++index)
                 {
                     var parts = lines[index].Split(',');
@@ -426,6 +427,20 @@ namespace UnderPressure.PowerGrid
                         _gridOverloaded = parts[6] == "1";
                         _energyStateInitialised = true;
                     }
+                    if (parts.Length == 7 && parts[0] == "E4" &&
+                        int.TryParse(parts[1], out contracted) && int.TryParse(parts[2], out dailyEnergy) &&
+                        int.TryParse(parts[3], out taskEnergy) && int.TryParse(parts[4], out currentTasks) &&
+                        TryFloat(parts[5], out dailyRemainder) && (parts[6] == "0" || parts[6] == "1"))
+                    {
+                        _contractedEnergy = NormaliseContractedEnergy(contracted);
+                        _lastDailyEnergy = Math.Max(0, dailyEnergy);
+                        _lastTaskEnergy = Math.Max(0, taskEnergy);
+                        _currentDayTaskEnergy = Math.Max(0, currentTasks);
+                        _dailyEnergyRemainder = Mathf.Clamp(dailyRemainder, 0f, 0.999999f);
+                        _gridOverloaded = parts[6] == "1";
+                        _energyStateInitialised = true;
+                        taskEnergyWasAppliedImmediately = true;
+                    }
                     if (parts.Length == 6 && parts[0] == "B" && int.TryParse(parts[1], out var batteryId) &&
                         int.TryParse(parts[2], out var maximumHundredths) &&
                         int.TryParse(parts[3], out var chargeHundredths) && TryFloat(parts[4], out var worldX) &&
@@ -452,6 +467,13 @@ namespace UnderPressure.PowerGrid
                 }
                 RestoreEnergyRooms(roomRecords);
                 ReconcileBatteryStates(batteryRecords);
+                if (!taskEnergyWasAppliedImmediately && _currentDayTaskEnergy > 0)
+                {
+                    var pendingTaskEnergy = _currentDayTaskEnergy;
+                    _currentDayTaskEnergy = 0;
+                    _lastTaskEnergy = 0;
+                    ConsumeTaskEnergyImmediately(pendingTaskEnergy);
+                }
                 RestoreStaffJobAssignments(staffJobRecords);
                 global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
                 PowerGridPlugin.Log.LogInfo($"Guardado complementario cargado: {_cells.Count} Alto V., " +
@@ -499,7 +521,7 @@ namespace UnderPressure.PowerGrid
                 var lines = new List<string>(ordered.Count + orderedLow.Count + 32) { "UNDERPRESSURE_SAVE_1" };
                 foreach (var coord in ordered) lines.Add("C," + coord.X + "," + coord.Y);
                 foreach (var coord in orderedLow) lines.Add("L," + coord.X + "," + coord.Y);
-                lines.Add("E3," + _contractedEnergy + "," + _lastDailyEnergy + "," + _lastTaskEnergy + "," +
+                lines.Add("E4," + _contractedEnergy + "," + _lastDailyEnergy + "," + _lastTaskEnergy + "," +
                           _currentDayTaskEnergy + "," + F(_dailyEnergyRemainder) + "," +
                           (_gridOverloaded ? "1" : "0"));
                 var orderedBatteries = new List<BatteryState>(_batteryStates.Values);
@@ -1503,7 +1525,41 @@ namespace UnderPressure.PowerGrid
         {
             var active = Active;
             if (active == null || amount <= 0 || !ReferenceEquals(active._level?.FinanceManager, manager)) return;
-            active._currentDayTaskEnergy += amount;
+            active.ConsumeTaskEnergyImmediately(amount);
+        }
+
+        private void ConsumeTaskEnergyImmediately(int amount)
+        {
+            if (amount <= 0) return;
+            if (!_energyStateInitialised) RefreshEnergyCapacity();
+            ReconcileBatteryStates();
+            RefreshBatteryEnergy();
+            var previousTaskEnergy = Math.Max(0, _currentDayTaskEnergy);
+            _currentDayTaskEnergy = amount > int.MaxValue - previousTaskEnergy
+                ? int.MaxValue
+                : previousTaskEnergy + amount;
+            _lastTaskEnergy = _currentDayTaskEnergy;
+            var contractedHundredths = Math.Max(0, _contractedEnergy) * EnergyHundredths;
+            var previousConsumptionHundredths =
+                (Math.Max(0, _lastDailyEnergy) + previousTaskEnergy) * EnergyHundredths;
+            var currentConsumptionHundredths =
+                (Math.Max(0, _lastDailyEnergy) + _currentDayTaskEnergy) * EnergyHundredths;
+            var previousBatteryDemand = Math.Max(0, previousConsumptionHundredths - contractedHundredths);
+            var currentBatteryDemand = Math.Max(0, currentConsumptionHundredths - contractedHundredths);
+            var additionalBatteryDemand = Math.Max(0, currentBatteryDemand - previousBatteryDemand);
+            var batteryAvailable = _batteryEnergyHundredths;
+            var wasOverloaded = _gridOverloaded;
+            if (!_gridOverloaded) _gridOverloaded = additionalBatteryDemand > batteryAvailable;
+            DischargeBatteries(Math.Min(additionalBatteryDemand, batteryAvailable));
+            RefreshBatteryEnergy();
+            _energyCapacityHundredths = contractedHundredths + _batteryEnergyHundredths;
+            RefreshEnergyHud();
+            RefreshElectricItemColors();
+            RefreshNetworkOutageVisuals();
+            if (!wasOverloaded && _gridOverloaded)
+                PowerGridPlugin.Log.LogWarning("Red electrica caida durante una tarea: el consumo " +
+                                               (_lastDailyEnergy + _lastTaskEnergy) +
+                                               " supera la energia disponible.");
         }
 
         internal static void ConsumeDailyMonthlyEnergy(Level level)
@@ -1515,19 +1571,20 @@ namespace UnderPressure.PowerGrid
             active._dailyEnergyRemainder += Math.Max(0, monthly) / 30f;
             var monthlyDailyEnergy = Mathf.FloorToInt(active._dailyEnergyRemainder + 0.000001f);
             active._dailyEnergyRemainder -= monthlyDailyEnergy;
+            var wasOverloaded = active._gridOverloaded;
+            active._gridOverloaded = false;
             var dailyEnergy = monthlyDailyEnergy + active.CountPoweredHighVoltageCables();
             active._lastDailyEnergy = Math.Max(0, dailyEnergy);
-            active._lastTaskEnergy = Math.Max(0, active._currentDayTaskEnergy);
+            active._lastTaskEnergy = 0;
             active._currentDayTaskEnergy = 0;
             active.RechargeBatteries();
             active.RefreshBatteryEnergy();
             var availableHundredths = Math.Max(0, active._contractedEnergy) * EnergyHundredths +
                                       active._batteryEnergyHundredths;
-            var dailyConsumption = active._lastDailyEnergy + active._lastTaskEnergy;
+            var dailyConsumption = active._lastDailyEnergy;
             var dailyConsumptionHundredths = dailyConsumption * EnergyHundredths;
             var contractedHundredths = Math.Max(0, active._contractedEnergy) * EnergyHundredths;
             var batteryDemandHundredths = Math.Max(0, dailyConsumptionHundredths - contractedHundredths);
-            var wasOverloaded = active._gridOverloaded;
             active._gridOverloaded = dailyConsumptionHundredths > availableHundredths;
             active.DischargeBatteries(Math.Min(batteryDemandHundredths, active._batteryEnergyHundredths));
             active.RefreshBatteryEnergy();
