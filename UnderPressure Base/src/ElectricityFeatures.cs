@@ -192,8 +192,8 @@ namespace UnderPressure
         private string _nativeTitle;
         private double _nativeMin;
         private double _nativeMax;
-        private double _monthlyMax = 1d;
-        private double _yearlyMax = 1d;
+        private double _monthlyMin = -1d;
+        private double _yearlyMin = -1d;
 
         internal void Bind(OverviewMenuGraphPanelBase panel)
         {
@@ -257,7 +257,7 @@ namespace UnderPressure
             var yearlyBills = new Dictionary<int, double>();
             foreach (var entry in events)
             {
-                var amount = Math.Abs(((HospitalEventEnergyBillPaid)entry).GetFinanceValue());
+                var amount = ((HospitalEventEnergyBillPaid)entry).GetFinanceValue();
                 var month = GameDateUtils.AsTotalMonths(entry.Date);
                 monthlyBills[month] = amount;
                 yearlyBills[entry.Date.Year] = yearlyBills.TryGetValue(entry.Date.Year, out var prior)
@@ -265,14 +265,15 @@ namespace UnderPressure
             }
             var monthly = Match(_nativeMonthly, monthlyBills);
             var quarterly = Match(_nativeQuarterly, monthlyBills);
-            var yearly = Match(_nativeYearly, yearlyBills);
+            var yearly = Match(BuildYearlySource(_nativeYearly,
+                level.TimelineManager.CurrentGameDate.Year), yearlyBills);
             _graph.AssignMonthlyData(monthly);
             _graph.AssignQuarterlyData(quarterly);
             _graph.AssignYearlyData(yearly);
-            _monthlyMax = 1d;
-            _yearlyMax = 1d;
-            foreach (var point in monthly) _monthlyMax = Math.Max(_monthlyMax, point.y);
-            foreach (var point in yearly) _yearlyMax = Math.Max(_yearlyMax, point.y);
+            _monthlyMin = -1d;
+            _yearlyMin = -1d;
+            foreach (var point in monthly) _monthlyMin = Math.Min(_monthlyMin, point.y);
+            foreach (var point in yearly) _yearlyMin = Math.Min(_yearlyMin, point.y);
             if (_graph.AssignedButton != null)
                 _graph.AssignedButton.SetTitleText(ModLocalization.Get("graph.electricity_bill"));
             ShowCurrentMode();
@@ -283,8 +284,21 @@ namespace UnderPressure
         {
             var result = new List<LineGraph.DataVector2>();
             foreach (var point in source)
-                if (bills.TryGetValue((int)Math.Floor(point.x), out var amount))
-                    result.Add(new LineGraph.DataVector2(point.x, amount));
+            {
+                bills.TryGetValue((int)Math.Floor(point.x), out var amount);
+                result.Add(new LineGraph.DataVector2(point.x, amount));
+            }
+            return result;
+        }
+
+        private static List<LineGraph.DataVector2> BuildYearlySource(
+            List<LineGraph.DataVector2> source, int currentYear)
+        {
+            var result = new List<LineGraph.DataVector2>(source);
+            if (result.Count == 0 || Math.Floor(result[result.Count - 1].x) < currentYear)
+                result.Add(new LineGraph.DataVector2(currentYear, 0d));
+            if (result.Count == 1)
+                result.Add(new LineGraph.DataVector2(result[0].x + 1d, 0d));
             return result;
         }
 
@@ -300,8 +314,8 @@ namespace UnderPressure
         {
             if (_graph == null || !UnderPressurePlugin.ShouldShowElectricity) return;
             var mode = (GraphDisplayMode)ModeField.GetValue(_panel);
-            _graph.MinYValue = 0d;
-            _graph.MaxYValue = mode == GraphDisplayMode.DmYearly ? _yearlyMax : _monthlyMax;
+            _graph.MinYValue = mode == GraphDisplayMode.DmYearly ? _yearlyMin : _monthlyMin;
+            _graph.MaxYValue = 0d;
         }
     }
 }
