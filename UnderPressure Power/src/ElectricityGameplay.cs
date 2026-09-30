@@ -180,16 +180,12 @@ namespace UnderPressure.PowerGrid
                 var finance = GetFinanceModifier(modifier);
                 if (finance == null) continue;
                 found = true;
-                var financeWrapper = ScriptableObject.CreateInstance<SharedInstance_TH20TH20_FinanceModifier>();
-                financeWrapper.name = "UnderPressure Per Use Energy " + item.DebugTag;
-                financeWrapper.hideFlags = HideFlags.HideAndDontSave;
-                financeWrapper.Instance = new FinanceModifier
-                {
-                    Amount = finance.Amount,
-                    EnergyCost = value,
-                    Type = finance.Type
-                };
-                FinanceReferenceField?.SetValue(modifier, financeWrapper);
+                var privateFinanceWrapper =
+                    ScriptableObject.CreateInstance<SharedInstance_TH20TH20_FinanceModifier>();
+                privateFinanceWrapper.name = "UnderPressure Per Use Energy " + item.DebugTag;
+                privateFinanceWrapper.hideFlags = HideFlags.HideAndDontSave;
+                privateFinanceWrapper.Instance = CloneFinanceModifier(finance, value);
+                FinanceReferenceField?.SetValue(modifier, privateFinanceWrapper);
                 changed++;
             }
             if (found)
@@ -239,6 +235,18 @@ namespace UnderPressure.PowerGrid
             PowerGridPlugin.Log.LogInfo("Consumo electrico por uso " + value + " creado en " +
                                         interaction.Name + ": " + Identity(item));
             return 1;
+        }
+
+        private static FinanceModifier CloneFinanceModifier(FinanceModifier source, int energyCost)
+        {
+            var clone = new FinanceModifier();
+            for (var type = typeof(FinanceModifier); type != null; type = type.BaseType)
+                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public |
+                                                     BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                    if (!field.IsInitOnly)
+                        field.SetValue(clone, field.GetValue(source));
+            clone.EnergyCost = energyCost;
+            return clone;
         }
 
         private static FinanceModifier GetFinanceModifier(InteractionAttributeModifier modifier)
