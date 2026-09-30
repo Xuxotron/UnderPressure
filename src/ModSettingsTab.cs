@@ -469,16 +469,20 @@ namespace UnderPressure
                 if (binding == null) continue;
                 binding.Slider.interactable = !adaptive;
                 if (binding.RowCanvas != null) binding.RowCanvas.alpha = adaptive ? 0.48f : 1f;
-                SetSliderDisplay(binding, adaptive
+                var value = adaptive
                     ? AdaptiveDifficulty.GetValue(binding.Setting)
-                    : binding.Setting.Value);
+                    : binding.Setting.Value;
+                // La barra adaptable debe alimentar la misma variable que funciona en modo manual.
+                if (adaptive && binding.Setting.Value != value)
+                    binding.Setting.Value = value;
+                SetSliderDisplay(binding, value);
             }
         }
 
         private static void SetSliderDisplay(SliderBinding binding, int value)
         {
             if (binding.Slider.value != value)
-                binding.Slider.SetValueWithoutNotify(value);
+                binding.Slider.value = value;
             if (binding.ValueLabel != null)
                 binding.ValueLabel.text = FormatPercentage(value);
             SetNativeFillColour(binding.Slider.fillRect != null
@@ -832,8 +836,13 @@ namespace UnderPressure
         {
             SetTabCaption();
             foreach (var group in _adaptiveGroups)
-                if (group.Setting.Value)
-                    SetAdaptiveState(group, true);
+            {
+                // El estado visible del check gobierna directamente sus cuatro barras.
+                var adaptive = group.Toggle.isOn;
+                if (group.Setting.Value != adaptive)
+                    group.Setting.Value = adaptive;
+                SetAdaptiveState(group, adaptive);
+            }
         }
 
         private void SetTabCaption()
