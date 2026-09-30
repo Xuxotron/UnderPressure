@@ -80,14 +80,6 @@ namespace UnderPressure.PowerGrid
             return false;
         }
 
-        internal static int GetConfiguredConsumption(string prefabName)
-        {
-            foreach (var rule in ElectricObjectCatalog.Objects)
-                if (string.Equals(rule.Prefab, prefabName, StringComparison.OrdinalIgnoreCase))
-                    return rule.Consumo;
-            throw new InvalidOperationException("No existe una regla eléctrica para " + prefabName);
-        }
-
         internal static bool RequiresPower(RoomItem item) =>
             item != null && RequiresPower(item.Definition);
 

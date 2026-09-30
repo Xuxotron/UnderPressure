@@ -141,8 +141,6 @@ namespace UnderPressure.PowerGrid
                 Set(Panel, "_hasCollision", true);
                 Set(Panel, "_occupyWallOnly", false);
                 Set(Panel, "_affectsNavigation", false);
-                Set(Panel, "_energyCost",
-                    ElectricityGameplay.GetConfiguredConsumption(PowerGridPlugin.PowerPanelPrefab.name));
                 Set(Panel, "_generatesElectricity", false);
                 Set(Panel, "_ignoredByJanitors", true);
                 Set(Panel, "_maintenanceModifer", 0f);
