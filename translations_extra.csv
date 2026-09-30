@@ -64,3 +64,8 @@ tooltip.machine_wear,Ускоряет износ оборудования.,Przys
 tooltip.adaptive.economy,Настраивает шкалы по доступным деньгам. +1% за каждые 10000 $ до +100%.,Ustawia suwaki według dostępnej gotówki. +1% za każde 10000 $ do +100%.,보유 자금에 따라 조정합니다. 10000 $마다 +1%이며 최대 +100%입니다.,按可用现金调整。每 10000 $ 增加 1%且最高为 +100%。,按可用現金調整。每 10000 $ 增加 1%且最高為 +100%。
 tooltip.adaptive.reputation,Настраивает шкалы по репутации. +1% за очко до +100%.,Ustawia suwaki według reputacji. +1% za punkt do +100%.,평판에 따라 조정합니다. 1점마다 +1%이며 최대 +100%입니다.,按声誉调整。每点增加 1%且最高为 +100%。,按聲譽調整。每點增加 1%且最高為 +100%。
 tooltip.adaptive.expansion,Настраивает шкалы по уровню больницы. +5% за уровень до +100%.,Ustawia suwaki według poziomu szpitala. +5% za poziom do +100%.,병원 레벨에 따라 조정합니다. 레벨당 +5%이며 최대 +100%입니다.,按医院等级调整。每级增加 5%且最高为 +100%。,按醫院等級調整。每級增加 5%且最高為 +100%。
+UnderPressure/Item/EnergyBattery/Name,,,,,
+UnderPressure/Item/EnergyBattery/Description,,,,,
+UnderPressure/UI/BatteryMaximumCapacity,,,,,
+UnderPressure/UI/HighVoltage,,,,,
+UnderPressure/UI/LowVoltage,,,,,
