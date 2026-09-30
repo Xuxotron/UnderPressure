@@ -81,6 +81,8 @@ namespace UnderPressure
         private TMP_Text _unlockLampsLabel;
         private Toggle _disableDiagnosisChargesToggle;
         private TMP_Text _disableDiagnosisChargesLabel;
+        private Toggle _disableAwardsToggle;
+        private TMP_Text _disableAwardsLabel;
         private Toggle _masterToggle;
         private TMP_Text _tabLabel;
         private TMP_Text _nativeSliderLabel;
@@ -351,6 +353,18 @@ namespace UnderPressure
                 _disableDiagnosisChargesToggle.isOn = UnderPressurePlugin.ShouldDisableDiagnosisCharges;
                 _disableDiagnosisChargesToggle.onValueChanged.AddListener(SetDisableDiagnosisCharges);
             }
+            var disableAwardsRow = Instantiate(settingRow, rightSection);
+            disableAwardsRow.name = "Disable Awards";
+            RemoveLocalisers(disableAwardsRow);
+            SetStretchRow((RectTransform)disableAwardsRow, -237f, 45f, 12f);
+            _disableAwardsToggle = disableAwardsRow.GetComponentInChildren<Toggle>(true);
+            _disableAwardsLabel = disableAwardsRow.GetComponentInChildren<TMP_Text>(true);
+            if (_disableAwardsToggle != null)
+            {
+                _disableAwardsToggle.onValueChanged.RemoveAllListeners();
+                _disableAwardsToggle.isOn = UnderPressurePlugin.ShouldDisableAwards;
+                _disableAwardsToggle.onValueChanged.AddListener(SetDisableAwards);
+            }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
             ConfigureRowTooltip(separateReputationPrestigeRow, _separateReputationPrestigeLabel,
@@ -369,6 +383,8 @@ namespace UnderPressure
                 "tooltip.unlock_lamps");
             ConfigureRowTooltip(disableDiagnosisChargesRow, _disableDiagnosisChargesLabel,
                 "tooltip.disable_diagnosis_charges");
+            ConfigureRowTooltip(disableAwardsRow, _disableAwardsLabel,
+                "tooltip.disable_awards");
             var uiRect = (RectTransform)section;
             SetHalfSectionRect(uiRect, -8f, 301f, true);
             SetHalfSectionRect((RectTransform)rightSection, -8f, 301f, false);
@@ -776,6 +792,11 @@ namespace UnderPressure
             UnderPressurePlugin.DisableDiagnosisChargesSetting.Value = value;
         }
 
+        private static void SetDisableAwards(bool value)
+        {
+            UnderPressurePlugin.DisableAwardsSetting.Value = value;
+        }
+
         private static void SetMasterEnabled(bool value)
         {
             UnderPressurePlugin.EnabledSetting.Value = value;
@@ -837,6 +858,8 @@ namespace UnderPressure
                 _unlockLampsLabel.text = ModLocalization.Get("mod.unlock_lamps");
             if (_disableDiagnosisChargesLabel != null)
                 _disableDiagnosisChargesLabel.text = ModLocalization.Get("mod.disable_diagnosis_charges");
+            if (_disableAwardsLabel != null)
+                _disableAwardsLabel.text = ModLocalization.Get("mod.disable_awards");
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);

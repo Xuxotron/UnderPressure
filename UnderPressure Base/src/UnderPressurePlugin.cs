@@ -27,6 +27,7 @@ namespace UnderPressure
         internal static ConfigEntry<bool> VisualLightingSetting { get; private set; }
         internal static ConfigEntry<bool> UnlockLampsSetting { get; private set; }
         internal static ConfigEntry<bool> DisableDiagnosisChargesSetting { get; private set; }
+        internal static ConfigEntry<bool> DisableAwardsSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveReputationSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveExpansionSetting { get; private set; }
@@ -67,6 +68,8 @@ namespace UnderPressure
             IsModEnabled && UnlockLampsSetting != null && UnlockLampsSetting.Value;
         internal static bool ShouldDisableDiagnosisCharges =>
             IsModEnabled && DisableDiagnosisChargesSetting != null && DisableDiagnosisChargesSetting.Value;
+        internal static bool ShouldDisableAwards =>
+            IsModEnabled && DisableAwardsSetting != null && DisableAwardsSetting.Value;
         internal static ManualLogSource Log { get; private set; }
 
         private void Awake()
@@ -121,6 +124,9 @@ namespace UnderPressure
             DisableDiagnosisChargesSetting = Config.Bind(
                 "Jugabilidad", "DisableDiagnosisCharges", false,
                 ModLocalization.Get("tooltip.disable_diagnosis_charges"));
+            DisableAwardsSetting = Config.Bind(
+                "Jugabilidad", "DisableAwards", false,
+                ModLocalization.Get("tooltip.disable_awards"));
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
             AdaptiveReputationSetting = Config.Bind("Dificultad adaptable", "Reputation", false,
