@@ -152,7 +152,7 @@ namespace UnderPressure
         private static void Postfix(OverviewMenuGraphPanelBase __instance)
         {
             if (__instance is FinanceTabGraphPanel)
-                __instance.GetComponent<ElectricityGraphDisplay>()?.RefreshScale();
+                __instance.GetComponent<ElectricityGraphDisplay>()?.RefreshCurrentMode();
         }
     }
 
@@ -245,7 +245,7 @@ namespace UnderPressure
                 _graph.MaxYValue = _nativeMax;
                 if (_graph.AssignedButton != null)
                     _graph.AssignedButton.SetTitleText(_nativeTitle);
-                ShowCurrentMode();
+                RefreshCurrentMode();
                 return;
             }
 
@@ -276,7 +276,7 @@ namespace UnderPressure
             foreach (var point in yearly) _yearlyMin = Math.Min(_yearlyMin, point.y);
             if (_graph.AssignedButton != null)
                 _graph.AssignedButton.SetTitleText(ModLocalization.Get("graph.electricity_bill"));
-            ShowCurrentMode();
+            RefreshCurrentMode();
         }
 
         private static List<LineGraph.DataVector2> Match(List<LineGraph.DataVector2> source,
@@ -302,7 +302,7 @@ namespace UnderPressure
             return result;
         }
 
-        private void ShowCurrentMode()
+        internal void RefreshCurrentMode()
         {
             RefreshScale();
             var mode = (GraphDisplayMode)ModeField.GetValue(_panel);
