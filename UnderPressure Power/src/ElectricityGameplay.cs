@@ -27,7 +27,7 @@ namespace UnderPressure.PowerGrid
         internal static void Configure(SharedInstance<RoomItemDefinition>[] items,
             SharedInstance<RoomDefinition>[] rooms)
         {
-            if (items == null) return;
+            if (items == null || _configured) return;
 
             var changed = 0;
             var perUseChanged = 0;
@@ -123,6 +123,12 @@ namespace UnderPressure.PowerGrid
             cost = 0;
             kind = CostKind.None;
             if (item?.Definition == null) return false;
+            if (TryGetConfiguredRule(item.Definition, out var configuredCost, out var billing, out _))
+            {
+                cost = Math.Max(0, configuredCost);
+                kind = billing == Cost.Mensual ? CostKind.Monthly : CostKind.PerUse;
+                return cost > 0;
+            }
             if (item.EnergyCost > 0)
             {
                 cost = item.EnergyCost;
@@ -174,8 +180,16 @@ namespace UnderPressure.PowerGrid
                 var finance = GetFinanceModifier(modifier);
                 if (finance == null) continue;
                 found = true;
-                if (finance.EnergyCost == value) continue;
-                finance.EnergyCost = value;
+                var financeWrapper = ScriptableObject.CreateInstance<SharedInstance_TH20TH20_FinanceModifier>();
+                financeWrapper.name = "UnderPressure Per Use Energy " + item.DebugTag;
+                financeWrapper.hideFlags = HideFlags.HideAndDontSave;
+                financeWrapper.Instance = new FinanceModifier
+                {
+                    Amount = finance.Amount,
+                    EnergyCost = value,
+                    Type = finance.Type
+                };
+                FinanceReferenceField?.SetValue(modifier, financeWrapper);
                 changed++;
             }
             if (found)
