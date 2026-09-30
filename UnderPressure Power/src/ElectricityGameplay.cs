@@ -15,6 +15,12 @@ namespace UnderPressure.PowerGrid
         Tarea
     }
 
+    internal enum Power
+    {
+        Bajo,
+        Alto
+    }
+
     internal static class ElectricityGameplay
     {
         private static readonly FieldInfo EnergyCostField = AccessTools.Field(typeof(RoomItemDefinition), "_energyCost");
@@ -35,7 +41,7 @@ namespace UnderPressure.PowerGrid
             {
                 var item = shared?.Instance;
                 if (item == null || EnergyRoomItems.IsTransformer(item)) continue;
-                if (!TryGetConfiguredRule(item, out var consumption, out var billing, out _)) continue;
+                if (!TryGetConfiguredRule(item, out var consumption, out var billing, out _, out _)) continue;
                 if (billing == Cost.Mensual)
                 {
                     changed += SetMonthlyCost(item, consumption);
@@ -53,10 +59,11 @@ namespace UnderPressure.PowerGrid
         }
 
         internal static bool TryGetConfiguredRule(IRoomItemDefinition definition, out int consumption,
-            out Cost billing, out float height)
+            out Cost billing, out Power power, out float height)
         {
             consumption = 0;
             billing = Cost.Mensual;
+            power = Power.Bajo;
             height = 0f;
             var item = definition as RoomItemDefinition;
             var prefabName = item?.GetPrefab(0)?.name;
@@ -66,6 +73,7 @@ namespace UnderPressure.PowerGrid
                 if (!string.Equals(prefabName, rule.Prefab, StringComparison.OrdinalIgnoreCase)) continue;
                 consumption = rule.Consumo;
                 billing = rule.Cobro;
+                power = rule.Red;
                 height = rule.Altura;
                 return true;
             }
@@ -123,7 +131,7 @@ namespace UnderPressure.PowerGrid
             cost = 0;
             kind = CostKind.None;
             if (item?.Definition == null) return false;
-            if (TryGetConfiguredRule(item.Definition, out var configuredCost, out var billing, out _))
+            if (TryGetConfiguredRule(item.Definition, out var configuredCost, out var billing, out _, out _))
             {
                 cost = Math.Max(0, configuredCost);
                 kind = billing == Cost.Mensual ? CostKind.Monthly : CostKind.PerUse;
@@ -148,7 +156,24 @@ namespace UnderPressure.PowerGrid
             return true;
         }
 
-        internal static int GetMonthlyEnergyDemand(Level level)
+        internal static bool TryGetPowerType(IRoomItemDefinition definition, out Power power)
+        {
+            if (TryGetConfiguredRule(definition, out _, out _, out power, out _)) return true;
+            power = Power.Bajo;
+            if (definition == null) return false;
+            if (definition.EnergyCost(0) > 0) return true;
+            foreach (var modifier in definition.InteractionAttributeModifiers ??
+                     Array.Empty<InteractionAttributeModifier>())
+            {
+                var finance = GetFinanceModifier(modifier);
+                if (finance == null || finance.EnergyCost <= 0) continue;
+                power = Power.Alto;
+                return true;
+            }
+            return false;
+        }
+
+        internal static int GetDailyRecurringDemand(Level level)
         {
             if (level?.WorldState?.AllRooms == null) return 0;
             var total = 0;
@@ -305,22 +330,23 @@ namespace UnderPressure.PowerGrid
 
         private struct BillState
         {
-            internal int OriginalMonthly;
-            internal int PerUseEnergy;
+            internal int OriginalInstalled;
+            internal bool UsesDailyAccumulator;
         }
 
+        [HarmonyPriority(Priority.First)]
         private static void Prefix(FinanceManager __instance, out BillState __state)
         {
             var level = LevelField?.GetValue(__instance) as Level;
-            var trackedMonthly = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
-            var monthly = level?.WorldState?.AllRooms == null
-                ? trackedMonthly
-                : ElectricityGameplay.GetMonthlyEnergyDemand(level);
-            if (monthly != trackedMonthly)
-                PowerGridPlugin.Log.LogWarning("Factura mensual corregida desde " + trackedMonthly +
-                                               " a " + monthly + " según los objetos colocados.");
+            var installed = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
+            var usesDailyAccumulator = PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var monthly);
+            if (!usesDailyAccumulator) monthly = installed;
             var perUse = PerUseEnergyField == null ? 0 : (int)PerUseEnergyField.GetValue(__instance);
-            __state = new BillState { OriginalMonthly = monthly, PerUseEnergy = Math.Max(0, perUse) };
+            __state = new BillState
+            {
+                OriginalInstalled = installed,
+                UsesDailyAccumulator = usesDailyAccumulator
+            };
             var multiplier = 1f - EnergyCampaignSystem.GetEffect(level, EnergyCampaignKind.HackPowerCompany);
             monthly = Mathf.RoundToInt(monthly * Mathf.Clamp01(multiplier));
             perUse = Mathf.RoundToInt(perUse * Mathf.Clamp01(multiplier));
@@ -328,11 +354,35 @@ namespace UnderPressure.PowerGrid
             PerUseEnergyField?.SetValue(__instance, perUse);
         }
 
-        private static void Postfix(FinanceManager __instance, BillState __state)
+        private static Exception Finalizer(Exception __exception, FinanceManager __instance, BillState __state)
         {
-            // La campaña reduce el dinero pagado, no la demanda física. El valor mensual
-            // recurrente debe conservarse tras el cobro; solo se reinicia el acumulador por uso.
-            MonthlyEnergyField?.SetValue(__instance, __state.OriginalMonthly);
+            // La campaña reduce el dinero pagado, no la demanda física. El total diario ya
+            // facturado se reinicia, mientras el valor nativo instalado se conserva para que
+            // añadir o retirar objetos continúe funcionando normalmente.
+            MonthlyEnergyField?.SetValue(__instance, __state.OriginalInstalled);
+            if (__exception == null && __state.UsesDailyAccumulator)
+                PowerGridPrototype.ClearAccruedDailyEnergyBill(__instance);
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch(typeof(FinanceManager), "get_EnergyBills")]
+    internal static class AccruedDailyEnergyBillPreviewPatch
+    {
+        private static readonly FieldInfo MonthlyEnergyField = AccessTools.Field(typeof(FinanceManager), "_energyBill");
+
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix(FinanceManager __instance, out int __state)
+        {
+            __state = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
+            if (PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var accrued))
+                MonthlyEnergyField?.SetValue(__instance, accrued);
+        }
+
+        private static Exception Finalizer(Exception __exception, FinanceManager __instance, int __state)
+        {
+            MonthlyEnergyField?.SetValue(__instance, __state);
+            return __exception;
         }
     }
 
