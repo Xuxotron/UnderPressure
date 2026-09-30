@@ -54,7 +54,14 @@ namespace UnderPressure
 
         internal static void Attach(Level level)
         {
-            if (level == null || Active.ContainsKey(level) || level.FinanceManager == null ||
+            if (level == null) return;
+            CurrentLevel = level;
+            if (Active.ContainsKey(level))
+            {
+                UpdateAll(level);
+                return;
+            }
+            if (level.FinanceManager == null ||
                 level.ReputationTracker == null || level.PrestigeTracker == null) return;
             var subscription = new Subscription { Level = level };
             subscription.BalanceChanged = unused => UpdateEconomy(level);
@@ -64,7 +71,6 @@ namespace UnderPressure
             level.ReputationTracker.OnReputationChangedEvent += subscription.ReputationChanged;
             level.PrestigeTracker.OnPrestigeChangedEvent += subscription.LevelChanged;
             Active.Add(level, subscription);
-            CurrentLevel = level;
             UpdateAll(level);
         }
 

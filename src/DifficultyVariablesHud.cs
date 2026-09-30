@@ -18,6 +18,8 @@ namespace UnderPressure
 
         private static void Postfix(TimeAndStatsMenu __instance, Level __0)
         {
+            // Este HUD recibe el hospital activo ya construido; úsalo como fuente adaptable fiable.
+            AdaptiveDifficulty.Attach(__0);
             var balanceText = BalanceTextField?.GetValue(__instance) as TMP_Text;
             if (balanceText == null || __0 == null) return;
             var display = balanceText.GetComponent<DifficultyVariablesHud>() ??
