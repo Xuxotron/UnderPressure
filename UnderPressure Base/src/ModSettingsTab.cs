@@ -79,6 +79,8 @@ namespace UnderPressure
         private TMP_Text _visualLightingLabel;
         private Toggle _unlockLampsToggle;
         private TMP_Text _unlockLampsLabel;
+        private Toggle _disableDiagnosisChargesToggle;
+        private TMP_Text _disableDiagnosisChargesLabel;
         private Toggle _masterToggle;
         private TMP_Text _tabLabel;
         private TMP_Text _nativeSliderLabel;
@@ -337,6 +339,18 @@ namespace UnderPressure
                 _unlockLampsToggle.isOn = UnderPressurePlugin.ShouldUnlockLamps;
                 _unlockLampsToggle.onValueChanged.AddListener(SetUnlockLamps);
             }
+            var disableDiagnosisChargesRow = Instantiate(settingRow, section);
+            disableDiagnosisChargesRow.name = "Disable Diagnosis Charges";
+            RemoveLocalisers(disableDiagnosisChargesRow);
+            SetStretchRow((RectTransform)disableDiagnosisChargesRow, -237f, 45f, 12f);
+            _disableDiagnosisChargesToggle = disableDiagnosisChargesRow.GetComponentInChildren<Toggle>(true);
+            _disableDiagnosisChargesLabel = disableDiagnosisChargesRow.GetComponentInChildren<TMP_Text>(true);
+            if (_disableDiagnosisChargesToggle != null)
+            {
+                _disableDiagnosisChargesToggle.onValueChanged.RemoveAllListeners();
+                _disableDiagnosisChargesToggle.isOn = UnderPressurePlugin.ShouldDisableDiagnosisCharges;
+                _disableDiagnosisChargesToggle.onValueChanged.AddListener(SetDisableDiagnosisCharges);
+            }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
             ConfigureRowTooltip(separateReputationPrestigeRow, _separateReputationPrestigeLabel,
@@ -353,9 +367,11 @@ namespace UnderPressure
                 "tooltip.visual_lighting");
             ConfigureRowTooltip(unlockLampsRow, _unlockLampsLabel,
                 "tooltip.unlock_lamps");
+            ConfigureRowTooltip(disableDiagnosisChargesRow, _disableDiagnosisChargesLabel,
+                "tooltip.disable_diagnosis_charges");
             var uiRect = (RectTransform)section;
-            SetHalfSectionRect(uiRect, -8f, 256f, true);
-            SetHalfSectionRect((RectTransform)rightSection, -8f, 256f, false);
+            SetHalfSectionRect(uiRect, -8f, 301f, true);
+            SetHalfSectionRect((RectTransform)rightSection, -8f, 301f, false);
             StretchBackground(section);
             StretchBackground(rightSection);
             BuildGameplaySection(content, nativeVideoRow, section);
@@ -367,12 +383,12 @@ namespace UnderPressure
             if (nativeVideoRow == null)
                 return;
 
-            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -280f, 82f);
+            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -325f, 82f);
             CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
                 UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -378f,
+                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -423f,
                 new[]
                 {
                     new SliderSpec("mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting),
@@ -381,7 +397,7 @@ namespace UnderPressure
                     new SliderSpec("mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting)
                 });
             var reputation = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -678f,
+                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -723f,
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
@@ -390,7 +406,7 @@ namespace UnderPressure
                     new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -978f,
+                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1023f,
                 new[]
                 {
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
@@ -401,7 +417,7 @@ namespace UnderPressure
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1270f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1315f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,
@@ -755,6 +771,11 @@ namespace UnderPressure
             UnderPressurePlugin.UnlockLampsSetting.Value = value;
         }
 
+        private static void SetDisableDiagnosisCharges(bool value)
+        {
+            UnderPressurePlugin.DisableDiagnosisChargesSetting.Value = value;
+        }
+
         private static void SetMasterEnabled(bool value)
         {
             UnderPressurePlugin.EnabledSetting.Value = value;
@@ -814,6 +835,8 @@ namespace UnderPressure
                 _visualLightingLabel.text = ModLocalization.Get("mod.visual_lighting");
             if (_unlockLampsLabel != null)
                 _unlockLampsLabel.text = ModLocalization.Get("mod.unlock_lamps");
+            if (_disableDiagnosisChargesLabel != null)
+                _disableDiagnosisChargesLabel.text = ModLocalization.Get("mod.disable_diagnosis_charges");
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);

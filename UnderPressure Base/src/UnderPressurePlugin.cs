@@ -26,6 +26,7 @@ namespace UnderPressure
         internal static ConfigEntry<bool> PermanentMachineWearSetting { get; private set; }
         internal static ConfigEntry<bool> VisualLightingSetting { get; private set; }
         internal static ConfigEntry<bool> UnlockLampsSetting { get; private set; }
+        internal static ConfigEntry<bool> DisableDiagnosisChargesSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveReputationSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveExpansionSetting { get; private set; }
@@ -64,6 +65,8 @@ namespace UnderPressure
             IsModEnabled && VisualLightingSetting != null && VisualLightingSetting.Value;
         internal static bool ShouldUnlockLamps =>
             IsModEnabled && UnlockLampsSetting != null && UnlockLampsSetting.Value;
+        internal static bool ShouldDisableDiagnosisCharges =>
+            IsModEnabled && DisableDiagnosisChargesSetting != null && DisableDiagnosisChargesSetting.Value;
         internal static ManualLogSource Log { get; private set; }
 
         private void Awake()
@@ -115,6 +118,9 @@ namespace UnderPressure
             UnlockLampsSetting = Config.Bind(
                 "Jugabilidad", "UnlockLamps", false,
                 "Desbloquea las lámparas de Consulta, Psiquiatría, Sala de personal y Marketing y permite colocarlas en cualquier sala.");
+            DisableDiagnosisChargesSetting = Config.Bind(
+                "Jugabilidad", "DisableDiagnosisCharges", false,
+                ModLocalization.Get("tooltip.disable_diagnosis_charges"));
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
             AdaptiveReputationSetting = Config.Bind("Dificultad adaptable", "Reputation", false,

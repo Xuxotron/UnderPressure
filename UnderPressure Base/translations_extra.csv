@@ -10,6 +10,7 @@ mod.imperfect_staff,Неидеальные сотрудники,Niedoskonali pra
 mod.show_electricity,Показывать расход электричества,Pokaż zużycie energii,전력 사용량 표시,显示耗电量,顯示耗電量
 mod.permanent_machine_wear,Постоянный износ машин,Trwałe zużycie maszyn,기계 영구 마모,机器永久损耗,機器永久損耗
 mod.visual_lighting,Освещение больницы,Oświetlenie szpitala,병원 조명,医院照明,醫院照明
+mod.disable_diagnosis_charges,,,,,
 mod.section.gameplay,Сложность и экономика,Trudność i ekonomia,난이도 및 경제,难度与经济,難度與經濟
 mod.section.economy,Экономическая сложность,Trudność ekonomiczna,경제 난이도,经济难度,經濟難度
 mod.section.reputation,Сложность репутации,Trudność reputacji,평판 난이도,声誉难度,聲譽難度
@@ -48,6 +49,7 @@ tooltip.imperfect_staff,У новых кандидатов всегда две �
 tooltip.show_electricity,Показывает расходы на электричество у объектов и на графике финансов.,Pokazuje koszty energii obiektów i na wykresie finansowym.,물품과 재정 그래프에 전기 비용을 표시합니다.,在物品信息和财务图表中显示电力成本。,在物品資訊和財務圖表中顯示電力成本。
 tooltip.permanent_machine_wear,Каждые 100 восстановленных процентных пунктов навсегда снижают максимальное состояние этой машины на 1%.,Każde naprawione 100 punktów procentowych trwale zmniejsza maksymalny stan tej maszyny o 1%.,수리된 백분율 포인트 100마다 해당 기계의 최대 상태가 영구적으로 1% 감소합니다.,每累计修复100个百分点，该机器的最大状态永久降低1%。,每累計修復100個百分點，該機器的最大狀態永久降低1%。
 tooltip.visual_lighting,Затемняет помещения и добавляет визуальный свет от окон и поддерживаемых ламп.,Przyciemnia wnętrza i dodaje światło z okien oraz obsługiwanych lamp.,실내를 어둡게 하고 창문과 지원되는 램프의 시각적 조명을 추가합니다.,使室内变暗并添加来自窗户和受支持灯具的视觉光照。,使室內變暗並加入來自窗戶和支援燈具的視覺光照。
+tooltip.disable_diagnosis_charges,,,,,
 tooltip.global_difficulty,Устанавливает одинаковое значение всех модификаторов сложности.,Ustawia tę samą wartość wszystkich modyfikatorów trudności.,모든 난이도 조정값을 같은 값으로 설정합니다.,将所有难度调整项设为相同数值。,將所有難度調整項設為相同數值。
 tooltip.staff_salaries,Одинаково повышает зарплаты и ожидания сотрудников.,Zwiększa jednakowo płace i oczekiwania płacowe.,직원 급여와 기대 급여를 같은 비율로 높입니다.,同比提高员工薪资和薪资期望。,同比提高員工薪資和薪資期望。
 tooltip.patient_income,Одинаково снижает платежи пациентов и терпимость к ценам.,Zmniejsza jednakowo opłaty pacjentów i tolerancję cenową.,환자 지불액과 가격 허용치를 같은 비율로 낮춥니다.,同比降低患者付款和价格容忍度。,同比降低病患付款和價格容忍度。

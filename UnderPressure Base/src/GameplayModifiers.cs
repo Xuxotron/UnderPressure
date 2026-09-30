@@ -273,6 +273,17 @@ namespace UnderPressure
         private static void Postfix(ref float __result) => __result *= IncomeFactor;
     }
 
+    [HarmonyPatch(typeof(FinanceManager), "GetDiagnosisCharge")]
+    internal static class DisableDiagnosisChargesPatch
+    {
+        private static bool Prefix(ref int __result)
+        {
+            if (!UnderPressurePlugin.ShouldDisableDiagnosisCharges) return true;
+            __result = 0;
+            return false;
+        }
+    }
+
     // Reconstruct the pre-mod comparison prices for the game's native pay decision.
     // Actual charges remain reduced, but an unchanged markup does not make patients happier.
     [HarmonyPatch]
