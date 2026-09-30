@@ -7,6 +7,7 @@ using System.Reflection;
 using BepInEx;
 using FullInspector.Generated.SharedInstance;
 using HarmonyLib;
+using I2.Loc;
 using TMPro;
 using TH20;
 using TH20.UI;
@@ -1023,14 +1024,14 @@ namespace UnderPressure.PowerGrid
             var buttonX = -(visualIconWidth + gap) * 0.5f;
             var flowButtonX = (visualButtonWidth + gap) * 0.5f;
             var rowStep = visualButtonHeight + gap;
-            var highCaption = EnergyLocalization.Create("energy.high_voltage").Translation;
-            var lowCaption = EnergyLocalization.Create("energy.low_voltage").Translation;
-            var deleteCaption = EnergyLocalization.Create("energy.delete").Translation;
-            _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "High Voltage Cable", highCaption,
+            _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "High Voltage Cable",
+                "energy.high_voltage",
                 buttonX, rowStep, buttonWidth, buttonHeight, toolButtonScale, ToolMode.HighVoltage);
-            _lowVoltageButton = CreateToolButton(nativeTextButton, panelObject.transform, "Low Voltage Cable", lowCaption,
+            _lowVoltageButton = CreateToolButton(nativeTextButton, panelObject.transform, "Low Voltage Cable",
+                "energy.low_voltage",
                 buttonX, 0f, buttonWidth, buttonHeight, toolButtonScale, ToolMode.LowVoltage);
-            _deleteButton = CreateToolButton(nativeTextButton, panelObject.transform, "Delete Power Cable", deleteCaption,
+            _deleteButton = CreateToolButton(nativeTextButton, panelObject.transform, "Delete Power Cable",
+                "energy.delete",
                 buttonX, -rowStep, buttonWidth, buttonHeight, toolButtonScale, ToolMode.Remove);
             _flowButton = CreateFlowButton(electricity, panelObject.transform, flowButtonX,
                 rowStep, cellWidth, cellHeight, toolButtonScale);
@@ -1209,8 +1210,9 @@ namespace UnderPressure.PowerGrid
         }
 
         private DynamicButton CreateToolButton(DynamicButton template, Transform parent, string name,
-            string caption, float x, float y, float width, float height, float scale, ToolMode mode)
+            string localisationKey, float x, float y, float width, float height, float scale, ToolMode mode)
         {
+            EnergyLocalization.Create(localisationKey);
             var button = Instantiate(template, parent);
             button.name = name;
             button.gameObject.SetActive(true);
@@ -1218,7 +1220,9 @@ namespace UnderPressure.PowerGrid
             button.onPrimaryDown.AddListener(() => SelectTool(mode));
             button.onSecondaryDown.RemoveAllListeners();
             button.interactable = true;
-            button.SetTMPText(caption);
+            foreach (var localiser in button.GetComponentsInChildren<Localize>(true))
+                localiser.SetTerm(localisationKey);
+            button.SetTMPText(global::UnderPressure.ModLocalization.Get(localisationKey));
             var tooltip = button.GetComponentInChildren<TooltipSpawner>(true);
             if (tooltip != null) tooltip.enabled = false;
 
