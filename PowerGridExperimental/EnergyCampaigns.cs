@@ -140,11 +140,11 @@ namespace UnderPressure.PowerGrid
     internal sealed class EnergyCampaignRoomData : InspectorSubDataRoom
     {
         private static readonly LocalisedString StartText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Start", "Iniciar campaña", "Start campaign");
+            "energy.campaign.start");
         private static readonly LocalisedString ActiveText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Active", "Campaña eléctrica", "Energy campaign");
+            "energy.campaign.active");
         private static readonly LocalisedString TooltipText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Tooltip", "Gestionar campañas de la Sala de energía", "Manage Energy Room campaigns");
+            "energy.campaign.tooltip");
 
         internal EnergyCampaignRoomData(Room room) : base(room) { }
 

@@ -138,12 +138,9 @@ namespace UnderPressure.PowerGrid
             AllowRequirementInPowerPlant(_batteryRequirement);
             AllowRequirementInPowerPlant(_panelRequirement);
             AllowRequirementInPowerPlant(_transformerRequirement);
-            var description = EnergyLocalization.Create("UnderPressure/Room/PowerPlant/Description",
-                "Contiene los equipos que formarán la red eléctrica del hospital.",
-                "Houses the equipment that will form the hospital power grid.");
+            var description = EnergyLocalization.Create("energy.room.description");
             SetDefinitionField("_type", (RoomDefinition.Type)RoomTypeValue);
-            SetDefinitionField("Name", EnergyLocalization.Create("UnderPressure/Room/PowerPlant/Name",
-                "Sala de energía", "Energy Room"));
+            SetDefinitionField("Name", EnergyLocalization.Create("energy.room.name"));
             SetDefinitionField("Description", description);
             SetDefinitionField("LongDescription", description);
             SetDefinitionField("UnlockedMessage", description);

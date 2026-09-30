@@ -77,6 +77,11 @@ namespace UnderPressure.PowerGrid
     internal static class EnergyCampaignRuntime
     {
         internal static readonly StatusIcon.Type StatusIconType = (StatusIcon.Type)43;
+        private static readonly LocalisedString HackName = EnergyLocalization.Create("energy.campaign.hack.name");
+        private static readonly LocalisedString DebugName = EnergyLocalization.Create("energy.campaign.debug.name");
+        private static readonly LocalisedString ClimateName = EnergyLocalization.Create("energy.campaign.climate.name");
+        private static readonly LocalisedString StartAction = EnergyLocalization.Create("energy.campaign.start_action");
+        private static readonly LocalisedString MonthsText = EnergyLocalization.Create("energy.campaign.months");
         private static readonly Dictionary<RoomItem, EnergyCampaignController> Controllers = new Dictionary<RoomItem, EnergyCampaignController>();
         private static GameObject _hoverPrefab;
         private static GameObject _selectPrefab;
@@ -220,10 +225,10 @@ namespace UnderPressure.PowerGrid
         {
             switch (kind)
             {
-                case EnergyCampaignKind.HackPowerCompany: return "Hackear compañía eléctrica";
-                case EnergyCampaignKind.DebugCodeWithAi: return "Depurar código con IA";
-                case EnergyCampaignKind.DenyClimateChange: return "Negar el cambio climático";
-                default: return "Iniciar campaña de energía";
+                case EnergyCampaignKind.HackPowerCompany: return HackName.Translation;
+                case EnergyCampaignKind.DebugCodeWithAi: return DebugName.Translation;
+                case EnergyCampaignKind.DenyClimateChange: return ClimateName.Translation;
+                default: return StartAction.Translation;
             }
         }
 
@@ -232,7 +237,8 @@ namespace UnderPressure.PowerGrid
             if (controller?.State == null) return string.Empty;
             var duration = controller.State.DurationMonths;
             var elapsedDays = Mathf.Max(0, controller.DurationInDays - controller.TimeRemainingDays);
-            return Mathf.Clamp(Mathf.FloorToInt(elapsedDays / 30.42f), 0, duration) + " / " + duration + " meses";
+            return Mathf.Clamp(Mathf.FloorToInt(elapsedDays / 30.42f), 0, duration) +
+                   " / " + duration + " " + MonthsText.Translation;
         }
 
         internal static Sprite FindEnergyIcon()
@@ -380,7 +386,7 @@ namespace UnderPressure.PowerGrid
             _campaign = EnergyCampaignRuntime.GetController(item);
             if (_campaign == null || _campaign.State.Active == EnergyCampaignKind.None)
             {
-                if (_campaignName != null) _campaignName.text = "Iniciar campaña de energía";
+                if (_campaignName != null) _campaignName.text = EnergyCampaignRuntime.CampaignName(EnergyCampaignKind.None);
                 if (_progressBar != null) _progressBar.gameObject.SetActive(false);
                 return;
             }

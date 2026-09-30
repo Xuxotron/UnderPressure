@@ -6,10 +6,10 @@ namespace UnderPressure.PowerGrid
 {
     internal static class EnergyLocalization
     {
-        internal static LocalisedString Create(string key, string spanish, string english)
+        internal static LocalisedString Create(string key)
         {
             var value = LocalisedString.CreateNewTerm(key,
-                global::UnderPressure.ModLocalization.Get(key, "en", english));
+                global::UnderPressure.ModLocalization.Get(key, "en", key));
             try
             {
                 if (LocalizationManager.Sources == null || LocalizationManager.Sources.Count == 0)
@@ -21,10 +21,8 @@ namespace UnderPressure.PowerGrid
                 for (var index = 0; index < term.Languages.Length && index < codes.Count; ++index)
                 {
                     var code = codes[index] ?? string.Empty;
-                    var fallback = code.StartsWith("es", StringComparison.OrdinalIgnoreCase)
-                        ? spanish : english;
                     term.Languages[index] = global::UnderPressure.ModLocalization.Get(
-                        key, code, fallback);
+                        key, code, key);
                 }
                 source.UpdateDictionary(false);
             }

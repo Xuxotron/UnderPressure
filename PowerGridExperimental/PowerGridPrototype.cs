@@ -63,6 +63,10 @@ namespace UnderPressure.PowerGrid
             AccessTools.Field(typeof(StatusIconQueuePosition), "_queuePositionText");
         private static readonly FieldInfo StatusIconHudElementField =
             AccessTools.Field(typeof(StatusIcon), "_inWorldHUDElement");
+        private static readonly LocalisedString EnergyText = EnergyLocalization.Create("energy.label");
+        private static readonly LocalisedString BatteryText = EnergyLocalization.Create("energy.battery.name");
+        private static readonly LocalisedString DailyText = EnergyLocalization.Create("energy.daily");
+        private static readonly LocalisedString TasksText = EnergyLocalization.Create("energy.tasks");
 
         private readonly HashSet<PowerCoord> _cells = new HashSet<PowerCoord>();
         private readonly Dictionary<PowerCoord, GameObject> _cellVisuals = new Dictionary<PowerCoord, GameObject>();
@@ -1019,9 +1023,9 @@ namespace UnderPressure.PowerGrid
             var buttonX = -(visualIconWidth + gap) * 0.5f;
             var flowButtonX = (visualButtonWidth + gap) * 0.5f;
             var rowStep = visualButtonHeight + gap;
-            var highCaption = EnergyLocalization.Create("energy.high_voltage", "Alto V.", "High V.").Translation;
-            var lowCaption = EnergyLocalization.Create("energy.low_voltage", "Bajo V.", "Low V.").Translation;
-            var deleteCaption = EnergyLocalization.Create("UnderPressure/UI/DeleteCable", "Eliminar", "Delete").Translation;
+            var highCaption = EnergyLocalization.Create("energy.high_voltage").Translation;
+            var lowCaption = EnergyLocalization.Create("energy.low_voltage").Translation;
+            var deleteCaption = EnergyLocalization.Create("energy.delete").Translation;
             _addButton = CreateToolButton(nativeTextButton, panelObject.transform, "High Voltage Cable", highCaption,
                 buttonX, rowStep, buttonWidth, buttonHeight, toolButtonScale, ToolMode.HighVoltage);
             _lowVoltageButton = CreateToolButton(nativeTextButton, panelObject.transform, "Low Voltage Cable", lowCaption,
@@ -1104,13 +1108,13 @@ namespace UnderPressure.PowerGrid
             _energyHudTooltip.AnchorOffset = new Vector3(18f, 18f, 0f);
             _energyHudTooltip.SetDataProvider(tooltip =>
             {
-                tooltip.Text = "<color=#202020>Energía: " +
+                tooltip.Text = "<color=#202020>" + EnergyText.Translation + ": " +
                                 _contractedEnergy.ToString(CultureInfo.InvariantCulture) + "</color>" +
-                                "\n<color=#E88124>Baterías: " +
+                                "\n<color=#E88124>" + BatteryText.Translation + ": " +
                                 FormatEnergy(_batteryEnergyHundredths) + "</color>" +
-                               "\n<color=#258DB8>Diario: " +
+                               "\n<color=#258DB8>" + DailyText.Translation + ": " +
                                DisplayedDailyEnergy().ToString(CultureInfo.InvariantCulture) + "</color>" +
-                               "\n<color=#E04898>Tareas: " +
+                               "\n<color=#E04898>" + TasksText.Translation + ": " +
                                _lastTaskEnergy.ToString(CultureInfo.InvariantCulture) + "</color>";
             });
             RefreshEnergyHud();

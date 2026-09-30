@@ -115,10 +115,7 @@ namespace UnderPressure.PowerGrid
             {
                 Battery = CloneBase(filingCabinet, BatteryTag,
                     BatteryGuid,
-                    "energy.battery.name", "Batería", "Battery",
-                    "energy.battery.description",
-                    "Batería para la Sala de energía. Almacena hasta 200 de energía y se recarga cada día.",
-                    "Battery for the Energy Room. Stores up to 200 energy and recharges every day.");
+                    "energy.battery.name", "energy.battery.description");
                 Set(Battery, "_prefab", batteryVisual.GetPrefab(0));
                 Set(Battery, "_blueprintPrefab", batteryVisual.GetBlueprintPrefab(0) ?? batteryVisual.GetPrefab(0));
                 Set(Battery, "_cost", 2000);
@@ -132,10 +129,7 @@ namespace UnderPressure.PowerGrid
             {
                 Panel = CloneBase(filingCabinet, PanelTag,
                     PanelGuid,
-                    "UnderPressure/Item/ElectricalPanel/Name", "Cuadro eléctrico", "Electrical Panel",
-                    "UnderPressure/Item/ElectricalPanel/Description",
-                    "Convierte la alimentación de alta tensión en una salida de baja tensión.",
-                    "Converts high-voltage power into a low-voltage output.");
+                    "energy.panel.name", "energy.panel.description");
                 CopyWallPlacement(Panel, wallItem);
                 Set(Panel, "_prefab", PowerGridPlugin.PowerPanelPrefab);
                 Set(Panel, "_blueprintPrefab", PowerGridPlugin.PowerPanelPrefab);
@@ -165,10 +159,7 @@ namespace UnderPressure.PowerGrid
             {
                 Transformer = CloneBase(pharmacyMachine, TransformerTag,
                     TransformerGuid,
-                    "UnderPressure/Item/Transformer/Name", "Transformador", "Transformer",
-                    "UnderPressure/Item/Transformer/Description",
-                    "Transformador de la Sala de energía desde el que se gestionan las campañas eléctricas.",
-                    "Energy Room transformer used to manage electrical campaigns.");
+                    "energy.transformer.name", "energy.transformer.description");
                 Set(Transformer, "_singlePlace", true);
                 Set(Transformer, "_generatesElectricity", false);
                 Set(Transformer, "_energyCost", 0);
@@ -258,14 +249,13 @@ namespace UnderPressure.PowerGrid
         }
 
         private static RoomItemDefinition CloneBase(RoomItemDefinition source, string tag, Guid guid,
-            string nameKey, string spanishName, string englishName,
-            string descriptionKey, string spanishDescription, string englishDescription)
+            string nameKey, string descriptionKey)
         {
             var clone = (RoomItemDefinition)MemberwiseCloneMethod.Invoke(source, null);
             Set(clone, "_guid", guid);
             Set(clone, "_debugTag", tag);
-            Set(clone, "_localisedName", EnergyLocalization.Create(nameKey, spanishName, englishName));
-            var description = EnergyLocalization.Create(descriptionKey, spanishDescription, englishDescription);
+            Set(clone, "_localisedName", EnergyLocalization.Create(nameKey));
+            var description = EnergyLocalization.Create(descriptionKey);
             Set(clone, "_localisedDescription", description);
             Set(clone, "_functionalDescription", description);
             Set(clone, "_initiallyAvailable", true);

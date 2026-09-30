@@ -21,40 +21,32 @@ namespace UnderPressure.PowerGrid
     {
         private static readonly LocalisedString[] Names =
         {
-            EnergyLocalization.Create("UnderPressure/EnergyCampaign/Hack/Name", "Hackear compañía eléctrica", "Hack the power company"),
-            EnergyLocalization.Create("UnderPressure/EnergyCampaign/Debug/Name", "Depurar código con IA", "Debug code with AI"),
-            EnergyLocalization.Create("UnderPressure/EnergyCampaign/Climate/Name", "Negar el cambio climático", "Deny climate change")
+            EnergyLocalization.Create("energy.campaign.hack.name"),
+            EnergyLocalization.Create("energy.campaign.debug.name"),
+            EnergyLocalization.Create("energy.campaign.climate.name")
         };
 
         private static readonly LocalisedString[] Descriptions =
         {
-            EnergyLocalization.Create("UnderPressure/EnergyCampaign/Hack/Description",
-                "Reduce la factura eléctrica según el porcentaje conseguido.",
-                "Reduces the electricity bill according to the achieved percentage."),
-            EnergyLocalization.Create("UnderPressure/EnergyCampaign/Debug/Description",
-                "Disminuye el deterioro del transformador según el porcentaje conseguido.",
-                "Reduces transformer deterioration according to the achieved percentage."),
-            EnergyLocalization.Create("UnderPressure/EnergyCampaign/Climate/Description",
-                "Aumentará la producción de energía según el porcentaje conseguido.",
-                "Will increase energy production according to the achieved percentage.")
+            EnergyLocalization.Create("energy.campaign.hack.description"),
+            EnergyLocalization.Create("energy.campaign.debug.description"),
+            EnergyLocalization.Create("energy.campaign.climate.description")
         };
 
         private static readonly LocalisedString DurationText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Duration", "Duración", "Duration");
+            "energy.campaign.duration");
         private static readonly LocalisedString MonthsText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Months", "meses", "months");
-        private static readonly LocalisedString CostText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Cost", "Coste de campaña", "Campaign cost");
+            "energy.campaign.months");
         private static readonly LocalisedString CapacityText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Capacity", "Mejora máxima", "Maximum improvement");
+            "energy.campaign.capacity");
         private static readonly LocalisedString StartText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/StartButton", "Iniciar campaña", "Start campaign");
+            "energy.campaign.start");
         private static readonly LocalisedString ActiveText = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/ActiveButton", "Campaña activa", "Campaign active");
+            "energy.campaign.active_button");
         private static readonly LocalisedString HeaderTitle = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/Header", "Campañas de energía", "Energy campaigns");
+            "energy.campaign.header");
         private static readonly LocalisedString HeaderAction = EnergyLocalization.Create(
-            "UnderPressure/EnergyCampaign/HeaderAction", "Iniciar una campaña de energía", "Start an energy campaign");
+            "energy.campaign.start_action");
 
         private static EnergyCampaignMenu _instance;
         private readonly List<Choice> _choices = new List<Choice>();
