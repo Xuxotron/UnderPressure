@@ -45,21 +45,27 @@ namespace UnderPressure
         private static readonly Dictionary<Level, Subscription> Active =
             new Dictionary<Level, Subscription>();
         private static Level CurrentLevel;
+        private static int CurrentEconomyValue;
+        private static int CurrentReputationValue;
+        private static int CurrentExpansionValue;
+        private static bool HasEconomyValue;
+        private static bool HasReputationValue;
+        private static bool HasExpansionValue;
 
         internal static void Attach(Level level)
         {
             if (level == null || Active.ContainsKey(level) || level.FinanceManager == null ||
                 level.ReputationTracker == null || level.PrestigeTracker == null) return;
             var subscription = new Subscription { Level = level };
-            subscription.BalanceChanged = unused => ApplyEconomy(level);
-            subscription.ReputationChanged = unused => ApplyReputation(level);
-            subscription.LevelChanged = unused => ApplyExpansion(level);
+            subscription.BalanceChanged = unused => UpdateEconomy(level);
+            subscription.ReputationChanged = unused => UpdateReputation(level);
+            subscription.LevelChanged = unused => UpdateExpansion(level);
             level.FinanceManager.OnBalanceUpdated += subscription.BalanceChanged;
             level.ReputationTracker.OnReputationChangedEvent += subscription.ReputationChanged;
             level.PrestigeTracker.OnPrestigeChangedEvent += subscription.LevelChanged;
             Active.Add(level, subscription);
             CurrentLevel = level;
-            ApplyAll(level);
+            UpdateAll(level);
         }
 
         internal static void Detach(Level level)
@@ -73,7 +79,12 @@ namespace UnderPressure
                 level.PrestigeTracker.OnPrestigeChangedEvent -= subscription.LevelChanged;
             Active.Remove(level);
             if (ReferenceEquals(CurrentLevel, level))
+            {
                 CurrentLevel = null;
+                HasEconomyValue = false;
+                HasReputationValue = false;
+                HasExpansionValue = false;
+            }
         }
 
         internal static int GetValue(BepInEx.Configuration.ConfigEntry<int> setting,
@@ -83,18 +94,22 @@ namespace UnderPressure
                 return 0;
 
             level ??= CurrentLevel;
-            if (level == null)
-                return setting.Value;
 
             if (UnderPressurePlugin.AdaptiveEconomySetting?.Value == true &&
-                IsEconomySetting(setting) && level.FinanceManager != null)
-                return EconomyValue(level);
+                IsEconomySetting(setting))
+                return level?.FinanceManager != null
+                    ? EconomyValue(level)
+                    : HasEconomyValue ? CurrentEconomyValue : 0;
             if (UnderPressurePlugin.AdaptiveReputationSetting?.Value == true &&
-                IsReputationSetting(setting) && level.ReputationTracker != null)
-                return ReputationValue(level);
+                IsReputationSetting(setting))
+                return level?.ReputationTracker != null
+                    ? ReputationValue(level)
+                    : HasReputationValue ? CurrentReputationValue : 0;
             if (UnderPressurePlugin.AdaptiveExpansionSetting?.Value == true &&
-                IsExpansionSetting(setting) && level.PrestigeTracker != null)
-                return ExpansionValue(level);
+                IsExpansionSetting(setting))
+                return level?.PrestigeTracker != null
+                    ? ExpansionValue(level)
+                    : HasExpansionValue ? CurrentExpansionValue : 0;
 
             return setting.Value;
         }
@@ -102,46 +117,35 @@ namespace UnderPressure
         internal static void RefreshAll()
         {
             foreach (var subscription in Active.Values)
-                ApplyAll(subscription.Level);
+                UpdateAll(subscription.Level);
         }
 
-        private static void ApplyAll(Level level)
+        private static void UpdateAll(Level level)
         {
-            ApplyEconomy(level);
-            ApplyReputation(level);
-            ApplyExpansion(level);
+            UpdateEconomy(level);
+            UpdateReputation(level);
+            UpdateExpansion(level);
         }
 
-        private static void ApplyEconomy(Level level)
+        private static void UpdateEconomy(Level level)
         {
-            if (UnderPressurePlugin.AdaptiveEconomySetting?.Value != true) return;
-            Set(EconomyValue(level), UnderPressurePlugin.StaffSalariesSetting,
-                UnderPressurePlugin.PatientIncomeSetting, UnderPressurePlugin.ApplicantWaitSetting,
-                UnderPressurePlugin.ElectricityBillSetting);
+            if (level?.FinanceManager == null) return;
+            CurrentEconomyValue = EconomyValue(level);
+            HasEconomyValue = true;
         }
 
-        private static void ApplyReputation(Level level)
+        private static void UpdateReputation(Level level)
         {
-            if (UnderPressurePlugin.AdaptiveReputationSetting?.Value != true) return;
-            Set(ReputationValue(level), UnderPressurePlugin.HungerThirstSetting,
-                UnderPressurePlugin.HappinessSetting, UnderPressurePlugin.HygieneSetting,
-                UnderPressurePlugin.HealthDecaySetting);
+            if (level?.ReputationTracker == null) return;
+            CurrentReputationValue = ReputationValue(level);
+            HasReputationValue = true;
         }
 
-        private static void ApplyExpansion(Level level)
+        private static void UpdateExpansion(Level level)
         {
-            if (UnderPressurePlugin.AdaptiveExpansionSetting?.Value != true) return;
-            Set(ExpansionValue(level), UnderPressurePlugin.DiagnosisChanceSetting,
-                UnderPressurePlugin.TreatmentChanceSetting, UnderPressurePlugin.PatientArrivalSetting,
-                UnderPressurePlugin.MachineWearSetting);
-        }
-
-        private static void Set(int value,
-            params BepInEx.Configuration.ConfigEntry<int>[] settings)
-        {
-            foreach (var setting in settings)
-                if (setting != null && setting.Value != value)
-                    setting.Value = value;
+            if (level?.PrestigeTracker == null) return;
+            CurrentExpansionValue = ExpansionValue(level);
+            HasExpansionValue = true;
         }
 
         private static int EconomyValue(Level level) =>
