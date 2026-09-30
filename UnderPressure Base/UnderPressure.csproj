@@ -5,29 +5,29 @@
     <RootNamespace>UnderPressure</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
-    <DefaultItemExcludes>$(DefaultItemExcludes);PowerGridExperimental\**;obj\**;bin\**;.codex_obj\**;.codex_bin\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**;.codex_obj\**;.codex_bin\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="tools\**\*.cs;obj\**\*.cs;bin\**\*.cs;.codex_obj\**\*.cs;.codex_bin\**\*.cs" />
+    <Compile Remove="obj\**\*.cs;bin\**\*.cs;.codex_obj\**\*.cs;.codex_bin\**\*.cs" />
     <Reference Include="Assembly-CSharp">
-      <HintPath>Libs\Assembly-CSharp.dll</HintPath>
+      <HintPath>..\Libs\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>Libs\0Harmony.dll</HintPath>
+      <HintPath>..\Libs\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="BepInEx">
-      <HintPath>Libs\BepInEx.dll</HintPath>
+      <HintPath>..\Libs\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>Libs\UnityEngine.dll</HintPath>
+      <HintPath>..\Libs\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>Libs\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>..\Libs\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.Physics2DModule">
@@ -43,7 +43,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>Libs\UnityEngine.UI.dll</HintPath>
+      <HintPath>..\Libs\UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
@@ -51,7 +51,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
-      <HintPath>Libs\Unity.TextMeshPro.dll</HintPath>
+      <HintPath>..\Libs\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
