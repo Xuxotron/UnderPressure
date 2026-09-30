@@ -284,15 +284,10 @@ namespace UnderPressure
         }
     }
 
-    [HarmonyPatch(typeof(FinanceManager), "GetDiagnosisBaseCharge")]
-    internal static class DisableDiagnosisBaseChargePatch
+    [HarmonyPatch(typeof(ReputationTracker), "OnPatientChargedForDiagnosis")]
+    internal static class DisableDiagnosisPriceReputationPatch
     {
-        private static bool Prefix(ref int __result)
-        {
-            if (!UnderPressurePlugin.ShouldDisableDiagnosisCharges) return true;
-            __result = 0;
-            return false;
-        }
+        private static bool Prefix() => !UnderPressurePlugin.ShouldDisableDiagnosisCharges;
     }
 
     // Reconstruct the pre-mod comparison prices for the game's native pay decision.
@@ -320,10 +315,21 @@ namespace UnderPressure
             });
         }
 
-        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        private static bool IsHappyToPayForDiagnosis(FinanceManager finance, Character patient,
+            int actualPrice, int basePrice)
+        {
+            if (UnderPressurePlugin.ShouldDisableDiagnosisCharges) actualPrice = basePrice;
+            return IsHappyToPay(finance, patient, actualPrice, basePrice);
+        }
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions,
+            MethodBase __originalMethod)
         {
             var original = AccessTools.Method(typeof(FinanceManager), "IsCharacterHappyToPay");
-            var replacement = AccessTools.Method(typeof(PatientPaymentTolerancePatch), nameof(IsHappyToPay));
+            var replacement = AccessTools.Method(typeof(PatientPaymentTolerancePatch),
+                __originalMethod.Name == "OnPatientReceivedDiagnosis"
+                    ? nameof(IsHappyToPayForDiagnosis)
+                    : nameof(IsHappyToPay));
             foreach (var instruction in instructions)
             {
                 if ((instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt) &&
