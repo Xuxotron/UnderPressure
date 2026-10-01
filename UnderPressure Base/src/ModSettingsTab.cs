@@ -322,7 +322,7 @@ namespace UnderPressure
             var visualLightingRow = Instantiate(settingRow, rightSection);
             visualLightingRow.name = "Hospital Lighting";
             RemoveLocalisers(visualLightingRow);
-            SetStretchRow((RectTransform)visualLightingRow, -192f, 45f, 12f);
+            SetStretchRow((RectTransform)visualLightingRow, -282f, 45f, 12f);
             _visualLightingToggle = visualLightingRow.GetComponentInChildren<Toggle>(true);
             _visualLightingLabel = visualLightingRow.GetComponentInChildren<TMP_Text>(true);
             if (_visualLightingToggle != null)
@@ -358,7 +358,7 @@ namespace UnderPressure
             var disableAwardsRow = Instantiate(settingRow, rightSection);
             disableAwardsRow.name = "Disable Awards";
             RemoveLocalisers(disableAwardsRow);
-            SetStretchRow((RectTransform)disableAwardsRow, -237f, 45f, 12f);
+            SetStretchRow((RectTransform)disableAwardsRow, -192f, 45f, 12f);
             _disableAwardsToggle = disableAwardsRow.GetComponentInChildren<Toggle>(true);
             _disableAwardsLabel = disableAwardsRow.GetComponentInChildren<TMP_Text>(true);
             if (_disableAwardsToggle != null)
@@ -370,7 +370,7 @@ namespace UnderPressure
             var resalePenaltiesRow = Instantiate(settingRow, rightSection);
             resalePenaltiesRow.name = "Resale Penalties";
             RemoveLocalisers(resalePenaltiesRow);
-            SetStretchRow((RectTransform)resalePenaltiesRow, -282f, 45f, 12f);
+            SetStretchRow((RectTransform)resalePenaltiesRow, -237f, 45f, 12f);
             _resalePenaltiesToggle = resalePenaltiesRow.GetComponentInChildren<Toggle>(true);
             _resalePenaltiesLabel = resalePenaltiesRow.GetComponentInChildren<TMP_Text>(true);
             if (_resalePenaltiesToggle != null)
@@ -979,8 +979,34 @@ namespace UnderPressure
         private void ConfigureRowTooltip(Transform row, TMP_Text label, string key)
         {
             if (row == null || label == null) return;
+            ConfigureCheckRow(row, label, row.GetComponentInChildren<Toggle>(true));
             RemoveTooltips(row);
             AddTooltip(label.gameObject, key);
+        }
+
+        private static void ConfigureCheckRow(Transform row, TMP_Text label, Toggle toggle)
+        {
+            if (row == null || label == null || toggle == null) return;
+            DisableAutomaticLayout(row);
+
+            var toggleRect = (RectTransform)toggle.transform;
+            toggleRect.anchorMin = new Vector2(1f, 0.5f);
+            toggleRect.anchorMax = new Vector2(1f, 0.5f);
+            toggleRect.pivot = new Vector2(1f, 0.5f);
+            toggleRect.anchoredPosition = Vector2.zero;
+            toggleRect.sizeDelta = new Vector2(38f, 38f);
+            toggleRect.localScale = Vector3.one;
+
+            var labelRect = label.rectTransform;
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.pivot = new Vector2(0f, 0.5f);
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = new Vector2(-48f, 0f);
+            label.enableAutoSizing = false;
+            label.enableWordWrapping = false;
+            label.overflowMode = TextOverflowModes.Overflow;
+            label.alignment = TextAlignmentOptions.MidlineLeft;
         }
 
         private void AddTooltip(GameObject target, string key)

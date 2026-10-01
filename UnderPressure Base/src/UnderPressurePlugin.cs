@@ -116,7 +116,7 @@ namespace UnderPressure
                 "Jugabilidad", "SeparateReputationAndPrestige", true,
                 "La reputación aumenta por sí sola la llegada de pacientes con bonificación doble; el prestigio solo aumenta las plazas de candidatos.");
             PermanentMachineWearSetting = Config.Bind(
-                "Jugabilidad", "PermanentMachineWear", false,
+                "Jugabilidad", "PermanentMachineWear", true,
                 "Cada 100 puntos porcentuales reparados reducen en un 1% el estado máximo reparable de esa máquina.");
             VisualLightingSetting = Config.Bind(
                 "Visual", "HospitalLighting", false,
@@ -125,13 +125,13 @@ namespace UnderPressure
                 "Jugabilidad", "UnlockLamps", false,
                 "Desbloquea las lámparas de Consulta, Psiquiatría, Sala de personal y Marketing y permite colocarlas en cualquier sala.");
             DisableDiagnosisChargesSetting = Config.Bind(
-                "Jugabilidad", "DisableDiagnosisCharges", false,
+                "Jugabilidad", "DisableDiagnosisCharges", true,
                 ModLocalization.Get("tooltip.disable_diagnosis_charges"));
             DisableAwardsSetting = Config.Bind(
-                "Jugabilidad", "DisableAwards", false,
+                "Jugabilidad", "DisableAwards", true,
                 ModLocalization.Get("tooltip.disable_awards"));
             ResalePenaltiesSetting = Config.Bind(
-                "Jugabilidad", "ResalePenalties", false,
+                "Jugabilidad", "ResalePenalties", true,
                 ModLocalization.Get("tooltip.resale_penalties"));
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
