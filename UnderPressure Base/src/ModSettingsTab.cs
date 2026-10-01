@@ -1021,9 +1021,8 @@ namespace UnderPressure
             if (adaptiveRect == null || adaptiveSection == null) return;
 
             Canvas.ForceUpdateCanvases();
-            var adaptiveRight = adaptiveSection.InverseTransformPoint(
-                adaptiveRect.TransformPoint(new Vector3(adaptiveRect.rect.xMax, 0f, 0f))).x;
-            var rightInset = adaptiveSection.rect.xMax - adaptiveRight;
+            var rightInset = adaptiveSection.rect.width -
+                             (adaptiveRect.anchoredPosition.x + adaptiveRect.rect.width);
             foreach (var binding in _checkRows)
             {
                 if (binding == null || binding.Row == null || binding.Toggle == null || binding.Label == null)
@@ -1032,16 +1031,12 @@ namespace UnderPressure
                 var toggleRect = binding.Toggle.transform as RectTransform;
                 if (section == null || toggleRect == null) continue;
 
-                var targetRight = section.TransformPoint(new Vector3(section.rect.xMax - rightInset, 0f, 0f));
-                var targetInRow = binding.Row.InverseTransformPoint(targetRight).x;
-                var currentInRow = binding.Row.InverseTransformPoint(
-                    toggleRect.TransformPoint(new Vector3(toggleRect.rect.xMax, 0f, 0f))).x;
-                toggleRect.anchoredPosition += new Vector2(targetInRow - currentInRow, 0f);
-
-                var toggleLeft = binding.Row.InverseTransformPoint(
-                    toggleRect.TransformPoint(new Vector3(toggleRect.rect.xMin, 0f, 0f))).x;
+                var rowRightInset = (section.rect.width - binding.Row.rect.width) * 0.5f -
+                                    binding.Row.anchoredPosition.x;
+                var toggleRightInset = Mathf.Max(0f, rightInset - rowRightInset);
+                toggleRect.anchoredPosition = new Vector2(-toggleRightInset, 0f);
                 binding.Label.rectTransform.offsetMax = new Vector2(
-                    toggleLeft - binding.Row.rect.xMax - 10f, 0f);
+                    -toggleRightInset - toggleRect.rect.width - 10f, 0f);
                 ResizeTooltipCollider(binding.Label);
             }
         }
