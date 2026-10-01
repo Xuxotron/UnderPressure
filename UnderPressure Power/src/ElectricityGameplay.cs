@@ -102,8 +102,9 @@ namespace UnderPressure.PowerGrid
         {
             if (!_configured || definition == null || EnergyRoomItems.IsTransformer(definition) ||
                 EnergyRoomItems.IsCell(definition) ||
-                EnergyRoomItems.IsBattery(definition)) return false;
-            if (EnergyRoomItems.IsPanel(definition) || definition.EnergyCost(0) > 0) return true;
+                EnergyRoomItems.IsBattery(definition) ||
+                EnergyRoomItems.IsPanel(definition)) return false;
+            if (definition.EnergyCost(0) > 0) return true;
             foreach (var modifier in definition.InteractionAttributeModifiers ??
                      Array.Empty<InteractionAttributeModifier>())
             {
