@@ -513,6 +513,13 @@ namespace UnderPressure.PowerGrid
             Set(target, "_wallMagnetismRotation", source.WallMagnetismRotation);
             Set(target, "_wallMagnetismDistance", source.WallMagnetismDistance);
             Set(target, "_fixedWallPlacement", source.FixedWallPlacement);
+            // La colocación en pared también depende del tipo de colisión y de sus
+            // límites verticales. Conservar los del archivador dejaba la celda como
+            // un objeto de suelo aunque las banderas de pared estuvieran activadas.
+            Set(target, "_collisionType", source.ItemCollisionType);
+            Set(target, "_useVerticalCollision", source.UseVerticalCollision);
+            Set(target, "_removeWalls", source.RemoveWalls);
+            Set(target, "_placementEffect", source.PlacementEffect);
         }
 
         private static string Identity(RoomItemDefinition item)
