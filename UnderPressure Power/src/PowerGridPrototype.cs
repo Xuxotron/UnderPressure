@@ -873,11 +873,19 @@ namespace UnderPressure.PowerGrid
                 attachedNeighbours.Add(neighbour);
             }
 
-            if (attachedNeighbours.Count > 2)
+            var sourceCells = lowVoltage ? _panelCells : _generatorCells;
+            var attachedSources = 0;
+            foreach (var neighbour in neighbours)
+                if (sourceCells.Contains(neighbour)) attachedSources++;
+
+            if (attachedNeighbours.Count + attachedSources > 2)
                 return false;
-            if (attachedNeighbours.Count == 1 &&
-                CountCardinalNeighbours(attachedNeighbours[0], sameVoltage) >= 2)
-                return false;
+            foreach (var attached in attachedNeighbours)
+                if (CountNetworkConnections(attached, sameVoltage, sourceCells) >= 2)
+                    return false;
+            foreach (var source in neighbours)
+                if (sourceCells.Contains(source) && CountCardinalNeighbours(source, sameVoltage) >= 1)
+                    return false;
             if (attachedNeighbours.Count == 2 &&
                 !CanReconnectDisconnectedEnds(attachedNeighbours[0], attachedNeighbours[1], sameVoltage,
                     lowVoltage))
@@ -996,6 +1004,15 @@ namespace UnderPressure.PowerGrid
             var count = 0;
             foreach (var neighbour in CardinalNeighbours(coord))
                 if (cells.Contains(neighbour)) count++;
+            return count;
+        }
+
+        private static int CountNetworkConnections(PowerCoord coord, HashSet<PowerCoord> cables,
+            HashSet<PowerCoord> sources)
+        {
+            var count = 0;
+            foreach (var neighbour in CardinalNeighbours(coord))
+                if (cables.Contains(neighbour) || sources.Contains(neighbour)) count++;
             return count;
         }
 
