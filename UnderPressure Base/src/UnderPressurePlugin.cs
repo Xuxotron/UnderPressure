@@ -159,6 +159,8 @@ namespace UnderPressure
                 100,
                 new ConfigDescription("Volumen de los sonidos de resultado del tratamiento.",
                     new AcceptableValueRange<int>(0, 100)));
+            TreatmentVolumeSetting.SettingChanged += (sender, args) =>
+                TreatmentVolumeAudio.RefreshActiveEmitters();
 
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());

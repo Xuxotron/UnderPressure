@@ -51,6 +51,10 @@
       <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>..\Libs\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>

@@ -99,6 +99,8 @@ namespace UnderPressure
         private readonly List<CheckRowBinding> _checkRows = new List<CheckRowBinding>();
         private bool _applyingGlobalDifficulty;
         private bool _showingModTab;
+        private Toggle _checkAlignmentReference;
+        private bool _checkAlignmentPending;
 
         internal static void Install(PreferencesScreen screen)
         {
@@ -112,6 +114,7 @@ namespace UnderPressure
         private void Build(PreferencesScreen screen)
         {
             _screen = screen;
+            TreatmentVolumeAudio.SetApp(GetField<App>(screen, "_app"));
             ReduceNativeTitleFont(screen);
             var videoContents = GetField<Transform>(screen, "_videoTabContents");
             var languageButton = GetField<DynamicButton>(screen, "_languageTabButton");
@@ -417,14 +420,14 @@ namespace UnderPressure
             if (nativeVideoRow == null)
                 return;
 
-            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -370f, 82f);
-            CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
-                UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
-
-            var treatmentVolume = CreateEmptySection(uiSection, content, "Treatment Volume", -468f, 82f);
+            var treatmentVolume = CreateEmptySection(uiSection, content, "Treatment Volume", -370f, 82f);
             CreateSliderRow(treatmentVolume, nativeVideoRow, "mod.treatment_volume",
                 UnderPressurePlugin.TreatmentVolumeSetting, -10f, null,
                 0f, 100f, false, false, FormatVolumePercentage);
+
+            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -468f, 82f);
+            CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
+                UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
                 "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -566f,
@@ -453,7 +456,7 @@ namespace UnderPressure
                     new SliderSpec("mod.patient_arrival", UnderPressurePlugin.PatientArrivalSetting),
                     new SliderSpec("mod.machine_wear", UnderPressurePlugin.MachineWearSetting)
                 });
-            AlignCheckRowsToAdaptiveToggle(economy.Toggle);
+            _checkAlignmentReference = economy.Toggle;
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
@@ -578,10 +581,26 @@ namespace UnderPressure
             if (tintFill) SetNativeFillColour(fillImage, setting.Value);
             slider.onValueChanged.AddListener(value =>
             {
-                setting.Value = Mathf.RoundToInt(value);
-                valueLabel.text = formatter(setting.Value);
-                if (tintFill) SetNativeFillColour(fillImage, setting.Value);
-                onChanged?.Invoke(setting.Value);
+                var config = ReferenceEquals(setting, UnderPressurePlugin.GlobalDifficultySetting)
+                    ? UnderPressurePlugin.ModConfig
+                    : null;
+                var saveOnSet = config != null && config.SaveOnConfigSet;
+                if (config != null) config.SaveOnConfigSet = false;
+                try
+                {
+                    setting.Value = Mathf.RoundToInt(value);
+                    valueLabel.text = formatter(setting.Value);
+                    if (tintFill) SetNativeFillColour(fillImage, setting.Value);
+                    onChanged?.Invoke(setting.Value);
+                }
+                finally
+                {
+                    if (config != null)
+                    {
+                        config.SaveOnConfigSet = saveOnSet;
+                        if (saveOnSet) config.Save();
+                    }
+                }
             });
             var canvas = row.GetComponent<CanvasGroup>() ?? row.gameObject.AddComponent<CanvasGroup>();
             var binding = new SliderBinding(localizationKey, label, valueLabel, setting, slider, canvas,
@@ -594,13 +613,28 @@ namespace UnderPressure
         {
             if (_applyingGlobalDifficulty) return;
             _applyingGlobalDifficulty = true;
-            foreach (var binding in _sliders)
+            var config = UnderPressurePlugin.ModConfig;
+            var saveOnSet = config != null && config.SaveOnConfigSet;
+            if (config != null) config.SaveOnConfigSet = false;
+            try
             {
-                if (!binding.AffectedByGlobalDifficulty ||
-                    binding.Setting == UnderPressurePlugin.GlobalDifficultySetting) continue;
-                binding.Slider.value = value;
+                foreach (var binding in _sliders)
+                {
+                    if (!binding.AffectedByGlobalDifficulty ||
+                        binding.Setting == UnderPressurePlugin.GlobalDifficultySetting) continue;
+                    binding.Setting.Value = value;
+                    SetSliderDisplay(binding, value);
+                }
             }
-            _applyingGlobalDifficulty = false;
+            finally
+            {
+                if (config != null)
+                {
+                    config.SaveOnConfigSet = saveOnSet;
+                    if (saveOnSet) config.Save();
+                }
+                _applyingGlobalDifficulty = false;
+            }
         }
 
         private static void SetNativeFillColour(Image image, int value)
@@ -855,6 +889,7 @@ namespace UnderPressure
                 _tabAnimator.CurrentState = (ButtonAnimator.State)1;
             _tab.SetAsLastSibling();
             RefreshLocalizedText();
+            _checkAlignmentPending = true;
         }
 
         internal void DeactivateModTab()
@@ -920,6 +955,11 @@ namespace UnderPressure
             foreach (var group in _adaptiveGroups)
                 if (group.Setting.Value)
                     SetAdaptiveState(group, true);
+            if (_showingModTab && _checkAlignmentPending)
+            {
+                AlignCheckRowsToAdaptiveToggle(_checkAlignmentReference);
+                _checkAlignmentPending = false;
+            }
         }
 
         private void SetTabCaption()
@@ -1010,7 +1050,7 @@ namespace UnderPressure
             toggleRect.anchorMax = new Vector2(1f, 0.5f);
             toggleRect.pivot = new Vector2(1f, 0.5f);
             toggleRect.anchoredPosition = Vector2.zero;
-            toggleRect.sizeDelta = new Vector2(38f, 38f);
+            toggleRect.sizeDelta = new Vector2(42f, 42f);
             toggleRect.localScale = Vector3.one;
 
             var labelRect = label.rectTransform;
@@ -1033,8 +1073,11 @@ namespace UnderPressure
             if (adaptiveRect == null || adaptiveSection == null) return;
 
             Canvas.ForceUpdateCanvases();
-            var rightInset = adaptiveSection.rect.width -
-                             (adaptiveRect.anchoredPosition.x + adaptiveRect.rect.width);
+            var sectionCorners = new Vector3[4];
+            var toggleCorners = new Vector3[4];
+            adaptiveSection.GetWorldCorners(sectionCorners);
+            adaptiveRect.GetWorldCorners(toggleCorners);
+            var rightInset = sectionCorners[2].x - toggleCorners[2].x;
             foreach (var binding in _checkRows)
             {
                 if (binding == null || binding.Row == null || binding.Toggle == null || binding.Label == null)
@@ -1043,10 +1086,15 @@ namespace UnderPressure
                 var toggleRect = binding.Toggle.transform as RectTransform;
                 if (section == null || toggleRect == null) continue;
 
-                var rowRightInset = (section.rect.width - binding.Row.rect.width) * 0.5f -
-                                    binding.Row.anchoredPosition.x;
-                var toggleRightInset = Mathf.Max(0f, rightInset - rowRightInset);
-                toggleRect.anchoredPosition = new Vector2(-toggleRightInset, 0f);
+                var targetSectionCorners = new Vector3[4];
+                var targetToggleCorners = new Vector3[4];
+                section.GetWorldCorners(targetSectionCorners);
+                toggleRect.GetWorldCorners(targetToggleCorners);
+                var desiredRight = targetSectionCorners[2].x - rightInset;
+                var worldDelta = desiredRight - targetToggleCorners[2].x;
+                var localDelta = binding.Row.InverseTransformVector(new Vector3(worldDelta, 0f, 0f)).x;
+                toggleRect.anchoredPosition += new Vector2(localDelta, 0f);
+                var toggleRightInset = Mathf.Max(0f, -toggleRect.anchoredPosition.x);
                 binding.Label.rectTransform.offsetMax = new Vector2(
                     -toggleRightInset - toggleRect.rect.width - 10f, 0f);
                 ResizeTooltipCollider(binding.Label);
