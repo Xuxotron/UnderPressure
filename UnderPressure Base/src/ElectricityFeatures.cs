@@ -192,8 +192,8 @@ namespace UnderPressure
         private string _nativeTitle;
         private double _nativeMin;
         private double _nativeMax;
-        private double _monthlyMin = -1d;
-        private double _yearlyMin = -1d;
+        private double _monthlyMax = 1d;
+        private double _yearlyMax = 1d;
 
         internal void Bind(OverviewMenuGraphPanelBase panel)
         {
@@ -257,7 +257,9 @@ namespace UnderPressure
             var yearlyBills = new Dictionary<int, double>();
             foreach (var entry in events)
             {
-                var amount = ((HospitalEventEnergyBillPaid)entry).GetFinanceValue();
+                // El evento financiero guarda las facturas como gastos negativos; la gráfica
+                // representa su magnitud para que el consumo se lea desde cero hacia arriba.
+                var amount = Math.Abs((double)((HospitalEventEnergyBillPaid)entry).GetFinanceValue());
                 var month = GameDateUtils.AsTotalMonths(entry.Date);
                 monthlyBills[month] = amount;
                 yearlyBills[entry.Date.Year] = yearlyBills.TryGetValue(entry.Date.Year, out var prior)
@@ -270,10 +272,10 @@ namespace UnderPressure
             _graph.AssignMonthlyData(monthly);
             _graph.AssignQuarterlyData(quarterly);
             _graph.AssignYearlyData(yearly);
-            _monthlyMin = -1d;
-            _yearlyMin = -1d;
-            foreach (var point in monthly) _monthlyMin = Math.Min(_monthlyMin, point.y);
-            foreach (var point in yearly) _yearlyMin = Math.Min(_yearlyMin, point.y);
+            _monthlyMax = 1d;
+            _yearlyMax = 1d;
+            foreach (var point in monthly) _monthlyMax = Math.Max(_monthlyMax, point.y);
+            foreach (var point in yearly) _yearlyMax = Math.Max(_yearlyMax, point.y);
             if (_graph.AssignedButton != null)
                 _graph.AssignedButton.SetTitleText(ModLocalization.Get("graph.electricity_bill"));
             RefreshCurrentMode();
@@ -314,8 +316,8 @@ namespace UnderPressure
         {
             if (_graph == null || !UnderPressurePlugin.ShouldShowElectricity) return;
             var mode = (GraphDisplayMode)ModeField.GetValue(_panel);
-            _graph.MinYValue = mode == GraphDisplayMode.DmYearly ? _yearlyMin : _monthlyMin;
-            _graph.MaxYValue = 0d;
+            _graph.MinYValue = 0d;
+            _graph.MaxYValue = mode == GraphDisplayMode.DmYearly ? _yearlyMax : _monthlyMax;
         }
     }
 }
