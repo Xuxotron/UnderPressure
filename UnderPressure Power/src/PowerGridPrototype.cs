@@ -2273,6 +2273,23 @@ namespace UnderPressure.PowerGrid
                     if (image == null) continue;
                     image.color = badgeColor.Value;
                 }
+            else
+            {
+                // La potencia contratada se muestra sin la estrecha placa de cola:
+                // así conserva cuatro o más cifras sin partirse en varias líneas.
+                foreach (var image in root.GetComponentsInChildren<Image>(true))
+                    if (image != null) image.enabled = false;
+                var label = text as TMP_Text;
+                if (label != null)
+                {
+                    label.color = new Color32(20, 88, 42, 255);
+                    label.enableWordWrapping = false;
+                    label.overflowMode = TextOverflowModes.Overflow;
+                    label.alignment = TextAlignmentOptions.Center;
+                    label.fontSize = 22f;
+                    label.rectTransform.sizeDelta = new Vector2(140f, 36f);
+                }
+            }
             hudElement.Position = ElectricityIndicatorPosition(item);
             hudElement.CanBeHidden = false;
             _level.HUD.AddElement(hudElement, _level.HUD.InWorldTransform);
