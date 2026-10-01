@@ -18,6 +18,14 @@ namespace UnderPressure
             "SFX_Treatment_Successful_2"
         };
 
+        private static readonly HashSet<string> TreatmentResultRequests = new HashSet<string>(
+            StringComparer.Ordinal)
+        {
+            "PatientCured",
+            "IneffectiveTreatment",
+            "FatalTreatment"
+        };
+
         private static readonly HashSet<AudioEmitter> ActiveEmitters = new HashSet<AudioEmitter>();
         private static App _app;
         private static AudioMixerGroup _masterGroup;
@@ -35,6 +43,20 @@ namespace UnderPressure
         {
             if (emitter == null || audioEvent == null ||
                 !TreatmentResultEvents.Contains(audioEvent.EventName)) return;
+
+            ConfigureEmitter(emitter);
+        }
+
+        internal static void RegisterRequested(AudioEmitter emitter, string requestedEvent)
+        {
+            if (emitter == null || string.IsNullOrEmpty(requestedEvent) ||
+                !TreatmentResultRequests.Contains(requestedEvent)) return;
+
+            ConfigureEmitter(emitter);
+        }
+
+        private static void ConfigureEmitter(AudioEmitter emitter)
+        {
 
             var masterGroup = GetMasterGroup();
             if (masterGroup != null)
@@ -87,6 +109,15 @@ namespace UnderPressure
         private static void Postfix(AudioEmitter __0, AudioEvent __2)
         {
             TreatmentVolumeAudio.Register(__0, __2);
+        }
+    }
+
+    [HarmonyPatch(typeof(AudioManager), nameof(AudioManager.Play), typeof(string), typeof(GameObject))]
+    internal static class TreatmentVolumeRequestedEventPatch
+    {
+        private static void Postfix(string __0, AudioEmitter __result)
+        {
+            TreatmentVolumeAudio.RegisterRequested(__result, __0);
         }
     }
 }
