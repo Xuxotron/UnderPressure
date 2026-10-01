@@ -1,4 +1,4 @@
-using System;
+using System.Reflection;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -7,21 +7,17 @@ namespace UnderPressure
 {
     internal static class ResalePenalties
     {
-        [ThreadStatic]
-        private static int _roomSaleCalculationDepth;
-
-        internal static bool IsCalculatingRoomSale => _roomSaleCalculationDepth > 0;
-
-        internal static void BeginRoomSaleCalculation() => _roomSaleCalculationDepth++;
-
-        internal static void EndRoomSaleCalculation()
-        {
-            if (_roomSaleCalculationDepth > 0) _roomSaleCalculationDepth--;
-        }
+        private static readonly FieldInfo RoomCostField =
+            AccessTools.Field(typeof(RoomDefinition), "_cost");
 
         internal static int ApplyObjectRefund(int value) => Mathf.FloorToInt(value * 0.8f);
 
         internal static int ApplyRoomRefund(int value) => Mathf.FloorToInt(value * 0.5f);
+
+        internal static int GetRoomBaseCost(FloorPlan floorPlan) =>
+            floorPlan?.Definition == null || RoomCostField == null
+                ? 0
+                : (int)RoomCostField.GetValue(floorPlan.Definition);
     }
 
     [HarmonyPatch(typeof(RoomItem), "SellValue")]
@@ -29,8 +25,7 @@ namespace UnderPressure
     {
         private static void Postfix(ref int __result)
         {
-            if (UnderPressurePlugin.ShouldUseResalePenalties &&
-                !ResalePenalties.IsCalculatingRoomSale)
+            if (UnderPressurePlugin.ShouldUseResalePenalties)
                 __result = ResalePenalties.ApplyObjectRefund(__result);
         }
     }
@@ -38,22 +33,13 @@ namespace UnderPressure
     [HarmonyPatch(typeof(GameAlgorithms), "CalculateSellCostOfRoom")]
     internal static class RoomResalePenaltyPatch
     {
-        private static void Prefix(out bool __state)
+        private static void Postfix(FloorPlan __0, ref int __result)
         {
-            __state = UnderPressurePlugin.ShouldUseResalePenalties;
-            if (__state) ResalePenalties.BeginRoomSaleCalculation();
-        }
-
-        private static void Postfix(ref int __result, bool __state)
-        {
-            if (__state) __result = ResalePenalties.ApplyRoomRefund(__result);
-        }
-
-        private static Exception Finalizer(Exception __exception, bool __state)
-        {
-            // El contador se limpia también si el cálculo nativo falla, para no contaminar ventas posteriores.
-            if (__state) ResalePenalties.EndRoomSaleCalculation();
-            return __exception;
+            if (!UnderPressurePlugin.ShouldUseResalePenalties) return;
+            // Los objetos ya llegan con su devolución del 80%; solo se sustituye la
+            // devolución completa de la construcción y sus muros por el 50%.
+            var roomBaseCost = ResalePenalties.GetRoomBaseCost(__0);
+            __result -= roomBaseCost - ResalePenalties.ApplyRoomRefund(roomBaseCost);
         }
     }
 }
