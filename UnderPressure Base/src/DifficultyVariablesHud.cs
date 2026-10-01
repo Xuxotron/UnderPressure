@@ -131,7 +131,7 @@ namespace UnderPressure
             AddHeading(labels, adjustments, results, ModLocalization.Get("hud.variables.title"),
                 ModLocalization.Get("hud.variables.adjustment"), ModLocalization.Get("hud.variables.result"));
 
-            var economySource = Mathf.Clamp(_level.FinanceManager.Balance / 10000, 0, 100);
+            var economySource = AdaptiveDifficulty.EconomyValue(_level);
             AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.economy"),
                 UnderPressurePlugin.AdaptiveEconomySetting.Value, economySource);
             AddStandard(labels, adjustments, results, "mod.staff_salaries",

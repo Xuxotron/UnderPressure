@@ -154,8 +154,8 @@ namespace UnderPressure
             HasExpansionValue = true;
         }
 
-        private static int EconomyValue(Level level) =>
-            Mathf.Clamp(level.FinanceManager.Balance / 10000, 0, 100);
+        internal static int EconomyValue(Level level) =>
+            Mathf.Clamp(level.FinanceManager.Balance / 5000, 0, 100);
 
         private static int ReputationValue(Level level) => Mathf.Clamp(Mathf.RoundToInt(
             level.ReputationTracker.OverallReputation * 100f), 0, 100);
