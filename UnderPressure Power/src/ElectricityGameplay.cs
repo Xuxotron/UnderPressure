@@ -83,6 +83,22 @@ namespace UnderPressure.PowerGrid
         internal static bool RequiresPower(RoomItem item) =>
             item != null && RequiresPower(item.Definition);
 
+        internal static bool CanOperateRoom(Room room)
+        {
+            if (room?.Definition == null) return true;
+            var items = room.FloorPlan?.Items;
+            if (items == null) return true;
+            foreach (var item in items)
+            {
+                if (item?.Definition == null || !room.Definition.RequiresWorkingItem(item.Definition)) continue;
+                if (RequiresPower(item) && !PowerGridPrototype.IsPowered(item)) return false;
+            }
+
+            // Igual que una avería nativa, cualquier máquina obligatoria sin suministro
+            // vuelve no funcional la sala completa, aunque existan otras máquinas operativas.
+            return true;
+        }
+
         internal static bool RequiresPower(IRoomItemDefinition definition)
         {
             if (!_configured || definition == null || EnergyRoomItems.IsTransformer(definition) ||
@@ -301,7 +317,8 @@ namespace UnderPressure.PowerGrid
         {
             if (!__result) return;
             var item = __instance?.ParentRoomItem;
-            if (ElectricityGameplay.RequiresPower(item) && !PowerGridPrototype.IsPowered(item))
+            if (ElectricityGameplay.RequiresPower(item) &&
+                (!PowerGridPrototype.IsPowered(item) || !ElectricityGameplay.CanOperateRoom(item.OwningRoom)))
                 __result = false;
         }
     }
@@ -312,7 +329,17 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(RoomItem __instance, ref bool __result)
         {
             if (__result && ElectricityGameplay.RequiresPower(__instance) &&
-                !PowerGridPrototype.IsPowered(__instance)) __result = false;
+                (!PowerGridPrototype.IsPowered(__instance) ||
+                 !ElectricityGameplay.CanOperateRoom(__instance.OwningRoom))) __result = false;
+        }
+    }
+
+    [HarmonyPatch(typeof(Room), "IsFunctional")]
+    internal static class ElectricityRoomFunctionalPatch
+    {
+        private static void Postfix(Room __instance, ref bool __result)
+        {
+            if (__result && !ElectricityGameplay.CanOperateRoom(__instance)) __result = false;
         }
     }
 
