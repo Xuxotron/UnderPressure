@@ -2101,8 +2101,9 @@ namespace UnderPressure.PowerGrid
 
         private static PowerCoord GetCellConnector(RoomItem item)
         {
-            var facing = item.GridRotation.DirectionVector();
-            return PowerCoord.FromWorldPosition(item.WorldPosition + facing * 0.5f);
+            // La fuente pertenece al tile realmente ocupado por el archivador clonado.
+            // El desplazamiento frontal anterior colocaba la placa un tile lejos del modelo.
+            return PowerCoord.FromWorldPosition(item.WorldCenter);
         }
 
         private void RebuildPanelCells()

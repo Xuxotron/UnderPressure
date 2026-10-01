@@ -96,6 +96,7 @@ namespace UnderPressure
         private static readonly Dictionary<int, Sprite> TintedFillSprites = new Dictionary<int, Sprite>();
         private readonly List<SliderBinding> _sliders = new List<SliderBinding>();
         private readonly List<AdaptiveGroup> _adaptiveGroups = new List<AdaptiveGroup>();
+        private readonly List<CheckRowBinding> _checkRows = new List<CheckRowBinding>();
         private bool _applyingGlobalDifficulty;
         private bool _showingModTab;
 
@@ -176,6 +177,7 @@ namespace UnderPressure
             if (content == null)
                 return;
             DisableAutomaticLayout(content);
+            _checkRows.Clear();
 
             var sourceSection = content.Find("Window Settings");
             if (sourceSection == null)
@@ -446,6 +448,7 @@ namespace UnderPressure
                     new SliderSpec("mod.patient_arrival", UnderPressurePlugin.PatientArrivalSetting),
                     new SliderSpec("mod.machine_wear", UnderPressurePlugin.MachineWearSetting)
                 });
+            AlignCheckRowsToAdaptiveToggle(economy.Toggle);
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
@@ -475,7 +478,7 @@ namespace UnderPressure
             title.name = titleKey + " Title";
             RemoveLocalisers(title.transform);
             RemoveTooltips(title.transform);
-            SetRect(title.rectTransform, new Vector2(24f, -6f), new Vector2(590f, 46f));
+            SetRect(title.rectTransform, new Vector2(54f, -6f), new Vector2(590f, 46f));
             title.alignment = TextAlignmentOptions.MidlineLeft;
             title.enableAutoSizing = false;
             title.fontSize = 29f;
@@ -548,6 +551,7 @@ namespace UnderPressure
             if (label == null || valueLabel == null || slider == null) return null;
             label.name = localizationKey + " Label";
             label.alignment = TextAlignmentOptions.MidlineLeft;
+            label.rectTransform.anchoredPosition += new Vector2(30f, 0f);
             AddTooltip(label.gameObject, localizationKey.Replace("mod.", "tooltip."));
             valueLabel.name = localizationKey + " Value";
             valueLabel.alignment = TextAlignmentOptions.Center;
@@ -984,7 +988,7 @@ namespace UnderPressure
             AddTooltip(label.gameObject, key);
         }
 
-        private static void ConfigureCheckRow(Transform row, TMP_Text label, Toggle toggle)
+        private void ConfigureCheckRow(Transform row, TMP_Text label, Toggle toggle)
         {
             if (row == null || label == null || toggle == null) return;
             DisableAutomaticLayout(row);
@@ -993,7 +997,7 @@ namespace UnderPressure
             toggleRect.anchorMin = new Vector2(1f, 0.5f);
             toggleRect.anchorMax = new Vector2(1f, 0.5f);
             toggleRect.pivot = new Vector2(1f, 0.5f);
-            toggleRect.anchoredPosition = new Vector2(-20f, 0f);
+            toggleRect.anchoredPosition = Vector2.zero;
             toggleRect.sizeDelta = new Vector2(38f, 38f);
             toggleRect.localScale = Vector3.one;
 
@@ -1002,11 +1006,56 @@ namespace UnderPressure
             labelRect.anchorMax = Vector2.one;
             labelRect.pivot = new Vector2(0f, 0.5f);
             labelRect.offsetMin = new Vector2(30f, 0f);
-            labelRect.offsetMax = new Vector2(-68f, 0f);
+            labelRect.offsetMax = new Vector2(-48f, 0f);
             label.enableAutoSizing = false;
             label.enableWordWrapping = false;
             label.overflowMode = TextOverflowModes.Overflow;
             label.alignment = TextAlignmentOptions.MidlineLeft;
+            _checkRows.Add(new CheckRowBinding((RectTransform)row, label, toggle));
+        }
+
+        private void AlignCheckRowsToAdaptiveToggle(Toggle adaptiveToggle)
+        {
+            var adaptiveRect = adaptiveToggle == null ? null : adaptiveToggle.transform as RectTransform;
+            var adaptiveSection = adaptiveRect == null ? null : adaptiveRect.parent as RectTransform;
+            if (adaptiveRect == null || adaptiveSection == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            var adaptiveRight = adaptiveSection.InverseTransformPoint(
+                adaptiveRect.TransformPoint(new Vector3(adaptiveRect.rect.xMax, 0f, 0f))).x;
+            var rightInset = adaptiveSection.rect.xMax - adaptiveRight;
+            foreach (var binding in _checkRows)
+            {
+                if (binding == null || binding.Row == null || binding.Toggle == null || binding.Label == null)
+                    continue;
+                var section = binding.Row.parent as RectTransform;
+                var toggleRect = binding.Toggle.transform as RectTransform;
+                if (section == null || toggleRect == null) continue;
+
+                var targetRight = section.TransformPoint(new Vector3(section.rect.xMax - rightInset, 0f, 0f));
+                var targetInRow = binding.Row.InverseTransformPoint(targetRight).x;
+                var currentInRow = binding.Row.InverseTransformPoint(
+                    toggleRect.TransformPoint(new Vector3(toggleRect.rect.xMax, 0f, 0f))).x;
+                toggleRect.anchoredPosition += new Vector2(targetInRow - currentInRow, 0f);
+
+                var toggleLeft = binding.Row.InverseTransformPoint(
+                    toggleRect.TransformPoint(new Vector3(toggleRect.rect.xMin, 0f, 0f))).x;
+                binding.Label.rectTransform.offsetMax = new Vector2(
+                    toggleLeft - binding.Row.rect.xMax - 10f, 0f);
+                ResizeTooltipCollider(binding.Label);
+            }
+        }
+
+        private static void ResizeTooltipCollider(TMP_Text label)
+        {
+            var collider = label == null ? null : label.GetComponent<BoxCollider>();
+            if (collider == null) return;
+            var rect = label.rectTransform;
+            var width = Mathf.Max(1f, rect.rect.width);
+            var height = Mathf.Max(1f, rect.rect.height);
+            collider.size = new Vector3(width, height, 1f);
+            collider.center = new Vector3((0.5f - rect.pivot.x) * width,
+                (0.5f - rect.pivot.y) * height, 0f);
         }
 
         private void AddTooltip(GameObject target, string key)
@@ -1045,6 +1094,20 @@ namespace UnderPressure
             {
                 Key = key; Label = label; ValueLabel = valueLabel; Setting = setting;
                 Slider = slider; RowCanvas = rowCanvas;
+            }
+        }
+
+        private sealed class CheckRowBinding
+        {
+            internal readonly RectTransform Row;
+            internal readonly TMP_Text Label;
+            internal readonly Toggle Toggle;
+
+            internal CheckRowBinding(RectTransform row, TMP_Text label, Toggle toggle)
+            {
+                Row = row;
+                Label = label;
+                Toggle = toggle;
             }
         }
 
