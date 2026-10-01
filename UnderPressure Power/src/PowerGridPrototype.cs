@@ -47,7 +47,7 @@ namespace UnderPressure.PowerGrid
         private const int LegacyDefaultContractedEnergy = 2000;
         private const int EnergyHundredths = 100;
         private const int BatteryMaximumHundredths = 200 * EnergyHundredths;
-        private const int LowVoltageMaximumLength = 5;
+        private const int LowVoltageMaximumCellsPerPanel = 15;
         private const int DefaultPanelCapacity = 20;
         private const float PowerTileSize = 1f;
         private const float PanelAnimationSpeed = 7f;
@@ -850,10 +850,7 @@ namespace UnderPressure.PowerGrid
             if (!lowVoltage) return true;
 
             var withCandidate = new HashSet<PowerCoord>(sameVoltage) { coord };
-            var distance = DistanceFromActivePanel(coord, withCandidate);
-            // A disconnected low-voltage layout may be prepared anywhere. Once it reaches
-            // an active panel, the normal five-cell limit becomes mandatory.
-            return distance < 0 || distance <= LowVoltageMaximumLength;
+            return FitsLowVoltagePanelLimit(coord, withCandidate);
         }
 
         private bool CanReconnectDisconnectedEnds(PowerCoord first, PowerCoord second,
@@ -887,26 +884,48 @@ namespace UnderPressure.PowerGrid
         private static bool IsDisconnected(PowerCoord coord, Dictionary<PowerCoord, int> values) =>
             values.TryGetValue(coord, out var value) && value <= 0;
 
-        private int DistanceFromActivePanel(PowerCoord start, HashSet<PowerCoord> lowCells)
+        private bool FitsLowVoltagePanelLimit(PowerCoord start, HashSet<PowerCoord> lowCells)
         {
             var visited = new HashSet<PowerCoord> { start };
             var queue = new Queue<PowerCoord>();
-            var distances = new Queue<int>();
+            var connectedPanels = new HashSet<PowerCoord>();
             queue.Enqueue(start);
-            distances.Enqueue(1);
             while (queue.Count != 0)
             {
                 var current = queue.Dequeue();
-                var distance = distances.Dequeue();
                 foreach (var neighbour in CardinalNeighbours(current))
                 {
-                    if (_activePanelCells.Contains(neighbour)) return distance;
+                    if (_panelCells.Contains(neighbour))
+                    {
+                        connectedPanels.Add(neighbour);
+                        continue;
+                    }
                     if (!lowCells.Contains(neighbour) || !visited.Add(neighbour)) continue;
                     queue.Enqueue(neighbour);
-                    distances.Enqueue(distance + 1);
                 }
             }
-            return -1;
+
+            // Una red desconectada puede prepararse libremente. En cuanto toca un cuadro,
+            // todas sus ramas comparten el mismo presupuesto total de quince celdas.
+            foreach (var panel in connectedPanels)
+                if (CountLowVoltageCellsForPanel(panel, lowCells) > LowVoltageMaximumCellsPerPanel)
+                    return false;
+            return true;
+        }
+
+        private static int CountLowVoltageCellsForPanel(PowerCoord panel, HashSet<PowerCoord> lowCells)
+        {
+            var visited = new HashSet<PowerCoord>();
+            var queue = new Queue<PowerCoord>();
+            foreach (var neighbour in CardinalNeighbours(panel))
+                if (lowCells.Contains(neighbour) && visited.Add(neighbour)) queue.Enqueue(neighbour);
+            while (queue.Count != 0)
+            {
+                var current = queue.Dequeue();
+                foreach (var neighbour in CardinalNeighbours(current))
+                    if (lowCells.Contains(neighbour) && visited.Add(neighbour)) queue.Enqueue(neighbour);
+            }
+            return visited.Count;
         }
 
         private static int CountCardinalNeighbours(PowerCoord coord, HashSet<PowerCoord> cells)
@@ -1523,28 +1542,35 @@ namespace UnderPressure.PowerGrid
 
             var panels = new List<PowerCoord>(_panelCells);
             panels.Sort(ComparePowerCoords);
+            var assignedPerPanel = new Dictionary<PowerCoord, int>();
             var queue = new Queue<PowerCoord>();
             foreach (var panel in panels)
+            {
+                assignedPerPanel[panel] = 0;
                 foreach (var cable in CardinalNeighbours(panel))
                 {
-                    if (!_lowVoltageCells.Contains(cable) || _lowVoltagePanelSource.ContainsKey(cable)) continue;
+                    if (!_lowVoltageCells.Contains(cable) || _lowVoltagePanelSource.ContainsKey(cable) ||
+                        assignedPerPanel[panel] >= LowVoltageMaximumCellsPerPanel) continue;
                     _lowVoltagePhysicalDistance[cable] = 1;
                     _lowVoltagePanelSource[cable] = panel;
+                    assignedPerPanel[panel]++;
                     queue.Enqueue(cable);
                 }
+            }
 
             while (queue.Count != 0)
             {
                 var current = queue.Dequeue();
                 var nextDistance = _lowVoltagePhysicalDistance[current] + 1;
-                if (nextDistance > LowVoltageMaximumLength) continue;
                 var source = _lowVoltagePanelSource[current];
                 foreach (var neighbour in CardinalNeighbours(current))
                 {
                     if (!_lowVoltageCells.Contains(neighbour) || _lowVoltagePanelSource.ContainsKey(neighbour))
                         continue;
+                    if (assignedPerPanel[source] >= LowVoltageMaximumCellsPerPanel) continue;
                     _lowVoltagePhysicalDistance[neighbour] = nextDistance;
                     _lowVoltagePanelSource[neighbour] = source;
+                    assignedPerPanel[source]++;
                     queue.Enqueue(neighbour);
                 }
             }
