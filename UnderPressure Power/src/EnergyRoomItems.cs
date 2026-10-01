@@ -181,13 +181,8 @@ namespace UnderPressure.PowerGrid
                 Cell = CloneBase(filingCabinet, CellTag,
                     CellGuid,
                     "energy.cell.name", "energy.cell.description");
-                CopyWallPlacement(Cell, wallItem);
                 Set(Cell, "_cost", EnergyCellPricing.BaseCost);
                 Set(Cell, "_singlePlace", false);
-                Set(Cell, "_hasCollision", true);
-                Set(Cell, "_occupyWallOnly", true);
-                Set(Cell, "_allowOnCorner", true);
-                Set(Cell, "_affectsNavigation", false);
                 Set(Cell, "_generatesElectricity", false);
                 Set(Cell, "_energyCost", 0);
                 Set(Cell, "_ignoredByJanitors", true);
