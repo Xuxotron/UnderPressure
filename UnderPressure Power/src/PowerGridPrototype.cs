@@ -1569,8 +1569,10 @@ namespace UnderPressure.PowerGrid
                 foreach (var item in items)
                 {
                     if (item?.Definition == null || EnergyRoomItems.IsPanel(item) ||
-                        !ElectricityGameplay.TryGetConfiguredRule(item.Definition, out var consumption,
-                            out _, out var power, out _) || power != Power.Bajo || consumption <= 0 ||
+                        !ElectricityGameplay.TryGetPowerType(item.Definition, out var power) ||
+                        power != Power.Bajo ||
+                        !ElectricityGameplay.TryGetDisplayCost(item, out var consumption, out _) ||
+                        consumption <= 0 ||
                         !TryGetLowVoltagePanel(item, out var panel)) continue;
                     var previous = _panelConnectedLoad.TryGetValue(panel, out var load) ? load : 0;
                     _panelConnectedLoad[panel] = consumption > int.MaxValue - previous
