@@ -1,7 +1,7 @@
 key,en,es,fr,de,it,pt
 hud.variables.title,Active variables,Variables activas,,,,
 hud.variables.adjustment,Setting,Ajuste,,,,
-hud.variables.result,Result,Resultado,,,,
+hud.variables.result,Total,Total,,,,
 hud.variables.economy,Economy (balance),Economía (saldo),,,,
 hud.variables.reputation,Reputation,Reputación,,,,
 hud.variables.expansion,Expansion (level),Expansión (nivel),,,,
@@ -17,7 +17,7 @@ mod.imperfect_staff,Imperfect staff,Empleados imperfectos,Personnel imparfait,Un
 mod.show_electricity,Show electricity use,Mostrar consumo eléctrico,Afficher la consommation électrique,Stromverbrauch anzeigen,Mostra consumo elettrico,Mostrar consumo elétrico
 mod.separate_reputation_prestige,Reputation VS prestige,Reputación VS prestigio,,,,
 mod.permanent_machine_wear,Machine breakdowns,Rotura de máquinas,Usure permanente des machines,Dauerhafter Maschinenverschleiß,Usura permanente dei macchinari,Desgaste permanente das máquinas
-mod.visual_lighting,Hospitals without power,Hospitales sin luz,Éclairage de l'hôpital,Krankenhausbeleuchtung,Illuminazione dell'ospedale,Iluminação do hospital
+mod.visual_lighting,Hospitals without lights,Hospitales sin luz,Éclairage de l'hôpital,Krankenhausbeleuchtung,Illuminazione dell'ospedale,Iluminação do hospital
 mod.unlock_lamps,Unlock lamps,Desbloquear lámparas,,,,
 mod.disable_diagnosis_charges,Free diagnoses,Diagnósticos gratis,,,,
 mod.disable_awards,Disable awards,Desactivar premios,,,,
@@ -28,10 +28,10 @@ mod.section.reputation,Reputation difficulty,Dificultad de reputación,Difficult
 mod.section.expansion,Expansion difficulty,Dificultad de expansión,Difficulté d'expansion,Expansionsschwierigkeit,Difficoltà espansione,Dificuldade de expansão
 mod.adaptive,Adaptive,Adaptable,Adaptatif,Adaptiv,Adattiva,Adaptável
 mod.global_difficulty,Global difficulty,Dificultad global,Difficulté globale,Globale Schwierigkeit,Difficoltà globale,Dificuldade global
-mod.patient_arrival,Patient visit frequency,Frecuencia de visitas de pacientes,Fréquence d'arrivée des patients,Patientenankunftsrate,Frequenza arrivo pazienti,Frequência de chegada de pacientes
-mod.health_decay,Patient health deterioration,Deterioro de salud de pacientes,Détérioration de la santé des patients,Verschlechterung der Patientengesundheit,Peggioramento salute pazienti,Deterioração da saúde dos pacientes
+mod.patient_arrival,Visit frequency,Frecuencia de visitas,Fréquence d'arrivée des patients,Patientenankunftsrate,Frequenza arrivo pazienti,Frequência de chegada de pacientes
+mod.health_decay,Health deterioration,Deterioro de salud,Détérioration de la santé des patients,Verschlechterung der Patientengesundheit,Peggioramento salute pazienti,Deterioração da saúde dos pacientes
 mod.diagnosis_chance,Diagnosis difficulty,Dificultad del diagnóstico,Difficulté du diagnostic,Diagnoseschwierigkeit,Difficoltà diagnosi,Dificuldade do diagnóstico
-mod.treatment_chance,Treatment failure risk,Riesgo de fallo del tratamiento,Risque d'échec du traitement,Behandlungsfehlerrisiko,Rischio fallimento trattamento,Risco de falha do tratamento
+mod.treatment_chance,Treatment failure risk,Riesgo de tratamiento fallido,Risque d'échec du traitement,Behandlungsfehlerrisiko,Rischio fallimento trattamento,Risco de falha do tratamento
 mod.machine_wear,Machine wear,Desgaste de máquinas,Usure des machines,Maschinenverschleiß,Usura macchinari,Desgaste das máquinas
 mod.staff_salaries,Employee salaries,Salarios de empleados,Salaires du personnel,Mitarbeitergehälter,Stipendi dipendenti,Salários dos funcionários
 mod.hunger_thirst,Increased hunger and thirst,Aumento del hambre y la sed,Augmentation de la faim et de la soif,Mehr Hunger und Durst,Aumento fame e sete,Aumento da fome e sede

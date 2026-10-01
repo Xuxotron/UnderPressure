@@ -993,7 +993,7 @@ namespace UnderPressure
             toggleRect.anchorMin = new Vector2(1f, 0.5f);
             toggleRect.anchorMax = new Vector2(1f, 0.5f);
             toggleRect.pivot = new Vector2(1f, 0.5f);
-            toggleRect.anchoredPosition = Vector2.zero;
+            toggleRect.anchoredPosition = new Vector2(-20f, 0f);
             toggleRect.sizeDelta = new Vector2(38f, 38f);
             toggleRect.localScale = Vector3.one;
 
@@ -1001,8 +1001,8 @@ namespace UnderPressure
             labelRect.anchorMin = Vector2.zero;
             labelRect.anchorMax = Vector2.one;
             labelRect.pivot = new Vector2(0f, 0.5f);
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = new Vector2(-48f, 0f);
+            labelRect.offsetMin = new Vector2(30f, 0f);
+            labelRect.offsetMax = new Vector2(-68f, 0f);
             label.enableAutoSizing = false;
             label.enableWordWrapping = false;
             label.overflowMode = TextOverflowModes.Overflow;

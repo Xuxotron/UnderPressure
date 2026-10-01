@@ -2266,35 +2266,57 @@ namespace UnderPressure.PowerGrid
 
             // Keep the exact queue-number visual while disabling its patient-specific update.
             queueIcon.enabled = false;
-            AccessTools.Property(text.GetType(), "text")?.SetValue(text, cost.ToString(), null);
+            var value = cost.ToString(CultureInfo.InvariantCulture);
+            AccessTools.Property(text.GetType(), "text")?.SetValue(text, value, null);
             if (badgeColor.HasValue)
                 foreach (var image in root.GetComponentsInChildren<Image>(true))
                 {
                     if (image == null) continue;
                     image.color = badgeColor.Value;
                 }
-            else
-            {
-                // La potencia contratada se muestra sin la estrecha placa de cola:
-                // así conserva cuatro o más cifras sin partirse en varias líneas.
-                foreach (var image in root.GetComponentsInChildren<Image>(true))
-                    if (image != null) image.enabled = false;
-                var label = text as TMP_Text;
-                if (label != null)
-                {
-                    label.color = new Color32(20, 88, 42, 255);
-                    label.enableWordWrapping = false;
-                    label.overflowMode = TextOverflowModes.Overflow;
-                    label.alignment = TextAlignmentOptions.Center;
-                    label.fontSize = 22f;
-                    label.rectTransform.sizeDelta = new Vector2(140f, 36f);
-                }
-            }
+
+            var label = text as TMP_Text;
+            if (label != null)
+                FitElectricityIndicatorWidth(root, label, value);
             hudElement.Position = ElectricityIndicatorPosition(item);
             hudElement.CanBeHidden = false;
             _level.HUD.AddElement(hudElement, _level.HUD.InWorldTransform);
             root.SetActive(_electricityViewActive && _showFlow);
             return new ElectricityCostIndicator { Root = root, HudElement = hudElement };
+        }
+
+        private static void FitElectricityIndicatorWidth(GameObject root, TMP_Text label, string value)
+        {
+            // La placa nativa conserva su altura y solo crece horizontalmente cuando
+            // el número necesita más espacio. El texto nunca reduce su tamaño.
+            var rootRect = root.transform as RectTransform;
+            if (rootRect != null)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
+            label.enableAutoSizing = false;
+            label.enableWordWrapping = false;
+            label.overflowMode = TextOverflowModes.Overflow;
+            label.alignment = TextAlignmentOptions.Center;
+            label.ForceMeshUpdate();
+
+            var requiredWidth = Mathf.Ceil(label.GetPreferredValues(value).x + 14f);
+            var cursor = label.rectTransform;
+            while (cursor != null && (cursor == rootRect || cursor.IsChildOf(root.transform)))
+            {
+                if (cursor.rect.width < requiredWidth)
+                    cursor.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, requiredWidth);
+                if (cursor == rootRect) break;
+                cursor = cursor.parent as RectTransform;
+            }
+
+            if (rootRect != null)
+            {
+                var layout = root.GetComponent<LayoutElement>();
+                if (layout != null)
+                {
+                    layout.minWidth = Mathf.Max(layout.minWidth, requiredWidth);
+                    layout.preferredWidth = Mathf.Max(layout.preferredWidth, requiredWidth);
+                }
+            }
         }
 
         private static Vector3 ElectricityIndicatorPosition(RoomItem item)
