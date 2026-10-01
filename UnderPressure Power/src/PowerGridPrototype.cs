@@ -162,6 +162,7 @@ namespace UnderPressure.PowerGrid
         }
         private bool _eventsSubscribed;
         private bool _restoringExtraState;
+        private Camera _worldCamera;
 
         private enum ToolMode
         {
@@ -268,13 +269,13 @@ namespace UnderPressure.PowerGrid
             if (!_dragging && input.GetMouseDownOnScene((MouseButton)0))
             {
                 _dragging = true;
-                _dragStart = PowerCoord.FromWorldPosition(_level.CursorManager.WorldPosition);
+                _dragStart = CursorPowerCoord();
                 _dragEnd = _dragStart;
                 RefreshPreview();
             }
             else if (_dragging && input.GetMouse((MouseButton)0))
             {
-                var current = PowerCoord.FromWorldPosition(_level.CursorManager.WorldPosition);
+                var current = CursorPowerCoord();
                 if (current != _dragEnd)
                 {
                     _dragEnd = current;
@@ -349,7 +350,7 @@ namespace UnderPressure.PowerGrid
 
         private void DeleteCableUnderCursor()
         {
-            var coord = PowerCoord.FromWorldPosition(_level.CursorManager.WorldPosition);
+            var coord = CursorPowerCoord();
             var existed = _cells.Contains(coord) || _lowVoltageCells.Contains(coord);
             if (!existed) return;
             CancelDrag();
@@ -996,6 +997,22 @@ namespace UnderPressure.PowerGrid
             foreach (var neighbour in CardinalNeighbours(coord))
                 if (cells.Contains(neighbour)) count++;
             return count;
+        }
+
+        private PowerCoord CursorPowerCoord()
+        {
+            var fallback = _level.CursorManager.WorldPosition;
+            if (_worldCamera == null) _worldCamera = Camera.main;
+            if (_worldCamera == null) return PowerCoord.FromWorldPosition(fallback);
+
+            // El CursorManager puede devolver el punto de impacto sobre un objeto y
+            // desplazar la casilla hacia la cámara. Proyectar el ratón al mismo plano
+            // horizontal del suelo mantiene la selección centrada en el tile visible.
+            var floor = new Plane(Vector3.up, new Vector3(0f, fallback.y, 0f));
+            var ray = _worldCamera.ScreenPointToRay(Input.mousePosition);
+            return floor.Raycast(ray, out var distance)
+                ? PowerCoord.FromWorldPosition(ray.GetPoint(distance))
+                : PowerCoord.FromWorldPosition(fallback);
         }
 
         private static PowerCoord[] CardinalNeighbours(PowerCoord coord) => new[]
