@@ -2217,6 +2217,18 @@ namespace UnderPressure.PowerGrid
                 var indicator = CreateElectricityCostIndicator(template, panel, load, color);
                 if (indicator != null) _electricityCostIndicators.Add(indicator);
             }
+            var transformers = EnergyRoomItems.Transformer == null
+                ? null
+                : _level.WorldState.GetRoomItemsOfType(EnergyRoomItems.Transformer);
+            if (transformers != null)
+                foreach (var transformer in transformers)
+                {
+                    if (!EnergyRoomItems.IsTransformer(transformer) || transformer?.Visual?.GameObject == null)
+                        continue;
+                    var indicator = CreateElectricityCostIndicator(template, transformer,
+                        Math.Max(0, _contractedEnergy), null);
+                    if (indicator != null) _electricityCostIndicators.Add(indicator);
+                }
             foreach (var room in _level.WorldState.AllRooms)
             {
                 var items = room?.FloorPlan?.Items;
@@ -2225,7 +2237,8 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!ElectricityGameplay.TryGetDisplayCost(item, out var cost, out var kind) ||
                         item?.Visual?.GameObject == null) continue;
-                    if (EnergyRoomItems.IsPanel(item) || EnergyRoomItems.IsCell(item)) continue;
+                    if (EnergyRoomItems.IsPanel(item) || EnergyRoomItems.IsCell(item) ||
+                        EnergyRoomItems.IsTransformer(item)) continue;
                     var badgeColor = kind == ElectricityGameplay.CostKind.Monthly
                         ? new Color(0.42f, 0.84f, 1f, 1f)
                         : new Color(0.90f, 0.28f, 0.62f, 1f);
@@ -2236,7 +2249,7 @@ namespace UnderPressure.PowerGrid
         }
 
         private ElectricityCostIndicator CreateElectricityCostIndicator(StatusIcon template, RoomItem item, int cost,
-            Color badgeColor)
+            Color? badgeColor)
         {
             var root = Object.Instantiate(template.gameObject);
             root.name = "UnderPressureElectricityCost_" + cost;
@@ -2254,11 +2267,12 @@ namespace UnderPressure.PowerGrid
             // Keep the exact queue-number visual while disabling its patient-specific update.
             queueIcon.enabled = false;
             AccessTools.Property(text.GetType(), "text")?.SetValue(text, cost.ToString(), null);
-            foreach (var image in root.GetComponentsInChildren<Image>(true))
-            {
-                if (image == null) continue;
-                image.color = badgeColor;
-            }
+            if (badgeColor.HasValue)
+                foreach (var image in root.GetComponentsInChildren<Image>(true))
+                {
+                    if (image == null) continue;
+                    image.color = badgeColor.Value;
+                }
             hudElement.Position = ElectricityIndicatorPosition(item);
             hudElement.CanBeHidden = false;
             _level.HUD.AddElement(hudElement, _level.HUD.InWorldTransform);
