@@ -63,23 +63,28 @@ namespace UnderPressure.PowerGrid
         private const int BatterySharedId = 9112101;
         private const int PanelSharedId = 9112111;
         private const int TransformerSharedId = 9112121;
+        private const int CellSharedId = 9112131;
         private static readonly Guid BatteryGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481101");
         private static readonly Guid PanelGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481102");
         private static readonly Guid TransformerGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481103");
+        private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = "under pressure electrical panel";
         internal const string TransformerTag = "under pressure transformer";
+        internal const string CellTag = "under pressure electrical cell";
 
         internal static RoomItemDefinition Battery { get; private set; }
         internal static RoomItemDefinition Panel { get; private set; }
         internal static RoomItemDefinition Transformer { get; private set; }
+        internal static RoomItemDefinition Cell { get; private set; }
         internal static RoomItemDefinition MarketingDesk { get; private set; }
         internal static InteractionDefinition MaintenanceDeskInteraction { get; private set; }
         internal static SharedInstance_TH20TH20_RoomItemDefinition BatteryShared { get; private set; }
         internal static SharedInstance_TH20TH20_RoomItemDefinition PanelShared { get; private set; }
         internal static SharedInstance_TH20TH20_RoomItemDefinition TransformerShared { get; private set; }
+        internal static SharedInstance_TH20TH20_RoomItemDefinition CellShared { get; private set; }
 
         internal static bool Ensure(Metagame metagame, RoomDefinition marketingRoom,
             SharedInstance<RoomDefinition>[] rooms)
@@ -171,6 +176,32 @@ namespace UnderPressure.PowerGrid
                 additions.Add(TransformerShared);
             }
 
+            if (Cell == null)
+            {
+                Cell = CloneBase(filingCabinet, CellTag,
+                    CellGuid,
+                    "energy.cell.name", "energy.cell.description");
+                CopyWallPlacement(Cell, wallItem);
+                Set(Cell, "_cost", EnergyCellPricing.BaseCost);
+                Set(Cell, "_singlePlace", false);
+                Set(Cell, "_hasCollision", true);
+                Set(Cell, "_occupyWallOnly", true);
+                Set(Cell, "_allowOnCorner", true);
+                Set(Cell, "_affectsNavigation", false);
+                Set(Cell, "_generatesElectricity", false);
+                Set(Cell, "_energyCost", 0);
+                Set(Cell, "_ignoredByJanitors", true);
+                Set(Cell, "_maintenanceModifer", 0f);
+                Set(Cell, "_prestige", 0f);
+                Set(Cell, "_hospitalLevelPoints", 0f);
+                Set(Cell, "_roomModifiers", Array.Empty<RoomModifier>());
+                Set(Cell, "_interactionAttributeModifiers", Array.Empty<InteractionAttributeModifier>());
+                Set(Cell, "_upgrades", Array.Empty<SharedInstance<RoomItemUpgradeDefinition>>());
+                DisableOwnInteractions(Cell);
+                CellShared = CreateWrapper(Cell, CellSharedId, "UnderPressure Electrical Cell");
+                additions.Add(CellShared);
+            }
+
             // Se reutilizan los modificadores exactos del radiador original para que ambos objetos
             // de la Sala de energía generen el mismo calor sin imitar el efecto manualmente.
             Set(Battery, "_roomModifiers", radiator.RoomModifiers);
@@ -189,7 +220,8 @@ namespace UnderPressure.PowerGrid
                 for (var i = 0; i < additions.Count; ++i)
                     expanded[database.RoomItems.Length + i] = additions[i];
                 database.RoomItems = expanded;
-                PowerGridPlugin.Log.LogInfo("Objetos de la Sala de energia registrados: bateria, cuadro y transformador.");
+                PowerGridPlugin.Log.LogInfo("Objetos de la Sala de energia registrados: bateria, cuadro, " +
+                                            "transformador y celda electrica.");
             }
             return true;
         }
@@ -237,14 +269,23 @@ namespace UnderPressure.PowerGrid
             return item != null && (ReferenceEquals(item, Panel) || item.DebugTag == PanelTag);
         }
 
+        internal static bool IsCell(RoomItem item) => item != null && IsCell(item.Definition);
+
+        internal static bool IsCell(IRoomItemDefinition definition)
+        {
+            var item = definition as RoomItemDefinition;
+            return item != null && (ReferenceEquals(item, Cell) || item.DebugTag == CellTag);
+        }
+
         internal static bool IsCustomDefinition(IRoomItemDefinition definition)
         {
             var item = definition as RoomItemDefinition;
             if (item == null) return false;
-            if (ReferenceEquals(item, Battery) || ReferenceEquals(item, Panel) || ReferenceEquals(item, Transformer))
+            if (ReferenceEquals(item, Battery) || ReferenceEquals(item, Panel) || ReferenceEquals(item, Transformer) ||
+                ReferenceEquals(item, Cell))
                 return true;
             var tag = item.DebugTag;
-            return tag == BatteryTag || tag == PanelTag || tag == TransformerTag;
+            return tag == BatteryTag || tag == PanelTag || tag == TransformerTag || tag == CellTag;
         }
 
         private static RoomItemDefinition CloneBase(RoomItemDefinition source, string tag, Guid guid,
@@ -362,6 +403,11 @@ namespace UnderPressure.PowerGrid
                 {
                     Transformer = item;
                     TransformerShared = shared as SharedInstance_TH20TH20_RoomItemDefinition;
+                }
+                else if (item.DebugTag == CellTag)
+                {
+                    Cell = item;
+                    CellShared = shared as SharedInstance_TH20TH20_RoomItemDefinition;
                 }
             }
         }
@@ -503,6 +549,7 @@ namespace UnderPressure.PowerGrid
             if (ReferenceEquals(item, Battery)) return BatteryShared;
             if (ReferenceEquals(item, Panel)) return PanelShared;
             if (ReferenceEquals(item, Transformer)) return TransformerShared;
+            if (ReferenceEquals(item, Cell)) return CellShared;
             return null;
         }
 
@@ -524,6 +571,96 @@ namespace UnderPressure.PowerGrid
                 PowerGridPlugin.Log.LogWarning($"Campo no encontrado: {target.GetType().Name}.{fieldName}");
             else
                 field.SetValue(target, value);
+        }
+    }
+
+    internal static class EnergyCellPricing
+    {
+        internal const int BaseCost = 5000;
+        internal const int MaximumPerRoom = 5;
+        private static readonly LocalisedString LimitText = EnergyLocalization.Create("energy.cell.limit");
+        private static readonly LocalisedString ConnectionText =
+            EnergyLocalization.Create("energy.cell.invalid_connection");
+
+        internal static int CostForIndex(int index)
+        {
+            var safeIndex = Mathf.Clamp(index, 0, MaximumPerRoom - 1);
+            return BaseCost << safeIndex;
+        }
+
+        internal static int Count(FloorPlan plan)
+        {
+            var count = 0;
+            var items = plan?.Items;
+            if (items == null) return count;
+            foreach (var item in items)
+                if (EnergyRoomItems.IsCell(item)) ++count;
+            return count;
+        }
+
+        internal static int IndexOf(RoomItem wanted)
+        {
+            var index = 0;
+            var items = wanted?.FloorPlan?.Items;
+            if (items == null) return index;
+            foreach (var item in items)
+            {
+                if (!EnergyRoomItems.IsCell(item)) continue;
+                if (ReferenceEquals(item, wanted)) return index;
+                ++index;
+            }
+            return index;
+        }
+
+        internal static string LimitTranslation => LimitText.Translation;
+        internal static string ConnectionTranslation => ConnectionText.Translation;
+    }
+
+    [HarmonyPatch(typeof(RoomItemDefinition), nameof(RoomItemDefinition.GetCost))]
+    internal static class EnergyCellDefinitionCostPatch
+    {
+        private static void Postfix(RoomItemDefinition __instance, ref int __result)
+        {
+            if (!EnergyRoomItems.IsCell(__instance)) return;
+            __result = EnergyCellPricing.CostForIndex(
+                EnergyCellPricing.Count(PowerGridPrototype.CurrentBuildingFloorPlan));
+        }
+    }
+
+    [HarmonyPatch(typeof(RoomItem), "get_Cost")]
+    internal static class EnergyCellPlacedCostPatch
+    {
+        private static void Postfix(RoomItem __instance, ref int __result)
+        {
+            if (!EnergyRoomItems.IsCell(__instance)) return;
+            __result = EnergyCellPricing.CostForIndex(EnergyCellPricing.IndexOf(__instance));
+        }
+    }
+
+    [HarmonyPatch(typeof(CursorRoomItem), "ValidatePlacement")]
+    internal static class EnergyCellPlacementLimitPatch
+    {
+        private static readonly FieldInfo ItemField = AccessTools.Field(typeof(CursorRoomItem), "_roomItem");
+        private static readonly FieldInfo FloorPlanField = AccessTools.Field(typeof(CursorRoomItem), "_floorPlan");
+        private static readonly FieldInfo EditModeField = AccessTools.Field(typeof(CursorRoomItem), "_editMode");
+
+        private static void Postfix(CursorRoomItem __instance, ref bool __result)
+        {
+            var item = ItemField?.GetValue(__instance) as RoomItem;
+            if (!EnergyRoomItems.IsCell(item)) return;
+            if (!PowerGridPrototype.IsCellPlacementValid(item))
+            {
+                item.SetValid(false, "Conexion de celda electrica no valida",
+                    EnergyCellPricing.ConnectionTranslation);
+                __result = false;
+                return;
+            }
+            var editMode = EditModeField?.GetValue(__instance);
+            if (editMode != null && Convert.ToInt32(editMode) != 0) return;
+            var plan = FloorPlanField?.GetValue(__instance) as FloorPlan;
+            if (EnergyCellPricing.Count(plan) < EnergyCellPricing.MaximumPerRoom) return;
+            item.SetValid(false, "Limite de celdas electricas", EnergyCellPricing.LimitTranslation);
+            __result = false;
         }
     }
 

@@ -40,7 +40,7 @@ namespace UnderPressure.PowerGrid
             foreach (var shared in items)
             {
                 var item = shared?.Instance;
-                if (item == null || EnergyRoomItems.IsTransformer(item)) continue;
+                if (item == null || EnergyRoomItems.IsTransformer(item) || EnergyRoomItems.IsCell(item)) continue;
                 if (!TryGetConfiguredRule(item, out var consumption, out var billing, out _, out _)) continue;
                 if (billing == Cost.Mensual)
                 {
@@ -86,6 +86,7 @@ namespace UnderPressure.PowerGrid
         internal static bool RequiresPower(IRoomItemDefinition definition)
         {
             if (!_configured || definition == null || EnergyRoomItems.IsTransformer(definition) ||
+                EnergyRoomItems.IsCell(definition) ||
                 EnergyRoomItems.IsPanel(definition)) return false;
             if (definition.EnergyCost(0) > 0) return true;
             foreach (var modifier in definition.InteractionAttributeModifiers ??
@@ -100,6 +101,7 @@ namespace UnderPressure.PowerGrid
         internal static bool ShowsElectricityIcon(IRoomItemDefinition definition)
         {
             if (!_configured || definition == null || EnergyRoomItems.IsTransformer(definition) ||
+                EnergyRoomItems.IsCell(definition) ||
                 EnergyRoomItems.IsBattery(definition)) return false;
             if (EnergyRoomItems.IsPanel(definition) || definition.EnergyCost(0) > 0) return true;
             foreach (var modifier in definition.InteractionAttributeModifiers ??

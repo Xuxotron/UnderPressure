@@ -20,6 +20,7 @@ namespace UnderPressure.PowerGrid
         private static RequiredItem _batteryRequirement;
         private static RequiredItem _panelRequirement;
         private static RequiredItem _transformerRequirement;
+        private static RequiredItem _cellRequirement;
         private static StaffRequired _janitorRequirement;
         private static SharedInstance_TH20TH20_RoomDefinition _definitionShared;
         private static RoomDefinition _marketingRoom;
@@ -132,12 +133,14 @@ namespace UnderPressure.PowerGrid
             _batteryRequirement = EnergyRoomItems.Requirement("UnderPressure Energy Battery", EnergyRoomItems.Battery, 9112101);
             _panelRequirement = EnergyRoomItems.Requirement("UnderPressure Electrical Panel", EnergyRoomItems.Panel, 9112102);
             _transformerRequirement = EnergyRoomItems.Requirement("UnderPressure Transformer", EnergyRoomItems.Transformer, 9112103);
+            _cellRequirement = EnergyRoomItems.Requirement("UnderPressure Electrical Cell", EnergyRoomItems.Cell, 9112104);
             _janitorRequirement = CreateJanitorRequirement(marketingRoom);
             AllowRequirementInPowerPlant(_doorRequirement);
             AllowRequirementInPowerPlant(_deskRequirement);
             AllowRequirementInPowerPlant(_batteryRequirement);
             AllowRequirementInPowerPlant(_panelRequirement);
             AllowRequirementInPowerPlant(_transformerRequirement);
+            AllowRequirementInPowerPlant(_cellRequirement);
             var description = EnergyLocalization.Create("energy.room.description");
             SetDefinitionField("_type", (RoomDefinition.Type)RoomTypeValue);
             SetDefinitionField("Name", EnergyLocalization.Create("energy.room.name"));
@@ -155,11 +158,10 @@ namespace UnderPressure.PowerGrid
             SetDefinitionField("MinimumStaffCount", 0);
             SetDefinitionField("MustBeWhiteListed", false);
             SetDefinitionField("DlcPackRequired", null);
-            // Battery and electrical panel remain available in the room, but only the
-            // transformer and Marketing desk are functional requirements. The door is
-            // retained as the room's normal construction requirement.
+            // La batería y el cuadro siguen siendo opcionales. La celda es obligatoria
+            // porque cada red de alta tensión debe nacer en una de ellas.
             SetDefinitionField("_requiredItemsNew", CombineRequirements(_doorRequirement, _deskRequirement,
-                _transformerRequirement));
+                _transformerRequirement, _cellRequirement));
             SetDefinitionField("_requiredWorkingItems", _transformerRequirement?.Items ?? Array.Empty<SharedInstance<RoomItemDefinition>>());
             SetDefinitionField("_requiresStaff", _janitorRequirement == null
                 ? Array.Empty<StaffRequired>()
@@ -207,6 +209,8 @@ namespace UnderPressure.PowerGrid
                 EnergyRoomItems.PanelShared, EnergyRoomItems.Panel);
             added += RegisterSaveAsset(mapping, EnergyRoomItems.TransformerShared?.ID ?? 0,
                 EnergyRoomItems.TransformerShared, EnergyRoomItems.Transformer);
+            added += RegisterSaveAsset(mapping, EnergyRoomItems.CellShared?.ID ?? 0,
+                EnergyRoomItems.CellShared, EnergyRoomItems.Cell);
             if (added > 0)
             {
                 RefreshSerializerMappings(saveSystem, mapping);
@@ -408,6 +412,7 @@ namespace UnderPressure.PowerGrid
             EnsureRequirementItemsAvailable(worldState, _batteryRequirement);
             EnsureRequirementItemsAvailable(worldState, _panelRequirement);
             EnsureRequirementItemsAvailable(worldState, _transformerRequirement);
+            EnsureRequirementItemsAvailable(worldState, _cellRequirement);
 
             // Never call Metagame.UnlockItem for runtime definitions. That method stores
             // the definition itself in the career save, where it cannot be reconstructed
