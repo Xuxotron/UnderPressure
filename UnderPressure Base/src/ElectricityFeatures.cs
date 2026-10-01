@@ -122,10 +122,10 @@ namespace UnderPressure
             var lines = new List<string>();
             if (fixedCost > 0)
                 lines.Add(string.Format(ModLocalization.Get("item.electricity_month"),
-                    ElectricityFeatures.Scale(fixedCost) + " $"));
+                    fixedCost + " $"));
             if (perUseCost > 0)
                 lines.Add(string.Format(ModLocalization.Get("item.electricity_use"),
-                    ElectricityFeatures.Scale(perUseCost) + " $"));
+                    perUseCost + " $"));
             var current = tooltip.FunctionalDescription.text?.TrimEnd('\r', '\n', ' ', '\t');
             tooltip.FunctionalDescription.text = string.IsNullOrEmpty(current)
                 ? string.Join("\n", lines.ToArray())
