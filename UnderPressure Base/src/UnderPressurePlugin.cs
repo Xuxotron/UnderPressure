@@ -45,6 +45,7 @@ namespace UnderPressure
         internal static ConfigEntry<int> PatientIncomeSetting { get; private set; }
         internal static ConfigEntry<int> ApplicantWaitSetting { get; private set; }
         internal static ConfigEntry<int> ElectricityBillSetting { get; private set; }
+        internal static ConfigEntry<int> TreatmentVolumeSetting { get; private set; }
         internal static ConfigFile ModConfig { get; private set; }
         internal static bool IsModEnabled => EnabledSetting == null || EnabledSetting.Value;
         internal static bool ShouldSkipIntroScreens =>
@@ -152,6 +153,12 @@ namespace UnderPressure
             PatientIncomeSetting = BindPercentage("PatientIncomeDifficulty", "Reduce conjuntamente los pagos y la tolerancia del paciente al sobreprecio.");
             ApplicantWaitSetting = BindPercentage("ApplicantWait", "Tiempo entre candidatos a empleados.");
             ElectricityBillSetting = BindPercentage("ElectricityBill", "Importe de la factura mensual de electricidad.");
+            TreatmentVolumeSetting = Config.Bind(
+                "Audio",
+                "TreatmentVolume",
+                100,
+                new ConfigDescription("Volumen de los sonidos de resultado del tratamiento.",
+                    new AcceptableValueRange<int>(0, 100)));
 
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());

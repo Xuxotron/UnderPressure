@@ -421,8 +421,13 @@ namespace UnderPressure
             CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
                 UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
+            var treatmentVolume = CreateEmptySection(uiSection, content, "Treatment Volume", -468f, 82f);
+            CreateSliderRow(treatmentVolume, nativeVideoRow, "mod.treatment_volume",
+                UnderPressurePlugin.TreatmentVolumeSetting, -10f, null,
+                0f, 100f, false, false, FormatVolumePercentage);
+
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -468f,
+                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -566f,
                 new[]
                 {
                     new SliderSpec("mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting),
@@ -431,7 +436,7 @@ namespace UnderPressure
                     new SliderSpec("mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting)
                 });
             var reputation = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -768f,
+                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -866f,
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
@@ -440,7 +445,7 @@ namespace UnderPressure
                     new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1068f,
+                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1166f,
                 new[]
                 {
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
@@ -452,7 +457,7 @@ namespace UnderPressure
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1360f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1458f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,
@@ -532,13 +537,16 @@ namespace UnderPressure
             if (binding.Slider.value != value)
                 binding.Slider.SetValueWithoutNotify(value);
             if (binding.ValueLabel != null)
-                binding.ValueLabel.text = FormatPercentage(value);
-            SetNativeFillColour(binding.Slider.fillRect != null
-                ? binding.Slider.fillRect.GetComponent<Image>() : null, value);
+                binding.ValueLabel.text = binding.Formatter(value);
+            if (binding.TintFill)
+                SetNativeFillColour(binding.Slider.fillRect != null
+                    ? binding.Slider.fillRect.GetComponent<Image>() : null, value);
         }
 
         private SliderBinding CreateSliderRow(Transform section, Transform nativeVideoRow, string localizationKey,
-            ConfigEntry<int> setting, float y, Action<int> onChanged = null)
+            ConfigEntry<int> setting, float y, Action<int> onChanged = null,
+            float minimum = -100f, float maximum = 100f, bool tintFill = true,
+            bool affectedByGlobalDifficulty = true, Func<int, string> formatter = null)
         {
             var row = Instantiate(nativeVideoRow, section);
             row.name = localizationKey + " Native Row";
@@ -561,21 +569,23 @@ namespace UnderPressure
             if (sliderRect != null)
                 sliderRect.anchoredPosition += new Vector2(-5f, 0f);
             slider.onValueChanged.RemoveAllListeners();
-            slider.minValue = -100f;
-            slider.maxValue = 100f;
+            slider.minValue = minimum;
+            slider.maxValue = maximum;
             slider.wholeNumbers = true;
             slider.value = setting.Value;
+            formatter = formatter ?? FormatPercentage;
             var fillImage = slider.fillRect != null ? slider.fillRect.GetComponent<Image>() : null;
-            SetNativeFillColour(fillImage, setting.Value);
+            if (tintFill) SetNativeFillColour(fillImage, setting.Value);
             slider.onValueChanged.AddListener(value =>
             {
                 setting.Value = Mathf.RoundToInt(value);
-                valueLabel.text = FormatPercentage(setting.Value);
-                SetNativeFillColour(fillImage, setting.Value);
+                valueLabel.text = formatter(setting.Value);
+                if (tintFill) SetNativeFillColour(fillImage, setting.Value);
                 onChanged?.Invoke(setting.Value);
             });
             var canvas = row.GetComponent<CanvasGroup>() ?? row.gameObject.AddComponent<CanvasGroup>();
-            var binding = new SliderBinding(localizationKey, label, valueLabel, setting, slider, canvas);
+            var binding = new SliderBinding(localizationKey, label, valueLabel, setting, slider, canvas,
+                tintFill, affectedByGlobalDifficulty, formatter);
             _sliders.Add(binding);
             return binding;
         }
@@ -586,7 +596,8 @@ namespace UnderPressure
             _applyingGlobalDifficulty = true;
             foreach (var binding in _sliders)
             {
-                if (binding.Setting == UnderPressurePlugin.GlobalDifficultySetting) continue;
+                if (!binding.AffectedByGlobalDifficulty ||
+                    binding.Setting == UnderPressurePlugin.GlobalDifficultySetting) continue;
                 binding.Slider.value = value;
             }
             _applyingGlobalDifficulty = false;
@@ -752,6 +763,7 @@ namespace UnderPressure
         }
 
         private static string FormatPercentage(int value) => value > 0 ? "+" + value + "%" : value + "%";
+        private static string FormatVolumePercentage(int value) => value + "%";
 
         private static void SetSkipIntroScreens(bool value)
         {
@@ -890,7 +902,7 @@ namespace UnderPressure
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);
-                if (binding.ValueLabel != null) binding.ValueLabel.text = FormatPercentage(binding.Setting.Value);
+                if (binding.ValueLabel != null) binding.ValueLabel.text = binding.Formatter(binding.Setting.Value);
             }
             foreach (var group in _adaptiveGroups)
             {
@@ -1084,11 +1096,17 @@ namespace UnderPressure
             internal readonly ConfigEntry<int> Setting;
             internal readonly Slider Slider;
             internal readonly CanvasGroup RowCanvas;
+            internal readonly bool TintFill;
+            internal readonly bool AffectedByGlobalDifficulty;
+            internal readonly Func<int, string> Formatter;
             internal SliderBinding(string key, TMP_Text label, TMP_Text valueLabel, ConfigEntry<int> setting,
-                Slider slider, CanvasGroup rowCanvas)
+                Slider slider, CanvasGroup rowCanvas, bool tintFill, bool affectedByGlobalDifficulty,
+                Func<int, string> formatter)
             {
                 Key = key; Label = label; ValueLabel = valueLabel; Setting = setting;
                 Slider = slider; RowCanvas = rowCanvas;
+                TintFill = tintFill; AffectedByGlobalDifficulty = affectedByGlobalDifficulty;
+                Formatter = formatter;
             }
         }
 
