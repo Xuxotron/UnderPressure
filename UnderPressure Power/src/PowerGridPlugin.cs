@@ -63,22 +63,25 @@ namespace UnderPressure.PowerGrid
                 BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
             if (BatterySprite == null)
                 Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
-            PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>("assets/powerpanel/powerpanel.prefab");
+            PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>(
+                RoomItemDefinitionCatalog.ElectricalPanelPrefabAsset);
             if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
             {
+                ConfigurePanelGraphics();
                 // Reserve the complete floor tile in front of the panel for its future
                 // maintenance animation. Build bounds are expressed in item-space by the
                 // game and therefore remain exactly one tile despite the imported FBX scale.
                 var buildBounds = PowerPanelPrefab.GetComponent<ItemBuildBoundsComponent>() ??
                                   PowerPanelPrefab.AddComponent<ItemBuildBoundsComponent>();
-                buildBounds.center = new Vector3(0f, 0.5f, 0.5f);
-                buildBounds.size = Vector3.one;
-                buildBounds.Solid = true;
+                buildBounds.center = RoomItemDefinitionCatalog.ElectricalPanelBuildBoundsCenter;
+                buildBounds.size = RoomItemDefinitionCatalog.ElectricalPanelBuildBoundsSize;
+                buildBounds.Solid = RoomItemDefinitionCatalog.ElectricalPanelBuildBoundsSolid;
             }
 
-            var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>("Assets/PowerPanel/powerpanel icon.png");
+            var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>(
+                RoomItemDefinitionCatalog.ElectricalPanelIconTextureAsset);
             if (panelIconTexture != null)
             {
                 PowerPanelSprite = Sprite.Create(panelIconTexture,
@@ -88,6 +91,62 @@ namespace UnderPressure.PowerGrid
                 PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
             }
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
+        }
+
+        private void ConfigurePanelGraphics()
+        {
+            var material = _uiAssetBundle.LoadAsset<Material>(
+                RoomItemDefinitionCatalog.ElectricalPanelMaterialAsset);
+            var texture = _uiAssetBundle.LoadAsset<Texture2D>(
+                RoomItemDefinitionCatalog.ElectricalPanelTextureAsset);
+            var meshes = _uiAssetBundle.LoadAllAssets<Mesh>();
+
+            if (material == null)
+                Logger.LogError("No se encontro el material grafico del cuadro electrico.");
+            if (texture == null)
+                Logger.LogError("No se encontro la textura grafica del cuadro electrico.");
+            if (material != null && texture != null)
+                material.mainTexture = texture;
+
+            ConfigurePanelMesh(meshes, RoomItemDefinitionCatalog.ElectricalPanelBaseMesh, material);
+            ConfigurePanelMesh(meshes, RoomItemDefinitionCatalog.ElectricalPanelDoorMesh, material);
+        }
+
+        private void ConfigurePanelMesh(Mesh[] meshes, string meshName, Material material)
+        {
+            var target = FindChild(PowerPanelPrefab.transform, meshName);
+            var targetFilter = target?.GetComponent<MeshFilter>();
+            if (targetFilter == null)
+            {
+                Logger.LogError("El prefab del cuadro no contiene el objeto de malla '" + meshName + "'.");
+                return;
+            }
+            Mesh selected = null;
+            foreach (var mesh in meshes ?? Array.Empty<Mesh>())
+                if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
+                {
+                    selected = mesh;
+                    break;
+                }
+            if (selected == null)
+                Logger.LogError("El AssetBundle no contiene la malla '" + meshName + "'.");
+            else
+                targetFilter.sharedMesh = selected;
+            var renderer = target.GetComponent<MeshRenderer>();
+            if (renderer != null && material != null)
+                renderer.sharedMaterial = material;
+        }
+
+        private static Transform FindChild(Transform root, string objectName)
+        {
+            if (root == null) return null;
+            if (string.Equals(root.name, objectName, StringComparison.Ordinal)) return root;
+            for (var index = 0; index < root.childCount; ++index)
+            {
+                var found = FindChild(root.GetChild(index), objectName);
+                if (found != null) return found;
+            }
+            return null;
         }
 
     }

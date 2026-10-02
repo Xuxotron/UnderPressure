@@ -61,17 +61,15 @@ namespace UnderPressure.PowerGrid
         // AssetIDMapping reserves wrapper ID - 1 for the wrapped instance. Keep
         // these pairs apart; consecutive wrapper IDs collide with that rule.
         private const int BatterySharedId = 9112101;
-        private const int PanelSharedId = 9112111;
         private const int TransformerSharedId = 9112121;
         private const int CellSharedId = 9112131;
         private static readonly Guid BatteryGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481101");
-        private static readonly Guid PanelGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481102");
         private static readonly Guid TransformerGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481103");
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
 
         internal const string BatteryTag = "under pressure energy battery";
-        internal const string PanelTag = "under pressure electrical panel";
+        internal const string PanelTag = RoomItemDefinitionCatalog.ElectricalPanelDebugTag;
         internal const string TransformerTag = "under pressure transformer";
         internal const string CellTag = "under pressure electrical cell";
 
@@ -97,17 +95,16 @@ namespace UnderPressure.PowerGrid
             var campaignTable = FindCampaignMenuSource(database.RoomItems);
             InstallDeskMaintenanceInteraction();
             var filingCabinet = FindItem(database.RoomItems, "filing cabinet", "filing", "archivador");
-            var wallItem = FindWallItem(database.RoomItems);
             var pharmacyMachine = FindPharmacyMachine(rooms);
             var batteryVisual = FindBatteryVisual(metagame);
             var radiator = FindItem(database.RoomItems, "radiator");
 
-            if (MarketingDesk == null || filingCabinet == null || wallItem == null || pharmacyMachine == null ||
+            if (MarketingDesk == null || filingCabinet == null || pharmacyMachine == null ||
                 batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null ||
                 PowerGridPlugin.PowerPanelSprite == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudieron localizar todos los objetos base de la Sala de energia: " +
-                    $"desk={MarketingDesk != null}, filing={filingCabinet != null}, wall={wallItem != null}, " +
+                    $"desk={MarketingDesk != null}, filing={filingCabinet != null}, " +
                     $"pharmacy={pharmacyMachine != null}, " +
                     $"battery={batteryVisual != null}, radiator={radiator != null}, " +
                     $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}, " +
@@ -132,30 +129,24 @@ namespace UnderPressure.PowerGrid
 
             if (Panel == null)
             {
-                Panel = CloneBase(filingCabinet, PanelTag,
-                    PanelGuid,
-                    "energy.panel.name", "energy.panel.description");
-                CopyWallPlacement(Panel, wallItem);
-                Set(Panel, "_prefab", PowerGridPlugin.PowerPanelPrefab);
-                Set(Panel, "_blueprintPrefab", PowerGridPlugin.PowerPanelPrefab);
-                Set(Panel, "_icon", PowerGridPlugin.PowerPanelSprite);
-                Set(Panel, "_iconWithoutBacking", PowerGridPlugin.PowerPanelSprite);
-                Set(Panel, "_canBePlacedIn", Array.Empty<RoomDefinition.Type>());
-                Set(Panel, "_cantBePlacedIn", Array.Empty<RoomDefinition.Type>());
-                Set(Panel, "_singlePlace", false);
-                Set(Panel, "_hasCollision", true);
-                Set(Panel, "_occupyWallOnly", false);
-                Set(Panel, "_affectsNavigation", false);
-                Set(Panel, "_generatesElectricity", false);
-                Set(Panel, "_ignoredByJanitors", true);
-                Set(Panel, "_maintenanceModifer", 0f);
-                Set(Panel, "_prestige", 0f);
-                Set(Panel, "_hospitalLevelPoints", 0f);
-                Set(Panel, "_roomModifiers", Array.Empty<RoomModifier>());
-                Set(Panel, "_interactionAttributeModifiers", Array.Empty<InteractionAttributeModifier>());
-                Set(Panel, "_upgrades", Array.Empty<SharedInstance<RoomItemUpgradeDefinition>>());
-                DisableOwnInteractions(Panel);
-                PanelShared = CreateWrapper(Panel, PanelSharedId, "UnderPressure Electrical Panel");
+                var maintenanceInteraction = CreatePanelMaintenanceInteraction(pharmacyMachine);
+                if (maintenanceInteraction == null)
+                {
+                    PowerGridPlugin.Log.LogError(
+                        "No se encontro una interaccion Maintenance nativa para el cuadro electrico.");
+                    return false;
+                }
+                Panel = RoomItemDefinitionCatalog.CreateElectricalPanel(new ElectricalPanelRuntimeContext
+                {
+                    Name = EnergyLocalization.Create("energy.panel.name"),
+                    Description = EnergyLocalization.Create("energy.panel.description"),
+                    Prefab = PowerGridPlugin.PowerPanelPrefab,
+                    Icon = PowerGridPlugin.PowerPanelSprite,
+                    MaintenanceInteraction = maintenanceInteraction,
+                    MaintenanceAttributeModifiers = GetMaintenanceAttributeModifiers(pharmacyMachine)
+                });
+                PanelShared = CreateWrapper(Panel, RoomItemDefinitionCatalog.ElectricalPanelSharedId,
+                    "UnderPressure Electrical Panel");
                 additions.Add(PanelShared);
             }
 
@@ -481,40 +472,30 @@ namespace UnderPressure.PowerGrid
             return null;
         }
 
-        private static RoomItemDefinition FindWallItem(SharedInstance<RoomItemDefinition>[] items)
+        private static InteractionDefinition CreatePanelMaintenanceInteraction(RoomItemDefinition source)
         {
-            RoomItemDefinition fallback = null;
-            foreach (var shared in items)
+            foreach (var interaction in source?.Interactions ?? Array.Empty<InteractionDefinition>())
             {
-                var item = shared?.Instance;
-                if (item == null || !item.PlaceOnWall || !item.OccupyWallOnly) continue;
-                if (fallback == null) fallback = item;
-                var identity = Identity(item);
-                if (Contains(identity, "poster") || Contains(identity, "picture") ||
-                    Contains(identity, "painting")) return item;
+                if (interaction == null || interaction.Deprecated ||
+                    interaction.Type != InteractionAttributeModifier.Type.Maintain ||
+                    !string.Equals(interaction.Name, "Maintenance", StringComparison.OrdinalIgnoreCase)) continue;
+                var clone = (InteractionDefinition)MemberwiseCloneMethod.Invoke(interaction, null);
+                clone.Sockets = new[] { RoomItemDefinitionCatalog.ElectricalPanelMaintenanceSocket };
+                clone.Exclusive = true;
+                clone.MaxQueue = 1;
+                return clone;
             }
-            return fallback;
+            return null;
         }
 
-        private static void CopyWallPlacement(RoomItemDefinition target, RoomItemDefinition source)
+        private static InteractionAttributeModifier[] GetMaintenanceAttributeModifiers(RoomItemDefinition source)
         {
-            Set(target, "_placeOnWall", source.PlaceOnWall);
-            Set(target, "_occupyWallOnly", source.OccupyWallOnly);
-            Set(target, "_allowOnCorner", source.AllowOnCorner);
-            Set(target, "_gridSnap", source.GridSnap);
-            Set(target, "_rotationSnap", source.RotationSnap);
-            Set(target, "_defaultRotation", source.DefaultRotation);
-            Set(target, "_wallMagnetism", source.WallMagnetism);
-            Set(target, "_wallMagnetismRotation", source.WallMagnetismRotation);
-            Set(target, "_wallMagnetismDistance", source.WallMagnetismDistance);
-            Set(target, "_fixedWallPlacement", source.FixedWallPlacement);
-            // La colocación en pared también depende del tipo de colisión y de sus
-            // límites verticales. Conservar los del archivador dejaba la celda como
-            // un objeto de suelo aunque las banderas de pared estuvieran activadas.
-            Set(target, "_collisionType", source.ItemCollisionType);
-            Set(target, "_useVerticalCollision", source.UseVerticalCollision);
-            Set(target, "_removeWalls", source.RemoveWalls);
-            Set(target, "_placementEffect", source.PlacementEffect);
+            var result = new List<InteractionAttributeModifier>();
+            foreach (var modifier in source?.InteractionAttributeModifiers ??
+                     Array.Empty<InteractionAttributeModifier>())
+                if (modifier != null && modifier._interactionType == InteractionAttributeModifier.Type.Maintain)
+                    result.Add(modifier);
+            return result.ToArray();
         }
 
         private static string Identity(RoomItemDefinition item)

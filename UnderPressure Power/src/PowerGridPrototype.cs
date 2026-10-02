@@ -47,8 +47,6 @@ namespace UnderPressure.PowerGrid
         private const int LegacyDefaultContractedEnergy = 2000;
         private const int EnergyHundredths = 100;
         private const int BatteryMaximumHundredths = 200 * EnergyHundredths;
-        private const int LowVoltageMaximumCellsPerPanel = 15;
-        private const int DefaultPanelCapacity = 20;
         private const int DefaultCellCapacity = 800;
         private const float PowerTileSize = 1f;
         private const float PanelAnimationSpeed = 7f;
@@ -950,7 +948,8 @@ namespace UnderPressure.PowerGrid
             // Una red desconectada puede prepararse libremente. En cuanto toca un cuadro,
             // todas sus ramas comparten el mismo presupuesto total de quince celdas.
             foreach (var panel in connectedPanels)
-                if (CountLowVoltageCellsForPanel(panel, lowCells) > LowVoltageMaximumCellsPerPanel)
+                if (CountLowVoltageCellsForPanel(panel, lowCells) >
+                    RoomItemDefinitionCatalog.ElectricalPanelMaximumConnectedTiles)
                     return false;
             return true;
         }
@@ -1683,7 +1682,8 @@ namespace UnderPressure.PowerGrid
                 foreach (var cable in CardinalNeighbours(panel))
                 {
                     if (!_lowVoltageCells.Contains(cable) || _lowVoltagePanelSource.ContainsKey(cable) ||
-                        assignedPerPanel[panel] >= LowVoltageMaximumCellsPerPanel) continue;
+                        assignedPerPanel[panel] >=
+                        RoomItemDefinitionCatalog.ElectricalPanelMaximumConnectedTiles) continue;
                     _lowVoltagePhysicalDistance[cable] = 1;
                     _lowVoltagePanelSource[cable] = panel;
                     assignedPerPanel[panel]++;
@@ -1700,7 +1700,8 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!_lowVoltageCells.Contains(neighbour) || _lowVoltagePanelSource.ContainsKey(neighbour))
                         continue;
-                    if (assignedPerPanel[source] >= LowVoltageMaximumCellsPerPanel) continue;
+                    if (assignedPerPanel[source] >=
+                        RoomItemDefinitionCatalog.ElectricalPanelMaximumConnectedTiles) continue;
                     _lowVoltagePhysicalDistance[neighbour] = nextDistance;
                     _lowVoltagePanelSource[neighbour] = source;
                     assignedPerPanel[source]++;
@@ -1791,7 +1792,8 @@ namespace UnderPressure.PowerGrid
             return x != 0 ? x : left.Y.CompareTo(right.Y);
         }
 
-        private static int PanelCapacity(PowerCoord panel) => DefaultPanelCapacity;
+        private static int PanelCapacity(PowerCoord panel) =>
+            RoomItemDefinitionCatalog.ElectricalPanelMaximumLoad;
 
         private static int CellCapacity(PowerCoord cell) => DefaultCellCapacity;
 
@@ -2126,6 +2128,17 @@ namespace UnderPressure.PowerGrid
         {
             var facing = panel.GridRotation.DirectionVector();
             return PowerCoord.FromWorldPosition(panel.WorldPosition + facing * 0.5f);
+        }
+
+        internal static int ConnectedLowVoltageTiles(RoomItem panel)
+        {
+            var active = Active;
+            if (active == null || panel == null || !EnergyRoomItems.IsPanel(panel)) return 0;
+            var panelCell = GetPanelCell(panel);
+            var count = 0;
+            foreach (var source in active._lowVoltagePanelSource.Values)
+                if (source.Equals(panelCell)) count++;
+            return count;
         }
 
         private void RebuildGeneratorVisual()
