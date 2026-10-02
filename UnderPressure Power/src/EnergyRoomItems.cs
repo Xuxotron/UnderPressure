@@ -69,7 +69,7 @@ namespace UnderPressure.PowerGrid
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
 
         internal const string BatteryTag = "under pressure energy battery";
-        internal const string PanelTag = RoomItemDefinitionCatalog.ElectricalPanel.ElectricalPanelDebugTag;
+        internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
         internal const string TransformerTag = "under pressure transformer";
         internal const string CellTag = "under pressure electrical cell";
 
@@ -136,8 +136,8 @@ namespace UnderPressure.PowerGrid
                         "No se encontro una interaccion Maintenance nativa para el cuadro electrico.");
                     return false;
                 }
-                Panel = RoomItemDefinitionCatalog.ElectricalPanel.CreateElectricalPanel(
-                    new RoomItemDefinitionCatalog.ElectricalPanel.ElectricalPanelRuntimeContext
+                Panel = ElectricalPanelNativeParameters.CreateElectricalPanel(
+                    new ElectricalPanelNativeParameters.ElectricalPanelRuntimeContext
                     {
                         Name = EnergyLocalization.Create("energy.panel.name"),
                         Description = EnergyLocalization.Create("energy.panel.description"),
@@ -147,7 +147,7 @@ namespace UnderPressure.PowerGrid
                         MaintenanceAttributeModifiers = GetMaintenanceAttributeModifiers(pharmacyMachine)
                     });
                 PanelShared = CreateWrapper(Panel,
-                    RoomItemDefinitionCatalog.ElectricalPanel.ElectricalPanelSharedId,
+                    ElectricalPanelNativeParameters.ElectricalPanelSharedId,
                     "UnderPressure Electrical Panel");
                 additions.Add(PanelShared);
             }
