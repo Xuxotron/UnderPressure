@@ -69,7 +69,7 @@ namespace UnderPressure.PowerGrid
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
 
         internal const string BatteryTag = "under pressure energy battery";
-        internal const string PanelTag = RoomItemDefinitionCatalog.ElectricalPanelDebugTag;
+        internal const string PanelTag = RoomItemDefinitionCatalog.ElectricalPanel.ElectricalPanelDebugTag;
         internal const string TransformerTag = "under pressure transformer";
         internal const string CellTag = "under pressure electrical cell";
 
@@ -136,16 +136,18 @@ namespace UnderPressure.PowerGrid
                         "No se encontro una interaccion Maintenance nativa para el cuadro electrico.");
                     return false;
                 }
-                Panel = RoomItemDefinitionCatalog.CreateElectricalPanel(new ElectricalPanelRuntimeContext
-                {
-                    Name = EnergyLocalization.Create("energy.panel.name"),
-                    Description = EnergyLocalization.Create("energy.panel.description"),
-                    Prefab = PowerGridPlugin.PowerPanelPrefab,
-                    Icon = PowerGridPlugin.PowerPanelSprite,
-                    MaintenanceInteraction = maintenanceInteraction,
-                    MaintenanceAttributeModifiers = GetMaintenanceAttributeModifiers(pharmacyMachine)
-                });
-                PanelShared = CreateWrapper(Panel, RoomItemDefinitionCatalog.ElectricalPanelSharedId,
+                Panel = RoomItemDefinitionCatalog.ElectricalPanel.CreateElectricalPanel(
+                    new RoomItemDefinitionCatalog.ElectricalPanel.ElectricalPanelRuntimeContext
+                    {
+                        Name = EnergyLocalization.Create("energy.panel.name"),
+                        Description = EnergyLocalization.Create("energy.panel.description"),
+                        Prefab = PowerGridPlugin.PowerPanelPrefab,
+                        Icon = PowerGridPlugin.PowerPanelSprite,
+                        MaintenanceInteraction = maintenanceInteraction,
+                        MaintenanceAttributeModifiers = GetMaintenanceAttributeModifiers(pharmacyMachine)
+                    });
+                PanelShared = CreateWrapper(Panel,
+                    RoomItemDefinitionCatalog.ElectricalPanel.ElectricalPanelSharedId,
                     "UnderPressure Electrical Panel");
                 additions.Add(PanelShared);
             }
