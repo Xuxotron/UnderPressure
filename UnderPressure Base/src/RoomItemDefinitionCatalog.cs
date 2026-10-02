@@ -41,7 +41,6 @@ namespace UnderPressure
 
             // PRECIO, DISPONIBILIDAD Y PRESTIGIO
             Set(item, "_cost", 200); // Precio de compra en dinero normal.
-            Set(item, "_energyCost", 0); // Coste energético mensual nativo añadido a la factura al instalarlo.
             Set(item, "_initiallyAvailable", true); // Disponible sin recibir previamente un desbloqueo.
             Set(item, "_mustBeWhiteListed", false); // Exige que otro sistema lo incluya en la lista de objetos permitidos.
             Set(item, "_saveInRoomLayout", true); // Permite conservarlo dentro de plantillas o diseños de sala.
@@ -142,6 +141,7 @@ namespace UnderPressure
             Set(item, "_canBePickedUp", true); // Permite recogerlo y recolocarlo.
             Set(item, "_canDragHoldSelect", true); // Permite selección mantenida y arrastre.
             Set(item, "_canBeSold", true); // Permite venderlo.
+            Set(item, "_energyCost", 0); // Coste energético mensual nativo añadido a la factura al instalarlo.
             Set(item, "_generatesElectricity", false); // Marca utilizada por el sistema eléctrico nativo del juego.
             Set(item, "_ecoRatingModifier", 0f); // Modificación aplicada a la valoración ecológica.
             Set(item, "_ambulanceConfig", null); // Configuración de ambulancia; null para objetos normales.
