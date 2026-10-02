@@ -8,7 +8,17 @@ namespace UnderPressure
 {
     public static class RoomItemDefinitionCatalog
     {
+        private static void Set(RoomItemDefinition item, string fieldName, object value)
+        {
+            var field = AccessTools.Field(typeof(RoomItemDefinition), fieldName);
+            if (field == null)
+                throw new MissingFieldException(typeof(RoomItemDefinition).FullName, fieldName);
+            field.SetValue(item, value);
+        }
+
+        // =================
         // CUADRO ELÉCTRICO
+        // =================
 
         public const string ElectricalPanelDebugTag = "under pressure electrical panel"; // Identificador interno legible.
         public const int ElectricalPanelSharedId = 9112111; // Identificador del contenedor SharedInstance.
@@ -152,13 +162,6 @@ namespace UnderPressure
             return item;
         }
 
-        private static void Set(RoomItemDefinition item, string fieldName, object value)
-        {
-            var field = AccessTools.Field(typeof(RoomItemDefinition), fieldName);
-            if (field == null)
-                throw new MissingFieldException(typeof(RoomItemDefinition).FullName, fieldName);
-            field.SetValue(item, value);
-        }
     }
 
     public sealed class ElectricalPanelRuntimeContext
@@ -171,7 +174,11 @@ namespace UnderPressure
         public InteractionAttributeModifier[] MaintenanceAttributeModifiers;
     }
 
-    // PARÁMETROS ESPECÍFICOS DEL CUADRO
+    // =================
+    // PARÁMETROS ESPECÍFICOS
+    // =================
+
+    // CUADRO ELÉCTRICO
     public static class ElectricalPanelParameters
     {
         public const int MaximumConnectedTiles = 15; // Máximo de tiles de baja tensión conectados.
@@ -179,7 +186,11 @@ namespace UnderPressure
         public const float WearPerConnectedTile = 0.01f; // Desgaste por segundo aportado por cada tile conectado.
     }
 
-    // PARÁMETROS PREFAB
+    // =================
+    // PARÁMETROS PREFABS
+    // =================
+
+    // CUADRO ELÉCTRICO
     public static class ElectricalPanelPrefabParameters
     {
         public const string PrefabAsset = "assets/powerpanel/powerpanel.prefab"; // Prefab cargado desde el AssetBundle.
