@@ -64,7 +64,7 @@ namespace UnderPressure.PowerGrid
             if (BatterySprite == null)
                 Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
             PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>(
-                ElectricalPanelParameters.PrefabAsset);
+                ElectricalPanelPrefabParameters.PrefabAsset);
             if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
@@ -75,13 +75,13 @@ namespace UnderPressure.PowerGrid
                 // game and therefore remain exactly one tile despite the imported FBX scale.
                 var buildBounds = PowerPanelPrefab.GetComponent<ItemBuildBoundsComponent>() ??
                                   PowerPanelPrefab.AddComponent<ItemBuildBoundsComponent>();
-                buildBounds.center = ElectricalPanelParameters.BuildBoundsCenter;
-                buildBounds.size = ElectricalPanelParameters.BuildBoundsSize;
-                buildBounds.Solid = ElectricalPanelParameters.BuildBoundsSolid;
+                buildBounds.center = ElectricalPanelPrefabParameters.BuildBoundsCenter;
+                buildBounds.size = ElectricalPanelPrefabParameters.BuildBoundsSize;
+                buildBounds.Solid = ElectricalPanelPrefabParameters.BuildBoundsSolid;
             }
 
             var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>(
-                ElectricalPanelParameters.IconTextureAsset);
+                ElectricalPanelPrefabParameters.IconTextureAsset);
             if (panelIconTexture != null)
             {
                 PowerPanelSprite = Sprite.Create(panelIconTexture,
@@ -96,9 +96,9 @@ namespace UnderPressure.PowerGrid
         private void ConfigurePanelGraphics()
         {
             var material = _uiAssetBundle.LoadAsset<Material>(
-                ElectricalPanelParameters.MaterialAsset);
+                ElectricalPanelPrefabParameters.MaterialAsset);
             var texture = _uiAssetBundle.LoadAsset<Texture2D>(
-                ElectricalPanelParameters.TextureAsset);
+                ElectricalPanelPrefabParameters.TextureAsset);
             var meshes = _uiAssetBundle.LoadAllAssets<Mesh>();
 
             if (material == null)
@@ -108,8 +108,8 @@ namespace UnderPressure.PowerGrid
             if (material != null && texture != null)
                 material.mainTexture = texture;
 
-            ConfigurePanelMesh(meshes, ElectricalPanelParameters.BaseMesh, material);
-            ConfigurePanelMesh(meshes, ElectricalPanelParameters.DoorMesh, material);
+            ConfigurePanelMesh(meshes, ElectricalPanelPrefabParameters.BaseMesh, material);
+            ConfigurePanelMesh(meshes, ElectricalPanelPrefabParameters.DoorMesh, material);
         }
 
         private void ConfigurePanelMesh(Mesh[] meshes, string meshName, Material material)

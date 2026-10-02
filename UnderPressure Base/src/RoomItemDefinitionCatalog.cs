@@ -41,6 +41,7 @@ namespace UnderPressure
 
             // PRECIO, DISPONIBILIDAD Y PRESTIGIO
             Set(item, "_cost", 200); // Precio de compra en dinero normal.
+            Set(item, "_canBeSold", true); // Permite venderlo.
             Set(item, "_initiallyAvailable", true); // Disponible sin recibir previamente un desbloqueo.
             Set(item, "_mustBeWhiteListed", false); // Exige que otro sistema lo incluya en la lista de objetos permitidos.
             Set(item, "_saveInRoomLayout", true); // Permite conservarlo dentro de plantillas o diseños de sala.
@@ -140,7 +141,6 @@ namespace UnderPressure
             // MANIPULACIÓN, ELECTRICIDAD NATIVA Y AMBULANCIAS
             Set(item, "_canBePickedUp", true); // Permite recogerlo y recolocarlo.
             Set(item, "_canDragHoldSelect", true); // Permite selección mantenida y arrastre.
-            Set(item, "_canBeSold", true); // Permite venderlo.
             Set(item, "_energyCost", 0); // Coste energético mensual nativo añadido a la factura al instalarlo.
             Set(item, "_generatesElectricity", false); // Marca utilizada por el sistema eléctrico nativo del juego.
             Set(item, "_ecoRatingModifier", 0f); // Modificación aplicada a la valoración ecológica.
@@ -177,6 +177,11 @@ namespace UnderPressure
         public const int MaximumConnectedTiles = 15; // Máximo de tiles de baja tensión conectados.
         public const int MaximumLoad = 20; // Carga máxima soportada.
         public const float WearPerConnectedTile = 0.01f; // Desgaste por segundo aportado por cada tile conectado.
+    }
+
+    // PARÁMETROS PREFAB
+    public static class ElectricalPanelPrefabParameters
+    {
         public const string PrefabAsset = "assets/powerpanel/powerpanel.prefab"; // Prefab cargado desde el AssetBundle.
         public const string ModelSourceAsset = "Assets/PowerPanel/powerpanel.FBX"; // Modelo fuente del proyecto de Unity.
         public const string MaterialAsset = "Assets/PowerPanel/Material #25.mat"; // Material cargado desde el AssetBundle.
