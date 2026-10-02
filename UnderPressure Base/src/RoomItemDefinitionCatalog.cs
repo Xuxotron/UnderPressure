@@ -17,9 +17,10 @@ namespace UnderPressure
         }
 
         // =================
-        // CUADRO ELÉCTRICO
+        // PARÁMETROS NATIVOS
         // =================
 
+        // CUADRO ELÉCTRICO
         public static class ElectricalPanel
         {
             public const string ElectricalPanelDebugTag = "under pressure electrical panel"; // Identificador interno legible.
