@@ -949,7 +949,7 @@ namespace UnderPressure.PowerGrid
             // todas sus ramas comparten el mismo presupuesto total de quince celdas.
             foreach (var panel in connectedPanels)
                 if (CountLowVoltageCellsForPanel(panel, lowCells) >
-                    ElectricalPanelParameters.MaximumConnectedTiles)
+                    ElectricalPanelSpecialParameters.MaximumConnectedTiles)
                     return false;
             return true;
         }
@@ -1683,7 +1683,7 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!_lowVoltageCells.Contains(cable) || _lowVoltagePanelSource.ContainsKey(cable) ||
                         assignedPerPanel[panel] >=
-                        ElectricalPanelParameters.MaximumConnectedTiles) continue;
+                        ElectricalPanelSpecialParameters.MaximumConnectedTiles) continue;
                     _lowVoltagePhysicalDistance[cable] = 1;
                     _lowVoltagePanelSource[cable] = panel;
                     assignedPerPanel[panel]++;
@@ -1701,7 +1701,7 @@ namespace UnderPressure.PowerGrid
                     if (!_lowVoltageCells.Contains(neighbour) || _lowVoltagePanelSource.ContainsKey(neighbour))
                         continue;
                     if (assignedPerPanel[source] >=
-                        ElectricalPanelParameters.MaximumConnectedTiles) continue;
+                        ElectricalPanelSpecialParameters.MaximumConnectedTiles) continue;
                     _lowVoltagePhysicalDistance[neighbour] = nextDistance;
                     _lowVoltagePanelSource[neighbour] = source;
                     assignedPerPanel[source]++;
@@ -1793,7 +1793,7 @@ namespace UnderPressure.PowerGrid
         }
 
         private static int PanelCapacity(PowerCoord panel) =>
-            ElectricalPanelParameters.MaximumLoad;
+            ElectricalPanelSpecialParameters.MaximumLoad;
 
         private static int CellCapacity(PowerCoord cell) => DefaultCellCapacity;
 
@@ -2341,7 +2341,7 @@ namespace UnderPressure.PowerGrid
             if (visual != null)
                 foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
                     if (renderer != null) top = Mathf.Max(top, renderer.bounds.max.y + 0.08f);
-            if (ElectricityGameplay.TryGetConfiguredRule(item.Definition, out _, out _, out _, out var height))
+            if (ElectricityGameplay.TryGetConfiguredRule(item.Definition, out _, out _, out var height))
                 top += height;
             return new Vector3(center.x, top, center.z);
         }

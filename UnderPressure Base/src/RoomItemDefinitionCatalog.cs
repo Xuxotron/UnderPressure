@@ -8,13 +8,7 @@ namespace UnderPressure
 {
     public static class RoomItemDefinitionCatalog
     {
-        private static void Set(RoomItemDefinition item, string fieldName, object value)
-        {
-            var field = AccessTools.Field(typeof(RoomItemDefinition), fieldName);
-            if (field == null)
-                throw new MissingFieldException(typeof(RoomItemDefinition).FullName, fieldName);
-            field.SetValue(item, value);
-        }
+        private static void Set(RoomItemDefinition item, string fieldName, object value) { var field = AccessTools.Field(typeof(RoomItemDefinition), fieldName); if (field == null) throw new MissingFieldException(typeof(RoomItemDefinition).FullName, fieldName); field.SetValue(item, value); }
 
         // =================
         // PARÁMETROS NATIVOS
@@ -175,18 +169,224 @@ namespace UnderPressure
                 return item;
             }
         }
+
+        // RECEPCIÓN
+        public static class Reception
+        {
+            public const string Prefab = "RI_Reception";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 3); }
+        }
+
+        // PUESTO DE ENFERMERÍA
+        public static class WardNurseStation
+        {
+            public const string Prefab = "RI_Ward_Nurse_Station";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 3); }
+        }
+
+        // ESCRITORIO
+        public static class OfficeDesk
+        {
+            public const string Prefab = "RI_OfficeDesk";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 3); }
+        }
+
+        // EXPENDEDORA DE BEBIDAS
+        public static class VendingMachineDrinks
+        {
+            public const string Prefab = "RI_VendingMachine_Drinks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE BEBIDAS ENERGÉTICAS
+        public static class VendingMachineEnergyDrinks
+        {
+            public const string Prefab = "RI_VendingMachine_EnergyDrinks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE BEBIDAS DE LUJO
+        public static class VendingMachineLuxuryDrinks
+        {
+            public const string Prefab = "RI_VendingMachine_LuxuryDrinks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE BEBIDAS DE APUESTAS
+        public static class VendingMachineGambleDrinks
+        {
+            public const string Prefab = "RI_VendingMachine_GambleDrinks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE BEBIDAS LAXANTES
+        public static class VendingMachineLaxativeDrinks
+        {
+            public const string Prefab = "RI_VendingMachine_Drinks_Laxative";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE APERITIVOS
+        public static class VendingMachineSnacks
+        {
+            public const string Prefab = "RI_VendingMachine_Snacks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE APERITIVOS SALADOS
+        public static class VendingMachineSaltySnacks
+        {
+            public const string Prefab = "RI_VendingMachine_SaltySnacks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE APERITIVOS DE LUJO
+        public static class VendingMachineLuxurySnacks
+        {
+            public const string Prefab = "RI_VendingMachine_LuxurySnacks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE APERITIVOS ESPONJA
+        public static class VendingMachineSpongeSnacks
+        {
+            public const string Prefab = "RI_VendingMachine_SpongeSnacks";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE APERITIVOS DE JUGUETE
+        public static class VendingMachineToySnacks
+        {
+            public const string Prefab = "RI_VendingMachine_Snacks_Toy";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE CAVIAR
+        public static class VendingMachineCaviarSnack
+        {
+            public const string Prefab = "RI_VendingMachine_CaviarSnack";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE LIMONES
+        public static class VendingMachineLemon
+        {
+            public const string Prefab = "RI_Grid_Vending_Lemon_V1";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE TOMATES
+        public static class VendingMachineTomatoes
+        {
+            public const string Prefab = "RI_Grid_Vending_Tomatoes_V1";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE ZANAHORIAS
+        public static class VendingMachineCarrot
+        {
+            public const string Prefab = "RI_Grid_Vending_Carrot_V1";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE AGUA
+        public static class VendingMachineWater
+        {
+            public const string Prefab = "RI_Grid_Vending_Water_V1";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // EXPENDEDORA DE KEBAB RETRO
+        public static class VendingMachineRetroKebab
+        {
+            public const string Prefab = "RI_IP_Retro_Kebab_Vending_Machine_V1";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 2); }
+        }
+
+        // SECAMANOS
+        public static class ToiletHandDryer
+        {
+            public const string Prefab = "RI_ToiletHandDryer";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 5); }
+        }
+
+        // SECAMANOS DORADO
+        public static class ToiletHandDryerGold
+        {
+            public const string Prefab = "RI_ToiletHandDryer_Gold";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 5); }
+        }
+
+        // MÁQUINA DE DIAGNÓSTICO
+        public static class DiagnosisMachine
+        {
+            public const string Prefab = "RI_DiagnosisMachine";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 150); }
+        }
+
+        // MÁQUINA DE CABEZAS HUECAS
+        public static class LightHeadedMachine
+        {
+            public const string Prefab = "RI_Machine_LightHeaded";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 350); }
+        }
+
+        // DISPENSADOR DE MEDICAMENTOS
+        public static class DrugDispenser
+        {
+            public const string Prefab = "RI_DrugDispenser";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 200); }
+        }
+
+        // CONSOLA DE CONTROL
+        public static class MachineControlConsole
+        {
+            public const string Prefab = "RI_Machine_Control_Console";
+            public static void Apply(RoomItemDefinition item) { Set(item, "_energyCost", 10); }
+        }
+
+        public static bool ApplyNativeEnergyCost(RoomItemDefinition item)
+        {
+            var prefab = item?.GetPrefab(0)?.name;
+            switch (prefab)
+            {
+                case Reception.Prefab: Reception.Apply(item); return true;
+                case WardNurseStation.Prefab: WardNurseStation.Apply(item); return true;
+                case OfficeDesk.Prefab: OfficeDesk.Apply(item); return true;
+                case VendingMachineDrinks.Prefab: VendingMachineDrinks.Apply(item); return true;
+                case VendingMachineEnergyDrinks.Prefab: VendingMachineEnergyDrinks.Apply(item); return true;
+                case VendingMachineLuxuryDrinks.Prefab: VendingMachineLuxuryDrinks.Apply(item); return true;
+                case VendingMachineGambleDrinks.Prefab: VendingMachineGambleDrinks.Apply(item); return true;
+                case VendingMachineLaxativeDrinks.Prefab: VendingMachineLaxativeDrinks.Apply(item); return true;
+                case VendingMachineSnacks.Prefab: VendingMachineSnacks.Apply(item); return true;
+                case VendingMachineSaltySnacks.Prefab: VendingMachineSaltySnacks.Apply(item); return true;
+                case VendingMachineLuxurySnacks.Prefab: VendingMachineLuxurySnacks.Apply(item); return true;
+                case VendingMachineSpongeSnacks.Prefab: VendingMachineSpongeSnacks.Apply(item); return true;
+                case VendingMachineToySnacks.Prefab: VendingMachineToySnacks.Apply(item); return true;
+                case VendingMachineCaviarSnack.Prefab: VendingMachineCaviarSnack.Apply(item); return true;
+                case VendingMachineLemon.Prefab: VendingMachineLemon.Apply(item); return true;
+                case VendingMachineTomatoes.Prefab: VendingMachineTomatoes.Apply(item); return true;
+                case VendingMachineCarrot.Prefab: VendingMachineCarrot.Apply(item); return true;
+                case VendingMachineWater.Prefab: VendingMachineWater.Apply(item); return true;
+                case VendingMachineRetroKebab.Prefab: VendingMachineRetroKebab.Apply(item); return true;
+                case ToiletHandDryer.Prefab: ToiletHandDryer.Apply(item); return true;
+                case ToiletHandDryerGold.Prefab: ToiletHandDryerGold.Apply(item); return true;
+                case DiagnosisMachine.Prefab: DiagnosisMachine.Apply(item); return true;
+                case LightHeadedMachine.Prefab: LightHeadedMachine.Apply(item); return true;
+                case DrugDispenser.Prefab: DrugDispenser.Apply(item); return true;
+                case MachineControlConsole.Prefab: MachineControlConsole.Apply(item); return true;
+                default: return false;
+            }
+        }
     }
 
     // =================
-    // PARÁMETROS ESPECÍFICOS
+    // PARÁMETROS NUEVOS
     // =================
 
     // CUADRO ELÉCTRICO
-    public static class ElectricalPanelParameters
+    public static class ElectricalPanelNewParameters
     {
-        public const int MaximumConnectedTiles = 15; // Máximo de tiles de baja tensión conectados.
-        public const int MaximumLoad = 20; // Carga máxima soportada.
-        public const float WearPerConnectedTile = 0.01f; // Desgaste por segundo aportado por cada tile conectado.
     }
 
     // =================
@@ -208,5 +408,17 @@ namespace UnderPressure
         public static readonly Vector3 BuildBoundsCenter = new Vector3(0f, 0.5f, 0.5f); // Centro del volumen reservado.
         public static readonly Vector3 BuildBoundsSize = Vector3.one; // Tamaño del volumen reservado.
         public const bool BuildBoundsSolid = true; // El volumen reservado bloquea la colocación.
+    }
+
+    // =================
+    // PARÁMETROS ESPECIALES
+    // =================
+
+    // CUADRO ELÉCTRICO
+    public static class ElectricalPanelSpecialParameters
+    {
+        public const int MaximumConnectedTiles = 15; // Máximo de tiles de baja tensión conectados.
+        public const int MaximumLoad = 20; // Carga máxima soportada.
+        public const float WearPerConnectedTile = 0.01f; // Desgaste por segundo aportado por cada tile conectado.
     }
 }

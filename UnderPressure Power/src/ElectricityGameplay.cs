@@ -41,14 +41,17 @@ namespace UnderPressure.PowerGrid
             {
                 var item = shared?.Instance;
                 if (item == null || EnergyRoomItems.IsTransformer(item) || EnergyRoomItems.IsCell(item)) continue;
-                if (!TryGetConfiguredRule(item, out var consumption, out var billing, out _, out _)) continue;
+                if (!TryGetConfiguredRule(item, out var billing, out _, out _)) continue;
+                if (!RoomItemDefinitionCatalog.ApplyNativeEnergyCost(item)) continue;
+                var consumption = item.EnergyCost(0);
                 if (billing == Cost.Mensual)
                 {
-                    changed += SetMonthlyCost(item, consumption);
+                    if (consumption > 0) changed++;
                 }
                 else
                 {
                     perUseChanged += EnsurePerUseCost(item, consumption);
+                    SetMonthlyCost(item, 0);
                 }
             }
 
@@ -58,10 +61,9 @@ namespace UnderPressure.PowerGrid
                                         " costes por uso actualizados.");
         }
 
-        internal static bool TryGetConfiguredRule(IRoomItemDefinition definition, out int consumption,
-            out Cost billing, out Power power, out float height)
+        internal static bool TryGetConfiguredRule(IRoomItemDefinition definition, out Cost billing,
+            out Power power, out float height)
         {
-            consumption = 0;
             billing = Cost.Mensual;
             power = Power.Bajo;
             height = 0f;
@@ -71,7 +73,6 @@ namespace UnderPressure.PowerGrid
             foreach (var rule in ElectricObjectCatalog.Objects)
             {
                 if (!string.Equals(prefabName, rule.Prefab, StringComparison.OrdinalIgnoreCase)) continue;
-                consumption = rule.Consumo;
                 billing = rule.Cobro;
                 power = rule.Red;
                 height = rule.Altura;
@@ -142,10 +143,11 @@ namespace UnderPressure.PowerGrid
             cost = 0;
             kind = CostKind.None;
             if (item?.Definition == null) return false;
-            if (TryGetConfiguredRule(item.Definition, out var configuredCost, out var billing, out _, out _))
+            if (TryGetConfiguredRule(item.Definition, out var billing, out _, out _) &&
+                billing == Cost.Mensual)
             {
-                cost = Math.Max(0, configuredCost);
-                kind = billing == Cost.Mensual ? CostKind.Monthly : CostKind.PerUse;
+                cost = Math.Max(0, item.EnergyCost);
+                kind = CostKind.Monthly;
                 return cost > 0;
             }
             if (item.EnergyCost > 0)
@@ -169,7 +171,7 @@ namespace UnderPressure.PowerGrid
 
         internal static bool TryGetPowerType(IRoomItemDefinition definition, out Power power)
         {
-            if (TryGetConfiguredRule(definition, out _, out _, out power, out _)) return true;
+            if (TryGetConfiguredRule(definition, out _, out power, out _)) return true;
             power = Power.Bajo;
             if (definition == null) return false;
             if (definition.EnergyCost(0) > 0) return true;
