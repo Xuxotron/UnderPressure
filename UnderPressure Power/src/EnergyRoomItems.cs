@@ -480,7 +480,7 @@ namespace UnderPressure.PowerGrid
                     interaction.Type != InteractionAttributeModifier.Type.Maintain ||
                     !string.Equals(interaction.Name, "Maintenance", StringComparison.OrdinalIgnoreCase)) continue;
                 var clone = (InteractionDefinition)MemberwiseCloneMethod.Invoke(interaction, null);
-                clone.Sockets = new[] { RoomItemDefinitionCatalog.ElectricalPanelMaintenanceSocket };
+                clone.Sockets = new[] { ElectricalPanelParameters.MaintenanceSocket };
                 clone.Exclusive = true;
                 clone.MaxQueue = 1;
                 return clone;

@@ -949,7 +949,7 @@ namespace UnderPressure.PowerGrid
             // todas sus ramas comparten el mismo presupuesto total de quince celdas.
             foreach (var panel in connectedPanels)
                 if (CountLowVoltageCellsForPanel(panel, lowCells) >
-                    RoomItemDefinitionCatalog.ElectricalPanelMaximumConnectedTiles)
+                    ElectricalPanelParameters.MaximumConnectedTiles)
                     return false;
             return true;
         }
@@ -1683,7 +1683,7 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!_lowVoltageCells.Contains(cable) || _lowVoltagePanelSource.ContainsKey(cable) ||
                         assignedPerPanel[panel] >=
-                        RoomItemDefinitionCatalog.ElectricalPanelMaximumConnectedTiles) continue;
+                        ElectricalPanelParameters.MaximumConnectedTiles) continue;
                     _lowVoltagePhysicalDistance[cable] = 1;
                     _lowVoltagePanelSource[cable] = panel;
                     assignedPerPanel[panel]++;
@@ -1701,7 +1701,7 @@ namespace UnderPressure.PowerGrid
                     if (!_lowVoltageCells.Contains(neighbour) || _lowVoltagePanelSource.ContainsKey(neighbour))
                         continue;
                     if (assignedPerPanel[source] >=
-                        RoomItemDefinitionCatalog.ElectricalPanelMaximumConnectedTiles) continue;
+                        ElectricalPanelParameters.MaximumConnectedTiles) continue;
                     _lowVoltagePhysicalDistance[neighbour] = nextDistance;
                     _lowVoltagePanelSource[neighbour] = source;
                     assignedPerPanel[source]++;
@@ -1793,7 +1793,7 @@ namespace UnderPressure.PowerGrid
         }
 
         private static int PanelCapacity(PowerCoord panel) =>
-            RoomItemDefinitionCatalog.ElectricalPanelMaximumLoad;
+            ElectricalPanelParameters.MaximumLoad;
 
         private static int CellCapacity(PowerCoord cell) => DefaultCellCapacity;
 

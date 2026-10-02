@@ -18,7 +18,7 @@ namespace UnderPressure.PowerGrid
                     StringComparison.OrdinalIgnoreCase)) return;
 
             var connectedTiles = PowerGridPrototype.ConnectedLowVoltageTiles(__instance);
-            __result = connectedTiles * RoomItemDefinitionCatalog.ElectricalPanelWearPerConnectedTile;
+            __result = connectedTiles * ElectricalPanelParameters.WearPerConnectedTile;
         }
     }
 }
