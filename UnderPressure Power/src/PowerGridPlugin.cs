@@ -70,9 +70,8 @@ namespace UnderPressure.PowerGrid
             else
             {
                 ConfigurePanelGraphics();
-                // Reserve the complete floor tile in front of the panel for its future
-                // maintenance animation. Build bounds are expressed in item-space by the
-                // game and therefore remain exactly one tile despite the imported FBX scale.
+                // El volumen sólido representa solo la caja física. El juego añade aparte
+                // la zona utilizable de 0,8 x 0,8 centrada en START_FRONT.
                 var buildBounds = PowerPanelPrefab.GetComponent<ItemBuildBoundsComponent>() ??
                                   PowerPanelPrefab.AddComponent<ItemBuildBoundsComponent>();
                 buildBounds.center = ElectricalPanelPrefabParameters.BuildBoundsCenter;
