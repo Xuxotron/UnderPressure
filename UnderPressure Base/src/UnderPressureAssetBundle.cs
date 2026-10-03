@@ -59,13 +59,16 @@ namespace UnderPressure
                     return false;
                 }
 
+                var bundleBytes = File.ReadAllBytes(_bundlePath);
+                MainAssets.Clear();
+                _allAssets = Array.Empty<Object>();
                 if (_bundle != null)
                 {
-                    _bundle.Unload(false);
+                    _bundle.Unload(true);
                     _bundle = null;
                 }
 
-                var reloadedBundle = AssetBundle.LoadFromFile(_bundlePath);
+                var reloadedBundle = AssetBundle.LoadFromMemory(bundleBytes);
                 if (reloadedBundle == null)
                 {
                     _log?.LogError("No se pudo recargar el AssetBundle global de UnderPressure: " + _bundlePath);
