@@ -44,6 +44,7 @@ namespace UnderPressure.PowerGrid
             Log = Logger;
             UnderPressureAssetBundle.Reloading += CaptureUiSpriteReferences;
             UnderPressureAssetBundle.Reloaded += LoadUiAssets;
+            UnderPressureAssetBundle.ReloadCompleted += ReloadExtraState;
             LoadUiAssets();
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
@@ -54,6 +55,7 @@ namespace UnderPressure.PowerGrid
         {
             UnderPressureAssetBundle.Reloading -= CaptureUiSpriteReferences;
             UnderPressureAssetBundle.Reloaded -= LoadUiAssets;
+            UnderPressureAssetBundle.ReloadCompleted -= ReloadExtraState;
             _harmony?.UnpatchSelf();
             _harmony = null;
         }
@@ -91,6 +93,11 @@ namespace UnderPressure.PowerGrid
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
             EnergyRoomItems.RefreshBundleAssetReferences(PowerPanelPrefab, PowerPanelSprite);
             RestoreUiSpriteReferences();
+        }
+
+        private static void ReloadExtraState()
+        {
+            PowerGridPrototype.ReloadActiveExtraState();
         }
 
         private void CaptureUiSpriteReferences()

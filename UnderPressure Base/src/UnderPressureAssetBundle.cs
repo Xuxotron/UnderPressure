@@ -23,6 +23,7 @@ namespace UnderPressure
 
         public static event Action Reloading;
         public static event Action Reloaded;
+        public static event Action ReloadCompleted;
 
         public static string BundlePath => _bundlePath;
         public static IReadOnlyList<Object> AllAssets => _allAssets;
@@ -93,6 +94,7 @@ namespace UnderPressure
                 foreach (var pair in mainAssets) MainAssets.Add(pair.Key, pair.Value);
 
                 NotifyReloaded();
+                NotifyReloadCompleted();
                 _log?.LogInfo("AssetBundle global de UnderPressure recargado completo: " +
                               assetNames.Length + " entradas, " + _allAssets.Length + " assets cargados desde " +
                               _bundlePath + ".");
@@ -185,6 +187,21 @@ namespace UnderPressure
                 catch (Exception exception)
                 {
                     _log?.LogError("Un consumidor no pudo preparar la recarga de assets globales: " + exception);
+                }
+        }
+
+        private static void NotifyReloadCompleted()
+        {
+            var handlers = ReloadCompleted;
+            if (handlers == null) return;
+            foreach (Action handler in handlers.GetInvocationList())
+                try
+                {
+                    handler();
+                }
+                catch (Exception exception)
+                {
+                    _log?.LogError("Un consumidor no pudo completar la recarga global de assets: " + exception);
                 }
         }
     }

@@ -172,6 +172,11 @@ namespace UnderPressure.PowerGrid
 
         internal static PowerGridPrototype Active { get; private set; }
         internal static Level ActiveLevel => Active?._level;
+        internal static void ReloadActiveExtraState()
+        {
+            Active?.LoadExtraState();
+        }
+
         internal static FloorPlan CurrentBuildingFloorPlan =>
             Active?._level?.BuildingLogic?.CurrentBlueprintFloorPlan;
 
@@ -723,7 +728,11 @@ namespace UnderPressure.PowerGrid
             {
                 foreach (var record in records.Values)
                 {
-                    if (EnergyRoomExists(record.AnchorX, record.AnchorY)) continue;
+                    if (EnergyRoomExists(record.AnchorX, record.AnchorY))
+                    {
+                        ApplySavedMaintenance(record);
+                        continue;
+                    }
                     if (record.PlotIndex < 0 || record.PlotIndex >= _level.WorldState.HospitalPlots.Count) continue;
                     var hospitalMap = _level.WorldState.HospitalPlots[record.PlotIndex].HospitalMap;
                     if (hospitalMap == null) continue;
