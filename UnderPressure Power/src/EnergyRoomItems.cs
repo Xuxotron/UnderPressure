@@ -67,6 +67,16 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid TransformerGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481103");
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
+        private static readonly FieldInfo RoomVisualManagerField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_visualManager");
+        private static readonly FieldInfo RoomVisualContainerField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_container");
+        private static readonly FieldInfo RoomVisualValueMaterialField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_valueMaterial");
+        private static readonly FieldInfo RoomVisualEditConfigField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_roomItemEditConfig");
+        private static readonly FieldInfo RoomVisualBuildEventsField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_buildEvents");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
         private static RoomItemDefinition _panelAnimationSource;
 
@@ -281,12 +291,11 @@ namespace UnderPressure.PowerGrid
             var level = PowerGridPrototype.ActiveLevel;
             if (level?.WorldState == null || Panel == null) return;
 
-            var refreshedPanels = new List<RoomItem>();
-            var affectedRooms = new HashSet<Room>();
+            var refreshed = 0;
             var skipped = 0;
             foreach (var panel in level.WorldState.GetRoomItemsOfType(Panel))
             {
-                if (panel?.OwningRoom?.FloorPlanVisual == null)
+                if (panel?.Visual == null || panel.OwningRoom?.FloorPlanVisual == null)
                 {
                     ++skipped;
                     continue;
@@ -305,19 +314,60 @@ namespace UnderPressure.PowerGrid
                     continue;
                 }
 
-                affectedRooms.Add(panel.OwningRoom);
-                refreshedPanels.Add(panel);
-                panel.Visual = null;
+                if (ReplacePlacedPanelVisual(panel)) ++refreshed;
+                else ++skipped;
             }
 
-            foreach (var room in affectedRooms)
-                room.FloorPlanVisual.CreateRoomItems(Vector3.zero, 0f, level);
-            foreach (var panel in refreshedPanels)
+            PowerGridPlugin.Log.LogInfo("Instancias completas del prefab colocadas reconstruidas: " +
+                                        refreshed + "; omitidas por estar en uso o sin contexto visual: " + skipped + ".");
+        }
+
+        private static bool ReplacePlacedPanelVisual(RoomItem panel)
+        {
+            try
+            {
+                var roomVisual = panel.OwningRoom.FloorPlanVisual;
+                var oldVisual = panel.Visual;
+                var prefab = panel.Prefab;
+                var visualManager = RoomVisualManagerField?.GetValue(roomVisual) as VisualManager;
+                var container = RoomVisualContainerField?.GetValue(roomVisual) as Transform;
+                var valueMaterial = RoomVisualValueMaterialField?.GetValue(roomVisual) as Material;
+                var editConfig = RoomVisualEditConfigField?.GetValue(roomVisual) as RoomItemVisualEdit.Config;
+                var buildEvents = RoomVisualBuildEventsField?.GetValue(roomVisual) as BuildEvents;
+                if (prefab == null || visualManager == null || container == null || buildEvents == null)
+                {
+                    PowerGridPlugin.Log.LogError("No se pudo obtener el contexto visual completo de un cuadro colocado.");
+                    return false;
+                }
+
+                var replacement = new RoomItemVisual(
+                    visualManager,
+                    prefab,
+                    panel.UpgradeAddOnPrefab,
+                    container,
+                    valueMaterial,
+                    editConfig,
+                    buildEvents);
+                var roomItems = roomVisual.RoomItems;
+                var visualIndex = roomItems.IndexOf(oldVisual);
+                panel.Visual = replacement;
+                replacement.UpdateFrom(panel, true, false, false, Vector3.zero, 0f);
+                if (visualIndex >= 0) roomItems[visualIndex] = replacement;
+                else roomItems.Add(replacement);
+
                 foreach (var interaction in panel.Interactions)
                     interaction?.RefreshSockets();
 
-            PowerGridPlugin.Log.LogInfo("Instancias completas del prefab colocadas reconstruidas: " +
-                                        refreshedPanels.Count + "; omitidas por estar en uso o sin contenedor: " + skipped + ".");
+                PowerGridPlugin.Log.LogInfo("Prefab colocado sustituido directamente: prefab " +
+                                            prefab.GetInstanceID() + ", instancia " +
+                                            replacement.GameObject.GetInstanceID() + ".");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                PowerGridPlugin.Log.LogError("No se pudo sustituir el prefab de un cuadro colocado: " + exception);
+                return false;
+            }
         }
 
         internal static bool IsCell(RoomItem item) => item != null && IsCell(item.Definition);
