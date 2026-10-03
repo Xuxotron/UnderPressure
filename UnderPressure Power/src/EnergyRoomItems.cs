@@ -116,7 +116,7 @@ namespace UnderPressure.PowerGrid
             }
 
             if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker) ||
-                !CopyPanelBuildBounds(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
+                !CopyPanelInteractionSocket(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
 
             var additions = new List<SharedInstance<RoomItemDefinition>>();
             if (Battery == null)
@@ -513,9 +513,14 @@ namespace UnderPressure.PowerGrid
             clone.ObjectAnimGraph = lockerInteraction.ObjectAnimGraph;
             clone.ObjectAnimGraphEx = lockerInteraction.ObjectAnimGraphEx;
             clone.ObjectAnimGraphAlternate = lockerInteraction.ObjectAnimGraphAlternate;
-            clone.SyncParametersFromObject = false;
+            clone.SyncParametersFromObject = lockerInteraction.SyncParametersFromObject;
             clone.UseObjectParameterSync = lockerInteraction.UseObjectParameterSync;
+            clone.CanInterrupt = lockerInteraction.CanInterrupt;
+            clone.IgnoreRoomCheck = lockerInteraction.IgnoreRoomCheck;
             clone.DisableLookAt = lockerInteraction.DisableLookAt;
+            clone.DisableNavAgent = lockerInteraction.DisableNavAgent;
+            clone.IncludeInBounds = lockerInteraction.IncludeInBounds;
+            clone.IgnoreStartRotation = lockerInteraction.IgnoreStartRotation;
             clone.Exclusive = true;
             clone.MaxQueue = 1;
             return clone;
@@ -541,59 +546,39 @@ namespace UnderPressure.PowerGrid
             return true;
         }
 
-        private static bool CopyPanelBuildBounds(GameObject panelPrefab, RoomItemDefinition nurseLocker)
+        private static bool CopyPanelInteractionSocket(GameObject panelPrefab, RoomItemDefinition nurseLocker)
         {
             var lockerPrefab = nurseLocker?.GetPrefab(0);
-            var sourceBounds = lockerPrefab?.GetComponentsInChildren<ItemBuildBoundsComponent>(true);
-            if (panelPrefab == null || lockerPrefab == null || sourceBounds == null || sourceBounds.Length == 0)
+            var sourceSocket = FindTransform(lockerPrefab?.transform,
+                ElectricalPanelPrefabParameters.MaintenanceSocket);
+            var panelSocket = FindTransform(panelPrefab?.transform,
+                ElectricalPanelPrefabParameters.MaintenanceSocket);
+            if (panelPrefab == null || lockerPrefab == null || sourceSocket == null || panelSocket == null)
             {
-                PowerGridPlugin.Log.LogError("No se pudieron copiar los limites de uso nativos de la taquilla al cuadro electrico.");
+                PowerGridPlugin.Log.LogError("No se pudo copiar el punto de interacción nativo de la taquilla al cuadro eléctrico: " +
+                                             $"origen={sourceSocket != null}, destino={panelSocket != null}.");
                 return false;
             }
 
-            var existingBounds = panelPrefab.GetComponentsInChildren<ItemBuildBoundsComponent>(true);
-            if (existingBounds.Length > sourceBounds.Length)
-            {
-                PowerGridPlugin.Log.LogError("El prefab del cuadro contiene mas limites de construccion que la taquilla nativa.");
-                return false;
-            }
-
-            for (var index = 0; index < sourceBounds.Length; index++)
-            {
-                var source = sourceBounds[index];
-                var target = index < existingBounds.Length
-                    ? existingBounds[index]
-                    : panelPrefab.AddComponent<ItemBuildBoundsComponent>();
-                var rootBounds = TransformBoundsToRoot(source, lockerPrefab.transform);
-                target.center = rootBounds.center;
-                target.size = rootBounds.size;
-                target.Solid = source.Solid;
-                PowerGridPlugin.Log.LogInfo("Limite nativo de taquilla copiado al cuadro: centro=" +
-                                            rootBounds.center + ", tamano=" + rootBounds.size +
-                                            ", solido=" + source.Solid + ".");
-            }
+            var rootPosition = lockerPrefab.transform.InverseTransformPoint(sourceSocket.position);
+            var rootRotation = Quaternion.Inverse(lockerPrefab.transform.rotation) * sourceSocket.rotation;
+            panelSocket.position = panelPrefab.transform.TransformPoint(rootPosition);
+            panelSocket.rotation = panelPrefab.transform.rotation * rootRotation;
+            PowerGridPlugin.Log.LogInfo("Punto de interacción nativo de taquilla copiado al cuadro: posición=" +
+                                        rootPosition + ", rotación=" + rootRotation.eulerAngles + ".");
             return true;
         }
 
-        private static Bounds TransformBoundsToRoot(ItemBuildBoundsComponent source, Transform sourceRoot)
+        private static Transform FindTransform(Transform root, string objectName)
         {
-            var half = source.size * 0.5f;
-            var rootBounds = new Bounds();
-            var initialised = false;
-            for (var x = -1; x <= 1; x += 2)
-                for (var y = -1; y <= 1; y += 2)
-                    for (var z = -1; z <= 1; z += 2)
-                    {
-                        var localCorner = source.center + Vector3.Scale(half, new Vector3(x, y, z));
-                        var rootCorner = sourceRoot.InverseTransformPoint(source.transform.TransformPoint(localCorner));
-                        if (!initialised)
-                        {
-                            rootBounds = new Bounds(rootCorner, Vector3.zero);
-                            initialised = true;
-                        }
-                        else rootBounds.Encapsulate(rootCorner);
-                    }
-            return rootBounds;
+            if (root == null) return null;
+            if (string.Equals(root.name, objectName, StringComparison.Ordinal)) return root;
+            for (var index = 0; index < root.childCount; index++)
+            {
+                var found = FindTransform(root.GetChild(index), objectName);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         internal static RuntimeAnimatorController GetPanelRepairAnimationGraph(Character character)
