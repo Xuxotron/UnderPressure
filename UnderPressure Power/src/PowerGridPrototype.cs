@@ -384,7 +384,9 @@ namespace UnderPressure.PowerGrid
                 EnergyCampaignSystem.ResetLevel(_level?.UniqueID);
                 global::UnderPressure.PermanentMachineWearSystem.BeginLoad(_level);
                 var path = GetExtraDataPath();
-                if (!File.Exists(path))
+                var saveExists = File.Exists(path);
+                global::UnderPressure.UnderPressureAssetBundle.ReportExtraSaveLoad(path, saveExists);
+                if (!saveExists)
                 {
                     global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
                     return;

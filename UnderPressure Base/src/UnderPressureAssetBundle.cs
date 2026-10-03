@@ -18,6 +18,8 @@ namespace UnderPressure
         private static AssetBundle _bundle;
         private static Object[] _allAssets = Array.Empty<Object>();
         private static string[] _overlayAssetNames = Array.Empty<string>();
+        private static string _overlayExtraSavePath;
+        private static bool _overlayExtraSaveFound;
         private static float _overlayVisibleUntil;
         private static bool _reloading;
 
@@ -51,6 +53,8 @@ namespace UnderPressure
             if (showOverlay)
             {
                 _overlayAssetNames = Array.Empty<string>();
+                _overlayExtraSavePath = null;
+                _overlayExtraSaveFound = false;
                 _overlayVisibleUntil = Time.unscaledTime + 8f;
             }
             try
@@ -122,15 +126,23 @@ namespace UnderPressure
             return _bundle == null ? Array.Empty<T>() : _bundle.LoadAllAssets<T>();
         }
 
+        public static void ReportExtraSaveLoad(string path, bool found)
+        {
+            _overlayExtraSavePath = path;
+            _overlayExtraSaveFound = found;
+        }
+
         internal static void DrawReloadOverlay()
         {
             if (Time.unscaledTime >= _overlayVisibleUntil) return;
 
             const float left = 14f;
             const float top = 14f;
-            const float width = 720f;
+            var width = Mathf.Min(1200f, Screen.width - left * 2f);
             const float lineHeight = 21f;
-            var lines = Math.Max(1, _overlayAssetNames.Length);
+            var assetLines = Math.Max(1, _overlayAssetNames.Length);
+            var saveLines = string.IsNullOrEmpty(_overlayExtraSavePath) ? 0 : 1;
+            var lines = assetLines + saveLines;
             var height = 48f + lines * lineHeight;
             GUI.Box(new Rect(left, top, width, height), GUIContent.none);
 
@@ -152,12 +164,18 @@ namespace UnderPressure
             {
                 GUI.Label(new Rect(left + 12f, top + 38f, width - 24f, lineHeight),
                     ModLocalization.Get("assets.not_found"), assetStyle);
-                return;
             }
+            else
+                for (var index = 0; index < _overlayAssetNames.Length; ++index)
+                    GUI.Label(new Rect(left + 12f, top + 38f + index * lineHeight, width - 24f, lineHeight),
+                        _overlayAssetNames[index], assetStyle);
 
-            for (var index = 0; index < _overlayAssetNames.Length; ++index)
-                GUI.Label(new Rect(left + 12f, top + 38f + index * lineHeight, width - 24f, lineHeight),
-                    _overlayAssetNames[index], assetStyle);
+            if (!string.IsNullOrEmpty(_overlayExtraSavePath))
+            {
+                var key = _overlayExtraSaveFound ? "assets.upsav_loading" : "assets.upsav_not_found";
+                GUI.Label(new Rect(left + 12f, top + 38f + assetLines * lineHeight, width - 24f, lineHeight),
+                    ModLocalization.Get(key) + " " + _overlayExtraSavePath, assetStyle);
+            }
         }
 
         private static void NotifyReloaded()
