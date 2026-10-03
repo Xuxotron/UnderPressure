@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using HarmonyLib;
 using TH20;
 
@@ -19,6 +20,36 @@ namespace UnderPressure.PowerGrid
 
             var connectedTiles = PowerGridPrototype.ConnectedLowVoltageTiles(__instance);
             __result = connectedTiles * ElectricalPanelSpecialParameters.WearPerConnectedTile;
+        }
+    }
+
+    /// <summary>
+    /// Los cuadros guardados antes de incorporar Maintenance conservan _attributes = null.
+    /// RoomItem.RestoreFromSave no reconstruye ese campo desde la definición actual, por lo
+    /// que se aplica la misma inicialización privada que usa el constructor de un objeto nuevo.
+    /// </summary>
+    [HarmonyPatch(typeof(RoomItem), "RestoreFromSave")]
+    internal static class ElectricalPanelMaintenanceSaveMigrationPatch
+    {
+        private static readonly MethodInfo CreateAttributesMethod =
+            AccessTools.Method(typeof(RoomItem), "CreateAttributes");
+        private static readonly MethodInfo SetupMaintenanceCallbacksMethod =
+            AccessTools.Method(typeof(RoomItem), "SetupMaintenanceCallbacks");
+
+        private static void Postfix(RoomItem __instance)
+        {
+            if (!EnergyRoomItems.IsPanel(__instance) || __instance.MaintenanceLevel != null) return;
+            if (CreateAttributesMethod == null || SetupMaintenanceCallbacksMethod == null)
+            {
+                PowerGridPlugin.Log.LogError(
+                    "No se pudo migrar el mantenimiento de un cuadro electrico guardado.");
+                return;
+            }
+
+            CreateAttributesMethod.Invoke(__instance, null);
+            SetupMaintenanceCallbacksMethod.Invoke(__instance, new object[] { false });
+            PowerGridPlugin.Log.LogInfo(
+                "Atributo de mantenimiento restaurado en un cuadro electrico antiguo.");
         }
     }
 }
