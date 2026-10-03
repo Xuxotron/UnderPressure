@@ -77,6 +77,20 @@ namespace UnderPressure.PowerGrid
             AccessTools.Field(typeof(RoomFloorPlanVisual), "_roomItemEditConfig");
         private static readonly FieldInfo RoomVisualBuildEventsField =
             AccessTools.Field(typeof(RoomFloorPlanVisual), "_buildEvents");
+        private static readonly FieldInfo BoundsCachedField = AccessTools.Field(typeof(RoomItem), "_boundsCached");
+        private static readonly FieldInfo ClipBoundsCachedField = AccessTools.Field(typeof(RoomItem), "_clipBoundsCached");
+        private static readonly FieldInfo NavBoundsCachedField = AccessTools.Field(typeof(RoomItem), "_navBoundsCached");
+        private static readonly FieldInfo CollisionShapesCachedField =
+            AccessTools.Field(typeof(RoomItem), "_collisionShapesCached");
+        private static readonly MethodInfo CacheBoundsMethod = AccessTools.Method(typeof(RoomItem), "CacheBounds");
+        private static readonly MethodInfo CacheClipBoundsMethod =
+            AccessTools.Method(typeof(RoomItem), "CacheClipBounds");
+        private static readonly MethodInfo CacheNavBoundsMethod =
+            AccessTools.Method(typeof(RoomItem), "CacheNavBounds");
+        private static readonly MethodInfo CacheMapTileBoundsMethod =
+            AccessTools.Method(typeof(RoomItem), "CacheMapTileBounds");
+        private static readonly MethodInfo CacheCollisionShapesMethod =
+            AccessTools.Method(typeof(RoomItem), "CacheCollisionShapes");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
         private static RoomItemDefinition _panelAnimationSource;
 
@@ -127,8 +141,7 @@ namespace UnderPressure.PowerGrid
             }
 
             _panelAnimationSource = nurseLocker;
-            if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker) ||
-                !CopyPanelInteractionSocket(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
+            if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
 
             var additions = new List<SharedInstance<RoomItemDefinition>>();
             if (Battery == null)
@@ -357,6 +370,7 @@ namespace UnderPressure.PowerGrid
 
                 foreach (var interaction in panel.Interactions)
                     interaction?.RefreshSockets();
+                RefreshPlacedPanelGeometry(panel);
 
                 PowerGridPlugin.Log.LogInfo("Prefab colocado sustituido directamente: prefab " +
                                             prefab.GetInstanceID() + ", instancia " +
@@ -368,6 +382,21 @@ namespace UnderPressure.PowerGrid
                 PowerGridPlugin.Log.LogError("No se pudo sustituir el prefab de un cuadro colocado: " + exception);
                 return false;
             }
+        }
+
+        private static void RefreshPlacedPanelGeometry(RoomItem panel)
+        {
+            BoundsCachedField?.SetValue(panel, false);
+            ClipBoundsCachedField?.SetValue(panel, false);
+            NavBoundsCachedField?.SetValue(panel, false);
+            CollisionShapesCachedField?.SetValue(panel, false);
+            panel.LocalPosition = panel.LocalPosition;
+            panel.Rotation = panel.Rotation;
+            CacheBoundsMethod?.Invoke(panel, null);
+            CacheClipBoundsMethod?.Invoke(panel, null);
+            CacheNavBoundsMethod?.Invoke(panel, null);
+            CacheMapTileBoundsMethod?.Invoke(panel, null);
+            CacheCollisionShapesMethod?.Invoke(panel, null);
         }
 
         internal static bool IsCell(RoomItem item) => item != null && IsCell(item.Definition);
@@ -650,29 +679,6 @@ namespace UnderPressure.PowerGrid
             animator.cullingMode = sourceAnimator.cullingMode;
             if (panelRig.GetComponent<AnimationEventListener>() == null)
                 panelRig.gameObject.AddComponent<AnimationEventListener>();
-            return true;
-        }
-
-        private static bool CopyPanelInteractionSocket(GameObject panelPrefab, RoomItemDefinition nurseLocker)
-        {
-            var lockerPrefab = nurseLocker?.GetPrefab(0);
-            var sourceSocket = FindTransform(lockerPrefab?.transform,
-                ElectricalPanelPrefabParameters.MaintenanceSocket);
-            var panelSocket = FindTransform(panelPrefab?.transform,
-                ElectricalPanelPrefabParameters.MaintenanceSocket);
-            if (panelPrefab == null || lockerPrefab == null || sourceSocket == null || panelSocket == null)
-            {
-                PowerGridPlugin.Log.LogError("No se pudo copiar el punto de interacción nativo de la taquilla al cuadro eléctrico: " +
-                                             $"origen={sourceSocket != null}, destino={panelSocket != null}.");
-                return false;
-            }
-
-            var rootPosition = lockerPrefab.transform.InverseTransformPoint(sourceSocket.position);
-            var rootRotation = Quaternion.Inverse(lockerPrefab.transform.rotation) * sourceSocket.rotation;
-            panelSocket.position = panelPrefab.transform.TransformPoint(rootPosition);
-            panelSocket.rotation = panelPrefab.transform.rotation * rootRotation;
-            PowerGridPlugin.Log.LogInfo("Punto de interacción nativo de taquilla copiado al cuadro: posición=" +
-                                        rootPosition + ", rotación=" + rootRotation.eulerAngles + ".");
             return true;
         }
 
