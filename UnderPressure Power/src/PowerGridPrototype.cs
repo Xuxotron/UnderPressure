@@ -220,6 +220,7 @@ namespace UnderPressure.PowerGrid
             {
                 _initialised = true;
                 LoadExtraState();
+                EnergyRoomItems.RecreatePlacedPanels(_level);
                 SubscribeBuildEvents();
                 _networkDirty = true;
                 LogDefinitions();

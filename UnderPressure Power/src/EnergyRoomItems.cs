@@ -67,30 +67,6 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid TransformerGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481103");
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
-        private static readonly FieldInfo RoomVisualManagerField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_visualManager");
-        private static readonly FieldInfo RoomVisualContainerField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_container");
-        private static readonly FieldInfo RoomVisualValueMaterialField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_valueMaterial");
-        private static readonly FieldInfo RoomVisualEditConfigField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_roomItemEditConfig");
-        private static readonly FieldInfo RoomVisualBuildEventsField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_buildEvents");
-        private static readonly FieldInfo BoundsCachedField = AccessTools.Field(typeof(RoomItem), "_boundsCached");
-        private static readonly FieldInfo ClipBoundsCachedField = AccessTools.Field(typeof(RoomItem), "_clipBoundsCached");
-        private static readonly FieldInfo NavBoundsCachedField = AccessTools.Field(typeof(RoomItem), "_navBoundsCached");
-        private static readonly FieldInfo CollisionShapesCachedField =
-            AccessTools.Field(typeof(RoomItem), "_collisionShapesCached");
-        private static readonly MethodInfo CacheBoundsMethod = AccessTools.Method(typeof(RoomItem), "CacheBounds");
-        private static readonly MethodInfo CacheClipBoundsMethod =
-            AccessTools.Method(typeof(RoomItem), "CacheClipBounds");
-        private static readonly MethodInfo CacheNavBoundsMethod =
-            AccessTools.Method(typeof(RoomItem), "CacheNavBounds");
-        private static readonly MethodInfo CacheMapTileBoundsMethod =
-            AccessTools.Method(typeof(RoomItem), "CacheMapTileBounds");
-        private static readonly MethodInfo CacheCollisionShapesMethod =
-            AccessTools.Method(typeof(RoomItem), "CacheCollisionShapes");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
         private static RoomItemDefinition _panelAnimationSource;
 
@@ -301,14 +277,19 @@ namespace UnderPressure.PowerGrid
 
         private static void RefreshPlacedPanelPrefabInstances()
         {
-            var level = PowerGridPrototype.ActiveLevel;
+            RecreatePlacedPanels(PowerGridPrototype.ActiveLevel);
+        }
+
+        internal static void RecreatePlacedPanels(Level level)
+        {
             if (level?.WorldState == null || Panel == null) return;
 
             var refreshed = 0;
             var skipped = 0;
-            foreach (var panel in level.WorldState.GetRoomItemsOfType(Panel))
+            var placedPanels = new List<RoomItem>(level.WorldState.GetRoomItemsOfType(Panel));
+            foreach (var panel in placedPanels)
             {
-                if (panel?.Visual == null || panel.OwningRoom?.FloorPlanVisual == null)
+                if (panel?.OwningRoom?.FloorPlan == null)
                 {
                     ++skipped;
                     continue;
@@ -327,7 +308,7 @@ namespace UnderPressure.PowerGrid
                     continue;
                 }
 
-                if (ReplacePlacedPanelVisual(panel)) ++refreshed;
+                if (ReplacePlacedPanel(panel, level)) ++refreshed;
                 else ++skipped;
             }
 
@@ -335,68 +316,46 @@ namespace UnderPressure.PowerGrid
                                         refreshed + "; omitidas por estar en uso o sin contexto visual: " + skipped + ".");
         }
 
-        private static bool ReplacePlacedPanelVisual(RoomItem panel)
+        private static bool ReplacePlacedPanel(RoomItem oldPanel, Level level)
         {
             try
             {
-                var roomVisual = panel.OwningRoom.FloorPlanVisual;
-                var oldVisual = panel.Visual;
-                var prefab = panel.Prefab;
-                var visualManager = RoomVisualManagerField?.GetValue(roomVisual) as VisualManager;
-                var container = RoomVisualContainerField?.GetValue(roomVisual) as Transform;
-                var valueMaterial = RoomVisualValueMaterialField?.GetValue(roomVisual) as Material;
-                var editConfig = RoomVisualEditConfigField?.GetValue(roomVisual) as RoomItemVisualEdit.Config;
-                var buildEvents = RoomVisualBuildEventsField?.GetValue(roomVisual) as BuildEvents;
-                if (prefab == null || visualManager == null || container == null || buildEvents == null)
+                var room = oldPanel.OwningRoom;
+                var floorPlan = room.FloorPlan;
+                var worldPosition = oldPanel.WorldPosition;
+                var rotation = oldPanel.Rotation;
+
+                floorPlan.RemoveItem(oldPanel);
+                oldPanel.RemoveFromWorld(true);
+                level.WorldState.RemoveNeedSatisfyingRoomItem(oldPanel);
+                oldPanel.Visual = null;
+                oldPanel.Destroy();
+
+                var replacement = RoomItemAlgorithms.SpawnItem(
+                    Panel,
+                    worldPosition,
+                    0f,
+                    rotation,
+                    level,
+                    room);
+                if (replacement == null)
                 {
-                    PowerGridPlugin.Log.LogError("No se pudo obtener el contexto visual completo de un cuadro colocado.");
+                    PowerGridPlugin.Log.LogError("El juego no pudo crear el cuadro de sustitución.");
                     return false;
                 }
 
-                var replacement = new RoomItemVisual(
-                    visualManager,
-                    prefab,
-                    panel.UpgradeAddOnPrefab,
-                    container,
-                    valueMaterial,
-                    editConfig,
-                    buildEvents);
-                var roomItems = roomVisual.RoomItems;
-                var visualIndex = roomItems.IndexOf(oldVisual);
-                panel.Visual = replacement;
-                replacement.UpdateFrom(panel, true, false, false, Vector3.zero, 0f);
-                if (visualIndex >= 0) roomItems[visualIndex] = replacement;
-                else roomItems.Add(replacement);
-
-                foreach (var interaction in panel.Interactions)
-                    interaction?.RefreshSockets();
-                RefreshPlacedPanelGeometry(panel);
-
-                PowerGridPlugin.Log.LogInfo("Prefab colocado sustituido directamente: prefab " +
-                                            prefab.GetInstanceID() + ", instancia " +
-                                            replacement.GameObject.GetInstanceID() + ".");
+                replacement.HasBeenPurchased = true;
+                if (room.IsOpen) level.WorldState.AddNeedSatisfyingRoomItem(replacement);
+                level.BuildEvents.OnRoomItemPlaced.InvokeSafe(replacement, floorPlan);
+                PowerGridPlugin.Log.LogInfo("Cuadro colocado destruido y creado de nuevo: instancia " +
+                                            replacement.Visual?.GameObject?.GetInstanceID() + ".");
                 return true;
             }
             catch (Exception exception)
             {
-                PowerGridPlugin.Log.LogError("No se pudo sustituir el prefab de un cuadro colocado: " + exception);
+                PowerGridPlugin.Log.LogError("No se pudo destruir y crear de nuevo un cuadro colocado: " + exception);
                 return false;
             }
-        }
-
-        private static void RefreshPlacedPanelGeometry(RoomItem panel)
-        {
-            BoundsCachedField?.SetValue(panel, false);
-            ClipBoundsCachedField?.SetValue(panel, false);
-            NavBoundsCachedField?.SetValue(panel, false);
-            CollisionShapesCachedField?.SetValue(panel, false);
-            panel.LocalPosition = panel.LocalPosition;
-            panel.Rotation = panel.Rotation;
-            CacheBoundsMethod?.Invoke(panel, null);
-            CacheClipBoundsMethod?.Invoke(panel, null);
-            CacheNavBoundsMethod?.Invoke(panel, null);
-            CacheMapTileBoundsMethod?.Invoke(panel, null);
-            CacheCollisionShapesMethod?.Invoke(panel, null);
         }
 
         internal static bool IsCell(RoomItem item) => item != null && IsCell(item.Definition);
