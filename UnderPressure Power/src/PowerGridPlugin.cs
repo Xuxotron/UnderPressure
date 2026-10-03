@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
@@ -22,11 +21,11 @@ namespace UnderPressure.PowerGrid
         internal static Sprite PowerPanelSprite { get; private set; }
         internal static GameObject PowerPanelPrefab { get; private set; }
         private Harmony _harmony;
-        private AssetBundle _uiAssetBundle;
 
         private void Awake()
         {
             Log = Logger;
+            UnderPressureAssetBundle.Reloaded += LoadUiAssets;
             LoadUiAssets();
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
@@ -35,6 +34,7 @@ namespace UnderPressure.PowerGrid
 
         private void OnDestroy()
         {
+            UnderPressureAssetBundle.Reloaded -= LoadUiAssets;
             _harmony?.UnpatchSelf();
             _harmony = null;
         }
@@ -49,28 +49,18 @@ namespace UnderPressure.PowerGrid
                 break;
             }
 
-            var pluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var assetsDirectory = Path.Combine(pluginDirectory ?? string.Empty, "Assets");
-            var bundlePath = Path.Combine(assetsDirectory, "underpressure");
-            _uiAssetBundle = AssetBundle.LoadFromFile(bundlePath);
-            if (_uiAssetBundle == null)
-            {
-                Logger.LogError("No se pudo cargar el AssetBundle de interfaz: " + bundlePath);
-                return;
-            }
-
             if (BatterySprite == null)
-                BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
+                BatterySprite = UnderPressureAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
             if (BatterySprite == null)
                 Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
-            PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>(
+            PowerPanelPrefab = UnderPressureAssetBundle.LoadAsset<GameObject>(
                 ElectricalPanelPrefabParameters.PrefabAsset);
             if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
                 ConfigurePanelGraphics();
 
-            var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>(
+            var panelIconTexture = UnderPressureAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.IconTextureAsset);
             if (panelIconTexture != null)
             {
@@ -81,15 +71,16 @@ namespace UnderPressure.PowerGrid
                 PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
             }
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
+            EnergyRoomItems.RefreshBundleAssetReferences(PowerPanelPrefab, PowerPanelSprite);
         }
 
         private void ConfigurePanelGraphics()
         {
-            var material = _uiAssetBundle.LoadAsset<Material>(
+            var material = UnderPressureAssetBundle.LoadAsset<Material>(
                 ElectricalPanelPrefabParameters.MaterialAsset);
-            var texture = _uiAssetBundle.LoadAsset<Texture2D>(
+            var texture = UnderPressureAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.TextureAsset);
-            var meshes = _uiAssetBundle.LoadAllAssets<Mesh>();
+            var meshes = UnderPressureAssetBundle.GetAllAssets<Mesh>();
 
             if (material == null)
                 Logger.LogError("No se encontro el material grafico del cuadro electrico.");

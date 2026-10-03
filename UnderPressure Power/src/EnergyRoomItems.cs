@@ -263,6 +263,15 @@ namespace UnderPressure.PowerGrid
             return item != null && (ReferenceEquals(item, Panel) || item.DebugTag == PanelTag);
         }
 
+        internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon)
+        {
+            if (Panel == null || panelPrefab == null || panelIcon == null) return;
+            Set(Panel, "_prefab", panelPrefab);
+            Set(Panel, "_blueprintPrefab", panelPrefab);
+            Set(Panel, "_icon", panelIcon);
+            Set(Panel, "_iconWithoutBacking", panelIcon);
+        }
+
         internal static bool IsCell(RoomItem item) => item != null && IsCell(item.Definition);
 
         internal static bool IsCell(IRoomItemDefinition definition)

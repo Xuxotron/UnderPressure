@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
@@ -162,9 +163,16 @@ namespace UnderPressure
             TreatmentVolumeSetting.SettingChanged += (sender, args) =>
                 TreatmentVolumeAudio.RefreshActiveEmitters();
 
+            UnderPressureAssetBundle.Initialise(Logger,
+                Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
             Logger.LogInfo($"{PluginName} {PluginVersion} cargado.");
+        }
+
+        private void Update()
+        {
+            UnderPressureAssetBundle.UpdateHotkey();
         }
 
         private ConfigEntry<int> BindPercentage(string key, string description)
