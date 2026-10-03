@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace UnderPressure.PowerGrid
 {
@@ -20,11 +22,27 @@ namespace UnderPressure.PowerGrid
         internal static Sprite BatterySprite { get; private set; }
         internal static Sprite PowerPanelSprite { get; private set; }
         internal static GameObject PowerPanelPrefab { get; private set; }
+        private readonly List<UiSpriteReference> _uiSpriteReferences = new List<UiSpriteReference>();
         private Harmony _harmony;
+
+        private enum UiSpriteKind
+        {
+            Battery,
+            Panel
+        }
+
+        private sealed class UiSpriteReference
+        {
+            internal Image Image;
+            internal UiSpriteKind Kind;
+            internal bool Sprite;
+            internal bool OverrideSprite;
+        }
 
         private void Awake()
         {
             Log = Logger;
+            UnderPressureAssetBundle.Reloading += CaptureUiSpriteReferences;
             UnderPressureAssetBundle.Reloaded += LoadUiAssets;
             LoadUiAssets();
             _harmony = new Harmony(PluginGuid);
@@ -34,6 +52,7 @@ namespace UnderPressure.PowerGrid
 
         private void OnDestroy()
         {
+            UnderPressureAssetBundle.Reloading -= CaptureUiSpriteReferences;
             UnderPressureAssetBundle.Reloaded -= LoadUiAssets;
             _harmony?.UnpatchSelf();
             _harmony = null;
@@ -41,16 +60,15 @@ namespace UnderPressure.PowerGrid
 
         private void LoadUiAssets()
         {
-            foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
-            {
-                if (sprite == null || !string.Equals(sprite.name, "bateria", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                BatterySprite = sprite;
-                break;
-            }
-
+            BatterySprite = UnderPressureAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
             if (BatterySprite == null)
-                BatterySprite = UnderPressureAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
+                foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
+                {
+                    if (sprite == null || !string.Equals(sprite.name, "bateria", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    BatterySprite = sprite;
+                    break;
+                }
             if (BatterySprite == null)
                 Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
             PowerPanelPrefab = UnderPressureAssetBundle.LoadAsset<GameObject>(
@@ -72,6 +90,46 @@ namespace UnderPressure.PowerGrid
             }
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
             EnergyRoomItems.RefreshBundleAssetReferences(PowerPanelPrefab, PowerPanelSprite);
+            RestoreUiSpriteReferences();
+        }
+
+        private void CaptureUiSpriteReferences()
+        {
+            _uiSpriteReferences.Clear();
+            foreach (var image in Resources.FindObjectsOfTypeAll<Image>())
+            {
+                if (image == null) continue;
+                CaptureUiSpriteReference(image, BatterySprite, UiSpriteKind.Battery);
+                CaptureUiSpriteReference(image, PowerPanelSprite, UiSpriteKind.Panel);
+            }
+        }
+
+        private void CaptureUiSpriteReference(Image image, Sprite sprite, UiSpriteKind kind)
+        {
+            if (sprite == null) return;
+            var usesSprite = image.sprite == sprite;
+            var usesOverride = image.overrideSprite == sprite;
+            if (!usesSprite && !usesOverride) return;
+            _uiSpriteReferences.Add(new UiSpriteReference
+            {
+                Image = image,
+                Kind = kind,
+                Sprite = usesSprite,
+                OverrideSprite = usesOverride
+            });
+        }
+
+        private void RestoreUiSpriteReferences()
+        {
+            foreach (var reference in _uiSpriteReferences)
+            {
+                if (reference.Image == null) continue;
+                var sprite = reference.Kind == UiSpriteKind.Battery ? BatterySprite : PowerPanelSprite;
+                if (sprite == null) continue;
+                if (reference.Sprite) reference.Image.sprite = sprite;
+                if (reference.OverrideSprite) reference.Image.overrideSprite = sprite;
+            }
+            _uiSpriteReferences.Clear();
         }
 
         private void ConfigurePanelGraphics()

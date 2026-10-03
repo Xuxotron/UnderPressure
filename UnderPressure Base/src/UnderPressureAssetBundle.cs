@@ -21,6 +21,7 @@ namespace UnderPressure
         private static float _overlayVisibleUntil;
         private static bool _reloading;
 
+        public static event Action Reloading;
         public static event Action Reloaded;
 
         public static string BundlePath => _bundlePath;
@@ -60,11 +61,12 @@ namespace UnderPressure
                 }
 
                 var bundleBytes = File.ReadAllBytes(_bundlePath);
+                NotifyReloading();
                 MainAssets.Clear();
                 _allAssets = Array.Empty<Object>();
                 if (_bundle != null)
                 {
-                    _bundle.Unload(true);
+                    _bundle.Unload(false);
                     _bundle = null;
                 }
 
@@ -168,6 +170,21 @@ namespace UnderPressure
                 catch (Exception exception)
                 {
                     _log?.LogError("Un consumidor no pudo aplicar los assets globales recargados: " + exception);
+                }
+        }
+
+        private static void NotifyReloading()
+        {
+            var handlers = Reloading;
+            if (handlers == null) return;
+            foreach (Action handler in handlers.GetInvocationList())
+                try
+                {
+                    handler();
+                }
+                catch (Exception exception)
+                {
+                    _log?.LogError("Un consumidor no pudo preparar la recarga de assets globales: " + exception);
                 }
         }
     }
