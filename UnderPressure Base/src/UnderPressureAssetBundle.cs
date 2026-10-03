@@ -153,7 +153,7 @@ namespace UnderPressure
                 normal = { textColor = Color.white }
             };
             GUI.Label(new Rect(left + 12f, top + 8f, width - 24f, 28f),
-                ModLocalization.Get("assets.loading"), titleStyle);
+                "LOADING ASSETS", titleStyle);
 
             var assetStyle = new GUIStyle(GUI.skin.label)
             {
@@ -163,7 +163,7 @@ namespace UnderPressure
             if (_overlayAssetNames.Length == 0)
             {
                 GUI.Label(new Rect(left + 12f, top + 38f, width - 24f, lineHeight),
-                    ModLocalization.Get("assets.not_found"), assetStyle);
+                    "ASSETS NOT FOUND", assetStyle);
             }
             else
                 for (var index = 0; index < _overlayAssetNames.Length; ++index)
@@ -172,9 +172,9 @@ namespace UnderPressure
 
             if (!string.IsNullOrEmpty(_overlayExtraSavePath))
             {
-                var key = _overlayExtraSaveFound ? "assets.upsav_loading" : "assets.upsav_not_found";
+                var message = _overlayExtraSaveFound ? "LOADING UPSAV:" : "UPSAV NOT FOUND:";
                 GUI.Label(new Rect(left + 12f, top + 38f + assetLines * lineHeight, width - 24f, lineHeight),
-                    ModLocalization.Get(key) + " " + _overlayExtraSavePath, assetStyle);
+                    message + " " + _overlayExtraSavePath, assetStyle);
             }
         }
 
