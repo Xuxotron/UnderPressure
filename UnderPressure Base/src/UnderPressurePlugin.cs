@@ -175,6 +175,11 @@ namespace UnderPressure
             UnderPressureAssetBundle.UpdateHotkey();
         }
 
+        private void OnGUI()
+        {
+            UnderPressureAssetBundle.DrawReloadOverlay();
+        }
+
         private ConfigEntry<int> BindPercentage(string key, string description)
         {
             return Config.Bind("Dificultad", key, 0, new ConfigDescription(description,

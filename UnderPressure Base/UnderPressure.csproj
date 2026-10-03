@@ -43,6 +43,14 @@
       <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.Physics2DModule">
       <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.Physics2DModule.dll</HintPath>
       <Private>false</Private>
