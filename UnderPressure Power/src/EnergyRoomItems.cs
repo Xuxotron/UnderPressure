@@ -68,7 +68,6 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
-        private static RoomItemDefinition _panelAnimationSource;
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
@@ -116,9 +115,8 @@ namespace UnderPressure.PowerGrid
                 return false;
             }
 
-            _panelAnimationSource = nurseLocker;
             if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker) ||
-                !ValidatePanelInteractionSocket(PowerGridPlugin.PowerPanelPrefab)) return false;
+                !CopyPanelInteractionSocket(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
 
             var additions = new List<SharedInstance<RoomItemDefinition>>();
             if (Battery == null)
@@ -548,72 +546,26 @@ namespace UnderPressure.PowerGrid
             return true;
         }
 
-        private static bool ValidatePanelInteractionSocket(GameObject panelPrefab)
+        private static bool CopyPanelInteractionSocket(GameObject panelPrefab, RoomItemDefinition nurseLocker)
         {
+            var lockerPrefab = nurseLocker?.GetPrefab(0);
+            var sourceSocket = FindTransform(lockerPrefab?.transform,
+                ElectricalPanelPrefabParameters.MaintenanceSocket);
             var panelSocket = FindTransform(panelPrefab?.transform,
                 ElectricalPanelPrefabParameters.MaintenanceSocket);
-            if (panelPrefab == null || panelSocket == null)
+            if (panelPrefab == null || lockerPrefab == null || sourceSocket == null || panelSocket == null)
             {
-                PowerGridPlugin.Log.LogError("El prefab del cuadro eléctrico no contiene el punto de interacción '" +
-                                             ElectricalPanelPrefabParameters.MaintenanceSocket + "'.");
+                PowerGridPlugin.Log.LogError("No se pudo copiar el punto de interacción nativo de la taquilla al cuadro eléctrico: " +
+                                             $"origen={sourceSocket != null}, destino={panelSocket != null}.");
                 return false;
             }
 
-            var rootPosition = panelPrefab.transform.InverseTransformPoint(panelSocket.position);
-            var rootRotation = Quaternion.Inverse(panelPrefab.transform.rotation) * panelSocket.rotation;
-            PowerGridPlugin.Log.LogInfo("Punto de interacción del cuadro cargado desde el prefab: posición=" +
+            var rootPosition = lockerPrefab.transform.InverseTransformPoint(sourceSocket.position);
+            var rootRotation = Quaternion.Inverse(lockerPrefab.transform.rotation) * sourceSocket.rotation;
+            panelSocket.position = panelPrefab.transform.TransformPoint(rootPosition);
+            panelSocket.rotation = panelPrefab.transform.rotation * rootRotation;
+            PowerGridPlugin.Log.LogInfo("Punto de interacción nativo de taquilla copiado al cuadro: posición=" +
                                         rootPosition + ", rotación=" + rootRotation.eulerAngles + ".");
-            return true;
-        }
-
-        internal static bool CanReloadPanelAssets(out string reason)
-        {
-            reason = null;
-            var level = PowerGridPrototype.ActiveLevel;
-            if (level?.WorldState == null || Panel == null) return true;
-            foreach (var panel in level.WorldState.GetRoomItemsOfType(Panel))
-            foreach (var interaction in panel?.Interactions ?? new List<ObjectInteraction>())
-                if (interaction?.Reserved != null || interaction?.Interactor != null)
-                {
-                    reason = "hay un cuadro eléctrico reservado o en uso";
-                    return false;
-                }
-            return true;
-        }
-
-        internal static bool ApplyReloadedPanelAssets(GameObject panelPrefab, Sprite panelIcon)
-        {
-            if (panelPrefab == null || panelIcon == null || !ValidatePanelInteractionSocket(panelPrefab)) return false;
-            if (_panelAnimationSource != null && !PreparePanelAnimator(panelPrefab, _panelAnimationSource)) return false;
-            if (Panel == null) return true;
-            if (_panelAnimationSource == null)
-            {
-                PowerGridPlugin.Log.LogError("No está disponible la taquilla nativa usada para preparar el animador del cuadro.");
-                return false;
-            }
-
-            Set(Panel, "_prefab", panelPrefab);
-            Set(Panel, "_blueprintPrefab", panelPrefab);
-            Set(Panel, "_icon", panelIcon);
-            Set(Panel, "_iconWithoutBacking", panelIcon);
-
-            var level = PowerGridPrototype.ActiveLevel;
-            if (level?.WorldState == null) return true;
-            var panels = level.WorldState.GetRoomItemsOfType(Panel);
-            var affectedRooms = new HashSet<Room>();
-            foreach (var panel in panels)
-            {
-                if (panel?.OwningRoom?.FloorPlanVisual == null) continue;
-                affectedRooms.Add(panel.OwningRoom);
-                panel.Visual = null;
-            }
-            foreach (var room in affectedRooms)
-                room?.FloorPlanVisual?.CreateRoomItems(Vector3.zero, 0f, level);
-            foreach (var panel in panels)
-            foreach (var interaction in panel?.Interactions ?? new List<ObjectInteraction>())
-                interaction?.RefreshSockets();
-
-            PowerGridPlugin.Log.LogInfo("Cuadros eléctricos reconstruidos tras recargar assets: " + panels.Count + ".");
             return true;
         }
 

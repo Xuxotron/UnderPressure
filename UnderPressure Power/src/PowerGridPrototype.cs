@@ -171,7 +171,6 @@ namespace UnderPressure.PowerGrid
         }
 
         internal static PowerGridPrototype Active { get; private set; }
-        internal static Level ActiveLevel => Active?._level;
         internal static FloorPlan CurrentBuildingFloorPlan =>
             Active?._level?.BuildingLogic?.CurrentBlueprintFloorPlan;
 

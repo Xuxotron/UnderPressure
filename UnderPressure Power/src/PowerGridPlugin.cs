@@ -23,12 +23,11 @@ namespace UnderPressure.PowerGrid
         internal static GameObject PowerPanelPrefab { get; private set; }
         private Harmony _harmony;
         private AssetBundle _uiAssetBundle;
-        private bool _assetReloadInProgress;
 
         private void Awake()
         {
             Log = Logger;
-            LoadUiAssets(false);
+            LoadUiAssets();
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
             Logger.LogInfo($"{PluginName} {PluginVersion} cargado.");
@@ -40,105 +39,57 @@ namespace UnderPressure.PowerGrid
             _harmony = null;
         }
 
-        private void Update()
+        private void LoadUiAssets()
         {
-            if (_assetReloadInProgress || !Input.GetKeyDown(KeyCode.F1) ||
-                (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))) return;
-
-            _assetReloadInProgress = true;
-            try
+            foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
             {
-                LoadUiAssets(true);
-            }
-            finally
-            {
-                _assetReloadInProgress = false;
-            }
-        }
-
-        private bool LoadUiAssets(bool reload)
-        {
-            if (!reload)
-            {
-                foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
-                {
-                    if (sprite == null || !string.Equals(sprite.name, "bateria", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    BatterySprite = sprite;
-                    break;
-                }
+                if (sprite == null || !string.Equals(sprite.name, "bateria", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                BatterySprite = sprite;
+                break;
             }
 
             var pluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             var assetsDirectory = Path.Combine(pluginDirectory ?? string.Empty, "Assets");
             var bundlePath = Path.Combine(assetsDirectory, "underpressure");
-            if (!File.Exists(bundlePath))
+            _uiAssetBundle = AssetBundle.LoadFromFile(bundlePath);
+            if (_uiAssetBundle == null)
             {
-                Logger.LogError("No existe el AssetBundle de UnderPressure: " + bundlePath);
-                return false;
+                Logger.LogError("No se pudo cargar el AssetBundle de interfaz: " + bundlePath);
+                return;
             }
 
-            if (reload && !EnergyRoomItems.CanReloadPanelAssets(out var blockedReason))
-            {
-                Logger.LogWarning("Recarga de assets cancelada: " + blockedReason);
-                return false;
-            }
-
-            if (reload && _uiAssetBundle != null)
-            {
-                _uiAssetBundle.Unload(false);
-                _uiAssetBundle = null;
-            }
-
-            var newBundle = AssetBundle.LoadFromFile(bundlePath);
-            if (newBundle == null)
-            {
-                Logger.LogError("No se pudo cargar el AssetBundle de UnderPressure: " + bundlePath);
-                return false;
-            }
-
-            var newBatterySprite = BatterySprite ?? newBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
-            if (newBatterySprite == null)
-                Logger.LogError("El AssetBundle de UnderPressure no contiene el sprite bateria.");
-            var newPanelPrefab = newBundle.LoadAsset<GameObject>(
+            if (BatterySprite == null)
+                BatterySprite = _uiAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
+            if (BatterySprite == null)
+                Logger.LogError("El AssetBundle de interfaz no contiene el sprite bateria.");
+            PowerPanelPrefab = _uiAssetBundle.LoadAsset<GameObject>(
                 ElectricalPanelPrefabParameters.PrefabAsset);
-            if (newPanelPrefab == null)
+            if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
-                ConfigurePanelGraphics(newBundle, newPanelPrefab);
+                ConfigurePanelGraphics();
 
-            var panelIconTexture = newBundle.LoadAsset<Texture2D>(
+            var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.IconTextureAsset);
-            Sprite newPanelSprite = null;
             if (panelIconTexture != null)
             {
-                newPanelSprite = Sprite.Create(panelIconTexture,
+                PowerPanelSprite = Sprite.Create(panelIconTexture,
                     new Rect(0f, 0f, panelIconTexture.width, panelIconTexture.height),
                     new Vector2(0.5f, 0.5f), 100f);
-                newPanelSprite.name = "powerpanel icon";
-                newPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
+                PowerPanelSprite.name = "powerpanel icon";
+                PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
             }
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
-
-            _uiAssetBundle = newBundle;
-            if (newPanelPrefab == null || newPanelSprite == null) return false;
-            if (reload && !EnergyRoomItems.ApplyReloadedPanelAssets(newPanelPrefab, newPanelSprite)) return false;
-
-            BatterySprite = newBatterySprite;
-            PowerPanelPrefab = newPanelPrefab;
-            PowerPanelSprite = newPanelSprite;
-            if (reload)
-                Logger.LogInfo("Assets de UnderPressure recargados con Ctrl+F1 desde: " + bundlePath);
-            return true;
         }
 
-        private void ConfigurePanelGraphics(AssetBundle bundle, GameObject panelPrefab)
+        private void ConfigurePanelGraphics()
         {
-            var material = bundle.LoadAsset<Material>(
+            var material = _uiAssetBundle.LoadAsset<Material>(
                 ElectricalPanelPrefabParameters.MaterialAsset);
-            var texture = bundle.LoadAsset<Texture2D>(
+            var texture = _uiAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.TextureAsset);
-            var meshes = bundle.LoadAllAssets<Mesh>();
+            var meshes = _uiAssetBundle.LoadAllAssets<Mesh>();
 
             if (material == null)
                 Logger.LogError("No se encontro el material grafico del cuadro electrico.");
@@ -147,13 +98,13 @@ namespace UnderPressure.PowerGrid
             if (material != null && texture != null)
                 material.mainTexture = texture;
 
-            ConfigurePanelMesh(panelPrefab, meshes, ElectricalPanelPrefabParameters.BaseMesh, material);
-            ConfigurePanelMesh(panelPrefab, meshes, ElectricalPanelPrefabParameters.DoorMesh, material);
+            ConfigurePanelMesh(meshes, ElectricalPanelPrefabParameters.BaseMesh, material);
+            ConfigurePanelMesh(meshes, ElectricalPanelPrefabParameters.DoorMesh, material);
         }
 
-        private void ConfigurePanelMesh(GameObject panelPrefab, Mesh[] meshes, string meshName, Material material)
+        private void ConfigurePanelMesh(Mesh[] meshes, string meshName, Material material)
         {
-            var target = FindChild(panelPrefab.transform, meshName);
+            var target = FindChild(PowerPanelPrefab.transform, meshName);
             var targetFilter = target?.GetComponent<MeshFilter>();
             if (targetFilter == null)
             {
