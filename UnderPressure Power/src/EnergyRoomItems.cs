@@ -67,6 +67,7 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid TransformerGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481103");
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
+        private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
@@ -96,21 +97,25 @@ namespace UnderPressure.PowerGrid
             InstallDeskMaintenanceInteraction();
             var filingCabinet = FindItem(database.RoomItems, "filing cabinet", "filing", "archivador");
             var pharmacyMachine = FindPharmacyMachine(rooms);
+            var nurseLocker = FindItem(database.RoomItems, "ward nurse locker", "nurse locker");
             var batteryVisual = FindBatteryVisual(metagame);
             var radiator = FindItem(database.RoomItems, "radiator");
 
-            if (MarketingDesk == null || filingCabinet == null || pharmacyMachine == null ||
+            if (MarketingDesk == null || filingCabinet == null || pharmacyMachine == null || nurseLocker == null ||
                 batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null ||
                 PowerGridPlugin.PowerPanelSprite == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudieron localizar todos los objetos base de la Sala de energia: " +
                     $"desk={MarketingDesk != null}, filing={filingCabinet != null}, " +
                     $"pharmacy={pharmacyMachine != null}, " +
+                    $"nurseLocker={nurseLocker != null}, " +
                     $"battery={batteryVisual != null}, radiator={radiator != null}, " +
                     $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}, " +
                     $"panelIcon={PowerGridPlugin.PowerPanelSprite != null}.");
                 return false;
             }
+
+            if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
 
             var additions = new List<SharedInstance<RoomItemDefinition>>();
             if (Battery == null)
@@ -129,11 +134,11 @@ namespace UnderPressure.PowerGrid
 
             if (Panel == null)
             {
-                var maintenanceInteraction = CreatePanelMaintenanceInteraction(pharmacyMachine);
+                var maintenanceInteraction = CreatePanelMaintenanceInteraction(pharmacyMachine, nurseLocker);
                 if (maintenanceInteraction == null)
                 {
                     PowerGridPlugin.Log.LogError(
-                        "No se encontro una interaccion Maintenance nativa para el cuadro electrico.");
+                        "No se pudieron combinar las interacciones nativas de taquilla y mantenimiento para el cuadro electrico.");
                     return false;
                 }
                 Panel = ElectricalPanelNativeParameters.CreateElectricalPanel(
@@ -474,20 +479,73 @@ namespace UnderPressure.PowerGrid
             return null;
         }
 
-        private static InteractionDefinition CreatePanelMaintenanceInteraction(RoomItemDefinition source)
+        private static InteractionDefinition CreatePanelMaintenanceInteraction(RoomItemDefinition source,
+            RoomItemDefinition nurseLocker)
         {
+            InteractionDefinition repairInteraction = null;
             foreach (var interaction in source?.Interactions ?? Array.Empty<InteractionDefinition>())
             {
                 if (interaction == null || interaction.Deprecated ||
                     interaction.Type != InteractionAttributeModifier.Type.Maintain ||
                     !string.Equals(interaction.Name, "Maintenance", StringComparison.OrdinalIgnoreCase)) continue;
-                var clone = (InteractionDefinition)MemberwiseCloneMethod.Invoke(interaction, null);
-                clone.Sockets = new[] { ElectricalPanelPrefabParameters.MaintenanceSocket };
-                clone.Exclusive = true;
-                clone.MaxQueue = 1;
-                return clone;
+                repairInteraction = interaction;
+                break;
             }
-            return null;
+
+            InteractionDefinition lockerInteraction = null;
+            foreach (var interaction in nurseLocker?.Interactions ?? Array.Empty<InteractionDefinition>())
+            {
+                if (interaction == null || interaction.Deprecated || interaction.ObjectAnimGraph == null ||
+                    interaction.AnimGraphs == null || interaction.AnimGraphs.Length == 0) continue;
+                lockerInteraction = interaction;
+                break;
+            }
+
+            if (repairInteraction?.AnimGraphs == null || repairInteraction.AnimGraphs.Length == 0 ||
+                lockerInteraction == null) return null;
+
+            _panelRepairAnimationGraphs = repairInteraction.AnimGraphs;
+            var clone = (InteractionDefinition)MemberwiseCloneMethod.Invoke(repairInteraction, null);
+            clone.Sockets = new[] { ElectricalPanelPrefabParameters.MaintenanceSocket };
+            clone.AnimGraphs = lockerInteraction.AnimGraphs;
+            clone.AnimGraphsAlternate = lockerInteraction.AnimGraphsAlternate;
+            clone.ObjectAnimGraph = lockerInteraction.ObjectAnimGraph;
+            clone.ObjectAnimGraphEx = lockerInteraction.ObjectAnimGraphEx;
+            clone.ObjectAnimGraphAlternate = lockerInteraction.ObjectAnimGraphAlternate;
+            clone.SyncParametersFromObject = false;
+            clone.UseObjectParameterSync = lockerInteraction.UseObjectParameterSync;
+            clone.DisableLookAt = lockerInteraction.DisableLookAt;
+            clone.Exclusive = true;
+            clone.MaxQueue = 1;
+            return clone;
+        }
+
+        private static bool PreparePanelAnimator(GameObject panelPrefab, RoomItemDefinition nurseLocker)
+        {
+            var sourceAnimator = nurseLocker?.GetPrefab(0)?.GetComponentInChildren<Animator>(true);
+            var panelRig = panelPrefab?.transform.Find("A_Prop_Nurse_Locker_V1");
+            if (sourceAnimator == null || sourceAnimator.avatar == null || panelRig == null)
+            {
+                PowerGridPlugin.Log.LogError("No se pudo preparar el rig nativo de taquilla del cuadro electrico.");
+                return false;
+            }
+
+            var animator = panelRig.GetComponent<Animator>() ?? panelRig.gameObject.AddComponent<Animator>();
+            animator.avatar = sourceAnimator.avatar;
+            animator.applyRootMotion = sourceAnimator.applyRootMotion;
+            animator.updateMode = sourceAnimator.updateMode;
+            animator.cullingMode = sourceAnimator.cullingMode;
+            if (panelRig.GetComponent<AnimationEventListener>() == null)
+                panelRig.gameObject.AddComponent<AnimationEventListener>();
+            return true;
+        }
+
+        internal static RuntimeAnimatorController GetPanelRepairAnimationGraph(Character character)
+        {
+            if (character == null || _panelRepairAnimationGraphs == null ||
+                _panelRepairAnimationGraphs.Length == 0) return null;
+            var graphs = _panelRepairAnimationGraphs;
+            return character.FindAnimationGraph(ref graphs, false);
         }
 
         private static InteractionAttributeModifier[] GetMaintenanceAttributeModifiers(RoomItemDefinition source)
