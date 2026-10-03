@@ -515,6 +515,7 @@ namespace UnderPressure.PowerGrid
             clone.SyncParametersFromObject = false;
             clone.UseObjectParameterSync = lockerInteraction.UseObjectParameterSync;
             clone.DisableLookAt = lockerInteraction.DisableLookAt;
+            clone.IgnoreStartRotation = true; // En pared, permite iniciar al alcanzar el socket sin exigir una rotación exacta con tolerancia cero.
             clone.Exclusive = true;
             clone.MaxQueue = 1;
             return clone;
