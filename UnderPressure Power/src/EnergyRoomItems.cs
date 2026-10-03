@@ -68,6 +68,7 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
+        private static RoomItemDefinition _panelAnimationSource;
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
@@ -115,6 +116,7 @@ namespace UnderPressure.PowerGrid
                 return false;
             }
 
+            _panelAnimationSource = nurseLocker;
             if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker) ||
                 !CopyPanelInteractionSocket(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
 
@@ -266,10 +268,56 @@ namespace UnderPressure.PowerGrid
         internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon)
         {
             if (Panel == null || panelPrefab == null || panelIcon == null) return;
+            if (_panelAnimationSource != null && !PreparePanelAnimator(panelPrefab, _panelAnimationSource)) return;
             Set(Panel, "_prefab", panelPrefab);
             Set(Panel, "_blueprintPrefab", panelPrefab);
             Set(Panel, "_icon", panelIcon);
             Set(Panel, "_iconWithoutBacking", panelIcon);
+            RefreshPlacedPanelPrefabInstances();
+        }
+
+        private static void RefreshPlacedPanelPrefabInstances()
+        {
+            var level = PowerGridPrototype.ActiveLevel;
+            if (level?.WorldState == null || Panel == null) return;
+
+            var refreshedPanels = new List<RoomItem>();
+            var affectedRooms = new HashSet<Room>();
+            var skipped = 0;
+            foreach (var panel in level.WorldState.GetRoomItemsOfType(Panel))
+            {
+                if (panel?.OwningRoom?.FloorPlanVisual == null)
+                {
+                    ++skipped;
+                    continue;
+                }
+
+                var busy = false;
+                foreach (var interaction in panel.Interactions)
+                    if (interaction?.Reserved != null || interaction?.Interactor != null)
+                    {
+                        busy = true;
+                        break;
+                    }
+                if (busy)
+                {
+                    ++skipped;
+                    continue;
+                }
+
+                affectedRooms.Add(panel.OwningRoom);
+                refreshedPanels.Add(panel);
+                panel.Visual = null;
+            }
+
+            foreach (var room in affectedRooms)
+                room.FloorPlanVisual.CreateRoomItems(Vector3.zero, 0f, level);
+            foreach (var panel in refreshedPanels)
+                foreach (var interaction in panel.Interactions)
+                    interaction?.RefreshSockets();
+
+            PowerGridPlugin.Log.LogInfo("Instancias completas del prefab colocadas reconstruidas: " +
+                                        refreshedPanels.Count + "; omitidas por estar en uso o sin contenedor: " + skipped + ".");
         }
 
         internal static bool IsCell(RoomItem item) => item != null && IsCell(item.Definition);
