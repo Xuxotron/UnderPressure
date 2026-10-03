@@ -353,9 +353,6 @@ namespace UnderPressure
         public const string DoorMesh = "CuadroEnergyDoor"; // Malla de la puerta.
         public const string MaterialName = "Material #25"; // Nombre del material asignado a las mallas.
         public const string MaintenanceSocket = "NURSE_LOCKER_BASE_RIG:START_FRONT"; // Punto de interacción del conserje.
-        public static readonly Vector3 BuildBoundsCenter = new Vector3(0.061859f, 1.155998f, 0.909653f); // Centro real combinado de las mallas del cuadro.
-        public static readonly Vector3 BuildBoundsSize = new Vector3(0.568817f, 0.568817f, 0.139450f); // Volumen físico del cuadro sin invadir el espacio de START_FRONT.
-        public const bool BuildBoundsSolid = true; // El volumen reservado bloquea la colocación.
     }
 
     // =================

@@ -68,16 +68,7 @@ namespace UnderPressure.PowerGrid
             if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
             else
-            {
                 ConfigurePanelGraphics();
-                // El volumen sólido representa solo la caja física. El juego añade aparte
-                // la zona utilizable de 0,8 x 0,8 centrada en START_FRONT.
-                var buildBounds = PowerPanelPrefab.GetComponent<ItemBuildBoundsComponent>() ??
-                                  PowerPanelPrefab.AddComponent<ItemBuildBoundsComponent>();
-                buildBounds.center = ElectricalPanelPrefabParameters.BuildBoundsCenter;
-                buildBounds.size = ElectricalPanelPrefabParameters.BuildBoundsSize;
-                buildBounds.Solid = ElectricalPanelPrefabParameters.BuildBoundsSolid;
-            }
 
             var panelIconTexture = _uiAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.IconTextureAsset);
