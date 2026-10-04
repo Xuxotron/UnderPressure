@@ -52,4 +52,25 @@ namespace UnderPressure.PowerGrid
                 "Atributo de mantenimiento restaurado en un cuadro electrico antiguo.");
         }
     }
+
+    /// <summary>
+    /// El Animator autónomo forma parte del prefab y se reconstruye con él. Su controlador y
+    /// su pose no son estado de juego, por lo que no deben copiarse a los campos temporales
+    /// que RoomItem utiliza para serializar animaciones nativas en curso.
+    /// </summary>
+    [HarmonyPatch(typeof(RoomItem), "FullSerializerSave.fsISerializationCallbacks.OnBeforeSerializeInstance")]
+    internal static class ElectricalPanelAnimatorSavePatch
+    {
+        private static readonly FieldInfo AnimatorStateForSaveField =
+            AccessTools.Field(typeof(RoomItem), "_animatorStateForSave");
+        private static readonly FieldInfo AnimationGraphForSaveField =
+            AccessTools.Field(typeof(RoomItem), "_animationGraphForSave");
+
+        private static void Postfix(RoomItem __instance)
+        {
+            if (!EnergyRoomItems.IsPanel(__instance)) return;
+            AnimatorStateForSaveField?.SetValue(__instance, null);
+            AnimationGraphForSaveField?.SetValue(__instance, null);
+        }
+    }
 }

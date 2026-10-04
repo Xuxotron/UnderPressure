@@ -78,10 +78,6 @@ namespace UnderPressure.PowerGrid
         internal static RoomItemDefinition Panel { get; private set; }
         internal static RoomItemDefinition Transformer { get; private set; }
         internal static RoomItemDefinition Cell { get; private set; }
-        internal static RuntimeAnimatorController PanelAnimatorController =>
-            PowerGridPlugin.PowerPanelPrefab == null
-                ? null
-                : PowerGridPlugin.PowerPanelPrefab.GetComponentInChildren<Animator>(true)?.runtimeAnimatorController;
         internal static RoomItemDefinition MarketingDesk { get; private set; }
         internal static InteractionDefinition MaintenanceDeskInteraction { get; private set; }
         internal static SharedInstance_TH20TH20_RoomItemDefinition BatteryShared { get; private set; }
