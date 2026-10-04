@@ -113,7 +113,7 @@ namespace UnderPressure
             Set(item, "_allowOnCorner", true); // Permite colocarlo junto a esquinas.
             Set(item, "_gridSnap", 0.25f); // Incremento de posición sobre la cuadrícula.
             Set(item, "_rotationSnap", 90f); // Incremento de rotación en grados.
-            Set(item, "_defaultRotation", 180f); // Rotación inicial en grados.
+            Set(item, "_defaultRotation", 0f); // Rotación inicial en grados.
             Set(item, "_wallMagnetism", false); // Activa la atracción automática hacia paredes cercanas.
             Set(item, "_wallMagnetismRotation", 0f); // Rotación aplicada por el magnetismo de pared.
             Set(item, "_wallMagnetismDistance", 2f); // Distancia máxima de actuación del magnetismo de pared.
