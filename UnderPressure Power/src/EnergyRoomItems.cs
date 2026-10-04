@@ -68,7 +68,6 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
-        private static RoomItemDefinition _panelAnimationSource;
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
@@ -116,8 +115,7 @@ namespace UnderPressure.PowerGrid
                 return false;
             }
 
-            _panelAnimationSource = nurseLocker;
-            if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
+            if (!PreparePanelAnimator(PowerGridPlugin.PowerPanelPrefab)) return false;
 
             var additions = new List<SharedInstance<RoomItemDefinition>>();
             if (Battery == null)
@@ -267,7 +265,7 @@ namespace UnderPressure.PowerGrid
         internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon)
         {
             if (Panel == null || panelPrefab == null || panelIcon == null) return;
-            if (_panelAnimationSource != null && !PreparePanelAnimator(panelPrefab, _panelAnimationSource)) return;
+            if (!PreparePanelAnimator(panelPrefab)) return;
             Set(Panel, "_prefab", panelPrefab);
             Set(Panel, "_blueprintPrefab", panelPrefab);
             Set(Panel, "_icon", panelIcon);
@@ -621,23 +619,17 @@ namespace UnderPressure.PowerGrid
             return clone;
         }
 
-        private static bool PreparePanelAnimator(GameObject panelPrefab, RoomItemDefinition nurseLocker)
+        private static bool PreparePanelAnimator(GameObject panelPrefab)
         {
-            var sourceAnimator = nurseLocker?.GetPrefab(0)?.GetComponentInChildren<Animator>(true);
-            var panelRig = panelPrefab?.transform.Find("A_Prop_Nurse_Locker_V1");
-            if (sourceAnimator == null || sourceAnimator.avatar == null || panelRig == null)
+            var animator = panelPrefab?.GetComponentInChildren<Animator>(true);
+            if (animator == null || animator.avatar == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudo preparar el rig nativo de taquilla del cuadro electrico.");
                 return false;
             }
 
-            var animator = panelRig.GetComponent<Animator>() ?? panelRig.gameObject.AddComponent<Animator>();
-            animator.avatar = sourceAnimator.avatar;
-            animator.applyRootMotion = sourceAnimator.applyRootMotion;
-            animator.updateMode = sourceAnimator.updateMode;
-            animator.cullingMode = sourceAnimator.cullingMode;
-            if (panelRig.GetComponent<AnimationEventListener>() == null)
-                panelRig.gameObject.AddComponent<AnimationEventListener>();
+            if (animator.GetComponent<AnimationEventListener>() == null)
+                animator.gameObject.AddComponent<AnimationEventListener>();
             return true;
         }
 
