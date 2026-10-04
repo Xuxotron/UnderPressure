@@ -352,7 +352,7 @@ namespace UnderPressure
         public const string BaseMesh = "CuadroEnergyBase"; // Malla de la carcasa.
         public const string DoorMesh = "CuadroEnergyDoor"; // Malla de la puerta.
         public const string MaterialName = "Material #25"; // Nombre del material asignado a las mallas.
-        public const string MaintenanceSocket = "NURSE_LOCKER_BASE_RIG:START_FRONT"; // Punto de interacción del conserje.
+        public const string MaintenanceSocket = "POWER_PANEL__BASE_RIG:START_FRONT"; // Punto de interacción del conserje.
     }
 
     // =================
