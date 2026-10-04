@@ -14,9 +14,6 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(ObjectInteraction __instance, Character __0, bool __result)
         {
             if (!IsPanelJanitorInteraction(__instance, __0)) return;
-            PowerGridPlugin.Log.LogInfo("Inicio de interacción del cuadro: resultado=" + __result +
-                                        ", socket=" + __instance.Definition.Sockets[0] +
-                                        ", posición=" + __instance.WorldStartPosition + ".");
             if (!__result || Drivers.ContainsKey(__instance)) return;
             var repairGraph = EnergyRoomItems.GetPanelRepairAnimationGraph(__0);
             var host = __0.Visual?.CharacterGameObject;
@@ -53,38 +50,35 @@ namespace UnderPressure.PowerGrid
             if (interaction != null && Drivers.TryGetValue(interaction, out var current) && current == driver)
                 Drivers.Remove(interaction);
         }
+
+        internal static bool IsOpening(ObjectInteraction interaction)
+        {
+            return interaction != null && Drivers.TryGetValue(interaction, out var driver) &&
+                   driver != null && !driver.OpeningComplete;
+        }
     }
 
-    [HarmonyPatch(typeof(InteractionController), "OnPathComplete")]
-    internal static class ElectricalPanelRepairPathDiagnosticPatch
+    [HarmonyPatch(typeof(ObjectInteraction), "HasFinished")]
+    internal static class ElectricalPanelOpeningCompletionPatch
     {
-        private static readonly System.Reflection.FieldInfo InteractionField =
-            AccessTools.Field(typeof(InteractionController), "_interaction");
-        private static readonly System.Reflection.FieldInfo CharacterField =
-            AccessTools.Field(typeof(InteractionController), "_character");
-
-        private static void Postfix(InteractionController __instance, EPathStatus __0)
+        private static void Postfix(ObjectInteraction __instance, ref bool __result)
         {
-            var interaction = InteractionField?.GetValue(__instance) as ObjectInteraction;
-            var character = CharacterField?.GetValue(__instance) as Character;
-            if (interaction?.ParentRoomItem == null || !EnergyRoomItems.IsPanel(interaction.ParentRoomItem)) return;
-            PowerGridPlugin.Log.LogInfo("Ruta de reparación del cuadro terminada: estado=" + __0 +
-                                        ", iniciada=" + __instance.InteractionStarted +
-                                        ", bedel=" + (character == null ? "null" : character.Position.ToString()) +
-                                        ", destino=" + interaction.WorldStartPosition +
-                                        ", rotación=" + interaction.WorldStartRotation +
-                                        ", ignorarRotación=" + interaction.Definition.IgnoreStartRotation + ".");
+            if (__result && ElectricalPanelRepairAnimationPatch.IsOpening(__instance)) __result = false;
         }
     }
 
     internal sealed class ElectricalPanelRepairAnimationDriver : MonoBehaviour
     {
+        private static readonly int PanelIdleState = Animator.StringToHash("Base Layer.Idle");
+        private static readonly int PanelRepairState = Animator.StringToHash("Base Layer.Repair");
         private Character _character;
         private ObjectInteraction _interaction;
         private RuntimeAnimatorController _repairGraph;
+        private Animator _panelAnimator;
+        private bool _panelAnimationComplete;
         private bool _repairGraphPushed;
-        private bool _waitingStateReported;
-        private float _waitingTime;
+
+        internal bool OpeningComplete => _repairGraphPushed;
 
         internal void Initialise(Character character, ObjectInteraction interaction,
             RuntimeAnimatorController repairGraph)
@@ -92,6 +86,17 @@ namespace UnderPressure.PowerGrid
             _character = character;
             _interaction = interaction;
             _repairGraph = repairGraph;
+            _panelAnimator = interaction.ParentRoomItem?.Visual?.Animator;
+            if (_panelAnimator == null || !_panelAnimator.HasState(0, PanelRepairState))
+            {
+                _panelAnimationComplete = true;
+                PowerGridPlugin.Log.LogError(
+                    "El prefab del cuadro no contiene el estado de animación Base Layer.Repair.");
+                return;
+            }
+
+            _panelAnimator.Play(PanelRepairState, 0, 0f);
+            _panelAnimator.Update(0f);
         }
 
         private void LateUpdate()
@@ -106,18 +111,9 @@ namespace UnderPressure.PowerGrid
 
             if (_repairGraphPushed) return;
             var animator = _character.Animator;
-            var objectAnimator = _interaction.ParentRoomItem?.Visual?.Animator;
-            _waitingTime += Time.unscaledDeltaTime;
-            if (!_waitingStateReported && _waitingTime >= 1f)
-            {
-                _waitingStateReported = true;
-                PowerGridPlugin.Log.LogInfo("Espera de animación del cuadro: personaje=" +
-                                            DescribeAnimator(animator) + ", objeto=" +
-                                            DescribeAnimator(objectAnimator) + ".");
-            }
-            if (animator == null || objectAnimator == null ||
-                !AnimationUtils.IsInState(animator, "Exit", 0) ||
-                !AnimationUtils.IsInState(objectAnimator, "Exit", 0)) return;
+            UpdatePanelAnimationCompletion();
+            if (animator == null || !_panelAnimationComplete ||
+                !AnimationUtils.IsInState(animator, "Exit", 0)) return;
 
             _character.PushAnimationGraph(_repairGraph, 0.15f, null);
             animator = _character.Animator;
@@ -126,20 +122,28 @@ namespace UnderPressure.PowerGrid
             _repairGraphPushed = true;
         }
 
-        private static string DescribeAnimator(Animator animator)
+        private void UpdatePanelAnimationCompletion()
         {
-            if (animator == null) return "null";
-            var controller = animator.runtimeAnimatorController;
-            return "controlador=" + (controller == null ? "null" : controller.name) +
-                   ", tieneExit=" + AnimationUtils.HasParameter(animator, "Exit") +
-                   ", enExit=" + AnimationUtils.IsInState(animator, "Exit", 0);
+            if (_panelAnimationComplete || _panelAnimator == null) return;
+            var state = _panelAnimator.GetCurrentAnimatorStateInfo(0);
+            if (state.fullPathHash != PanelRepairState || state.normalizedTime < 1f) return;
+            _panelAnimationComplete = true;
+            _panelAnimator.Play(PanelIdleState, 0, 0f);
+            _panelAnimator.Update(0f);
         }
 
         internal void RestoreOpeningGraph(Character character)
         {
-            if (!_repairGraphPushed || character == null || _repairGraph == null) return;
-            character.PopAnimationGraph(_repairGraph, 0f, false);
-            _repairGraphPushed = false;
+            if (_panelAnimator != null && _panelAnimator.HasState(0, PanelIdleState))
+            {
+                _panelAnimator.Play(PanelIdleState, 0, 0f);
+                _panelAnimator.Update(0f);
+            }
+            if (_repairGraphPushed && character != null && _repairGraph != null)
+            {
+                character.PopAnimationGraph(_repairGraph, 0f, false);
+                _repairGraphPushed = false;
+            }
         }
     }
 
