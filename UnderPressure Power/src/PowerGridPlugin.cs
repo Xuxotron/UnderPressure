@@ -22,6 +22,7 @@ namespace UnderPressure.PowerGrid
         internal static Sprite BatterySprite { get; private set; }
         internal static Sprite PowerPanelSprite { get; private set; }
         internal static GameObject PowerPanelPrefab { get; private set; }
+        internal static AnimationClip PowerPanelAnimationClip { get; private set; }
         private readonly List<UiSpriteReference> _uiSpriteReferences = new List<UiSpriteReference>();
         private Harmony _harmony;
 
@@ -80,6 +81,10 @@ namespace UnderPressure.PowerGrid
             else
                 ConfigurePanelGraphics();
 
+            PowerPanelAnimationClip = FindPanelAnimationClip();
+            if (PowerPanelAnimationClip == null)
+                Logger.LogError("El AssetBundle no contiene el clip propio del cuadro electrico.");
+
             var panelIconTexture = UnderPressureAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.IconTextureAsset);
             if (panelIconTexture != null)
@@ -91,8 +96,18 @@ namespace UnderPressure.PowerGrid
                 PowerPanelSprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
             }
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
-            EnergyRoomItems.RefreshBundleAssetReferences(PowerPanelPrefab, PowerPanelSprite);
+            EnergyRoomItems.RefreshBundleAssetReferences(PowerPanelPrefab, PowerPanelSprite,
+                PowerPanelAnimationClip);
             RestoreUiSpriteReferences();
+        }
+
+        private static AnimationClip FindPanelAnimationClip()
+        {
+            foreach (var clip in UnderPressureAssetBundle.GetAllAssets<AnimationClip>())
+                if (clip != null && string.Equals(clip.name,
+                        ElectricalPanelPrefabParameters.AnimationClipName, StringComparison.Ordinal))
+                    return clip;
+            return null;
         }
 
         private static void ReloadExtraState()

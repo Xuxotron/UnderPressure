@@ -68,6 +68,10 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
+        private static InteractionDefinition _panelMaintenanceInteraction;
+        private static RuntimeAnimatorController _panelObjectAnimationSource;
+        private static RuntimeAnimatorController[] _panelObjectAnimationSourcesEx;
+        private static RuntimeAnimatorController _panelObjectAnimationSourceAlternate;
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
@@ -103,7 +107,7 @@ namespace UnderPressure.PowerGrid
 
             if (MarketingDesk == null || filingCabinet == null || pharmacyMachine == null || nurseLocker == null ||
                 batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null ||
-                PowerGridPlugin.PowerPanelSprite == null)
+                PowerGridPlugin.PowerPanelSprite == null || PowerGridPlugin.PowerPanelAnimationClip == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudieron localizar todos los objetos base de la Sala de energia: " +
                     $"desk={MarketingDesk != null}, filing={filingCabinet != null}, " +
@@ -111,7 +115,8 @@ namespace UnderPressure.PowerGrid
                     $"nurseLocker={nurseLocker != null}, " +
                     $"battery={batteryVisual != null}, radiator={radiator != null}, " +
                     $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}, " +
-                    $"panelIcon={PowerGridPlugin.PowerPanelSprite != null}.");
+                    $"panelIcon={PowerGridPlugin.PowerPanelSprite != null}, " +
+                    $"panelClip={PowerGridPlugin.PowerPanelAnimationClip != null}.");
                 return false;
             }
 
@@ -134,7 +139,8 @@ namespace UnderPressure.PowerGrid
 
             if (Panel == null)
             {
-                var maintenanceInteraction = CreatePanelMaintenanceInteraction(pharmacyMachine, nurseLocker);
+                var maintenanceInteraction = CreatePanelMaintenanceInteraction(pharmacyMachine, nurseLocker,
+                    PowerGridPlugin.PowerPanelAnimationClip);
                 if (maintenanceInteraction == null)
                 {
                     PowerGridPlugin.Log.LogError(
@@ -262,10 +268,13 @@ namespace UnderPressure.PowerGrid
             return item != null && (ReferenceEquals(item, Panel) || item.DebugTag == PanelTag);
         }
 
-        internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon)
+        internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon,
+            AnimationClip panelAnimationClip)
         {
-            if (Panel == null || panelPrefab == null || panelIcon == null) return;
+            if (Panel == null || panelPrefab == null || panelIcon == null || panelAnimationClip == null) return;
             if (!PreparePanelAnimator(panelPrefab)) return;
+            if (_panelMaintenanceInteraction != null &&
+                !ApplyPanelObjectAnimationGraphs(_panelMaintenanceInteraction, panelAnimationClip)) return;
             Set(Panel, "_prefab", panelPrefab);
             Set(Panel, "_blueprintPrefab", panelPrefab);
             Set(Panel, "_icon", panelIcon);
@@ -574,7 +583,7 @@ namespace UnderPressure.PowerGrid
         }
 
         private static InteractionDefinition CreatePanelMaintenanceInteraction(RoomItemDefinition source,
-            RoomItemDefinition nurseLocker)
+            RoomItemDefinition nurseLocker, AnimationClip panelAnimationClip)
         {
             InteractionDefinition repairInteraction = null;
             foreach (var interaction in source?.Interactions ?? Array.Empty<InteractionDefinition>())
@@ -603,9 +612,11 @@ namespace UnderPressure.PowerGrid
             clone.Sockets = new[] { ElectricalPanelPrefabParameters.MaintenanceSocket };
             clone.AnimGraphs = lockerInteraction.AnimGraphs;
             clone.AnimGraphsAlternate = lockerInteraction.AnimGraphsAlternate;
-            clone.ObjectAnimGraph = lockerInteraction.ObjectAnimGraph;
-            clone.ObjectAnimGraphEx = lockerInteraction.ObjectAnimGraphEx;
-            clone.ObjectAnimGraphAlternate = lockerInteraction.ObjectAnimGraphAlternate;
+            _panelObjectAnimationSource = lockerInteraction.ObjectAnimGraph;
+            _panelObjectAnimationSourcesEx = lockerInteraction.ObjectAnimGraphEx;
+            _panelObjectAnimationSourceAlternate = lockerInteraction.ObjectAnimGraphAlternate;
+            _panelMaintenanceInteraction = clone;
+            if (!ApplyPanelObjectAnimationGraphs(clone, panelAnimationClip)) return null;
             clone.SyncParametersFromObject = lockerInteraction.SyncParametersFromObject;
             clone.UseObjectParameterSync = lockerInteraction.UseObjectParameterSync;
             clone.CanInterrupt = lockerInteraction.CanInterrupt;
@@ -621,16 +632,65 @@ namespace UnderPressure.PowerGrid
 
         private static bool PreparePanelAnimator(GameObject panelPrefab)
         {
-            var animator = panelPrefab?.GetComponentInChildren<Animator>(true);
+            var animatorRoot = FindTransform(panelPrefab?.transform,
+                ElectricalPanelPrefabParameters.AnimatorRoot);
+            var animator = animatorRoot?.GetComponent<Animator>();
             if (animator == null || animator.avatar == null)
             {
-                PowerGridPlugin.Log.LogError("No se pudo preparar el rig nativo de taquilla del cuadro electrico.");
+                PowerGridPlugin.Log.LogError("No se pudo preparar el Animator propio del cuadro electrico.");
                 return false;
             }
 
             if (animator.GetComponent<AnimationEventListener>() == null)
                 animator.gameObject.AddComponent<AnimationEventListener>();
             return true;
+        }
+
+        private static bool ApplyPanelObjectAnimationGraphs(InteractionDefinition interaction,
+            AnimationClip panelAnimationClip)
+        {
+            if (interaction == null || panelAnimationClip == null || _panelObjectAnimationSource == null)
+                return false;
+            interaction.ObjectAnimGraph = CreatePanelObjectAnimationGraph(_panelObjectAnimationSource,
+                panelAnimationClip);
+            interaction.ObjectAnimGraphEx = CreatePanelObjectAnimationGraphs(_panelObjectAnimationSourcesEx,
+                panelAnimationClip);
+            interaction.ObjectAnimGraphAlternate = CreatePanelObjectAnimationGraph(
+                _panelObjectAnimationSourceAlternate, panelAnimationClip);
+            return interaction.ObjectAnimGraph != null;
+        }
+
+        private static RuntimeAnimatorController[] CreatePanelObjectAnimationGraphs(
+            RuntimeAnimatorController[] sources, AnimationClip panelAnimationClip)
+        {
+            if (sources == null) return null;
+            var graphs = new RuntimeAnimatorController[sources.Length];
+            for (var index = 0; index < sources.Length; ++index)
+                graphs[index] = CreatePanelObjectAnimationGraph(sources[index], panelAnimationClip);
+            return graphs;
+        }
+
+        private static RuntimeAnimatorController CreatePanelObjectAnimationGraph(
+            RuntimeAnimatorController source, AnimationClip panelAnimationClip)
+        {
+            if (source == null) return null;
+            var sourceOverride = source as AnimatorOverrideController;
+            var baseController = sourceOverride?.runtimeAnimatorController ?? source;
+            if (baseController == null) return null;
+
+            var graph = new AnimatorOverrideController(baseController)
+            {
+                name = source.name + "_UnderPressurePanel",
+                hideFlags = HideFlags.DontUnloadUnusedAsset
+            };
+            var overrides = new List<KeyValuePair<AnimationClip, AnimationClip>>();
+            graph.GetOverrides(overrides);
+            if (overrides.Count == 0) return null;
+            for (var index = 0; index < overrides.Count; ++index)
+                overrides[index] = new KeyValuePair<AnimationClip, AnimationClip>(overrides[index].Key,
+                    panelAnimationClip);
+            graph.ApplyOverrides(overrides);
+            return graph;
         }
 
         private static Transform FindTransform(Transform root, string objectName)
