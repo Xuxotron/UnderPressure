@@ -77,6 +77,7 @@ namespace UnderPressure.PowerGrid
         private Animator _panelAnimator;
         private bool _panelAnimationComplete;
         private bool _repairGraphPushed;
+        private bool _exitRequested;
 
         internal bool OpeningComplete => _repairGraphPushed;
 
@@ -109,17 +110,27 @@ namespace UnderPressure.PowerGrid
                 return;
             }
 
-            if (_repairGraphPushed) return;
             var animator = _character.Animator;
             UpdatePanelAnimationCompletion();
-            if (animator == null || !_panelAnimationComplete ||
-                !AnimationUtils.IsInState(animator, "Exit", 0)) return;
+            if (!_repairGraphPushed)
+            {
+                if (animator == null || !_panelAnimationComplete ||
+                    !AnimationUtils.IsInState(animator, "Exit", 0)) return;
 
-            _character.PushAnimationGraph(_repairGraph, 0.15f, null);
-            animator = _character.Animator;
-            if (animator != null && AnimationUtils.HasParameter(animator, "Exit"))
-                animator.SetBool("Exit", false);
-            _repairGraphPushed = true;
+                _character.PushAnimationGraph(_repairGraph, 0.15f, null);
+                animator = _character.Animator;
+                if (animator != null && AnimationUtils.HasParameter(animator, "Exit"))
+                    animator.SetBool("Exit", false);
+                _repairGraphPushed = true;
+                return;
+            }
+
+            var item = _interaction.ParentRoomItem;
+            if (!_exitRequested && item != null && item.IsFullyRepaired())
+            {
+                _interaction.RequestExit();
+                _exitRequested = true;
+            }
         }
 
         private void UpdatePanelAnimationCompletion()
@@ -144,6 +155,7 @@ namespace UnderPressure.PowerGrid
                 character.PopAnimationGraph(_repairGraph, 0f, false);
                 _repairGraphPushed = false;
             }
+            _exitRequested = false;
         }
     }
 

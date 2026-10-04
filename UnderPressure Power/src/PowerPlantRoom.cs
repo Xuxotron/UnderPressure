@@ -211,6 +211,10 @@ namespace UnderPressure.PowerGrid
                 EnergyRoomItems.TransformerShared, EnergyRoomItems.Transformer);
             added += RegisterSaveAsset(mapping, EnergyRoomItems.CellShared?.ID ?? 0,
                 EnergyRoomItems.CellShared, EnergyRoomItems.Cell);
+            var panelController = EnergyRoomItems.PanelAnimatorController;
+            if (panelController != null)
+                added += RegisterSaveObject(mapping, ElectricalPanelNativeParameters.ElectricalPanelSharedId + 1,
+                    panelController);
             if (added > 0)
             {
                 RefreshSerializerMappings(saveSystem, mapping);
