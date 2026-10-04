@@ -617,8 +617,9 @@ namespace UnderPressure.PowerGrid
             _panelObjectAnimationSourceAlternate = lockerInteraction.ObjectAnimGraphAlternate;
             _panelMaintenanceInteraction = clone;
             if (!ApplyPanelObjectAnimationGraphs(clone, panelAnimationClip)) return null;
-            clone.SyncParametersFromObject = lockerInteraction.SyncParametersFromObject;
-            clone.UseObjectParameterSync = lockerInteraction.UseObjectParameterSync;
+            // El bedel y el cuadro comienzan sus animaciones a la vez, pero sus Animator son independientes.
+            clone.SyncParametersFromObject = false;
+            clone.UseObjectParameterSync = false;
             clone.CanInterrupt = lockerInteraction.CanInterrupt;
             clone.IgnoreRoomCheck = lockerInteraction.IgnoreRoomCheck;
             clone.DisableLookAt = lockerInteraction.DisableLookAt;
