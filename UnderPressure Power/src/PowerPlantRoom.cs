@@ -15,6 +15,10 @@ namespace UnderPressure.PowerGrid
         private const int SharedDefinitionId = 9112001;
         private static readonly MethodInfo MemberwiseCloneMethod =
             AccessTools.Method(typeof(object), "MemberwiseClone");
+        private static readonly MethodInfo GenerateAssetHashMethod =
+            AccessTools.Method(typeof(AssetIDMapping), "GenerateHashFromString", new[] { typeof(string) });
+        private static readonly MethodInfo AssetNamePrefixMethod =
+            AccessTools.Method(typeof(AssetIDMapping), "PrefixForAssetNameOfType", new[] { typeof(Type) });
         private static RequiredItem _doorRequirement;
         private static RequiredItem _deskRequirement;
         private static RequiredItem _batteryRequirement;
@@ -213,8 +217,7 @@ namespace UnderPressure.PowerGrid
                 EnergyRoomItems.CellShared, EnergyRoomItems.Cell);
             var panelController = EnergyRoomItems.PanelAnimatorController;
             if (panelController != null)
-                added += RegisterSaveObject(mapping, ElectricalPanelNativeParameters.ElectricalPanelSharedId + 1,
-                    panelController);
+                added += RegisterNamedUnityAsset(mapping, panelController);
             if (added > 0)
             {
                 RefreshSerializerMappings(saveSystem, mapping);
@@ -253,6 +256,18 @@ namespace UnderPressure.PowerGrid
             }
             mapping.Add(id, value);
             return 1;
+        }
+
+        private static int RegisterNamedUnityAsset(BiDictionary<int, object> mapping, UnityEngine.Object value)
+        {
+            if (value == null) return 0;
+            if (GenerateAssetHashMethod == null || AssetNamePrefixMethod == null)
+                throw new MissingMethodException(typeof(AssetIDMapping).FullName,
+                    "GenerateHashFromString/PrefixForAssetNameOfType");
+
+            var prefix = (string)AssetNamePrefixMethod.Invoke(null, new object[] { value.GetType() });
+            var id = (int)GenerateAssetHashMethod.Invoke(null, new object[] { prefix + value.name });
+            return RegisterSaveObject(mapping, id, value);
         }
 
         private static RequiredItem[] CombineRequirements(params RequiredItem[] requirements)
