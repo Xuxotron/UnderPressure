@@ -1,3 +1,4 @@
+// Purpose: Hides diagnosis price rows when diagnosis charging is disabled.
 using HarmonyLib;
 using TH20;
 
