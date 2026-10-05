@@ -1,3 +1,4 @@
+// Purpose: Creates and configures runtime room-item definitions used by the electrical system.
 using System;
 using FullInspector;
 using HarmonyLib;
