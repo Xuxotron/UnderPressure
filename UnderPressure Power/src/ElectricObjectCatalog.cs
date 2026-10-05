@@ -1,3 +1,4 @@
+// Purpose: Defines the editable catalogue of electrical objects, billing modes, voltages, and connector heights.
 namespace UnderPressure.PowerGrid
 {
     internal static class ElectricObjectCatalog
