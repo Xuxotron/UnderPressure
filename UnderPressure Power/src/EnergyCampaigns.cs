@@ -1,3 +1,4 @@
+// Purpose: Stores, calculates, persists, and exposes electrical campaign state and effects.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
