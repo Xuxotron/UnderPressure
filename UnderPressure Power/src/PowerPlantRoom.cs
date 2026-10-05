@@ -1,3 +1,4 @@
+// Purpose: Defines, unlocks, registers, and persists the custom Energy Room and its janitor work category.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
