@@ -1,3 +1,4 @@
+// Purpose: Records Hogsport's original level parameters as a typed reference catalogue.
 using System;
 
 namespace UnderPressure.Research
