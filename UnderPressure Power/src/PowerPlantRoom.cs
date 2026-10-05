@@ -555,8 +555,6 @@ namespace UnderPressure.PowerGrid
             AccessTools.Field(typeof(RoomDefinition), "_wallsInterior");
         private static readonly FieldInfo ExteriorWallsDefinitionField =
             AccessTools.Field(typeof(RoomDefinition), "_wallsExterior");
-        private static readonly FieldInfo RandomMeshesField =
-            AccessTools.Field(typeof(MeshRandomizer), "_meshes");
         private static readonly Type CorridorWallVisualType =
             typeof(CorridorWallsVisual).GetNestedType("WallVisual", BindingFlags.NonPublic);
         private static readonly FieldInfo CorridorWallTransformField =
@@ -565,14 +563,6 @@ namespace UnderPressure.PowerGrid
             CorridorWallVisualType?.GetField("Room", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static readonly List<WeakReference> RoomVisuals = new List<WeakReference>();
         private static readonly List<WeakReference> CorridorVisuals = new List<WeakReference>();
-        private static readonly RoomWallDefinition.Type[] TexturedWallTypes =
-        {
-            RoomWallDefinition.Type.Wall,
-            RoomWallDefinition.Type.Door,
-            RoomWallDefinition.Type.Window,
-            RoomWallDefinition.Type.Blank,
-            RoomWallDefinition.Type.AmbulanceBayEntrance
-        };
         private static Material _floor;
         private static Material _interior;
         private static Material _exterior;
@@ -624,14 +614,13 @@ namespace UnderPressure.PowerGrid
             if (wallObjects != null)
                 foreach (var wall in wallObjects)
                 {
-                    if (UsesTexturedWallPiece(wall.Key, interiorDefinition))
-                        ApplyFirstMaterial(wall.Key, _interior);
+                    ApplyWallMaterial(wall.Key, _interior, interiorDefinition);
                     ApplyFirstMaterial(wall.Value, _exterior);
                 }
 
-            if (floorPlan.Doors != null)
-                foreach (var door in floorPlan.Doors)
-                    ApplyDoor(door);
+            if (floorPlan.Items != null)
+                foreach (var item in floorPlan.Items)
+                    ApplyDoor(item);
         }
 
         internal static void ApplyDoor(RoomItem item)
@@ -639,7 +628,7 @@ namespace UnderPressure.PowerGrid
             if (item?.Definition == null || item.Definition.ItemType != RoomItemDefinition.Type.Door ||
                 item.OwningRoom == null || !PowerPlantRoomRegistry.IsPowerPlant(item.OwningRoom.Definition))
                 return;
-            ApplyFirstMaterial(item.Visual?.GameObject?.transform, _door);
+            ApplyAllMaterials(item.Visual?.GameObject?.transform, _door);
         }
 
         internal static void Apply(CorridorWallsVisual visual)
@@ -656,35 +645,36 @@ namespace UnderPressure.PowerGrid
                 var transform = CorridorWallTransformField.GetValue(entry) as Transform;
                 var exteriorDefinition = ExteriorWallsDefinitionField?.GetValue(room.Definition)
                     as RoomWallDefinition;
-                if (UsesTexturedWallPiece(transform, exteriorDefinition))
-                    ApplyFirstMaterial(transform, _exterior);
+                ApplyWallMaterial(transform, _exterior, exteriorDefinition);
             }
         }
 
-        private static bool UsesTexturedWallPiece(Transform transform, RoomWallDefinition definition)
+        private static void ApplyWallMaterial(Transform transform, Material replacement,
+            RoomWallDefinition definition)
         {
-            if (transform == null || definition == null) return false;
-            var mesh = transform.GetComponent<MeshFilter>()?.sharedMesh;
-            if (mesh == null) return false;
-            foreach (var type in TexturedWallTypes)
-            {
-                var prefab = definition.GetPiece(type);
-                if (PrefabUsesMesh(prefab, mesh)) return true;
-            }
-            return false;
-        }
+            if (transform == null || replacement == null || definition == null) return;
+            var wallPrefab = definition.GetPiece(RoomWallDefinition.Type.Wall);
+            if (wallPrefab == null) return;
+            var surfaceMaterials = new List<Material>();
+            foreach (var sourceRenderer in wallPrefab.GetComponentsInChildren<Renderer>(true))
+                foreach (var sourceMaterial in sourceRenderer.sharedMaterials)
+                    if (sourceMaterial != null && !sourceMaterial.name.Contains("M_Wall_Top") &&
+                        !surfaceMaterials.Contains(sourceMaterial))
+                        surfaceMaterials.Add(sourceMaterial);
+            if (surfaceMaterials.Count == 0) return;
 
-        private static bool PrefabUsesMesh(GameObject prefab, Mesh mesh)
-        {
-            if (prefab == null || mesh == null) return false;
-            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
-                if (filter != null && filter.sharedMesh == mesh) return true;
-            foreach (var randomizer in prefab.GetComponentsInChildren<MeshRandomizer>(true))
+            foreach (var renderer in transform.GetComponentsInChildren<Renderer>(true))
             {
-                var meshes = RandomMeshesField?.GetValue(randomizer) as Mesh[];
-                if (meshes != null && Array.IndexOf(meshes, mesh) >= 0) return true;
+                var materials = renderer.sharedMaterials;
+                var changed = false;
+                for (var index = 0; index < materials.Length; ++index)
+                {
+                    if (!surfaceMaterials.Contains(materials[index])) continue;
+                    materials[index] = replacement;
+                    changed = true;
+                }
+                if (changed) renderer.sharedMaterials = materials;
             }
-            return false;
         }
 
         private static void RefreshTrackedVisuals()
@@ -719,6 +709,23 @@ namespace UnderPressure.PowerGrid
             if (root == null || material == null) return;
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
                 ApplyFirstMaterial(renderer, material);
+        }
+
+        private static void ApplyAllMaterials(Transform root, Material material)
+        {
+            if (root == null || material == null) return;
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0)
+                {
+                    renderer.sharedMaterial = material;
+                    continue;
+                }
+                for (var index = 0; index < materials.Length; ++index)
+                    materials[index] = material;
+                renderer.sharedMaterials = materials;
+            }
         }
 
         private static void ApplyFirstMaterial(Renderer renderer, Material material)
