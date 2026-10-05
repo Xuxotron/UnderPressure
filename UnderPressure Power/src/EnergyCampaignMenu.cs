@@ -256,7 +256,7 @@ namespace UnderPressure.PowerGrid
             if (_slider != null)
             {
                 if (_duration != null)
-                    _duration.rectTransform.anchoredPosition += new Vector2(0f, -8f);
+                    _duration.rectTransform.anchoredPosition += new Vector2(0f, -3f);
                 _slider.transform.localPosition += new Vector3(16f, 0f, 0f);
                 _slider.onValueChanged.RemoveAllListeners();
                 _slider.minValue = 1f;
@@ -290,6 +290,7 @@ namespace UnderPressure.PowerGrid
             {
                 _launch.onPrimaryDown.RemoveAllListeners();
                 _launch.onPrimaryDown.AddListener(Launch);
+                _launch.interactable = !DisabledFeatures.EnergyCampaignLaunch;
             }
 
             CloneNativeHeader(native, root);
@@ -345,6 +346,7 @@ namespace UnderPressure.PowerGrid
 
         private void Launch()
         {
+            if (DisabledFeatures.EnergyCampaignLaunch) return;
             var component = EnergyCampaignSystem.GetController(_room);
             if (component == null)
             {
