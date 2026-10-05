@@ -1,5 +1,6 @@
 // Purpose: Defines, unlocks, registers, and persists the custom Energy Room and its janitor work category.
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using FullInspector;
@@ -506,6 +507,166 @@ namespace UnderPressure.PowerGrid
                 field.SetValue(Definition, value);
         }
 
+    }
+
+    internal static class EnergyRoomSurfaceMaterials
+    {
+        private static readonly FieldInfo FloorPlanField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorPlan");
+        private static readonly FieldInfo FloorRenderersField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorTileRenderers");
+        private static readonly FieldInfo WallObjectsField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_wallObjects");
+        private static readonly FieldInfo FloorOverrideField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorVisualOverride");
+        private static readonly FieldInfo WallOverrideField =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_wallVisualOverride");
+        private static readonly FieldInfo CorridorWallsField =
+            AccessTools.Field(typeof(CorridorWallsVisual), "_activeWalls");
+        private static readonly Type CorridorWallVisualType =
+            typeof(CorridorWallsVisual).GetNestedType("WallVisual", BindingFlags.NonPublic);
+        private static readonly FieldInfo CorridorWallTransformField =
+            CorridorWallVisualType?.GetField("Transform", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        private static readonly FieldInfo CorridorWallRoomField =
+            CorridorWallVisualType?.GetField("Room", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        private static readonly List<WeakReference> RoomVisuals = new List<WeakReference>();
+        private static readonly List<WeakReference> CorridorVisuals = new List<WeakReference>();
+        private static Material _floor;
+        private static Material _interior;
+        private static Material _exterior;
+        private static Material _door;
+
+        internal static void SetMaterials(Material floor, Material interior, Material exterior, Material door)
+        {
+            _floor = floor;
+            _interior = interior;
+            _exterior = exterior;
+            _door = door;
+            RefreshTrackedVisuals();
+        }
+
+        internal static void Apply(RoomFloorPlanVisual visual)
+        {
+            var floorPlan = FloorPlanField?.GetValue(visual) as FloorPlan;
+            if (visual == null || floorPlan == null || !PowerPlantRoomRegistry.IsPowerPlant(floorPlan.Definition))
+                return;
+            Track(RoomVisuals, visual);
+
+            // Esta sala usa siempre sus acabados propios, no las personalizaciones del hospital.
+            FloorOverrideField?.SetValue(visual, null);
+            WallOverrideField?.SetValue(visual, null);
+
+            var floorRenderers = FloorRenderersField?.GetValue(visual) as List<Renderer>;
+            if (floorRenderers != null)
+                foreach (var renderer in floorRenderers)
+                    ApplyFirstMaterial(renderer, _floor, true);
+
+            var wallObjects = WallObjectsField?.GetValue(visual)
+                as List<KeyValuePair<Transform, Transform>>;
+            if (wallObjects != null)
+                foreach (var wall in wallObjects)
+                {
+                    ApplyFirstMaterial(wall.Key, _interior, true);
+                    ApplyFirstMaterial(wall.Value, _exterior, true);
+                }
+
+            if (floorPlan.Doors != null)
+                foreach (var door in floorPlan.Doors)
+                    ApplyDoor(door);
+        }
+
+        internal static void ApplyDoor(RoomItem item)
+        {
+            if (item?.OwningRoom == null || !PowerPlantRoomRegistry.IsPowerPlant(item.OwningRoom.Definition))
+                return;
+            ApplyFirstMaterial(item.Visual?.GameObject?.transform, _door, false);
+        }
+
+        internal static void Apply(CorridorWallsVisual visual)
+        {
+            if (visual == null) return;
+            Track(CorridorVisuals, visual);
+            var activeWalls = CorridorWallsField?.GetValue(visual) as IEnumerable;
+            if (activeWalls == null || CorridorWallTransformField == null || CorridorWallRoomField == null)
+                return;
+            foreach (var entry in activeWalls)
+            {
+                var room = CorridorWallRoomField.GetValue(entry) as Room;
+                if (room == null || !PowerPlantRoomRegistry.IsPowerPlant(room.Definition)) continue;
+                ApplyFirstMaterial(CorridorWallTransformField.GetValue(entry) as Transform, _exterior, false);
+            }
+        }
+
+        private static void RefreshTrackedVisuals()
+        {
+            Refresh(RoomVisuals, target => Apply(target as RoomFloorPlanVisual));
+            Refresh(CorridorVisuals, target => Apply(target as CorridorWallsVisual));
+        }
+
+        private static void Refresh(List<WeakReference> references, Action<object> apply)
+        {
+            for (var index = references.Count - 1; index >= 0; --index)
+            {
+                var target = references[index].Target;
+                if (target == null)
+                {
+                    references.RemoveAt(index);
+                    continue;
+                }
+                apply(target);
+            }
+        }
+
+        private static void Track(List<WeakReference> references, object target)
+        {
+            foreach (var reference in references)
+                if (ReferenceEquals(reference.Target, target)) return;
+            references.Add(new WeakReference(target));
+        }
+
+        private static void ApplyFirstMaterial(Transform root, Material material, bool clearOverrides)
+        {
+            if (root == null || material == null) return;
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+                ApplyFirstMaterial(renderer, material, clearOverrides);
+        }
+
+        private static void ApplyFirstMaterial(Renderer renderer, Material material, bool clearOverrides)
+        {
+            if (renderer == null || material == null) return;
+            var materials = renderer.sharedMaterials;
+            if (materials == null || materials.Length == 0)
+            {
+                renderer.sharedMaterial = material;
+                return;
+            }
+            if (materials[0] != material)
+            {
+                materials[0] = material;
+                renderer.sharedMaterials = materials;
+            }
+            if (clearOverrides) renderer.SetPropertyBlock(null, 0);
+        }
+    }
+
+    [HarmonyPatch(typeof(RoomFloorPlanVisual), "UpdateFromRoom")]
+    internal static class EnergyRoomSurfaceMaterialsPatch
+    {
+        private static void Postfix(RoomFloorPlanVisual __instance) =>
+            EnergyRoomSurfaceMaterials.Apply(__instance);
+    }
+
+    [HarmonyPatch(typeof(CorridorWallsVisual), "CreateWallObjects")]
+    internal static class EnergyRoomExteriorMaterialsPatch
+    {
+        private static void Postfix(CorridorWallsVisual __instance) =>
+            EnergyRoomSurfaceMaterials.Apply(__instance);
+    }
+
+    [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
+    internal static class EnergyRoomDoorMaterialPatch
+    {
+        private static void Postfix(RoomItem __0) => EnergyRoomSurfaceMaterials.ApplyDoor(__0);
     }
 
     [HarmonyPatch(typeof(Metagame), "HasUnlocked", new[] { typeof(ISilverUnlockable) })]
