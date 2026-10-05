@@ -1,3 +1,4 @@
+// Purpose: Manages hospital lighting, room reflections, window lights, shadows, and illuminated patients.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
