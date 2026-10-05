@@ -63,6 +63,21 @@ namespace UnderPressure.PowerGrid
 
         private void LoadUiAssets()
         {
+            var energyFloorMaterial = UnderPressureAssetBundle.LoadAsset<Material>(
+                "Assets/EnergyRoom/EnergyFloor.mat");
+            var energyInteriorMaterial = UnderPressureAssetBundle.LoadAsset<Material>(
+                "Assets/EnergyRoom/EnergyInterior.mat");
+            var energyExteriorMaterial = UnderPressureAssetBundle.LoadAsset<Material>(
+                "Assets/EnergyRoom/EnergyExterior.mat");
+            var energyDoorMaterial = UnderPressureAssetBundle.LoadAsset<Material>(
+                "Assets/EnergyRoom/EnergyDoor.mat");
+            EnergyRoomSurfaceMaterials.SetMaterials(energyFloorMaterial, energyInteriorMaterial,
+                energyExteriorMaterial, energyDoorMaterial);
+            LogMissingEnergyRoomMaterial(energyFloorMaterial, "EnergyFloor");
+            LogMissingEnergyRoomMaterial(energyInteriorMaterial, "EnergyInterior");
+            LogMissingEnergyRoomMaterial(energyExteriorMaterial, "EnergyExterior");
+            LogMissingEnergyRoomMaterial(energyDoorMaterial, "EnergyDoor");
+
             BatterySprite = UnderPressureAssetBundle.LoadAsset<Sprite>("Assets/UI/bateria.png");
             if (BatterySprite == null)
                 foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
@@ -92,6 +107,12 @@ namespace UnderPressure.PowerGrid
             else Logger.LogError("El AssetBundle no contiene el icono del cuadro electrico.");
             EnergyRoomItems.RefreshBundleAssetReferences(PowerPanelPrefab, PowerPanelSprite);
             RestoreUiSpriteReferences();
+        }
+
+        private void LogMissingEnergyRoomMaterial(Material material, string assetName)
+        {
+            if (material == null)
+                Logger.LogError($"El AssetBundle no contiene el material {assetName} de la sala de energia.");
         }
 
         private static void ReloadExtraState()
