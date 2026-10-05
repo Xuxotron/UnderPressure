@@ -1,3 +1,4 @@
+// Purpose: Inspects game assemblies and prints IL metadata used for implementation research.
 using System;
 using System.Collections.Generic;
 using System.Linq;
