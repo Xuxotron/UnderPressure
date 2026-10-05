@@ -291,6 +291,12 @@ namespace UnderPressure.PowerGrid
                 _launch.onPrimaryDown.RemoveAllListeners();
                 _launch.onPrimaryDown.AddListener(Launch);
                 _launch.interactable = !DisabledFeatures.EnergyCampaignLaunch;
+                if (DisabledFeatures.EnergyCampaignLaunch)
+                {
+                    var launchAnimator = _launch.GetComponentInChildren<ButtonAnimator>(true);
+                    if (launchAnimator != null)
+                        launchAnimator.CurrentState = ButtonAnimator.State.Unselectable;
+                }
             }
 
             CloneNativeHeader(native, root);
