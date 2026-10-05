@@ -95,7 +95,8 @@ namespace UnderPressure.PowerGrid
             FindExisting(database.RoomItems);
             MarketingDesk = FindMarketingDesk(marketingRoom);
             var campaignTable = FindCampaignMenuSource(database.RoomItems);
-            InstallDeskMaintenanceInteraction();
+            if (!DisabledFeatures.EnergyRoomDesk)
+                InstallDeskMaintenanceInteraction();
             var filingCabinet = FindItem(database.RoomItems, "filing cabinet", "filing", "archivador");
             var pharmacyMachine = FindPharmacyMachine(rooms);
             var nurseLocker = FindItem(database.RoomItems, "ward nurse locker", "nurse locker");
@@ -203,7 +204,8 @@ namespace UnderPressure.PowerGrid
 
             ElectricityGameplay.Configure(database.RoomItems, rooms);
 
-            AllowInEnergyRoom(MarketingDesk);
+            if (!DisabledFeatures.EnergyRoomDesk)
+                AllowInEnergyRoom(MarketingDesk);
 
             if (additions.Count > 0)
             {
