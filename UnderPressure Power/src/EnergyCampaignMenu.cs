@@ -1,3 +1,4 @@
+// Purpose: Builds the transformer campaign interface, contracted-power selector, and progress controls.
 using System;
 using System.Collections.Generic;
 using System.Linq;
