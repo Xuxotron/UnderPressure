@@ -1,4 +1,4 @@
-// Actualizado: 2026-10-05 — restaurado Ctrl+F1 para recarga en caliente de AssetBundle/prefabs/.upsav.
+// Purpose: Bootstraps the core Under Pressure plugin, settings, patches, localization, and shared assets.
 using System.IO;
 using System.Reflection;
 using BepInEx;
