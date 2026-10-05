@@ -391,7 +391,10 @@ namespace UnderPressure.PowerGrid
             if (_contractPower != null)
             {
                 _contractPower.gameObject.name = "Contracted power";
-                SetRect(_contractPower.rectTransform, new Vector2(0f, 40f), new Vector2(390f, 34f));
+                _contractPower.enableAutoSizing = false;
+                _contractPower.enableWordWrapping = false;
+                _contractPower.overflowMode = TextOverflowModes.Overflow;
+                SetRect(_contractPower.rectTransform, new Vector2(0f, 42f), new Vector2(390f, 34f));
             }
             if (_contractSlider != null)
             {
@@ -405,8 +408,11 @@ namespace UnderPressure.PowerGrid
                 _contractCost = costObject.GetComponent<TMP_Text>();
                 if (_contractCost != null)
                 {
-                    _contractCost.fontSize = Mathf.Max(1f, _contractPower.fontSize * 0.82f);
-                    SetRect(_contractCost.rectTransform, new Vector2(0f, 16f), new Vector2(390f, 28f));
+                    _contractCost.fontSize = Mathf.Max(1f, _contractPower.fontSize * 0.9f);
+                    _contractCost.enableAutoSizing = false;
+                    _contractCost.enableWordWrapping = false;
+                    _contractCost.overflowMode = TextOverflowModes.Overflow;
+                    SetRect(_contractCost.rectTransform, new Vector2(0f, 20f), new Vector2(390f, 30f));
                 }
             }
             DisablePanelImages(contractGroup);
