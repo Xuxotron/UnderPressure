@@ -1,3 +1,4 @@
+// Purpose: Loads mod translation tables and resolves text for the active game language.
 using System;
 using System.Collections.Generic;
 using System.IO;
