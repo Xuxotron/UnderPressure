@@ -1,3 +1,4 @@
+// Purpose: Applies configurable resale penalties to room items and complete rooms.
 using System.Reflection;
 using HarmonyLib;
 using TH20;
