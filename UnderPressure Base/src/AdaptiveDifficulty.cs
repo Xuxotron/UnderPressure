@@ -1,3 +1,4 @@
+// Purpose: Calculates adaptive difficulty values from the active hospital's performance.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
