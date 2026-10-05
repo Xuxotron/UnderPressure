@@ -1,3 +1,4 @@
+// Purpose: Displays active difficulty variables, adjustments, and calculated results in the HUD.
 using System;
 using System.Reflection;
 using System.Text;
