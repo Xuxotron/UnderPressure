@@ -1,3 +1,4 @@
+// Purpose: Adds diagnosis, treatment, and electricity data views with live world colouring.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
