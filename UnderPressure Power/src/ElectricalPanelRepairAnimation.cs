@@ -1,4 +1,4 @@
-// Actualizado: 2026-10-05 — conecta la reparación real del bedel con los estados Repair/Idle del Animator del cuadro.
+// Purpose: Synchronizes electrical-panel repair and idle animations with janitor maintenance work.
 
 using System;
 using HarmonyLib;
