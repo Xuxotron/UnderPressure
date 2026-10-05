@@ -1,3 +1,4 @@
+// Purpose: Applies editable runtime overrides to Hogsport's level configuration.
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
