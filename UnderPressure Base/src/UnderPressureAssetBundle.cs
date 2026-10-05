@@ -1,9 +1,8 @@
+// Actualizado: 2026-10-05 — corregida visibilidad pública entre UnderPressure y UnderPressurePower.
 using System;
-using System.Collections.Generic;
 using System.IO;
 using BepInEx.Logging;
 using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace UnderPressure
 {
@@ -11,12 +10,10 @@ namespace UnderPressure
     {
         public const string FileName = "underpressure";
 
-        private static readonly Dictionary<string, Object> MainAssets =
-            new Dictionary<string, Object>(StringComparer.OrdinalIgnoreCase);
         private static ManualLogSource _log;
         private static string _bundlePath;
         private static AssetBundle _bundle;
-        private static Object[] _allAssets = Array.Empty<Object>();
+        private static UnityEngine.Object[] _allAssets = Array.Empty<UnityEngine.Object>();
         private static string[] _overlayAssetNames = Array.Empty<string>();
         private static string _overlayExtraSavePath;
         private static bool _overlayExtraSaveFound;
@@ -28,28 +25,32 @@ namespace UnderPressure
         public static event Action ReloadCompleted;
 
         public static string BundlePath => _bundlePath;
-        public static IReadOnlyList<Object> AllAssets => _allAssets;
+        public static UnityEngine.Object[] AllAssets => _allAssets;
 
         internal static void Initialise(ManualLogSource log, string pluginDirectory)
         {
             _log = log;
             _bundlePath = Path.Combine(pluginDirectory ?? string.Empty, "Assets", FileName);
-            Reload();
+            Reload(false);
         }
 
         internal static void UpdateHotkey()
         {
-            if (_reloading || !Input.GetKeyDown(KeyCode.F1) ||
-                (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))) return;
+            if (_reloading || !Input.GetKeyDown(KeyCode.F1)) return;
+            if (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl)) return;
             Reload(true);
         }
 
-        public static bool Reload() => Reload(false);
+        public static bool Reload()
+        {
+            return Reload(false);
+        }
 
-        private static bool Reload(bool showOverlay)
+        internal static bool Reload(bool showOverlay)
         {
             if (_reloading) return false;
             _reloading = true;
+
             if (showOverlay)
             {
                 _overlayAssetNames = Array.Empty<string>();
@@ -57,6 +58,7 @@ namespace UnderPressure
                 _overlayExtraSaveFound = false;
                 _overlayVisibleUntil = Time.unscaledTime + 8f;
             }
+
             try
             {
                 if (string.IsNullOrEmpty(_bundlePath) || !File.Exists(_bundlePath))
@@ -65,43 +67,40 @@ namespace UnderPressure
                     return false;
                 }
 
-                var bundleBytes = File.ReadAllBytes(_bundlePath);
+                // Leer primero a memoria permite descargar el bundle anterior y volver a cargar
+                // exactamente el mismo fichero sin mantenerlo bloqueado.
+                var bytes = File.ReadAllBytes(_bundlePath);
+
                 NotifyReloading();
-                MainAssets.Clear();
-                _allAssets = Array.Empty<Object>();
+
+                _allAssets = Array.Empty<UnityEngine.Object>();
+
                 if (_bundle != null)
                 {
+                    // false: descarga el contenedor pero mantiene vivos los objetos existentes
+                    // hasta que los consumidores sustituyan sus referencias durante Reloaded.
                     _bundle.Unload(false);
                     _bundle = null;
                 }
 
-                var reloadedBundle = AssetBundle.LoadFromMemory(bundleBytes);
-                if (reloadedBundle == null)
+                var newBundle = AssetBundle.LoadFromMemory(bytes);
+                if (newBundle == null)
                 {
                     _log?.LogError("No se pudo recargar el AssetBundle global de UnderPressure: " + _bundlePath);
                     return false;
                 }
 
-                var assetNames = reloadedBundle.GetAllAssetNames();
-                var allAssets = reloadedBundle.LoadAllAssets();
-                var mainAssets = new Dictionary<string, Object>(StringComparer.OrdinalIgnoreCase);
-                foreach (var assetName in assetNames)
-                {
-                    var asset = reloadedBundle.LoadAsset(assetName);
-                    if (asset != null) mainAssets[assetName] = asset;
-                }
+                _bundle = newBundle;
 
-                _bundle = reloadedBundle;
-                _allAssets = allAssets ?? Array.Empty<Object>();
-                if (showOverlay) _overlayAssetNames = assetNames ?? Array.Empty<string>();
-                MainAssets.Clear();
-                foreach (var pair in mainAssets) MainAssets.Add(pair.Key, pair.Value);
+                // En el arranque NO se hace LoadAllAssets ni se recorre asset por asset.
+                // Solo se enumeran nombres cuando Ctrl+F1 necesita mostrarlos en pantalla.
+                if (showOverlay)
+                    _overlayAssetNames = _bundle.GetAllAssetNames() ?? Array.Empty<string>();
 
                 NotifyReloaded();
                 NotifyReloadCompleted();
-                _log?.LogInfo("AssetBundle global de UnderPressure recargado completo: " +
-                              assetNames.Length + " entradas, " + _allAssets.Length + " assets cargados desde " +
-                              _bundlePath + ".");
+
+                _log?.LogInfo("AssetBundle global de UnderPressure recargado desde " + _bundlePath + ".");
                 return true;
             }
             catch (Exception exception)
@@ -115,112 +114,108 @@ namespace UnderPressure
             }
         }
 
-        public static T LoadAsset<T>(string assetPath) where T : Object
+        public static T LoadAsset<T>(string assetName) where T : UnityEngine.Object
         {
-            if (string.IsNullOrEmpty(assetPath) || _bundle == null) return null;
-            return _bundle.LoadAsset<T>(assetPath);
+            if (string.IsNullOrEmpty(assetName) || _bundle == null) return default(T);
+            return _bundle.LoadAsset<T>(assetName);
         }
 
-        public static T[] GetAllAssets<T>() where T : Object
+        public static T[] GetAllAssets<T>() where T : UnityEngine.Object
         {
-            return _bundle == null ? Array.Empty<T>() : _bundle.LoadAllAssets<T>();
+            return _bundle != null ? _bundle.LoadAllAssets<T>() : Array.Empty<T>();
         }
 
-        public static void ReportExtraSaveLoad(string path, bool found)
+        public static void ReportExtraSaveLoad(string path, bool saveExists)
         {
             _overlayExtraSavePath = path;
-            _overlayExtraSaveFound = found;
+            _overlayExtraSaveFound = saveExists;
         }
 
         internal static void DrawReloadOverlay()
         {
             if (Time.unscaledTime >= _overlayVisibleUntil) return;
 
-            const float left = 14f;
-            const float top = 14f;
-            var width = Mathf.Min(1200f, Screen.width - left * 2f);
-            const float lineHeight = 21f;
+            var width = Mathf.Min(1200f, Screen.width - 28f);
             var assetLines = Math.Max(1, _overlayAssetNames.Length);
-            var saveLines = string.IsNullOrEmpty(_overlayExtraSavePath) ? 0 : 1;
-            var lines = assetLines + saveLines;
-            var height = 48f + lines * lineHeight;
-            GUI.Box(new Rect(left, top, width, height), GUIContent.none);
+            var hasExtraSave = !string.IsNullOrEmpty(_overlayExtraSavePath);
+            var totalLines = assetLines + (hasExtraSave ? 1 : 0);
+            var height = 48f + totalLines * 21f;
 
-            var titleStyle = new GUIStyle(GUI.skin.label)
+            GUI.Box(new Rect(14f, 14f, width, height), GUIContent.none);
+
+            var headingStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 20,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.white }
+                fontStyle = FontStyle.Bold
             };
-            GUI.Label(new Rect(left + 12f, top + 8f, width - 24f, 28f),
-                "LOADING ASSETS", titleStyle);
+            headingStyle.normal.textColor = Color.white;
 
-            var assetStyle = new GUIStyle(GUI.skin.label)
+            GUI.Label(new Rect(26f, 22f, width - 24f, 28f), "LOADING ASSETS", headingStyle);
+
+            var itemStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14,
-                normal = { textColor = new Color(0.82f, 0.95f, 1f, 1f) }
+                fontSize = 14
             };
+            itemStyle.normal.textColor = new Color(0.82f, 0.95f, 1f, 1f);
+
             if (_overlayAssetNames.Length == 0)
             {
-                GUI.Label(new Rect(left + 12f, top + 38f, width - 24f, lineHeight),
-                    "ASSETS NOT FOUND", assetStyle);
+                GUI.Label(new Rect(26f, 52f, width - 24f, 21f), "ASSETS NOT FOUND", itemStyle);
             }
             else
-                for (var index = 0; index < _overlayAssetNames.Length; ++index)
-                    GUI.Label(new Rect(left + 12f, top + 38f + index * lineHeight, width - 24f, lineHeight),
-                        _overlayAssetNames[index], assetStyle);
-
-            if (!string.IsNullOrEmpty(_overlayExtraSavePath))
             {
-                var message = _overlayExtraSaveFound ? "LOADING UPSAV:" : "UPSAV NOT FOUND:";
-                GUI.Label(new Rect(left + 12f, top + 38f + assetLines * lineHeight, width - 24f, lineHeight),
-                    message + " " + _overlayExtraSavePath, assetStyle);
+                for (var index = 0; index < _overlayAssetNames.Length; ++index)
+                {
+                    GUI.Label(
+                        new Rect(26f, 52f + index * 21f, width - 24f, 21f),
+                        _overlayAssetNames[index],
+                        itemStyle);
+                }
+            }
+
+            if (hasExtraSave)
+            {
+                var prefix = _overlayExtraSaveFound ? "LOADING UPSAV:" : "UPSAV NOT FOUND:";
+                GUI.Label(
+                    new Rect(26f, 52f + assetLines * 21f, width - 24f, 21f),
+                    prefix + " " + _overlayExtraSavePath,
+                    itemStyle);
             }
         }
 
         private static void NotifyReloaded()
         {
-            var handlers = Reloaded;
-            if (handlers == null) return;
-            foreach (Action handler in handlers.GetInvocationList())
-                try
-                {
-                    handler();
-                }
-                catch (Exception exception)
-                {
-                    _log?.LogError("Un consumidor no pudo aplicar los assets globales recargados: " + exception);
-                }
+            InvokeSubscribers(Reloaded,
+                "Un consumidor no pudo aplicar los assets globales recargados: ");
         }
 
         private static void NotifyReloading()
         {
-            var handlers = Reloading;
-            if (handlers == null) return;
-            foreach (Action handler in handlers.GetInvocationList())
-                try
-                {
-                    handler();
-                }
-                catch (Exception exception)
-                {
-                    _log?.LogError("Un consumidor no pudo preparar la recarga de assets globales: " + exception);
-                }
+            InvokeSubscribers(Reloading,
+                "Un consumidor no pudo preparar la recarga de assets globales: ");
         }
 
         private static void NotifyReloadCompleted()
         {
-            var handlers = ReloadCompleted;
+            InvokeSubscribers(ReloadCompleted,
+                "Un consumidor no pudo completar la recarga global de assets: ");
+        }
+
+        private static void InvokeSubscribers(Action handlers, string errorPrefix)
+        {
             if (handlers == null) return;
+
             foreach (Action handler in handlers.GetInvocationList())
+            {
                 try
                 {
                     handler();
                 }
                 catch (Exception exception)
                 {
-                    _log?.LogError("Un consumidor no pudo completar la recarga global de assets: " + exception);
+                    _log?.LogError(errorPrefix + exception);
                 }
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+// Actualizado: 2026-10-05 — Ctrl+F1 restaura la carga directa original del .upsav tras recargar assets/prefabs.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -77,8 +78,6 @@ namespace UnderPressure.PowerGrid
                 ElectricalPanelPrefabParameters.PrefabAsset);
             if (PowerPanelPrefab == null)
                 Logger.LogError("El AssetBundle no contiene el prefab del cuadro electrico.");
-            else
-                ConfigurePanelGraphics();
 
             var panelIconTexture = UnderPressureAssetBundle.LoadAsset<Texture2D>(
                 ElectricalPanelPrefabParameters.IconTextureAsset);
@@ -139,61 +138,7 @@ namespace UnderPressure.PowerGrid
             _uiSpriteReferences.Clear();
         }
 
-        private void ConfigurePanelGraphics()
-        {
-            var material = UnderPressureAssetBundle.LoadAsset<Material>(
-                ElectricalPanelPrefabParameters.MaterialAsset);
-            var texture = UnderPressureAssetBundle.LoadAsset<Texture2D>(
-                ElectricalPanelPrefabParameters.TextureAsset);
-            var meshes = UnderPressureAssetBundle.GetAllAssets<Mesh>();
 
-            if (material == null)
-                Logger.LogError("No se encontro el material grafico del cuadro electrico.");
-            if (texture == null)
-                Logger.LogError("No se encontro la textura grafica del cuadro electrico.");
-            if (material != null && texture != null)
-                material.mainTexture = texture;
-
-            ConfigurePanelMesh(meshes, ElectricalPanelPrefabParameters.BaseMesh, material);
-            ConfigurePanelMesh(meshes, ElectricalPanelPrefabParameters.DoorMesh, material);
-        }
-
-        private void ConfigurePanelMesh(Mesh[] meshes, string meshName, Material material)
-        {
-            var target = FindChild(PowerPanelPrefab.transform, meshName);
-            var targetFilter = target?.GetComponent<MeshFilter>();
-            if (targetFilter == null)
-            {
-                Logger.LogError("El prefab del cuadro no contiene el objeto de malla '" + meshName + "'.");
-                return;
-            }
-            Mesh selected = null;
-            foreach (var mesh in meshes ?? Array.Empty<Mesh>())
-                if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
-                {
-                    selected = mesh;
-                    break;
-                }
-            if (selected == null)
-                Logger.LogError("El AssetBundle no contiene la malla '" + meshName + "'.");
-            else
-                targetFilter.sharedMesh = selected;
-            var renderer = target.GetComponent<MeshRenderer>();
-            if (renderer != null && material != null)
-                renderer.sharedMaterial = material;
-        }
-
-        private static Transform FindChild(Transform root, string objectName)
-        {
-            if (root == null) return null;
-            if (string.Equals(root.name, objectName, StringComparison.Ordinal)) return root;
-            for (var index = 0; index < root.childCount; ++index)
-            {
-                var found = FindChild(root.GetChild(index), objectName);
-                if (found != null) return found;
-            }
-            return null;
-        }
 
     }
 }

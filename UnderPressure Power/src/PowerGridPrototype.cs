@@ -1,3 +1,4 @@
+// Actualizado: 2026-10-05 — Ctrl+F1 recarga el .upsav y reactiva inmediatamente los cables restaurados.
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -181,7 +182,18 @@ namespace UnderPressure.PowerGrid
         internal static Level ActiveLevel => Active?._level;
         internal static void ReloadActiveExtraState()
         {
-            Active?.LoadExtraState();
+            var active = Active;
+            if (active == null)
+            {
+                PowerGridPlugin.Log?.LogWarning(
+                    "Recarga .upsav omitida: no hay un PowerGridPrototype activo para el nivel actual.");
+                return;
+            }
+
+            PowerGridPlugin.Log?.LogInfo("Forzando recarga en caliente del .upsav del nivel activo.");
+            active.LoadExtraState();
+            active.SetCommittedVisualsActive(active._electricityViewActive);
+            active._networkDirty = true;
         }
 
         internal static FloorPlan CurrentBuildingFloorPlan =>
@@ -591,7 +603,7 @@ namespace UnderPressure.PowerGrid
             if (!cells.Add(coord)) return;
             var visual = CreateTileVisual(coord, lowVoltage ? LowVoltageColor : PoweredColor,
                 lowVoltage ? "LowVoltageCell" : "HighVoltageCell");
-            visual.SetActive(false);
+            visual.SetActive(_electricityViewActive);
             visuals.Add(coord, visual);
         }
 

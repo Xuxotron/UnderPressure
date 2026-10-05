@@ -1,3 +1,4 @@
+// Actualizado: 2026-10-05 — restaurada la actualización ingame de instancias tras Ctrl+F1.
 using System;
 using System.Collections.Generic;
 using System.Reflection;

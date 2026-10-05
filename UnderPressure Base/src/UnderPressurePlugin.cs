@@ -1,3 +1,4 @@
+// Actualizado: 2026-10-05 — restaurado Ctrl+F1 para recarga en caliente de AssetBundle/prefabs/.upsav.
 using System.IO;
 using System.Reflection;
 using BepInEx;

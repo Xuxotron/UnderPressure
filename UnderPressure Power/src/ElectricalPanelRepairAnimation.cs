@@ -1,170 +1,248 @@
-using System.Collections.Generic;
+// Actualizado: 2026-10-05 — conecta la reparación real del bedel con los estados Repair/Idle del Animator del cuadro.
+
+using System;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
 
 namespace UnderPressure.PowerGrid
 {
+    /// <summary>
+    /// Controla únicamente la animación propia del cuadro eléctrico.
+    ///
+    /// La interacción humana sigue usando los AnimGraphs de la Nurse Locker
+    /// configurados en EnergyRoomItems.CreatePanelMaintenanceInteraction().
+    ///
+    /// El controller del prefab debe contener:
+    ///   Base Layer.Idle
+    ///   Base Layer.Repair
+    ///
+    /// No hacen falta transiciones entre ambos estados: este código los reproduce
+    /// directamente cuando empieza y termina la interacción Maintenance.
+    /// </summary>
+    internal static class ElectricalPanelRepairAnimation
+    {
+        private const string PanelIdleStateName = "Base Layer.Idle";
+        private const string PanelRepairStateName = "Base Layer.Repair";
+
+        private static readonly int PanelIdleState = Animator.StringToHash(PanelIdleStateName);
+        private static readonly int PanelRepairState = Animator.StringToHash(PanelRepairStateName);
+
+        private static bool _missingRepairStateLogged;
+
+        internal static bool IsPanelJanitorInteraction(ObjectInteraction interaction, Character character)
+        {
+            if (!(character is Staff staff) ||
+                staff.Definition == null ||
+                staff.Definition._type != StaffDefinition.Type.Janitor)
+                return false;
+
+            var panel = interaction?.ParentRoomItem;
+            if (panel == null || !EnergyRoomItems.IsPanel(panel))
+                return false;
+
+            var definition = interaction.Definition;
+            return definition != null &&
+                   !definition.Deprecated &&
+                   definition.Type == InteractionAttributeModifier.Type.Maintain &&
+                   string.Equals(definition.Name, "Maintenance", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static void Begin(ObjectInteraction interaction, Character character)
+        {
+            if (!IsPanelJanitorInteraction(interaction, character))
+                return;
+
+            var panel = interaction.ParentRoomItem;
+            var animator = FindPanelAnimator(panel);
+            if (animator == null)
+                return;
+
+            if (!animator.HasState(0, PanelRepairState))
+            {
+                if (!_missingRepairStateLogged)
+                {
+                    _missingRepairStateLogged = true;
+                    PowerGridPlugin.Log.LogError(
+                        "El prefab del cuadro no contiene el estado de animacion Base Layer.Repair.");
+                }
+
+                return;
+            }
+
+            animator.enabled = true;
+            animator.speed = 1f;
+            animator.Play(PanelRepairState, 0, 0f);
+            animator.Update(0f);
+
+            var host = panel.Visual?.GameObject;
+            if (host == null)
+                return;
+
+            var driver = host.GetComponent<ElectricalPanelRepairAnimationDriver>();
+            if (driver == null)
+                driver = host.AddComponent<ElectricalPanelRepairAnimationDriver>();
+
+            driver.Initialise(interaction, character, animator);
+        }
+
+        internal static void End(ObjectInteraction interaction, Character character)
+        {
+            if (interaction == null)
+                return;
+
+            var panel = interaction.ParentRoomItem;
+            if (panel == null || !EnergyRoomItems.IsPanel(panel))
+                return;
+
+            var host = panel.Visual?.GameObject;
+            var driver = host == null ? null : host.GetComponent<ElectricalPanelRepairAnimationDriver>();
+
+            if (driver != null && driver.Matches(interaction))
+            {
+                driver.Stop();
+                return;
+            }
+
+            // Respaldo por si el driver hubiese desaparecido al reconstruirse el visual.
+            PlayIdle(FindPanelAnimator(panel));
+        }
+
+        internal static void PlayIdle(Animator animator)
+        {
+            if (animator == null)
+                return;
+
+            animator.enabled = true;
+            animator.speed = 1f;
+
+            if (animator.HasState(0, PanelIdleState))
+            {
+                animator.Play(PanelIdleState, 0, 0f);
+                animator.Update(0f);
+            }
+        }
+
+        private static Animator FindPanelAnimator(RoomItem panel)
+        {
+            var root = panel?.Visual?.GameObject;
+            if (root == null)
+                return null;
+
+            // El Animator está dentro del prefab visual. Panel_offset puede existir
+            // por encima de A_Prop_power_panel_V1 sin afectar a esta búsqueda.
+            var animators = root.GetComponentsInChildren<Animator>(true);
+
+            // Preferir expresamente el Animator cuyo controller contiene Repair.
+            foreach (var animator in animators)
+            {
+                if (animator == null || animator.runtimeAnimatorController == null)
+                    continue;
+
+                if (animator.HasState(0, PanelRepairState))
+                    return animator;
+            }
+
+            // Si todavía no ha quedado evaluado el controller, devolver el primer
+            // Animator válido para permitir un diagnóstico limpio.
+            foreach (var animator in animators)
+            {
+                if (animator != null && animator.runtimeAnimatorController != null)
+                    return animator;
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Arranca la animación propia del cuadro únicamente cuando StartInteraction
+    /// ha aceptado realmente la interacción de mantenimiento.
+    /// </summary>
     [HarmonyPatch(typeof(ObjectInteraction), "StartInteraction")]
     internal static class ElectricalPanelRepairAnimationPatch
     {
-        private static readonly Dictionary<ObjectInteraction, ElectricalPanelRepairAnimationDriver> Drivers =
-            new Dictionary<ObjectInteraction, ElectricalPanelRepairAnimationDriver>();
-
         private static void Postfix(ObjectInteraction __instance, Character __0, bool __result)
         {
-            if (!IsPanelJanitorInteraction(__instance, __0)) return;
-            if (!__result || Drivers.ContainsKey(__instance)) return;
-            var repairGraph = EnergyRoomItems.GetPanelRepairAnimationGraph(__0);
-            var host = __0.Visual?.CharacterGameObject;
-            if (repairGraph == null || host == null) return;
+            if (!__result)
+                return;
 
-            var driver = host.AddComponent<ElectricalPanelRepairAnimationDriver>();
-            driver.Initialise(__0, __instance, repairGraph);
-            Drivers.Add(__instance, driver);
-            // La taquilla nativa se usa con una interacción auto-finalizable, que activa Exit
-            // al comenzar. El trabajo de mantenimiento no lo hace, así que se solicita aquí
-            // únicamente para que el one-shot complete apertura y cierre.
-            __instance.RequestExit();
-        }
-
-        private static bool IsPanelJanitorInteraction(ObjectInteraction interaction, Character character)
-        {
-            if (!(character is Staff staff) || staff.Definition == null ||
-                staff.Definition._type != StaffDefinition.Type.Janitor) return false;
-            var item = interaction?.ParentRoomItem;
-            return item != null && EnergyRoomItems.IsPanel(item);
-        }
-
-        internal static void BeforeInteractionEnds(ObjectInteraction interaction, Character character)
-        {
-            if (interaction == null || !Drivers.TryGetValue(interaction, out var driver)) return;
-            Drivers.Remove(interaction);
-            if (driver == null) return;
-            driver.RestoreOpeningGraph(character);
-            Object.Destroy(driver);
-        }
-
-        internal static void Forget(ObjectInteraction interaction, ElectricalPanelRepairAnimationDriver driver)
-        {
-            if (interaction != null && Drivers.TryGetValue(interaction, out var current) && current == driver)
-                Drivers.Remove(interaction);
-        }
-
-        internal static bool IsOpening(ObjectInteraction interaction)
-        {
-            return interaction != null && Drivers.TryGetValue(interaction, out var driver) &&
-                   driver != null && !driver.OpeningComplete;
+            ElectricalPanelRepairAnimation.Begin(__instance, __0);
         }
     }
 
-    [HarmonyPatch(typeof(ObjectInteraction), "HasFinished")]
-    internal static class ElectricalPanelOpeningCompletionPatch
-    {
-        private static void Postfix(ObjectInteraction __instance, ref bool __result)
-        {
-            if (__result && ElectricalPanelRepairAnimationPatch.IsOpening(__instance)) __result = false;
-        }
-    }
-
-    internal sealed class ElectricalPanelRepairAnimationDriver : MonoBehaviour
-    {
-        private static readonly int PanelIdleState = Animator.StringToHash("Base Layer.Idle");
-        private static readonly int PanelRepairState = Animator.StringToHash("Base Layer.Repair");
-        private Character _character;
-        private ObjectInteraction _interaction;
-        private RuntimeAnimatorController _repairGraph;
-        private Animator _panelAnimator;
-        private bool _panelAnimationComplete;
-        private bool _repairGraphPushed;
-        private bool _exitRequested;
-
-        internal bool OpeningComplete => _repairGraphPushed;
-
-        internal void Initialise(Character character, ObjectInteraction interaction,
-            RuntimeAnimatorController repairGraph)
-        {
-            _character = character;
-            _interaction = interaction;
-            _repairGraph = repairGraph;
-            _panelAnimator = interaction.ParentRoomItem?.Visual?.Animator;
-            if (_panelAnimator == null || !_panelAnimator.HasState(0, PanelRepairState))
-            {
-                _panelAnimationComplete = true;
-                PowerGridPlugin.Log.LogError(
-                    "El prefab del cuadro no contiene el estado de animación Base Layer.Repair.");
-                return;
-            }
-
-            _panelAnimator.Play(PanelRepairState, 0, 0f);
-            _panelAnimator.Update(0f);
-        }
-
-        private void LateUpdate()
-        {
-            if (_character == null || _interaction == null || _character.Interaction != _interaction)
-            {
-                RestoreOpeningGraph(_character);
-                ElectricalPanelRepairAnimationPatch.Forget(_interaction, this);
-                Destroy(this);
-                return;
-            }
-
-            var animator = _character.Animator;
-            UpdatePanelAnimationCompletion();
-            if (!_repairGraphPushed)
-            {
-                if (animator == null || !_panelAnimationComplete ||
-                    !AnimationUtils.IsInState(animator, "Exit", 0)) return;
-
-                _character.PushAnimationGraph(_repairGraph, 0.15f, null);
-                animator = _character.Animator;
-                if (animator != null && AnimationUtils.HasParameter(animator, "Exit"))
-                    animator.SetBool("Exit", false);
-                _repairGraphPushed = true;
-                return;
-            }
-
-            var item = _interaction.ParentRoomItem;
-            if (!_exitRequested && item != null && item.IsFullyRepaired())
-            {
-                _interaction.RequestExit();
-                _exitRequested = true;
-            }
-        }
-
-        private void UpdatePanelAnimationCompletion()
-        {
-            if (_panelAnimationComplete || _panelAnimator == null) return;
-            var state = _panelAnimator.GetCurrentAnimatorStateInfo(0);
-            if (state.fullPathHash != PanelRepairState || state.normalizedTime < 1f) return;
-            _panelAnimationComplete = true;
-            _panelAnimator.Play(PanelIdleState, 0, 0f);
-            _panelAnimator.Update(0f);
-        }
-
-        internal void RestoreOpeningGraph(Character character)
-        {
-            if (_panelAnimator != null && _panelAnimator.HasState(0, PanelIdleState))
-            {
-                _panelAnimator.Play(PanelIdleState, 0, 0f);
-                _panelAnimator.Update(0f);
-            }
-            if (_repairGraphPushed && character != null && _repairGraph != null)
-            {
-                character.PopAnimationGraph(_repairGraph, 0f, false);
-                _repairGraphPushed = false;
-            }
-            _exitRequested = false;
-        }
-    }
-
+    /// <summary>
+    /// Devuelve el cuadro a Idle al terminar o cancelar la reparación.
+    /// </summary>
     [HarmonyPatch(typeof(ObjectInteraction), "EndInteractionInner")]
     internal static class ElectricalPanelRepairAnimationCleanupPatch
     {
         private static void Prefix(ObjectInteraction __instance, Character __0)
         {
-            ElectricalPanelRepairAnimationPatch.BeforeInteractionEnds(__instance, __0);
+            ElectricalPanelRepairAnimation.End(__instance, __0);
+        }
+    }
+
+    /// <summary>
+    /// Red de seguridad para interrupciones anómalas de la interacción.
+    /// Si el trabajador deja de tener esta interacción sin pasar por el cierre
+    /// normal, restaura igualmente el panel a Idle.
+    /// </summary>
+    internal sealed class ElectricalPanelRepairAnimationDriver : MonoBehaviour
+    {
+        private ObjectInteraction _interaction;
+        private Character _character;
+        private Animator _panelAnimator;
+        private bool _stopped;
+
+        internal void Initialise(ObjectInteraction interaction, Character character, Animator animator)
+        {
+            _interaction = interaction;
+            _character = character;
+            _panelAnimator = animator;
+            _stopped = false;
+        }
+
+        internal bool Matches(ObjectInteraction interaction)
+        {
+            return ReferenceEquals(_interaction, interaction);
+        }
+
+        internal void Stop()
+        {
+            if (_stopped)
+                return;
+
+            _stopped = true;
+            ElectricalPanelRepairAnimation.PlayIdle(_panelAnimator);
+
+            _interaction = null;
+            _character = null;
+            _panelAnimator = null;
+
+            Destroy(this);
+        }
+
+        private void Update()
+        {
+            if (_stopped)
+                return;
+
+            if (_interaction == null ||
+                _character == null ||
+                !ReferenceEquals(_character.Interaction, _interaction))
+            {
+                Stop();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (_stopped)
+                return;
+
+            _stopped = true;
+            ElectricalPanelRepairAnimation.PlayIdle(_panelAnimator);
         }
     }
 }
