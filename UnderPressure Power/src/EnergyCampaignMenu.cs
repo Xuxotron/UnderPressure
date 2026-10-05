@@ -244,7 +244,7 @@ namespace UnderPressure.PowerGrid
             SetSlicedPanel(descriptionGroup);
             var contractGroup = BuildContractGroup(panel, durationGroup);
             PlaceDirectly(panel, contractGroup, new Vector2(0f, -48f), new Vector2(390f, 116f));
-            PlaceDirectly(panel, durationGroup, new Vector2(0f, -159f), new Vector2(390f, 106f));
+            PlaceDirectly(panel, durationGroup, new Vector2(0f, -159f), new Vector2(390f, 126f));
             PlaceDirectly(panel, costGroup, new Vector2(0f, -258f), new Vector2(390f, 82f));
             DisablePanelImages(durationGroup);
             DisablePanelImages(costGroup);
@@ -255,6 +255,8 @@ namespace UnderPressure.PowerGrid
 
             if (_slider != null)
             {
+                if (_duration != null)
+                    _duration.rectTransform.anchoredPosition += new Vector2(0f, -8f);
                 _slider.transform.localPosition += new Vector3(16f, 0f, 0f);
                 _slider.onValueChanged.RemoveAllListeners();
                 _slider.minValue = 1f;
@@ -389,7 +391,7 @@ namespace UnderPressure.PowerGrid
             if (_contractPower != null)
             {
                 _contractPower.gameObject.name = "Contracted power";
-                SetRect(_contractPower.rectTransform, new Vector2(0f, 27f), new Vector2(390f, 34f));
+                SetRect(_contractPower.rectTransform, new Vector2(0f, 40f), new Vector2(390f, 34f));
             }
             if (_contractSlider != null)
             {
@@ -404,7 +406,7 @@ namespace UnderPressure.PowerGrid
                 if (_contractCost != null)
                 {
                     _contractCost.fontSize = Mathf.Max(1f, _contractPower.fontSize * 0.82f);
-                    SetRect(_contractCost.rectTransform, new Vector2(0f, 4f), new Vector2(390f, 28f));
+                    SetRect(_contractCost.rectTransform, new Vector2(0f, 16f), new Vector2(390f, 28f));
                 }
             }
             DisablePanelImages(contractGroup);
@@ -420,11 +422,14 @@ namespace UnderPressure.PowerGrid
             var cost = PowerGridPrototype.GetMonthlyCostForContractedEnergy(power);
             if (_contractPower != null)
                 _contractPower.text = ContractedPowerText.Translation + ": " +
-                                      power.ToString(CultureInfo.InvariantCulture);
+                                      FormatInteger(power);
             if (_contractCost != null)
                 _contractCost.text = MonthlyCostText.Translation + ": " +
-                                     cost.ToString(CultureInfo.InvariantCulture) + " $";
+                                     FormatInteger(cost) + " $";
         }
+
+        private static string FormatInteger(int value) =>
+            value.ToString("#,0", CultureInfo.InvariantCulture).Replace(',', '.');
 
         private static void ConfigureSliderPoints(Slider slider, int pointCount)
         {
@@ -469,7 +474,7 @@ namespace UnderPressure.PowerGrid
             if (group == null) return;
             foreach (var image in group.GetComponentsInChildren<Image>(true)) image.enabled = false;
             var track = NewImage(group, "Campaign capacity track", new Color(0.40f, 0.42f, 0.42f, 1f));
-            SetRect(track.rectTransform, new Vector2(0f, -18f), new Vector2(330f, 32f));
+            SetRect(track.rectTransform, new Vector2(0f, -10f), new Vector2(330f, 32f));
             ApplyRoundedBarStyle(track, _slider);
             _capacityFill = NewImage(track.rectTransform, "Maximum capacity", new Color(0.95f, 0.48f, 0.10f, 1f));
             _earnedFill = NewImage(track.rectTransform, "Earned progress", new Color(0.20f, 0.72f, 0.30f, 1f));
