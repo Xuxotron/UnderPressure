@@ -365,6 +365,7 @@ namespace UnderPressure.PowerGrid
             var installed = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
             var usesDailyAccumulator = PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var monthly);
             if (!usesDailyAccumulator) monthly = installed;
+            monthly = SafeAdd(monthly, PowerGridPrototype.GetContractedEnergyMonthlyCost(level));
             var perUse = PerUseEnergyField == null ? 0 : (int)PerUseEnergyField.GetValue(__instance);
             __state = new BillState
             {
@@ -377,6 +378,9 @@ namespace UnderPressure.PowerGrid
             MonthlyEnergyField?.SetValue(__instance, monthly);
             PerUseEnergyField?.SetValue(__instance, perUse);
         }
+
+        private static int SafeAdd(int left, int right) =>
+            left > int.MaxValue - right ? int.MaxValue : left + right;
 
         private static Exception Finalizer(Exception __exception, FinanceManager __instance, BillState __state)
         {
@@ -394,13 +398,19 @@ namespace UnderPressure.PowerGrid
     internal static class AccruedDailyEnergyBillPreviewPatch
     {
         private static readonly FieldInfo MonthlyEnergyField = AccessTools.Field(typeof(FinanceManager), "_energyBill");
+        private static readonly FieldInfo LevelField = AccessTools.Field(typeof(FinanceManager), "_level");
 
         [HarmonyPriority(Priority.First)]
         private static void Prefix(FinanceManager __instance, out int __state)
         {
             __state = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
             if (PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var accrued))
-                MonthlyEnergyField?.SetValue(__instance, accrued);
+            {
+                var level = LevelField?.GetValue(__instance) as Level;
+                var contract = PowerGridPrototype.GetContractedEnergyMonthlyCost(level);
+                MonthlyEnergyField?.SetValue(__instance,
+                    accrued > int.MaxValue - contract ? int.MaxValue : accrued + contract);
+            }
         }
 
         private static Exception Finalizer(Exception __exception, FinanceManager __instance, int __state)

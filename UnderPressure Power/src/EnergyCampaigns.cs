@@ -123,7 +123,7 @@ namespace UnderPressure.PowerGrid
             state.Progress[0] = Mathf.Clamp(hack, 0f, 100f);
             state.Progress[1] = Mathf.Clamp(debug, 0f, 100f);
             state.Progress[2] = Mathf.Clamp(climate, 0f, 100f);
-            state.DurationMonths = Mathf.Clamp(durationMonths, 3, 12);
+            state.DurationMonths = Mathf.Clamp(durationMonths, 1, 6);
             state.TimeRemainingDays = Mathf.Max(0, timeRemainingDays);
             States[new RoomKey(levelId, x, y)] = state;
         }

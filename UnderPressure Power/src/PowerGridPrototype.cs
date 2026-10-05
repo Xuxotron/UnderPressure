@@ -45,6 +45,11 @@ namespace UnderPressure.PowerGrid
         private const int ElectricityMode = 602;
         private const int DefaultContractedEnergy = 1000;
         private const int LegacyDefaultContractedEnergy = 2000;
+        private const int NoPendingContractedEnergy = -1;
+        private static readonly int[] ContractedEnergyMonthlyCosts =
+        {
+            0, 10000, 20800, 33000, 48000, 67500, 93000, 126000, 172000, 229500, 300000
+        };
         private const int EnergyHundredths = 100;
         private const int BatteryMaximumHundredths = 200 * EnergyHundredths;
         private const int DefaultCellCapacity = 800;
@@ -139,6 +144,8 @@ namespace UnderPressure.PowerGrid
         private bool _networkDirty;
         private bool _energyStateInitialised;
         private int _contractedEnergy;
+        private int _pendingContractedEnergy = NoPendingContractedEnergy;
+        private int _contractActivationMonth = -1;
         private int _batteryEnergyHundredths;
         private int _energyCapacityHundredths;
         private int _lastDailyEnergy;
@@ -401,6 +408,8 @@ namespace UnderPressure.PowerGrid
                 var staffJobRecords = new Dictionary<int, bool>();
                 var batteryRecords = new List<LoadedBatteryRecord>();
                 var taskEnergyWasAppliedImmediately = false;
+                _pendingContractedEnergy = NoPendingContractedEnergy;
+                _contractActivationMonth = -1;
                 for (var index = 1; index < lines.Length; ++index)
                 {
                     var parts = lines[index].Split(',');
@@ -509,6 +518,27 @@ namespace UnderPressure.PowerGrid
                         _energyStateInitialised = true;
                         taskEnergyWasAppliedImmediately = true;
                     }
+                    if (parts.Length == 9 && parts[0] == "E6" &&
+                        int.TryParse(parts[1], out contracted) && int.TryParse(parts[2], out var pendingContracted) &&
+                        int.TryParse(parts[3], out var activationMonth) && int.TryParse(parts[4], out dailyEnergy) &&
+                        int.TryParse(parts[5], out taskEnergy) && int.TryParse(parts[6], out currentTasks) &&
+                        int.TryParse(parts[7], out var accruedContractBill) &&
+                        (parts[8] == "0" || parts[8] == "1"))
+                    {
+                        _contractedEnergy = NormaliseSelectableContractedEnergy(contracted);
+                        _pendingContractedEnergy = pendingContracted < 0
+                            ? NoPendingContractedEnergy
+                            : NormaliseSelectableContractedEnergy(pendingContracted);
+                        _contractActivationMonth = _pendingContractedEnergy < 0 ? -1 : Math.Max(0, activationMonth);
+                        _lastDailyEnergy = Math.Max(0, dailyEnergy);
+                        _lastTaskEnergy = Math.Max(0, taskEnergy);
+                        _currentDayTaskEnergy = Math.Max(0, currentTasks);
+                        _dailyEnergyRemainder = 0f;
+                        _accruedDailyEnergyBill = Math.Max(0, accruedContractBill);
+                        _gridOverloaded = parts[8] == "1";
+                        _energyStateInitialised = true;
+                        taskEnergyWasAppliedImmediately = true;
+                    }
                     if (parts.Length == 6 && parts[0] == "B" && int.TryParse(parts[1], out var batteryId) &&
                         int.TryParse(parts[2], out var maximumHundredths) &&
                         int.TryParse(parts[3], out var chargeHundredths) && TryFloat(parts[4], out var worldX) &&
@@ -589,7 +619,8 @@ namespace UnderPressure.PowerGrid
                 var lines = new List<string>(ordered.Count + orderedLow.Count + 32) { "UNDERPRESSURE_SAVE_1" };
                 foreach (var coord in ordered) lines.Add("C," + coord.X + "," + coord.Y);
                 foreach (var coord in orderedLow) lines.Add("L," + coord.X + "," + coord.Y);
-                lines.Add("E5," + _contractedEnergy + "," + _lastDailyEnergy + "," + _lastTaskEnergy + "," +
+                lines.Add("E6," + _contractedEnergy + "," + _pendingContractedEnergy + "," +
+                          _contractActivationMonth + "," + _lastDailyEnergy + "," + _lastTaskEnergy + "," +
                           _currentDayTaskEnergy + "," + _accruedDailyEnergyBill + "," +
                           (_gridOverloaded ? "1" : "0"));
                 var orderedBatteries = new List<BatteryState>(_batteryStates.Values);
@@ -1372,10 +1403,72 @@ namespace UnderPressure.PowerGrid
 
         private static int NormaliseContractedEnergy(int stored)
         {
-            // Contract changes are not exposed yet, so 2000 can only be the former default.
+            // Los guardados anteriores a la contratación editable usaban 2000 como valor inicial.
             return stored == LegacyDefaultContractedEnergy
                 ? DefaultContractedEnergy
-                : Math.Max(0, stored);
+                : NormaliseSelectableContractedEnergy(stored);
+        }
+
+        private static int NormaliseSelectableContractedEnergy(int value) =>
+            Mathf.Clamp(Mathf.RoundToInt(value / 1000f), 0, 10) * 1000;
+
+        internal static int GetSelectedContractedEnergy(Level level)
+        {
+            var active = Active;
+            if (active == null || level == null || !ReferenceEquals(active._level, level))
+                return DefaultContractedEnergy;
+            if (!active._energyStateInitialised) active.RefreshEnergyCapacity();
+            active.ApplyPendingContractIfDue();
+            return active._pendingContractedEnergy >= 0
+                ? active._pendingContractedEnergy
+                : active._contractedEnergy;
+        }
+
+        internal static void RequestContractedEnergy(Level level, int value)
+        {
+            var active = Active;
+            if (active == null || level == null || !ReferenceEquals(active._level, level)) return;
+            if (!active._energyStateInitialised) active.RefreshEnergyCapacity();
+            active.ApplyPendingContractIfDue();
+            var requested = NormaliseSelectableContractedEnergy(value);
+            if (requested == active._contractedEnergy)
+            {
+                active._pendingContractedEnergy = NoPendingContractedEnergy;
+                active._contractActivationMonth = -1;
+                return;
+            }
+            active._pendingContractedEnergy = requested;
+            if (active._contractActivationMonth < 0)
+                active._contractActivationMonth = Math.Max(0,
+                    active._level.TimelineManager.TotalGameMonthsPassed + 1);
+        }
+
+        internal static int GetContractedEnergyMonthlyCost(Level level)
+        {
+            var active = Active;
+            if (active == null || level == null || !ReferenceEquals(active._level, level))
+                return ContractedEnergyMonthlyCosts[DefaultContractedEnergy / 1000];
+            if (!active._energyStateInitialised) active.RefreshEnergyCapacity();
+            active.ApplyPendingContractIfDue();
+            return ContractedEnergyMonthlyCosts[NormaliseSelectableContractedEnergy(active._contractedEnergy) / 1000];
+        }
+
+        internal static int GetMonthlyCostForContractedEnergy(int value) =>
+            ContractedEnergyMonthlyCosts[NormaliseSelectableContractedEnergy(value) / 1000];
+
+        private void ApplyPendingContractIfDue()
+        {
+            if (_pendingContractedEnergy < 0 || _level?.TimelineManager == null ||
+                _level.TimelineManager.Day != 0 ||
+                _level.TimelineManager.TotalGameMonthsPassed < _contractActivationMonth) return;
+            _contractedEnergy = _pendingContractedEnergy;
+            _pendingContractedEnergy = NoPendingContractedEnergy;
+            _contractActivationMonth = -1;
+            _energyCapacityHundredths = Math.Max(0, _contractedEnergy) * EnergyHundredths +
+                                        _batteryEnergyHundredths;
+            _networkDirty = true;
+            RefreshEnergyHud();
+            PowerGridPlugin.Log.LogInfo("Potencia electrica contratada activada: " + _contractedEnergy + ".");
         }
 
         private static string FormatEnergy(int hundredths)
@@ -1875,6 +1968,7 @@ namespace UnderPressure.PowerGrid
         {
             var active = Active;
             if (active == null || level == null || !ReferenceEquals(active._level, level)) return;
+            active.ApplyPendingContractIfDue();
             active.ReconcileBatteryStates();
             var recurringDailyEnergy = Math.Max(0, ElectricityGameplay.GetDailyRecurringDemand(level));
             active.AccumulateDailyEnergyBill(recurringDailyEnergy);

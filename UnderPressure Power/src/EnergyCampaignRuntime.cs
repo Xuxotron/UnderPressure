@@ -39,7 +39,7 @@ namespace UnderPressure.PowerGrid
             var state = State;
             if (kind == EnergyCampaignKind.None || state == null) return;
             state.Active = kind;
-            state.DurationMonths = Mathf.Clamp(months, 3, 12);
+            state.DurationMonths = Mathf.Clamp(months, 1, 6);
             state.TimeRemainingDays = Mathf.Max(1, Mathf.RoundToInt(state.DurationMonths * 30.42f));
             ShowStatusIcon();
             ProgressChanged?.Invoke();
