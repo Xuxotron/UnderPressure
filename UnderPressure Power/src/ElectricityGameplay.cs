@@ -1,3 +1,4 @@
+// Purpose: Enforces electrical demand, power availability, recurring consumption, and monthly billing.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
