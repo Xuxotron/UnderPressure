@@ -1,4 +1,4 @@
-// Actualizado: 2026-10-05 — restaurada la actualización ingame de instancias tras Ctrl+F1.
+// Purpose: Creates energy-room items, interactions, prices, placement rules, and daily simulation hooks.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
