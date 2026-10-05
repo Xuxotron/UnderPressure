@@ -1,4 +1,4 @@
-// Actualizado: 2026-10-05 — Ctrl+F1 restaura la carga directa original del .upsav tras recargar assets/prefabs.
+// Purpose: Bootstraps the electrical plugin, shared assets, Harmony patches, and extra-save reloads.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
