@@ -1,3 +1,4 @@
+// Purpose: Registers electrical-system localization keys with the game's localization database.
 using System;
 using I2.Loc;
 using TH20;
