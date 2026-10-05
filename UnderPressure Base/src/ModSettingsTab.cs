@@ -1,3 +1,4 @@
+// Purpose: Builds and synchronizes the Under Pressure settings interface and difficulty controls.
 using System;
 using System.Reflection;
 using System.Collections.Generic;
