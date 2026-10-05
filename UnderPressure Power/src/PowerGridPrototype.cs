@@ -1,4 +1,4 @@
-// Actualizado: 2026-10-05 — Ctrl+F1 recarga el .upsav y reactiva inmediatamente los cables restaurados.
+// Purpose: Implements the electrical grid, wiring tools, energy capacity, batteries, contracts, and extra saves.
 using System;
 using System.Collections;
 using System.Collections.Generic;
