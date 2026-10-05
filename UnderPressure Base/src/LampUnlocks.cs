@@ -1,3 +1,4 @@
+// Purpose: Unlocks supported lamps and makes them available across compatible room types.
 using System;
 using System.Collections;
 using System.Collections.Generic;
