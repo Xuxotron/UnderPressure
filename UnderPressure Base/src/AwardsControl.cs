@@ -1,3 +1,4 @@
+// Purpose: Disables annual award menus, processing, rewards, and records when configured.
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
