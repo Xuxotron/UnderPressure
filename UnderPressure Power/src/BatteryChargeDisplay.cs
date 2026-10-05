@@ -1,3 +1,4 @@
+// Purpose: Displays live battery charge and capacity in room-item hover and selection menus.
 using System.Reflection;
 using HarmonyLib;
 using TMPro;
