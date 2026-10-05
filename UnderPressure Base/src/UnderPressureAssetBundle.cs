@@ -1,4 +1,4 @@
-// Actualizado: 2026-10-05 — corregida visibilidad pública entre UnderPressure y UnderPressurePower.
+// Purpose: Loads and hot-reloads the shared Under Pressure AssetBundle for all mod assemblies.
 using System;
 using System.IO;
 using BepInEx.Logging;
