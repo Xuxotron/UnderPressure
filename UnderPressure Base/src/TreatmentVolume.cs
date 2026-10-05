@@ -1,3 +1,4 @@
+// Purpose: Tracks treatment audio emitters and applies the configured treatment-volume scale.
 using System;
 using System.Collections.Generic;
 using System.Linq;
