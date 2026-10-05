@@ -1,3 +1,4 @@
+// Purpose: Adds a HUD button that toggles the prototype shadow ceiling.
 using HarmonyLib;
 using TH20;
 using TH20.UI;
