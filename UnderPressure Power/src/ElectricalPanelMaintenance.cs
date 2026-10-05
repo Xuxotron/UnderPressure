@@ -1,3 +1,4 @@
+// Purpose: Applies electrical-panel wear, migrates saved maintenance state, and protects animator data.
 using System;
 using System.Reflection;
 using HarmonyLib;
