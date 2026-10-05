@@ -1,3 +1,4 @@
+// Purpose: Applies configurable gameplay modifiers to patients, staff, economy, and hospital simulation.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
