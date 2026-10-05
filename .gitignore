@@ -17,6 +17,13 @@ BepInEx_win_x64_*/
 *.pdb
 *.exe
 
+# Private local project material
+Docs/
+Research/
+AGENTS.md
+Two Point Hospital.zip
+UnderPressure.actual.csproj
+
 # Saves, recovery copies and runtime data
 Recovery/
 *.sav
