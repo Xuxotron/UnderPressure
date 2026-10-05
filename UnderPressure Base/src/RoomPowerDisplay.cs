@@ -1,3 +1,4 @@
+// Purpose: Displays room diagnosis and treatment capacity derived from equipment and assigned staff.
 using System;
 using System.Collections;
 using System.Collections.Generic;
