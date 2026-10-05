@@ -1,3 +1,4 @@
+// Purpose: Selects and loads the most recent hospital save while bypassing the front end.
 using System.Collections;
 using System.Reflection;
 using HarmonyLib;
