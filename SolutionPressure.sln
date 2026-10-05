@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnderPressure", "UnderPressure Base\UnderPressure.csproj", "{4B7F202B-2294-40DF-9B87-E179CE1C9332}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnderPressurePower", "UnderPressure Power\UnderPressurePower.csproj", "{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4B7F202B-2294-40DF-9B87-E179CE1C9332}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B7F202B-2294-40DF-9B87-E179CE1C9332}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B7F202B-2294-40DF-9B87-E179CE1C9332}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B7F202B-2294-40DF-9B87-E179CE1C9332}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
