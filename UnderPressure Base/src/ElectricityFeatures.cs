@@ -1,3 +1,4 @@
+// Purpose: Integrates electricity costs with billing, item tooltips, and finance graphs.
 using System;
 using System.Collections;
 using System.Collections.Generic;
