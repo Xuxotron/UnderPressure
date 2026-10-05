@@ -1,3 +1,4 @@
+// Purpose: Defines the editable constants and material parameters used by hospital lighting.
 using UnityEngine;
 using UnityEngine.Rendering;
 
