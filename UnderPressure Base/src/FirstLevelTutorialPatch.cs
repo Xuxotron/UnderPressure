@@ -1,3 +1,4 @@
+// Purpose: Skips the first-level tutorial sequence while preserving required unlocks and rewards.
 using System;
 using System.Collections;
 using System.Collections.Generic;
