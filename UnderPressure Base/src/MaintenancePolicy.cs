@@ -1,3 +1,4 @@
+// Purpose: Provides a configurable preventive-maintenance threshold and its policy interface.
 using System;
 using System.Collections;
 using System.Collections.Generic;
