@@ -545,29 +545,37 @@ namespace UnderPressure.PowerGrid
             RefreshTrackedVisuals();
         }
 
-        internal static void Apply(RoomFloorPlanVisual visual)
+        internal static void Prepare(RoomFloorPlanVisual visual, FloorPlan floorPlan)
         {
-            var floorPlan = FloorPlanField?.GetValue(visual) as FloorPlan;
-            if (visual == null || floorPlan == null || !PowerPlantRoomRegistry.IsPowerPlant(floorPlan.Definition))
-                return;
-            Track(RoomVisuals, visual);
+            if (visual == null || floorPlan == null ||
+                !PowerPlantRoomRegistry.IsPowerPlant(floorPlan.Definition)) return;
 
-            // Esta sala usa siempre sus acabados propios, no las personalizaciones del hospital.
+            // Se anulan antes de crear la geometría para que el juego no aplique
+            // texturas hospitalarias encima de los materiales propios de la sala.
             FloorOverrideField?.SetValue(visual, null);
             WallOverrideField?.SetValue(visual, null);
+        }
+
+        internal static void Apply(RoomFloorPlanVisual visual)
+        {
+            if (visual == null) return;
+            var floorPlan = FloorPlanField?.GetValue(visual) as FloorPlan;
+            if (floorPlan == null || !PowerPlantRoomRegistry.IsPowerPlant(floorPlan.Definition))
+                return;
+            Track(RoomVisuals, visual);
 
             var floorRenderers = FloorRenderersField?.GetValue(visual) as List<Renderer>;
             if (floorRenderers != null)
                 foreach (var renderer in floorRenderers)
-                    ApplyFirstMaterial(renderer, _floor, true);
+                    ApplyFirstMaterial(renderer, _floor);
 
             var wallObjects = WallObjectsField?.GetValue(visual)
                 as List<KeyValuePair<Transform, Transform>>;
             if (wallObjects != null)
                 foreach (var wall in wallObjects)
                 {
-                    ApplyFirstMaterial(wall.Key, _interior, true);
-                    ApplyFirstMaterial(wall.Value, _exterior, true);
+                    ApplyFirstMaterial(wall.Key, _interior);
+                    ApplyFirstMaterial(wall.Value, _exterior);
                 }
 
             if (floorPlan.Doors != null)
@@ -577,9 +585,10 @@ namespace UnderPressure.PowerGrid
 
         internal static void ApplyDoor(RoomItem item)
         {
-            if (item?.OwningRoom == null || !PowerPlantRoomRegistry.IsPowerPlant(item.OwningRoom.Definition))
+            if (item?.Definition == null || item.Definition.ItemType != RoomItemDefinition.Type.Door ||
+                item.OwningRoom == null || !PowerPlantRoomRegistry.IsPowerPlant(item.OwningRoom.Definition))
                 return;
-            ApplyFirstMaterial(item.Visual?.GameObject?.transform, _door, false);
+            ApplyFirstMaterial(item.Visual?.GameObject?.transform, _door);
         }
 
         internal static void Apply(CorridorWallsVisual visual)
@@ -593,7 +602,7 @@ namespace UnderPressure.PowerGrid
             {
                 var room = CorridorWallRoomField.GetValue(entry) as Room;
                 if (room == null || !PowerPlantRoomRegistry.IsPowerPlant(room.Definition)) continue;
-                ApplyFirstMaterial(CorridorWallTransformField.GetValue(entry) as Transform, _exterior, false);
+                ApplyFirstMaterial(CorridorWallTransformField.GetValue(entry) as Transform, _exterior);
             }
         }
 
@@ -624,14 +633,14 @@ namespace UnderPressure.PowerGrid
             references.Add(new WeakReference(target));
         }
 
-        private static void ApplyFirstMaterial(Transform root, Material material, bool clearOverrides)
+        private static void ApplyFirstMaterial(Transform root, Material material)
         {
             if (root == null || material == null) return;
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
-                ApplyFirstMaterial(renderer, material, clearOverrides);
+                ApplyFirstMaterial(renderer, material);
         }
 
-        private static void ApplyFirstMaterial(Renderer renderer, Material material, bool clearOverrides)
+        private static void ApplyFirstMaterial(Renderer renderer, Material material)
         {
             if (renderer == null || material == null) return;
             var materials = renderer.sharedMaterials;
@@ -645,13 +654,15 @@ namespace UnderPressure.PowerGrid
                 materials[0] = material;
                 renderer.sharedMaterials = materials;
             }
-            if (clearOverrides) renderer.SetPropertyBlock(null, 0);
         }
     }
 
     [HarmonyPatch(typeof(RoomFloorPlanVisual), "UpdateFromRoom")]
     internal static class EnergyRoomSurfaceMaterialsPatch
     {
+        private static void Prefix(RoomFloorPlanVisual __instance, FloorPlan __0) =>
+            EnergyRoomSurfaceMaterials.Prepare(__instance, __0);
+
         private static void Postfix(RoomFloorPlanVisual __instance) =>
             EnergyRoomSurfaceMaterials.Apply(__instance);
     }
@@ -661,12 +672,6 @@ namespace UnderPressure.PowerGrid
     {
         private static void Postfix(CorridorWallsVisual __instance) =>
             EnergyRoomSurfaceMaterials.Apply(__instance);
-    }
-
-    [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
-    internal static class EnergyRoomDoorMaterialPatch
-    {
-        private static void Postfix(RoomItem __0) => EnergyRoomSurfaceMaterials.ApplyDoor(__0);
     }
 
     [HarmonyPatch(typeof(Metagame), "HasUnlocked", new[] { typeof(ISilverUnlockable) })]
