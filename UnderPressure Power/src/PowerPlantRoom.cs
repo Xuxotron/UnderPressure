@@ -127,7 +127,24 @@ namespace UnderPressure.PowerGrid
             var isNewDefinition = Definition == null;
             _marketingRoom = marketingRoom;
             if (isNewDefinition)
-                Definition = (RoomDefinition)MemberwiseCloneMethod.Invoke(template, null);
+            {
+                Definition = new RoomDefinition();
+                SetDefinitionField("_components", Array.Empty<EntityComponent>());
+                CopyStructuralField(template, "WallThickness");
+                CopyStructuralField(template, "UseHospitalFloorTile");
+                CopyStructuralField(template, "_roomFloorTile");
+                CopyStructuralField(template, "_wallsInterior");
+                CopyStructuralField(template, "_wallsExterior");
+                CopyStructuralField(template, "_blueprintWallDefinition");
+                CopyStructuralField(template, "_dragAddWallDefinition");
+                CopyStructuralField(template, "_dragSubWallDefinition");
+                CopyStructuralField(template, "_roomLightMaterial");
+                CopyStructuralField(template, "_roomReflectionCubemap");
+                CopyStructuralField(template, "_roomClosedLightMaterial");
+                CopyStructuralField(template, "_roomClosedReflectionCubemap");
+                CopyStructuralField(template, "_roomOperationalLightMaterial");
+                CopyStructuralField(template, "_roomOperationalReflectionCubemap");
+            }
 
             _doorRequirement = FindDoorRequirement(template, rooms);
             _deskRequirement = DisabledFeatures.EnergyRoomDesk
@@ -507,6 +524,17 @@ namespace UnderPressure.PowerGrid
                 field.SetValue(Definition, value);
         }
 
+        private static void CopyStructuralField(RoomDefinition source, string name)
+        {
+            var field = AccessTools.Field(typeof(RoomDefinition), name);
+            if (field == null)
+            {
+                PowerGridPlugin.Log.LogWarning($"Campo estructural de RoomDefinition no encontrado: {name}");
+                return;
+            }
+            SetDefinitionField(name, field.GetValue(source));
+        }
+
     }
 
     internal static class EnergyRoomSurfaceMaterials
@@ -523,6 +551,12 @@ namespace UnderPressure.PowerGrid
             AccessTools.Field(typeof(RoomFloorPlanVisual), "_wallVisualOverride");
         private static readonly FieldInfo CorridorWallsField =
             AccessTools.Field(typeof(CorridorWallsVisual), "_activeWalls");
+        private static readonly FieldInfo InteriorWallsDefinitionField =
+            AccessTools.Field(typeof(RoomDefinition), "_wallsInterior");
+        private static readonly FieldInfo ExteriorWallsDefinitionField =
+            AccessTools.Field(typeof(RoomDefinition), "_wallsExterior");
+        private static readonly FieldInfo RandomMeshesField =
+            AccessTools.Field(typeof(MeshRandomizer), "_meshes");
         private static readonly Type CorridorWallVisualType =
             typeof(CorridorWallsVisual).GetNestedType("WallVisual", BindingFlags.NonPublic);
         private static readonly FieldInfo CorridorWallTransformField =
@@ -531,6 +565,14 @@ namespace UnderPressure.PowerGrid
             CorridorWallVisualType?.GetField("Room", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static readonly List<WeakReference> RoomVisuals = new List<WeakReference>();
         private static readonly List<WeakReference> CorridorVisuals = new List<WeakReference>();
+        private static readonly RoomWallDefinition.Type[] TexturedWallTypes =
+        {
+            RoomWallDefinition.Type.Wall,
+            RoomWallDefinition.Type.Door,
+            RoomWallDefinition.Type.Window,
+            RoomWallDefinition.Type.Blank,
+            RoomWallDefinition.Type.AmbulanceBayEntrance
+        };
         private static Material _floor;
         private static Material _interior;
         private static Material _exterior;
@@ -556,6 +598,12 @@ namespace UnderPressure.PowerGrid
             WallOverrideField?.SetValue(visual, null);
         }
 
+        internal static void PrepareRestored(RoomFloorPlanVisual visual)
+        {
+            if (visual == null) return;
+            Prepare(visual, FloorPlanField?.GetValue(visual) as FloorPlan);
+        }
+
         internal static void Apply(RoomFloorPlanVisual visual)
         {
             if (visual == null) return;
@@ -571,10 +619,13 @@ namespace UnderPressure.PowerGrid
 
             var wallObjects = WallObjectsField?.GetValue(visual)
                 as List<KeyValuePair<Transform, Transform>>;
+            var interiorDefinition = InteriorWallsDefinitionField?.GetValue(floorPlan.Definition)
+                as RoomWallDefinition;
             if (wallObjects != null)
                 foreach (var wall in wallObjects)
                 {
-                    ApplyFirstMaterial(wall.Key, _interior);
+                    if (UsesTexturedWallPiece(wall.Key, interiorDefinition))
+                        ApplyFirstMaterial(wall.Key, _interior);
                     ApplyFirstMaterial(wall.Value, _exterior);
                 }
 
@@ -602,8 +653,38 @@ namespace UnderPressure.PowerGrid
             {
                 var room = CorridorWallRoomField.GetValue(entry) as Room;
                 if (room == null || !PowerPlantRoomRegistry.IsPowerPlant(room.Definition)) continue;
-                ApplyFirstMaterial(CorridorWallTransformField.GetValue(entry) as Transform, _exterior);
+                var transform = CorridorWallTransformField.GetValue(entry) as Transform;
+                var exteriorDefinition = ExteriorWallsDefinitionField?.GetValue(room.Definition)
+                    as RoomWallDefinition;
+                if (UsesTexturedWallPiece(transform, exteriorDefinition))
+                    ApplyFirstMaterial(transform, _exterior);
             }
+        }
+
+        private static bool UsesTexturedWallPiece(Transform transform, RoomWallDefinition definition)
+        {
+            if (transform == null || definition == null) return false;
+            var mesh = transform.GetComponent<MeshFilter>()?.sharedMesh;
+            if (mesh == null) return false;
+            foreach (var type in TexturedWallTypes)
+            {
+                var prefab = definition.GetPiece(type);
+                if (PrefabUsesMesh(prefab, mesh)) return true;
+            }
+            return false;
+        }
+
+        private static bool PrefabUsesMesh(GameObject prefab, Mesh mesh)
+        {
+            if (prefab == null || mesh == null) return false;
+            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+                if (filter != null && filter.sharedMesh == mesh) return true;
+            foreach (var randomizer in prefab.GetComponentsInChildren<MeshRandomizer>(true))
+            {
+                var meshes = RandomMeshesField?.GetValue(randomizer) as Mesh[];
+                if (meshes != null && Array.IndexOf(meshes, mesh) >= 0) return true;
+            }
+            return false;
         }
 
         private static void RefreshTrackedVisuals()
@@ -662,6 +743,16 @@ namespace UnderPressure.PowerGrid
     {
         private static void Prefix(RoomFloorPlanVisual __instance, FloorPlan __0) =>
             EnergyRoomSurfaceMaterials.Prepare(__instance, __0);
+
+        private static void Postfix(RoomFloorPlanVisual __instance) =>
+            EnergyRoomSurfaceMaterials.Apply(__instance);
+    }
+
+    [HarmonyPatch(typeof(RoomFloorPlanVisual), "RestoreFromSave")]
+    internal static class RestoredEnergyRoomSurfaceMaterialsPatch
+    {
+        private static void Prefix(RoomFloorPlanVisual __instance) =>
+            EnergyRoomSurfaceMaterials.PrepareRestored(__instance);
 
         private static void Postfix(RoomFloorPlanVisual __instance) =>
             EnergyRoomSurfaceMaterials.Apply(__instance);
