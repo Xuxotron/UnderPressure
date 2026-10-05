@@ -1,3 +1,4 @@
+// Purpose: Adds electrical-consumption icons to supported room-item catalogue entries.
 using System;
 using HarmonyLib;
 using TH20;
