@@ -2253,6 +2253,12 @@ namespace UnderPressure.PowerGrid
             var active = Active;
             if (active == null || panel == null || !EnergyRoomItems.IsPanel(panel)) return 0;
             var panelCell = GetPanelCell(panel);
+            var overloaded = active._overloadedPanelCells.Contains(panelCell) ||
+                             active.IsPanelFedByOverloadedCell(panelCell);
+            var powered = !active._gridOverloaded && active._activePanelCells.Contains(panelCell);
+            // El gris de la vista eléctrica representa un cuadro sin alimentación.
+            // Aunque tenga cableado de baja tensión asignado, en ese estado no se desgasta.
+            if (!overloaded && !powered) return 0;
             var count = 0;
             foreach (var source in active._lowVoltagePanelSource.Values)
                 if (source.Equals(panelCell)) count++;
