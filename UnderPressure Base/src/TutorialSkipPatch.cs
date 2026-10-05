@@ -1,3 +1,4 @@
+// Purpose: Skips tutorial-mode behaviour when tutorial suppression is enabled.
 using BehaviorDesigner.Runtime.Tasks;
 using HarmonyLib;
 
