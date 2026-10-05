@@ -1,3 +1,4 @@
+// Purpose: Adjusts random staff traits so applicants can retain meaningful imperfections.
 using System;
 using System.Collections.Generic;
 using HarmonyLib;
