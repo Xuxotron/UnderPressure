@@ -1,3 +1,4 @@
+// Purpose: Persists permanent machine wear and limits how fully maintenance can restore equipment.
 using System;
 using System.Collections;
 using System.Collections.Generic;
