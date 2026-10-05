@@ -1,15 +1,28 @@
 # Under Pressure
 
-Plugin de BepInEx 5 para Two Point Hospital 1.29.52 (Unity 2020.3.12f1, Mono).
+Under Pressure is a BepInEx 5 gameplay and infrastructure mod for Two Point Hospital 1.29.52 (Unity 2020.3.12f1, Mono).
 
-## Desarrollo
+The repository contains two active assemblies:
 
-Abre `UnderPressure Base\UnderPressure.csproj` en Rider. Las referencias necesarias están en `Libs`.
+- `UnderPressure Base` provides configurable gameplay systems, difficulty controls, localization, lighting, maintenance, data views, and the shared asset loader.
+- `UnderPressure Power` provides the electrical grid, Energy Room, electrical objects, batteries, contracted power, billing, and energy campaigns.
 
-Compilación manual:
+## Development
+
+Open `SolutionPressure.sln` or the required project in Rider or Visual Studio. Local game and framework assemblies belong in `Libs`; that directory is intentionally excluded from Git.
+
+Build the complete electrical system with:
 
 ```powershell
-dotnet build "UnderPressure Base\UnderPressure.csproj" -c Debug
+dotnet build "UnderPressure Power\UnderPressurePower.csproj" -c Debug
 ```
 
-Si BepInEx está instalado en `D:\Games\Two Point Hospital`, la compilación copia automáticamente `UnderPressure.dll` y su PDB a `BepInEx\plugins\UnderPressure`.
+The power project references and builds the base project. By default, both DLLs are deployed directly to `D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure`.
+
+To verify a build without deploying it, use:
+
+```powershell
+dotnet build "UnderPressure Power\UnderPressurePower.csproj" -c Debug -p:SkipDeploy=true
+```
+
+The compiled AssetBundle is produced separately from the Unity project and is never replaced by a C# build.
