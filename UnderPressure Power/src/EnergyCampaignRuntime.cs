@@ -1,3 +1,4 @@
+// Purpose: Runs transformer campaigns and connects their controllers, menus, status icons, and timeline updates.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
