@@ -129,7 +129,9 @@ namespace UnderPressure.PowerGrid
                 Definition = (RoomDefinition)MemberwiseCloneMethod.Invoke(template, null);
 
             _doorRequirement = FindDoorRequirement(template, rooms);
-            _deskRequirement = FindMarketingDeskRequirement(marketingRoom);
+            _deskRequirement = DisabledFeatures.EnergyRoomDesk
+                ? null
+                : FindMarketingDeskRequirement(marketingRoom);
             EnergyRoomItems.Ensure(metagame, marketingRoom, rooms);
             _batteryRequirement = EnergyRoomItems.Requirement("UnderPressure Energy Battery", EnergyRoomItems.Battery, 9112101);
             _panelRequirement = EnergyRoomItems.Requirement("UnderPressure Electrical Panel", EnergyRoomItems.Panel, 9112102);
