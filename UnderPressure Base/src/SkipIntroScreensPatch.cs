@@ -1,3 +1,4 @@
+// Purpose: Skips the game's introductory splash screens and opens the main interface directly.
 using System.Collections;
 using HarmonyLib;
 using TH20;
