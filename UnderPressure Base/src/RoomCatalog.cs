@@ -19,29 +19,54 @@ namespace UnderPressure
     public static class RoomCatalog
     {
         // =====================================================================
-        // ESTILOS DE PARED
+        // PLANTILLAS DE ESTILOS DE PARED
         // =====================================================================
 
         public const int NoWallStyle = 0;
         public const int WallStyle1 = 1;
 
+        // Cada plantilla contiene las 11 piezas minimas de un estilo completo:
+        // cuatro paredes, dos esquinas, una puerta y cuatro ventanas.
         public static readonly WallStyleDefinition Style1 = new WallStyleDefinition(WallStyle1)
         {
             Geometry = new WallGeometry
             {
-                CornerInner = NativeMesh("Wall_Corner_A_V1"),
-                CornerOuter = NativeMesh("Wall_Corner_B_V1"),
+                CornerInner = NativePrefab(
+                    "Wall_Corner_A_V1",
+                    "D_Outer_Wall_Corner_A_V1"),
+                CornerOuter = NativePrefab(
+                    "Wall_Corner_B_V1",
+                    "D_Outer_Wall_Corner_B_V1"),
 
-                Wall = NativeMesh("Wall_Blank_A_V1"),
-                WallCornerLeft = NativeMesh("Wall_Blank_SL_A_V1"),
-                WallCornerRight = NativeMesh("Wall_Blank_SR_A_V1"),
-                WallCornerBoth = NativeMesh("Wall_Blank_Short_A_V1"),
+                Wall = NativePrefab(
+                    "Wall_Blank_A_V1",
+                    "D_Outer_Wall_Blank_A_V1"),
+                WallCornerLeft = NativePrefab(
+                    "Wall_Blank_SL_A_V1",
+                    "D_Outer_Wall_Blank_SL_A_V1"),
+                WallCornerRight = NativePrefab(
+                    "Wall_Blank_SR_A_V1",
+                    "D_Outer_Wall_Blank_SR_A_V1"),
+                WallCornerBoth = NativePrefab(
+                    "Wall_Blank_Short_A_V1",
+                    "D_Outer_Wall_Blank_Short_A_V1"),
 
-                Door = NativeMesh("Wall_DoorFrame_A_V1"),
+                Door = NativePrefab(
+                    "I_Wall_DoorFrame_A_V1",
+                    "Wall_DoorFrame_A_V1"),
 
-                Window = NativeMesh("Wall_WinFrame_Short_A_V1"),
-                WindowCornerLeft = NativeMesh("Wall_Winframe_SL_A_V1"),
-                WindowCornerRight = NativeMesh("Wall_Winframe_SR_A_V1")
+                Window = NativePrefab(
+                    "Wall_Winframe_A_V1",
+                    "D_Outer_Wall_Winframe_A_V1"),
+                WindowCornerLeft = NativePrefab(
+                    "Wall_Winframe_SL_A_V1",
+                    "D_Outer_Wall_WinFrame_SL_A_1"),
+                WindowCornerRight = NativePrefab(
+                    "Wall_Winframe_SR_A_V1",
+                    "D_Outer_Wall_Winframe_SR_A_V1"),
+                WindowCornerBoth = NativePrefab(
+                    "Wall_Winframe_Short_A_V1",
+                    "D_Outer_Wall_Winframe_Short_A_V1")
             }
         };
 
