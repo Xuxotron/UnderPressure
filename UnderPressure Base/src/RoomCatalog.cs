@@ -7,7 +7,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using FullInspector;
 using FullInspector.Generated.SharedInstance;
@@ -663,6 +662,7 @@ namespace UnderPressure
 
         private static void ResolveNativeWallDefaults(SharedInstance<RoomDefinition>[] rooms)
         {
+            IndexNativeWallPrefabs(rooms);
             foreach (var shared in rooms)
             {
                 var definition = shared?.Instance;
@@ -770,33 +770,73 @@ namespace UnderPressure
             if (string.IsNullOrEmpty(prefabName))
                 return null;
 
-            var expectedFileName = prefabName + ".prefab";
-            foreach (var bundle in AssetBundle.GetAllLoadedAssetBundles())
-            {
-                if (bundle == null)
-                    continue;
+            if (NativeWallPrefabs.TryGetValue(prefabName, out var prefab) && prefab != null)
+                return prefab;
 
-                foreach (var assetName in bundle.GetAllAssetNames() ?? Array.Empty<string>())
-                {
-                    if (!string.Equals(
-                            Path.GetFileName(assetName),
-                            expectedFileName,
-                            StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    var prefab = bundle.LoadAsset<GameObject>(assetName);
-                    if (prefab == null)
-                        continue;
-
-                    UnityEngine.Debug.Log(
-                        "[UnderPressure] Prefab nativo de pared cargado: " + assetName);
-                    return prefab;
-                }
-            }
+            var rootName = RemovePrefabVariantSuffix(prefabName);
+            if (NativeWallPrefabs.TryGetValue(rootName, out prefab) && prefab != null)
+                return prefab;
 
             UnityEngine.Debug.LogError(
-                "[UnderPressure] No se encontro el asset nativo de pared: " + expectedFileName);
+                "[UnderPressure] No se encontro la referencia nativa del prefab: " +
+                prefabName + ".prefab");
             return null;
+        }
+
+        private static void IndexNativeWallPrefabs(SharedInstance<RoomDefinition>[] rooms)
+        {
+            NativeWallPrefabs.Clear();
+            foreach (var shared in rooms ?? Array.Empty<SharedInstance<RoomDefinition>>())
+            {
+                var definition = shared?.Instance;
+                if (definition == null || Find(definition) != null)
+                    continue;
+
+                IndexWallDefinition(definition._wallsInterior);
+                IndexWallDefinition(definition._wallsExterior);
+
+                var blueprint = BlueprintWallDefinitionField?.GetValue(definition)
+                    as SharedInstance<RoomWallDefinition>;
+                IndexWallDefinition(blueprint?.Instance);
+            }
+        }
+
+        private static void IndexWallDefinition(RoomWallDefinition definition)
+        {
+            var walls = definition?.GetWallsDefinition();
+            if (walls == null)
+                return;
+
+            foreach (var field in typeof(WallsDefinition).GetFields(
+                         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (!typeof(GameObject).IsAssignableFrom(field.FieldType))
+                    continue;
+
+                var candidate = field.GetValue(walls) as GameObject;
+                var prefab = candidate?.transform?.root?.gameObject ?? candidate;
+                if (prefab == null || string.IsNullOrEmpty(prefab.name))
+                    continue;
+
+                if (!NativeWallPrefabs.ContainsKey(prefab.name))
+                    NativeWallPrefabs.Add(prefab.name, prefab);
+            }
+        }
+
+        private static string RemovePrefabVariantSuffix(string prefabName)
+        {
+            var separator = prefabName.LastIndexOf('_');
+            if (separator <= 0 || separator == prefabName.Length - 1)
+                return prefabName;
+
+            for (var index = separator + 1; index < prefabName.Length; ++index)
+                if (!char.IsDigit(prefabName[index]))
+                    return prefabName;
+
+            var rootName = prefabName.Substring(0, separator);
+            return rootName.LastIndexOf("_V", StringComparison.Ordinal) >= 0
+                ? rootName
+                : prefabName;
         }
         internal static bool TryGetConfiguredExteriorWallDefinition(
             Room room,
@@ -1237,6 +1277,9 @@ namespace UnderPressure
 
         private static readonly Dictionary<int, RoomWallDefinition> BuiltWallStyles =
             new Dictionary<int, RoomWallDefinition>();
+
+        private static readonly Dictionary<string, GameObject> NativeWallPrefabs =
+            new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<RoomEntry, SurfaceMaterials> SurfaceMaterialSets =
             new Dictionary<RoomEntry, SurfaceMaterials>();
 
