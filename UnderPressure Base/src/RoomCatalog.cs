@@ -272,9 +272,7 @@ namespace UnderPressure
             public PrefabReference CornerOuter;
 
             public PrefabReference Door;
-            public PrefabReference DoorCornerLeft;
-            public PrefabReference DoorCornerRight;
-            public PrefabReference DoorCornerBoth;
+
 
             public PrefabReference Window;
             public PrefabReference WindowCornerLeft;
@@ -841,9 +839,7 @@ namespace UnderPressure
                 CornerInner = ResolvePrefab(source.CornerInner, name + " CornerInner"),
                 CornerOuter = ResolvePrefab(source.CornerOuter, name + " CornerOuter"),
                 Door = NativeExteriorWalls?.GetWallsDefinition()?.Door,
-                DoorCornerLeft = NativeExteriorWalls?.GetWallsDefinition()?.DoorCornerLeft,
-                DoorCornerRight = NativeExteriorWalls?.GetWallsDefinition()?.DoorCornerRight,
-                DoorCornerBoth = NativeExteriorWalls?.GetWallsDefinition()?.DoorCornerBoth,
+
                 Window = ResolvePrefab(source.Window, name + " Window"),
                 WindowCornerLeft = ResolvePrefab(source.WindowCornerLeft, name + " WindowCornerLeft"),
                 WindowCornerRight = ResolvePrefab(source.WindowCornerRight, name + " WindowCornerRight"),
