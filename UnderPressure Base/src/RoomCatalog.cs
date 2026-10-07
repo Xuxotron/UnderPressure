@@ -31,20 +31,20 @@ namespace UnderPressure
         {
             Geometry = new WallGeometry
             {
-                CornerInner = NativeMesh("Wall_Corner_A_V1"),
-                CornerOuter = NativeMesh("Wall_Corner_B_V1_4"),
+                CornerInner = NativePrefab("Wall_Corner_A_V1"),
+                CornerOuter = NativePrefab("Wall_Corner_B_V1_4"),
 
-                Wall = NativeMesh("Wall_Blank_A_V1"),
-                WallCornerLeft = NativeMesh("Wall_Blank_SL_A_V1_3"),
-                WallCornerRight = NativeMesh("Wall_Blank_SL_A_V1_3"),
-                WallCornerBoth = NativeMesh("Wall_Blank_Short_A_V1"),
+                Wall = NativePrefab("Wall_Blank_A_V1"),
+                WallCornerLeft = NativePrefab("Wall_Blank_SL_A_V1_3"),
+                WallCornerRight = NativePrefab("Wall_Blank_SL_A_V1_3"),
+                WallCornerBoth = NativePrefab("Wall_Blank_Short_A_V1"),
+                // La puerta usa la geometria global del juego.
+                Door = null,
 
-                Door = NativeMesh("Wall_DoorFrame_A_V1_1"),
-
-                Window = NativeMesh("Wall_Winframe_A_V1"),
-                WindowCornerLeft = NativeMesh("Wall_Winframe_SL_A_V1"),
-                WindowCornerRight = NativeMesh("Wall_Winframe_SR_A_V1"),
-                WindowCornerBoth = NativeMesh("Wall_Winframe_Short_A_V1")
+                Window = NativePrefab("Wall_Winframe_A_V1"),
+                WindowCornerLeft = NativePrefab("Wall_Winframe_SL_A_V1"),
+                WindowCornerRight = NativePrefab("Wall_Winframe_SR_A_V1"),
+                WindowCornerBoth = NativePrefab("Wall_Winframe_Short_A_V1")
             }
         };
 
@@ -220,7 +220,7 @@ namespace UnderPressure
 
         public sealed class PrefabReference
         {
-            public string NativeMeshName;
+            public string NativePrefabMeshName;
             public string BundlePrefabAsset;
         }
 
@@ -596,9 +596,9 @@ namespace UnderPressure
         // GEOMETRIA
         // =====================================================================
 
-        public static PrefabReference NativeMesh(string meshName)
+        public static PrefabReference NativePrefab(string meshName)
         {
-            return new PrefabReference { NativeMeshName = meshName };
+            return new PrefabReference { NativePrefabMeshName = meshName };
         }
 
         public static PrefabReference BundlePrefab(string assetPath)
@@ -758,41 +758,57 @@ namespace UnderPressure
                     return bundlePrefab;
             }
 
-            if (!string.IsNullOrEmpty(reference.NativeMeshName))
-                return CreateMeshPrefab(generatedName, ResolveNative<Mesh>(reference.NativeMeshName));
+            if (!string.IsNullOrEmpty(reference.NativePrefabMeshName))
+                return ResolveNativePrefab(reference.NativePrefabMeshName);
 
             return null;
         }
 
-        private static GameObject CreateMeshPrefab(string name, Mesh mesh)
+        private static GameObject ResolveNativePrefab(string meshName)
         {
-            if (mesh == null)
-                return null;
+            foreach (var candidate in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (candidate == null || candidate.scene.IsValid())
+                    continue;
 
-            if (MeshPrefabCache.TryGetValue(mesh, out var cached) && cached != null)
-                return cached;
+                var root = candidate.transform?.root?.gameObject ?? candidate;
+                if (root.scene.IsValid() || !PrefabContainsMesh(root, meshName))
+                    continue;
 
-            var prefab = new GameObject("UnderPressure Geometry - " + name);
-            prefab.hideFlags = HideFlags.HideAndDontSave;
-            prefab.AddComponent<MeshFilter>().sharedMesh = mesh;
-            prefab.AddComponent<MeshRenderer>().sharedMaterials = Array.Empty<Material>();
-            MeshPrefabCache[mesh] = prefab;
-            return prefab;
-        }
+                return root;
+            }
 
-        private static T ResolveNative<T>(string name) where T : UnityEngine.Object
-        {
-            if (string.IsNullOrEmpty(name))
-                return null;
-
-            foreach (var asset in Resources.FindObjectsOfTypeAll<T>())
-                if (asset != null && string.Equals(asset.name, name, StringComparison.Ordinal))
-                    return asset;
-
-            UnityEngine.Debug.LogWarning("[UnderPressure] Recurso nativo de sala no encontrado: " + name);
+            UnityEngine.Debug.LogError(
+                "[UnderPressure] No se encontro el prefab nativo que contiene la malla: " + meshName);
             return null;
         }
 
+        private static bool PrefabContainsMesh(GameObject prefab, string meshName)
+        {
+            foreach (var meshFilter in prefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = meshFilter?.sharedMesh;
+                if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
+                    return true;
+            }
+
+            var meshesField = AccessTools.Field(typeof(MeshRandomizer), "_meshes");
+            if (meshesField == null)
+                return false;
+
+            foreach (var randomizer in prefab.GetComponentsInChildren<MeshRandomizer>(true))
+            {
+                var meshes = meshesField.GetValue(randomizer) as Mesh[];
+                if (meshes == null)
+                    continue;
+
+                foreach (var mesh in meshes)
+                    if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
+                        return true;
+            }
+
+            return false;
+        }
         internal static bool TryGetConfiguredExteriorWallDefinition(
             Room room,
             out RoomWallDefinition wallDefinition)
@@ -1232,10 +1248,6 @@ namespace UnderPressure
 
         private static readonly Dictionary<int, RoomWallDefinition> BuiltWallStyles =
             new Dictionary<int, RoomWallDefinition>();
-
-        private static readonly Dictionary<Mesh, GameObject> MeshPrefabCache =
-            new Dictionary<Mesh, GameObject>();
-
         private static readonly Dictionary<RoomEntry, SurfaceMaterials> SurfaceMaterialSets =
             new Dictionary<RoomEntry, SurfaceMaterials>();
 
