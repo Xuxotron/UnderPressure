@@ -29,19 +29,19 @@ namespace UnderPressure
         {
             Geometry = new WallGeometry
             {
-                CornerInner = NativeMesh("Wall_Corner_A_V1_0"),
-                CornerOuter = NativeMesh("Wall_Corner_B_V1_0"),
+                CornerInner = NativeMesh("Wall_Corner_A_V1"),
+                CornerOuter = NativeMesh("Wall_Corner_B_V1"),
 
-                Wall = NativeMesh("Wall_Blank_A_V1_0"),
-                WallCornerLeft = NativeMesh("Wall_Blank_SL_A_V1_0"),
-                WallCornerRight = NativeMesh("Wall_Blank_SR_A_V1_0"),
-                WallCornerBoth = NativeMesh("Wall_Blank_Short_A_V1_0"),
+                Wall = NativeMesh("Wall_Blank_A_V1"),
+                WallCornerLeft = NativeMesh("Wall_Blank_SL_A_V1"),
+                WallCornerRight = NativeMesh("Wall_Blank_SR_A_V1"),
+                WallCornerBoth = NativeMesh("Wall_Blank_Short_A_V1"),
 
-                Door = NativeMesh("Wall_DoorFrame_A_V1_1"),
+                Door = NativeMesh("Wall_DoorFrame_A_V1"),
 
-                Window = NativeMesh("Wall_WinFrame_Short_A_V1_0"),
-                WindowCornerLeft = NativeMesh("Wall_Winframe_SL_A_V1_1"),
-                WindowCornerRight = NativeMesh("Wall_Winframe_SR_A_V1_1")
+                Window = NativeMesh("Wall_WinFrame_Short_A_V1"),
+                WindowCornerLeft = NativeMesh("Wall_Winframe_SL_A_V1"),
+                WindowCornerRight = NativeMesh("Wall_Winframe_SR_A_V1")
             }
         };
 
