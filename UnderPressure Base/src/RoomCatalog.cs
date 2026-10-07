@@ -709,8 +709,13 @@ namespace UnderPressure
 
         private static void ResolveNativeWallDefaults(SharedInstance<RoomDefinition>[] rooms)
         {
-            if (NativeInteriorWalls != null && NativeExteriorWalls != null && NativeBlueprintWalls != null)
-                return;
+            var interiorCounts = new Dictionary<WallsDefinition, int>();
+            var exteriorCounts = new Dictionary<WallsDefinition, int>();
+            var blueprintCounts = new Dictionary<WallsDefinition, int>();
+            var interiorValues = new Dictionary<WallsDefinition, RoomWallDefinition>();
+            var exteriorValues = new Dictionary<WallsDefinition, RoomWallDefinition>();
+            var blueprintValues =
+                new Dictionary<WallsDefinition, SharedInstance<RoomWallDefinition>>();
 
             foreach (var shared in rooms)
             {
@@ -718,18 +723,72 @@ namespace UnderPressure
                 if (definition == null || Find(definition) != null)
                     continue;
 
+                CountWallDefinition(definition._wallsInterior, interiorCounts, interiorValues);
+                CountWallDefinition(definition._wallsExterior, exteriorCounts, exteriorValues);
+
                 var blueprint = BlueprintWallDefinitionField?.GetValue(definition)
                     as SharedInstance<RoomWallDefinition>;
-                if (NativeInteriorWalls == null && definition._wallsInterior?.GetWallsDefinition() != null)
-                    NativeInteriorWalls = definition._wallsInterior;
-                if (NativeExteriorWalls == null && definition._wallsExterior?.GetWallsDefinition()?.Door != null)
-                    NativeExteriorWalls = definition._wallsExterior;
-                if (NativeBlueprintWalls == null && blueprint?.Instance?.GetWallsDefinition() != null)
-                    NativeBlueprintWalls = blueprint;
+                var blueprintWalls = blueprint?.Instance?.GetWallsDefinition();
+                if (blueprintWalls == null || !HasAnyWallPiece(blueprintWalls))
+                    continue;
 
-                if (NativeInteriorWalls != null && NativeExteriorWalls != null && NativeBlueprintWalls != null)
-                    return;
+                blueprintCounts[blueprintWalls] = blueprintCounts.TryGetValue(blueprintWalls, out var count)
+                    ? count + 1
+                    : 1;
+                if (!blueprintValues.ContainsKey(blueprintWalls))
+                    blueprintValues[blueprintWalls] = blueprint;
             }
+
+            NativeInteriorWalls = FindMostCommonWall(interiorCounts, interiorValues);
+            NativeExteriorWalls = FindMostCommonWall(exteriorCounts, exteriorValues);
+            NativeBlueprintWalls = FindMostCommonBlueprint(blueprintCounts, blueprintValues);
+        }
+
+        private static void CountWallDefinition(
+            RoomWallDefinition definition,
+            IDictionary<WallsDefinition, int> counts,
+            IDictionary<WallsDefinition, RoomWallDefinition> values)
+        {
+            var walls = definition?.GetWallsDefinition();
+            if (walls == null || !HasAnyWallPiece(walls))
+                return;
+
+            counts[walls] = counts.TryGetValue(walls, out var count) ? count + 1 : 1;
+            if (!values.ContainsKey(walls))
+                values[walls] = definition;
+        }
+
+        private static RoomWallDefinition FindMostCommonWall(
+            IDictionary<WallsDefinition, int> counts,
+            IDictionary<WallsDefinition, RoomWallDefinition> values)
+        {
+            var walls = FindMostCommonWalls(counts);
+            return walls != null && values.TryGetValue(walls, out var value) ? value : null;
+        }
+
+        private static SharedInstance<RoomWallDefinition> FindMostCommonBlueprint(
+            IDictionary<WallsDefinition, int> counts,
+            IDictionary<WallsDefinition, SharedInstance<RoomWallDefinition>> values)
+        {
+            var walls = FindMostCommonWalls(counts);
+            return walls != null && values.TryGetValue(walls, out var value) ? value : null;
+        }
+
+        private static WallsDefinition FindMostCommonWalls(
+            IDictionary<WallsDefinition, int> counts)
+        {
+            WallsDefinition selected = null;
+            var highestCount = 0;
+            foreach (var pair in counts)
+            {
+                if (pair.Value <= highestCount)
+                    continue;
+
+                selected = pair.Key;
+                highestCount = pair.Value;
+            }
+
+            return selected;
         }
 
         public static WallStyleDefinition FindWallStyle(int number)
