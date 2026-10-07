@@ -461,11 +461,11 @@ namespace UnderPressure
 
             foreach (var shared in rooms)
             {
-                var requiredItems = shared?.Instance?.GetRequiredItems();
-                if (requiredItems == null)
+                var room = shared?.Instance;
+                if (room == null || room._type != RoomDefinition.Type.GPOffice)
                     continue;
 
-                foreach (var requirement in requiredItems)
+                foreach (var requirement in room.GetRequiredItems() ?? Array.Empty<RequiredItem>())
                     if (requirement != null && requirement.ContainsType(RoomItemDefinition.Type.Door))
                         return requirement;
             }
