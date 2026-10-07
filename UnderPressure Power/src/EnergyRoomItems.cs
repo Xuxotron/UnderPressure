@@ -105,7 +105,8 @@ namespace UnderPressure.PowerGrid
 
             if (MarketingDesk == null || filingCabinet == null || pharmacyMachine == null || nurseLocker == null ||
                 batteryVisual == null || radiator == null || PowerGridPlugin.PowerPanelPrefab == null ||
-                PowerGridPlugin.PowerPanelSprite == null)
+                PowerGridPlugin.PowerPanelSprite == null || PowerGridPlugin.TransformerPrefab == null ||
+                PowerGridPlugin.ElectricalCellPrefab == null)
             {
                 PowerGridPlugin.Log.LogError("No se pudieron localizar todos los objetos base de la Sala de energia: " +
                     $"desk={MarketingDesk != null}, filing={filingCabinet != null}, " +
@@ -113,7 +114,9 @@ namespace UnderPressure.PowerGrid
                     $"nurseLocker={nurseLocker != null}, " +
                     $"battery={batteryVisual != null}, radiator={radiator != null}, " +
                     $"panelPrefab={PowerGridPlugin.PowerPanelPrefab != null}, " +
-                    $"panelIcon={PowerGridPlugin.PowerPanelSprite != null}.");
+                    $"panelIcon={PowerGridPlugin.PowerPanelSprite != null}, " +
+                    $"transformerPrefab={PowerGridPlugin.TransformerPrefab != null}, " +
+                    $"cellPrefab={PowerGridPlugin.ElectricalCellPrefab != null}.");
                 return false;
             }
 
@@ -162,6 +165,8 @@ namespace UnderPressure.PowerGrid
                 Transformer = CloneBase(pharmacyMachine, TransformerTag,
                     TransformerGuid,
                     "energy.transformer.name", "energy.transformer.description");
+                Set(Transformer, "_prefab", PowerGridPlugin.TransformerPrefab);
+                Set(Transformer, "_blueprintPrefab", PowerGridPlugin.TransformerPrefab);
                 Set(Transformer, "_singlePlace", true);
                 Set(Transformer, "_generatesElectricity", false);
                 Set(Transformer, "_energyCost", 0);
@@ -179,6 +184,8 @@ namespace UnderPressure.PowerGrid
                 Cell = CloneBase(filingCabinet, CellTag,
                     CellGuid,
                     "energy.cell.name", "energy.cell.description");
+                Set(Cell, "_prefab", PowerGridPlugin.ElectricalCellPrefab);
+                Set(Cell, "_blueprintPrefab", PowerGridPlugin.ElectricalCellPrefab);
                 Set(Cell, "_cost", EnergyCellPricing.BaseCost);
                 Set(Cell, "_singlePlace", false);
                 Set(Cell, "_generatesElectricity", false);
@@ -263,14 +270,29 @@ namespace UnderPressure.PowerGrid
             return item != null && (ReferenceEquals(item, Panel) || item.DebugTag == PanelTag);
         }
 
-        internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon)
+        internal static void RefreshBundleAssetReferences(GameObject panelPrefab, Sprite panelIcon,
+            GameObject transformerPrefab, GameObject electricalCellPrefab)
         {
-            if (Panel == null || panelPrefab == null || panelIcon == null) return;
-            Set(Panel, "_prefab", panelPrefab);
-            Set(Panel, "_blueprintPrefab", panelPrefab);
-            Set(Panel, "_icon", panelIcon);
-            Set(Panel, "_iconWithoutBacking", panelIcon);
-            RefreshPlacedPanelPrefabInstances();
+            if (Panel != null && panelPrefab != null && panelIcon != null)
+            {
+                Set(Panel, "_prefab", panelPrefab);
+                Set(Panel, "_blueprintPrefab", panelPrefab);
+                Set(Panel, "_icon", panelIcon);
+                Set(Panel, "_iconWithoutBacking", panelIcon);
+                RefreshPlacedPanelPrefabInstances();
+            }
+
+            if (Transformer != null && transformerPrefab != null)
+            {
+                Set(Transformer, "_prefab", transformerPrefab);
+                Set(Transformer, "_blueprintPrefab", transformerPrefab);
+            }
+
+            if (Cell != null && electricalCellPrefab != null)
+            {
+                Set(Cell, "_prefab", electricalCellPrefab);
+                Set(Cell, "_blueprintPrefab", electricalCellPrefab);
+            }
         }
 
         private static void RefreshPlacedPanelPrefabInstances()

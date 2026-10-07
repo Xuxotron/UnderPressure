@@ -25,6 +25,8 @@ namespace UnderPressure.PowerGrid
         internal static Sprite BatterySprite { get; private set; }
         internal static Sprite PowerPanelSprite { get; private set; }
         internal static GameObject PowerPanelPrefab { get; private set; }
+        internal static GameObject TransformerPrefab { get; private set; }
+        internal static GameObject ElectricalCellPrefab { get; private set; }
 
         private readonly List<UiSpriteReference> _uiSpriteReferences =
             new List<UiSpriteReference>();
@@ -127,6 +129,18 @@ namespace UnderPressure.PowerGrid
             if (PowerPanelPrefab != null)
                 EnableNativeBuildEffect(PowerPanelPrefab);
 
+            TransformerPrefab =
+                UnderPressureAssetBundle.LoadAsset<GameObject>(
+                    "Assets/Transformador/Transformador.prefab");
+            ElectricalCellPrefab =
+                UnderPressureAssetBundle.LoadAsset<GameObject>(
+                    "Assets/CeldaElectrica/Celda.prefab");
+
+            if (TransformerPrefab == null)
+                Logger.LogError("El AssetBundle no contiene el prefab del transformador.");
+            if (ElectricalCellPrefab == null)
+                Logger.LogError("El AssetBundle no contiene el prefab de la celda electrica.");
+
             var panelIconTexture =
                 UnderPressureAssetBundle.LoadAsset<Texture2D>(
                     ElectricalPanelPrefabParameters.IconTextureAsset);
@@ -158,7 +172,9 @@ namespace UnderPressure.PowerGrid
 
             EnergyRoomItems.RefreshBundleAssetReferences(
                 PowerPanelPrefab,
-                PowerPanelSprite);
+                PowerPanelSprite,
+                TransformerPrefab,
+                ElectricalCellPrefab);
 
             RestoreUiSpriteReferences();
         }
