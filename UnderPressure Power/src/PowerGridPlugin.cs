@@ -1,5 +1,5 @@
+// Updated: 2026-10-07
 // Purpose: Bootstraps the electrical plugin, shared assets, Harmony patches, and extra-save reloads.
-// Updated: 2026-10-06
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -9,6 +9,7 @@ using HarmonyLib;
 using TH20;
 using UnityEngine;
 using UnityEngine.UI;
+using UnderPressure;
 
 namespace UnderPressure.PowerGrid
 {
@@ -72,43 +73,21 @@ namespace UnderPressure.PowerGrid
 
         private void LoadUiAssets()
         {
-            var energyFloorMaterial =
-                UnderPressureAssetBundle.LoadAsset<Material>(
-                    "Assets/EnergyRoom/EnergyFloor.mat");
+            var energyRoomMaterials =
+                RoomCatalog.LoadSurfaceMaterials(RoomCatalog.Energy);
 
-            var energyInteriorMaterial =
-                UnderPressureAssetBundle.LoadAsset<Material>(
-                    "Assets/EnergyRoom/EnergyInterior.mat");
+            if (energyRoomMaterials != null)
+            {
+                ShaderConversion.ConvertKnownShaders(
+                    energyRoomMaterials.Floor,
+                    energyRoomMaterials.Interior,
+                    energyRoomMaterials.Exterior,
+                    energyRoomMaterials.Door);
 
-            var energyExteriorMaterial =
-                UnderPressureAssetBundle.LoadAsset<Material>(
-                    "Assets/EnergyRoom/EnergyExterior.mat");
-
-            var energyDoorMaterial =
-                UnderPressureAssetBundle.LoadAsset<Material>(
-                    "Assets/EnergyRoom/EnergyDoor.mat");
-
-            EnergyRoomSurfaceMaterials.SetMaterials(
-                energyFloorMaterial,
-                energyInteriorMaterial,
-                energyExteriorMaterial,
-                energyDoorMaterial);
-
-            LogMissingEnergyRoomMaterial(
-                energyFloorMaterial,
-                "EnergyFloor");
-
-            LogMissingEnergyRoomMaterial(
-                energyInteriorMaterial,
-                "EnergyInterior");
-
-            LogMissingEnergyRoomMaterial(
-                energyExteriorMaterial,
-                "EnergyExterior");
-
-            LogMissingEnergyRoomMaterial(
-                energyDoorMaterial,
-                "EnergyDoor");
+                RoomCatalog.SetSurfaceMaterials(
+                    RoomCatalog.Energy,
+                    energyRoomMaterials);
+            }
 
             BatterySprite =
                 UnderPressureAssetBundle.LoadAsset<Sprite>(
@@ -144,11 +123,6 @@ namespace UnderPressure.PowerGrid
                     "El AssetBundle no contiene el prefab del cuadro electrico.");
             }
 
-            ShaderConversion.ConvertKnownShaders(
-                energyFloorMaterial,
-                energyInteriorMaterial,
-                energyExteriorMaterial,
-                energyDoorMaterial);
 
             if (PowerPanelPrefab != null)
                 EnableNativeBuildEffect(PowerPanelPrefab);
@@ -217,16 +191,6 @@ namespace UnderPressure.PowerGrid
             }
         }
 
-        private void LogMissingEnergyRoomMaterial(
-            Material material,
-            string assetName)
-        {
-            if (material == null)
-            {
-                Logger.LogError(
-                    $"El AssetBundle no contiene el material {assetName} de la sala de energia.");
-            }
-        }
 
         private static void ReloadExtraState()
         {

@@ -1,7 +1,6 @@
-// Purpose: Defines, unlocks, registers, and persists the custom Energy Room and its janitor work category.
-// Updated: 2026-10-06
+// Updated: 2026-10-07
+// Purpose: Energy-room-specific runtime logic: requirements resolution, unlock/save integration and janitor jobs.
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using FullInspector;
@@ -9,13 +8,13 @@ using FullInspector.Generated.SharedInstance;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
+using UnderPressure;
 
 namespace UnderPressure.PowerGrid
 {
     internal static class PowerPlantRoomRegistry
     {
-        internal const int RoomTypeValue = 1000;
-        private const int SharedDefinitionId = 9112001;
+        internal static int RoomTypeValue => RoomCatalog.Energy.TypeValue;
 
         private static readonly MethodInfo MemberwiseCloneMethod =
             AccessTools.Method(typeof(object), "MemberwiseClone");
@@ -27,7 +26,6 @@ namespace UnderPressure.PowerGrid
         private static RequiredItem _transformerRequirement;
         private static RequiredItem _cellRequirement;
         private static StaffRequired _janitorRequirement;
-        private static SharedInstance_TH20TH20_RoomDefinition _definitionShared;
         private static RoomDefinition _marketingRoom;
 
         internal static RoomDefinition Definition { get; private set; }
@@ -36,7 +34,7 @@ namespace UnderPressure.PowerGrid
 
         internal static bool IsPowerPlant(RoomDefinition definition)
         {
-            return definition != null && Convert.ToInt32(definition._type) == RoomTypeValue;
+            return RoomCatalog.Is(definition, RoomCatalog.Energy);
         }
 
         internal static bool IsMarketingRoom(ISilverUnlockable unlockable) =>
@@ -108,76 +106,23 @@ namespace UnderPressure.PowerGrid
         {
             if (metagame?.RoomDatabase?.Instance == null) return;
 
-            var database = metagame.RoomDatabase.Instance;
-            var rooms = database.Rooms;
+            var rooms = metagame.RoomDatabase.Instance.Rooms;
             if (rooms == null) return;
 
-            RoomDefinition template = null;
             RoomDefinition marketingRoom = null;
-
             foreach (var shared in rooms)
             {
                 if (shared?.Instance == null) continue;
-
-                if (IsPowerPlant(shared.Instance))
-                {
-                    Definition = shared.Instance;
-                    _definitionShared = shared as SharedInstance_TH20TH20_RoomDefinition;
-                }
-
-                if (shared.Instance._type == RoomDefinition.Type.MRIScanner)
-                    template = shared.Instance;
-
                 if (shared.Instance._type == RoomDefinition.Type.Marketing)
-                    marketingRoom = shared.Instance;
-            }
-
-            if (template == null)
-            {
-                foreach (var shared in rooms)
                 {
-                    if (shared?.Instance == null ||
-                        shared.Instance._type != RoomDefinition.Type.XRay)
-                        continue;
-
-                    template = shared.Instance;
+                    marketingRoom = shared.Instance;
                     break;
                 }
             }
 
-            if (Definition == null && template == null)
-            {
-                PowerGridPlugin.Log.LogError(
-                    "No se encontro una sala de escaner para crear la central electrica.");
-                return;
-            }
-
-            var isNewDefinition = Definition == null;
             _marketingRoom = marketingRoom;
 
-            if (isNewDefinition)
-            {
-                Definition = new RoomDefinition();
-                SetDefinitionField("_components", Array.Empty<EntityComponent>());
-
-                CopyStructuralField(template, "WallThickness");
-                CopyStructuralField(template, "UseHospitalFloorTile");
-                CopyStructuralField(template, "_roomFloorTile");
-                CopyStructuralField(template, "_wallsInterior");
-                CopyStructuralField(template, "_wallsExterior");
-                CopyStructuralField(template, "_blueprintWallDefinition");
-                CopyStructuralField(template, "_dragAddWallDefinition");
-                CopyStructuralField(template, "_dragSubWallDefinition");
-                CopyStructuralField(template, "_roomLightMaterial");
-                CopyStructuralField(template, "_roomReflectionCubemap");
-                CopyStructuralField(template, "_roomClosedLightMaterial");
-                CopyStructuralField(template, "_roomClosedReflectionCubemap");
-                CopyStructuralField(template, "_roomOperationalLightMaterial");
-                CopyStructuralField(template, "_roomOperationalReflectionCubemap");
-            }
-
-            _doorRequirement = FindDoorRequirement(template, rooms);
-
+            _doorRequirement = RoomCatalog.FindDoorRequirement(rooms);
             _deskRequirement = DisabledFeatures.EnergyRoomDesk
                 ? null
                 : FindMarketingDeskRequirement(marketingRoom);
@@ -195,85 +140,18 @@ namespace UnderPressure.PowerGrid
 
             _janitorRequirement = CreateJanitorRequirement(marketingRoom);
 
-            AllowRequirementInPowerPlant(_doorRequirement);
-            AllowRequirementInPowerPlant(_deskRequirement);
-            AllowRequirementInPowerPlant(_batteryRequirement);
-            AllowRequirementInPowerPlant(_panelRequirement);
-            AllowRequirementInPowerPlant(_transformerRequirement);
-            AllowRequirementInPowerPlant(_cellRequirement);
+            Definition = RoomCatalog.EnsureDefinition(
+                metagame,
+                RoomCatalog.Energy,
+                EnergyLocalization.Create,
+                BuildRequirementMap(),
+                BuildStaffMap());
 
-            var description = EnergyLocalization.Create("energy.room.description");
-
-            SetDefinitionField("_type", (RoomDefinition.Type)RoomTypeValue);
-            SetDefinitionField("Name", EnergyLocalization.Create("energy.room.name"));
-            SetDefinitionField("Description", description);
-            SetDefinitionField("LongDescription", description);
-            SetDefinitionField("UnlockedMessage", description);
-            SetDefinitionField("_cost", 25000);
-            SetDefinitionField("_silverCost", 0);
-            SetDefinitionField("_minSizeX", 3);
-            SetDefinitionField("_minSizeY", 3);
-            SetDefinitionField("_maxCapacity", 0);
-            SetDefinitionField("_hasQueue", false);
-            SetDefinitionField("_canManageQueue", false);
-            SetDefinitionField("_allowQueueWarningStatusIcon", false);
-            SetDefinitionField("MinimumStaffCount", 0);
-            SetDefinitionField("MustBeWhiteListed", false);
-            SetDefinitionField("DlcPackRequired", null);
-
-            // La bateria y el cuadro siguen siendo opcionales. La celda es obligatoria
-            // porque cada red de alta tension debe nacer en una de ellas.
-            SetDefinitionField("_requiredItemsNew",
-                CombineRequirements(
-                    _doorRequirement,
-                    _deskRequirement,
-                    _transformerRequirement,
-                    _cellRequirement));
-
-            SetDefinitionField(
-                "_requiredWorkingItems",
-                _transformerRequirement?.Items ??
-                Array.Empty<SharedInstance<RoomItemDefinition>>());
-
-            SetDefinitionField(
-                "_requiresStaff",
-                _janitorRequirement == null
-                    ? Array.Empty<StaffRequired>()
-                    : new[] { _janitorRequirement });
-
-            SetDefinitionField("_singlePlaceItems",
-                Array.Empty<RoomItemDefinition.Type>());
-            SetDefinitionField("_staffPatientInteractions",
-                Array.Empty<StaffPatientInteraction>());
-            SetDefinitionField("WhoCanUseRoom",
-                Array.Empty<WhoCanUseRoom.GroupDefinition>());
-            SetDefinitionField("_itemToLeaveOnCursor", null);
-            SetDefinitionField("_showUnitsProcessedInGUI", false);
-            SetDefinitionField("_showTotalRevenueInGUI", false);
-
-            ApplyIcon();
-
-            if (isNewDefinition)
+            if (Definition == null)
             {
-                var wrapper =
-                    ScriptableObject.CreateInstance<SharedInstance_TH20TH20_RoomDefinition>();
-
-                wrapper.name = "UnderPressure Energy Room";
-                wrapper.hideFlags = HideFlags.DontUnloadUnusedAsset;
-                wrapper.ID = SharedDefinitionId;
-                wrapper.Instance = Definition;
-
-                _definitionShared = wrapper;
-
-                var expanded =
-                    new SharedInstance<RoomDefinition>[rooms.Length + 1];
-
-                Array.Copy(rooms, expanded, rooms.Length);
-                expanded[rooms.Length] = wrapper;
-                database.Rooms = expanded;
-
-                PowerGridPlugin.Log.LogInfo(
-                    "Definicion de sala Central electrica registrada.");
+                PowerGridPlugin.Log.LogError(
+                    "No se pudo registrar la sala de energia desde RoomCatalog.");
+                return;
             }
 
             RegisterSaveAssets(metagame);
@@ -291,12 +169,6 @@ namespace UnderPressure.PowerGrid
             if (mapping == null) return;
 
             var added = 0;
-
-            added += RegisterSaveAsset(
-                mapping,
-                _definitionShared?.ID ?? 0,
-                _definitionShared,
-                Definition);
 
             added += RegisterSaveAsset(
                 mapping,
@@ -387,47 +259,26 @@ namespace UnderPressure.PowerGrid
             return 1;
         }
 
-        private static RequiredItem[] CombineRequirements(
-            params RequiredItem[] requirements)
+
+        private static Dictionary<string, RequiredItem> BuildRequirementMap()
         {
-            var result = new List<RequiredItem>();
-
-            foreach (var requirement in requirements)
-                if (requirement != null && !result.Contains(requirement))
-                    result.Add(requirement);
-
-            return result.ToArray();
+            return new Dictionary<string, RequiredItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Door"] = _doorRequirement,
+                ["MarketingDesk"] = _deskRequirement,
+                ["Battery"] = _batteryRequirement,
+                ["ElectricalPanel"] = _panelRequirement,
+                ["Transformer"] = _transformerRequirement,
+                ["ElectricalCell"] = _cellRequirement
+            };
         }
 
-        private static RequiredItem FindDoorRequirement(
-            RoomDefinition preferred,
-            SharedInstance<RoomDefinition>[] rooms)
+        private static Dictionary<string, StaffRequired> BuildStaffMap()
         {
-            var preferredItems = preferred?.GetRequiredItems();
-
-            if (preferredItems != null)
+            return new Dictionary<string, StaffRequired>(StringComparer.OrdinalIgnoreCase)
             {
-                foreach (var requirement in preferredItems)
-                    if (requirement != null &&
-                        requirement.ContainsType(RoomItemDefinition.Type.Door))
-                        return requirement;
-            }
-
-            foreach (var shared in rooms)
-            {
-                var requiredItems = shared?.Instance?.GetRequiredItems();
-                if (requiredItems == null) continue;
-
-                foreach (var requirement in requiredItems)
-                    if (requirement != null &&
-                        requirement.ContainsType(RoomItemDefinition.Type.Door))
-                        return requirement;
-            }
-
-            PowerGridPlugin.Log.LogWarning(
-                "No se encontro el requisito nativo de puerta para la central electrica.");
-
-            return null;
+                ["Janitor"] = _janitorRequirement
+            };
         }
 
         private static RequiredItem FindMarketingDeskRequirement(
@@ -558,65 +409,6 @@ namespace UnderPressure.PowerGrid
                        StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static void AllowRequirementInPowerPlant(
-            RequiredItem requirement)
-        {
-            if (requirement?.Items == null) return;
-
-            foreach (var shared in requirement.Items)
-                AllowItemInPowerPlant(shared?.Instance);
-        }
-
-        private static void AllowItemInPowerPlant(RoomItemDefinition item)
-        {
-            if (item == null) return;
-
-            var powerPlantType =
-                (RoomDefinition.Type)RoomTypeValue;
-
-            var canField =
-                AccessTools.Field(
-                    typeof(RoomItemDefinition),
-                    "_canBePlacedIn");
-
-            var allowed =
-                canField?.GetValue(item) as RoomDefinition.Type[];
-
-            if (allowed != null &&
-                allowed.Length > 0 &&
-                Array.IndexOf(allowed, powerPlantType) < 0)
-            {
-                var expanded =
-                    new RoomDefinition.Type[allowed.Length + 1];
-
-                Array.Copy(allowed, expanded, allowed.Length);
-                expanded[allowed.Length] = powerPlantType;
-                canField.SetValue(item, expanded);
-            }
-
-            var cantField =
-                AccessTools.Field(
-                    typeof(RoomItemDefinition),
-                    "_cantBePlacedIn");
-
-            var forbidden =
-                cantField?.GetValue(item) as RoomDefinition.Type[];
-
-            if (forbidden == null ||
-                Array.IndexOf(forbidden, powerPlantType) < 0)
-                return;
-
-            var reduced =
-                new RoomDefinition.Type[forbidden.Length - 1];
-
-            var target = 0;
-
-            foreach (var roomType in forbidden)
-                if (roomType != powerPlantType)
-                    reduced[target++] = roomType;
-
-            cantField.SetValue(item, reduced);
-        }
 
         internal static void AddToLevel(WorldState worldState)
         {
@@ -642,25 +434,11 @@ namespace UnderPressure.PowerGrid
 
             if (Definition == null) return;
 
-            EnsureRoomTemplateBucket(level);
-
-            EnsureRequirementItemsAvailable(
-                worldState, _doorRequirement);
-
-            EnsureRequirementItemsAvailable(
-                worldState, _deskRequirement);
-
-            EnsureRequirementItemsAvailable(
-                worldState, _batteryRequirement);
-
-            EnsureRequirementItemsAvailable(
-                worldState, _panelRequirement);
-
-            EnsureRequirementItemsAvailable(
-                worldState, _transformerRequirement);
-
-            EnsureRequirementItemsAvailable(
-                worldState, _cellRequirement);
+            RoomCatalog.EnsureRoomTemplateBucket(level, RoomCatalog.Energy);
+            RoomCatalog.EnsureAvailableItems(
+                worldState,
+                RoomCatalog.Energy,
+                BuildRequirementMap());
 
             // Never call Metagame.UnlockItem for runtime definitions.
             PurgePersistentUnlocks(metagame);
@@ -701,45 +479,11 @@ namespace UnderPressure.PowerGrid
                          _marketingRoom.GetRequiredItems() ??
                          Array.Empty<RequiredItem>())
                 {
-                    EnsureRequirementItemsAvailable(
-                        worldState,
-                        requirement);
+                    RoomCatalog.EnsureRequirementItemsAvailable(worldState, requirement);
                 }
             }
         }
 
-        private static void EnsureRoomTemplateBucket(Level level)
-        {
-            var templates =
-                level?.App?.RoomTemplatesManager?.RoomTemplates;
-
-            var powerPlantType =
-                (RoomDefinition.Type)RoomTypeValue;
-
-            if (templates == null ||
-                templates.ContainsKey(powerPlantType))
-                return;
-
-            templates.Add(
-                powerPlantType,
-                new Dictionary<string, RoomTemplate>());
-        }
-
-        private static void EnsureRequirementItemsAvailable(
-            WorldState worldState,
-            RequiredItem requirement)
-        {
-            if (requirement?.Items == null) return;
-
-            foreach (var shared in requirement.Items)
-            {
-                var item = shared?.Instance;
-                if (item == null) continue;
-
-                if (!worldState.AvailableRoomItems.Contains(item))
-                    worldState.AvailableRoomItems.Add(item);
-            }
-        }
 
         internal static void PurgePersistentUnlocks(Metagame metagame)
         {
@@ -777,472 +521,7 @@ namespace UnderPressure.PowerGrid
                 $"Eliminadas {removed} referencias persistentes antiguas de UnderPressure antes de guardar.");
         }
 
-        private static void ApplyIcon()
-        {
-            if (Definition == null) return;
 
-            foreach (var sprite in
-                     Resources.FindObjectsOfTypeAll<Sprite>())
-            {
-                if (sprite == null ||
-                    !sprite.name.Equals(
-                        "shock_icon",
-                        StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                SetDefinitionField("_icon", sprite);
-                SetDefinitionField(
-                    "_jobAssignmentIcon",
-                    sprite);
-
-                return;
-            }
-        }
-
-        private static void SetDefinitionField(
-            string name,
-            object value)
-        {
-            var field =
-                AccessTools.Field(
-                    typeof(RoomDefinition),
-                    name);
-
-            if (field == null)
-            {
-                PowerGridPlugin.Log.LogWarning(
-                    $"Campo de RoomDefinition no encontrado: {name}");
-            }
-            else
-            {
-                field.SetValue(Definition, value);
-            }
-        }
-
-        private static void CopyStructuralField(
-            RoomDefinition source,
-            string name)
-        {
-            var field =
-                AccessTools.Field(
-                    typeof(RoomDefinition),
-                    name);
-
-            if (field == null)
-            {
-                PowerGridPlugin.Log.LogWarning(
-                    $"Campo estructural de RoomDefinition no encontrado: {name}");
-                return;
-            }
-
-            SetDefinitionField(
-                name,
-                field.GetValue(source));
-        }
-    }
-
-    /// <summary>
-    /// Define la apariencia de la Sala de energia antes de que el juego construya
-    /// su geometria. RoomFloorPlanVisual y CorridorWallsVisual siguen decidiendo
-    /// de forma nativa que pieza corresponde a cada pared, esquina, puerta o ventana.
-    /// </summary>
-    internal static class EnergyRoomSurfaceMaterials
-    {
-        private static readonly FieldInfo FloorPlanField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorPlan");
-
-        private static readonly FieldInfo FloorRenderersField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorTileRenderers");
-
-        private static readonly FieldInfo WallObjectsField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_wallObjects");
-
-        private static readonly FieldInfo FloorOverrideField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorVisualOverride");
-
-        private static readonly FieldInfo WallOverrideField =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_wallVisualOverride");
-
-        private static readonly FieldInfo CorridorWallsField =
-            AccessTools.Field(typeof(CorridorWallsVisual), "_activeWalls");
-
-        private static readonly Type CorridorWallVisualType =
-            typeof(CorridorWallsVisual).GetNestedType(
-                "WallVisual",
-                BindingFlags.NonPublic);
-
-        private static readonly FieldInfo CorridorWallTransformField =
-            CorridorWallVisualType?.GetField(
-                "Transform",
-                BindingFlags.Instance |
-                BindingFlags.Public |
-                BindingFlags.NonPublic);
-
-        private static readonly FieldInfo CorridorWallRoomField =
-            CorridorWallVisualType?.GetField(
-                "Room",
-                BindingFlags.Instance |
-                BindingFlags.Public |
-                BindingFlags.NonPublic);
-
-        private static readonly List<WeakReference> RoomVisuals =
-            new List<WeakReference>();
-
-        private static readonly List<WeakReference> CorridorVisuals =
-            new List<WeakReference>();
-
-        private static Material _floor;
-        private static Material _interior;
-        private static Material _exterior;
-        private static Material _door;
-
-        internal static void SetMaterials(
-            Material floor,
-            Material interior,
-            Material exterior,
-            Material door)
-        {
-            _floor = floor;
-            _interior = interior;
-            _exterior = exterior;
-            _door = door;
-
-            RefreshTrackedVisuals();
-        }
-
-        internal static void Prepare(
-            RoomFloorPlanVisual visual,
-            FloorPlan floorPlan)
-        {
-            if (visual == null ||
-                visual is BlueprintFloorPlanVisual ||
-                floorPlan == null ||
-                !PowerPlantRoomRegistry.IsPowerPlant(
-                    floorPlan.Definition))
-                return;
-
-            // Evita que los overrides de hospital pisen nuestros materiales.
-            FloorOverrideField?.SetValue(visual, null);
-            WallOverrideField?.SetValue(visual, null);
-        }
-
-        internal static void PrepareRestored(
-            RoomFloorPlanVisual visual)
-        {
-            if (visual == null)
-                return;
-
-            Prepare(
-                visual,
-                FloorPlanField?.GetValue(visual) as FloorPlan);
-        }
-
-        internal static void Apply(
-            RoomFloorPlanVisual visual)
-        {
-            if (visual == null ||
-                visual is BlueprintFloorPlanVisual)
-                return;
-
-            var floorPlan =
-                FloorPlanField?.GetValue(visual) as FloorPlan;
-
-            if (floorPlan == null ||
-                !PowerPlantRoomRegistry.IsPowerPlant(
-                    floorPlan.Definition))
-                return;
-
-            Track(RoomVisuals, visual);
-
-            var floorRenderers =
-                FloorRenderersField?.GetValue(visual)
-                    as List<Renderer>;
-
-            if (floorRenderers != null)
-            {
-                foreach (var renderer in floorRenderers)
-                    ApplyFirstMaterial(renderer, _floor);
-            }
-
-            var wallObjects =
-                WallObjectsField?.GetValue(visual)
-                    as List<KeyValuePair<Transform, Transform>>;
-
-            if (wallObjects != null)
-            {
-                foreach (var wall in wallObjects)
-                {
-                    // No se intenta reconocer materiales por referencia.
-                    // Cada pieza nativa (recta, esquina, puerta, etc.) recibe
-                    // el material de superficie en su primer slot.
-                    ApplyFirstMaterial(wall.Key, _interior);
-                    ApplyFirstMaterial(wall.Value, _exterior);
-                }
-            }
-
-            if (floorPlan.Items != null)
-            {
-                foreach (var item in floorPlan.Items)
-                    ApplyDoor(item);
-            }
-        }
-
-        internal static void Apply(
-            CorridorWallsVisual visual)
-        {
-            if (visual == null)
-                return;
-
-            Track(CorridorVisuals, visual);
-
-            var activeWalls =
-                CorridorWallsField?.GetValue(visual)
-                    as IEnumerable;
-
-            if (activeWalls == null ||
-                CorridorWallTransformField == null ||
-                CorridorWallRoomField == null)
-                return;
-
-            foreach (var entry in activeWalls)
-            {
-                var room =
-                    CorridorWallRoomField.GetValue(entry)
-                        as Room;
-
-                if (room == null ||
-                    !PowerPlantRoomRegistry.IsPowerPlant(
-                        room.Definition))
-                    continue;
-
-                var transform =
-                    CorridorWallTransformField.GetValue(entry)
-                        as Transform;
-
-                ApplyFirstMaterial(
-                    transform,
-                    _exterior);
-            }
-        }
-
-        private static void ApplyDoor(RoomItem item)
-        {
-            if (item?.Definition == null ||
-                item.Definition.ItemType !=
-                    RoomItemDefinition.Type.Door ||
-                item.OwningRoom == null ||
-                !PowerPlantRoomRegistry.IsPowerPlant(
-                    item.OwningRoom.Definition))
-                return;
-
-            ApplyDoorSurfaceMaterial(
-                item.Visual?.GameObject?.transform,
-                _door);
-        }
-
-        private static void ApplyDoorSurfaceMaterial(
-            Transform root,
-            Material replacement)
-        {
-            if (root == null ||
-                replacement == null)
-                return;
-
-            foreach (var renderer in
-                     root.GetComponentsInChildren<Renderer>(true))
-            {
-                var materials =
-                    renderer.sharedMaterials;
-
-                if (materials == null ||
-                    materials.Length == 0)
-                    continue;
-
-                var changed = false;
-
-                for (var index = 0;
-                     index < materials.Length;
-                     ++index)
-                {
-                    var material = materials[index];
-
-                    if (material == null ||
-                        string.IsNullOrEmpty(material.name))
-                        continue;
-
-                    var name = material.name;
-
-                    // La hoja nativa usa materiales tipo M_*_Door_*.
-                    // El marco/trim queda exactamente como lo crea el juego.
-                    if (name.IndexOf(
-                            "Door",
-                            StringComparison.OrdinalIgnoreCase) < 0 ||
-                        name.IndexOf(
-                            "Frame",
-                            StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        name.IndexOf(
-                            "Trim",
-                            StringComparison.OrdinalIgnoreCase) >= 0)
-                        continue;
-
-                    materials[index] = replacement;
-                    changed = true;
-                }
-
-                if (changed)
-                    renderer.sharedMaterials = materials;
-            }
-        }
-
-        private static void ApplyFirstMaterial(
-            Transform root,
-            Material material)
-        {
-            if (root == null ||
-                material == null)
-                return;
-
-            foreach (var renderer in
-                     root.GetComponentsInChildren<Renderer>(true))
-            {
-                ApplyFirstMaterial(
-                    renderer,
-                    material);
-            }
-        }
-
-        private static void ApplyFirstMaterial(
-            Renderer renderer,
-            Material material)
-        {
-            if (renderer == null ||
-                material == null)
-                return;
-
-            var materials =
-                renderer.sharedMaterials;
-
-            if (materials == null ||
-                materials.Length == 0)
-            {
-                renderer.sharedMaterial =
-                    material;
-                return;
-            }
-
-            if (ReferenceEquals(
-                    materials[0],
-                    material))
-                return;
-
-            materials[0] =
-                material;
-
-            renderer.sharedMaterials =
-                materials;
-        }
-
-        private static void RefreshTrackedVisuals()
-        {
-            Refresh(
-                RoomVisuals,
-                target =>
-                    Apply(
-                        target as RoomFloorPlanVisual));
-
-            Refresh(
-                CorridorVisuals,
-                target =>
-                    Apply(
-                        target as CorridorWallsVisual));
-        }
-
-        private static void Refresh(
-            List<WeakReference> references,
-            Action<object> apply)
-        {
-            for (var index =
-                     references.Count - 1;
-                 index >= 0;
-                 --index)
-            {
-                var target =
-                    references[index].Target;
-
-                if (target == null)
-                {
-                    references.RemoveAt(index);
-                    continue;
-                }
-
-                apply(target);
-            }
-        }
-
-        private static void Track(
-            List<WeakReference> references,
-            object target)
-        {
-            foreach (var reference in references)
-            {
-                if (ReferenceEquals(
-                        reference.Target,
-                        target))
-                    return;
-            }
-
-            references.Add(
-                new WeakReference(target));
-        }
-    }
-
-    [HarmonyPatch(typeof(RoomFloorPlanVisual), "UpdateFromRoom")]
-    internal static class EnergyRoomSurfaceMaterialsPatch
-    {
-        private static void Prefix(
-            RoomFloorPlanVisual __instance,
-            FloorPlan __0)
-        {
-            EnergyRoomSurfaceMaterials.Prepare(
-                __instance,
-                __0);
-        }
-
-        private static void Postfix(
-            RoomFloorPlanVisual __instance)
-        {
-            EnergyRoomSurfaceMaterials.Apply(
-                __instance);
-        }
-    }
-
-    [HarmonyPatch(typeof(RoomFloorPlanVisual), "RestoreFromSave")]
-    internal static class RestoredEnergyRoomSurfaceMaterialsPatch
-    {
-        private static void Prefix(
-            RoomFloorPlanVisual __instance)
-        {
-            EnergyRoomSurfaceMaterials.PrepareRestored(
-                __instance);
-        }
-
-        private static void Postfix(
-            RoomFloorPlanVisual __instance)
-        {
-            EnergyRoomSurfaceMaterials.Apply(
-                __instance);
-        }
-    }
-
-    [HarmonyPatch(typeof(CorridorWallsVisual), "CreateWallObjects")]
-    internal static class EnergyRoomExteriorMaterialsPatch
-    {
-        private static void Postfix(
-            CorridorWallsVisual __instance)
-        {
-            EnergyRoomSurfaceMaterials.Apply(
-                __instance);
-        }
     }
 
     [HarmonyPatch(
