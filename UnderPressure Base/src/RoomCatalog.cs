@@ -887,8 +887,8 @@ namespace UnderPressure
             if (wallObjects != null)
                 foreach (var wall in wallObjects)
                 {
-                    ApplyFirstMaterial(wall.Key, materials.Interior);
-                    ApplyFirstMaterial(wall.Value, materials.Exterior);
+                    ApplyFirstMaterial(wall.Key, materials.Interior, preserveWallClip: true);
+                    ApplyFirstMaterial(wall.Value, materials.Exterior, preserveWallClip: true);
                 }
 
             if (floorPlan.Items != null)
@@ -916,7 +916,8 @@ namespace UnderPressure
                 ApplyFirstMaterial(
                     CorridorWallTransformField.GetValue(entry) as Transform,
                     materials.Exterior,
-                    true);
+                    replaceAllSlots: true,
+                    preserveWallClip: true);
             }
         }
 
@@ -964,7 +965,8 @@ namespace UnderPressure
         private static void ApplyFirstMaterial(
             Transform root,
             Material material,
-            bool replaceAllSlots = false)
+            bool replaceAllSlots = false,
+            bool preserveWallClip = false)
         {
             if (root == null || material == null)
                 return;
@@ -973,7 +975,7 @@ namespace UnderPressure
             {
                 if (!replaceAllSlots)
                 {
-                    ApplyFirstMaterial(renderer, material);
+                    ApplyFirstMaterial(renderer, material, preserveWallClip);
                     continue;
                 }
 
@@ -990,7 +992,9 @@ namespace UnderPressure
                     if (ReferenceEquals(materials[index], material))
                         continue;
 
-                    materials[index] = material;
+                    materials[index] = preserveWallClip
+                        ? PrepareWallMaterial(material, materials[index])
+                        : material;
                     changed = true;
                 }
 
@@ -999,7 +1003,10 @@ namespace UnderPressure
             }
         }
 
-        private static void ApplyFirstMaterial(Renderer renderer, Material material)
+        private static void ApplyFirstMaterial(
+            Renderer renderer,
+            Material material,
+            bool preserveWallClip = false)
         {
             if (renderer == null || material == null)
                 return;
@@ -1014,8 +1021,35 @@ namespace UnderPressure
             if (ReferenceEquals(materials[0], material))
                 return;
 
-            materials[0] = material;
+            materials[0] = preserveWallClip
+                ? PrepareWallMaterial(material, materials[0])
+                : material;
             renderer.sharedMaterials = materials;
+        }
+
+        private static Material PrepareWallMaterial(Material replacement, Material current)
+        {
+            if (replacement == null || current == null)
+                return replacement;
+
+            if (current.HasProperty("_AAClipBox") && !replacement.HasProperty("_AAClipBox"))
+                replacement.shader = current.shader;
+
+            if (!current.IsKeywordEnabled("_AACLIPBOX_ON"))
+                return replacement;
+
+            var clippedName = replacement.name + " [UnderPressure Door Clip]";
+            if (string.Equals(current.name, clippedName, StringComparison.Ordinal))
+                return current;
+
+            var clipped = new Material(replacement)
+            {
+                name = clippedName
+            };
+            clipped.EnableKeyword("_AACLIPBOX_ON");
+            clipped.SetVector("_AAClipBoxPos", current.GetVector("_AAClipBoxPos"));
+            clipped.SetVector("_AAClipBoxExtents", current.GetVector("_AAClipBoxExtents"));
+            return clipped;
         }
 
         private static void RefreshTrackedVisuals()
