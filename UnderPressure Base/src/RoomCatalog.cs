@@ -7,6 +7,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using FullInspector;
 using FullInspector.Generated.SharedInstance;
@@ -31,12 +32,12 @@ namespace UnderPressure
         {
             Geometry = new WallGeometry
             {
-                CornerInner = NativePrefab("Wall_Corner_A_V1"),
-                CornerOuter = NativePrefab("Wall_Corner_B_V1_4"),
+                CornerInner = NativePrefab("I_Wall_Corner_A_V1_1"),
+                CornerOuter = NativePrefab("I_Wall_Corner_B_V1"),
 
-                Wall = NativePrefab("Wall_Blank_A_V1"),
-                WallCornerLeft = NativePrefab("Wall_Blank_SL_A_V1_3"),
-                WallCornerRight = NativePrefab("Wall_Blank_SL_A_V1_3"),
+                Wall = NativePrefab("I_Wall_Blank_A_V1_2"),
+                WallCornerLeft = NativePrefab("I_Wall_Blank_SL_A_V1_0"),
+                WallCornerRight = NativePrefab("I_Wall_Blank_SR_A_V1_2"),
                 WallCornerBoth = NativePrefab("Wall_Blank_Short_A_V1"),
                 // La puerta usa la geometria global del juego.
                 Door = null,
@@ -220,7 +221,7 @@ namespace UnderPressure
 
         public sealed class PrefabReference
         {
-            public string NativePrefabMeshName;
+            public string NativePrefabName;
             public string BundlePrefabAsset;
         }
 
@@ -596,9 +597,9 @@ namespace UnderPressure
         // GEOMETRIA
         // =====================================================================
 
-        public static PrefabReference NativePrefab(string meshName)
+        public static PrefabReference NativePrefab(string prefabName)
         {
-            return new PrefabReference { NativePrefabMeshName = meshName };
+            return new PrefabReference { NativePrefabName = prefabName };
         }
 
         public static PrefabReference BundlePrefab(string assetPath)
@@ -758,56 +759,44 @@ namespace UnderPressure
                     return bundlePrefab;
             }
 
-            if (!string.IsNullOrEmpty(reference.NativePrefabMeshName))
-                return ResolveNativePrefab(reference.NativePrefabMeshName);
+            if (!string.IsNullOrEmpty(reference.NativePrefabName))
+                return ResolveNativePrefab(reference.NativePrefabName);
 
             return null;
         }
 
-        private static GameObject ResolveNativePrefab(string meshName)
+        private static GameObject ResolveNativePrefab(string prefabName)
         {
-            foreach (var candidate in Resources.FindObjectsOfTypeAll<GameObject>())
+            if (string.IsNullOrEmpty(prefabName))
+                return null;
+
+            var expectedFileName = prefabName + ".prefab";
+            foreach (var bundle in AssetBundle.GetAllLoadedAssetBundles())
             {
-                if (candidate == null || candidate.scene.IsValid())
+                if (bundle == null)
                     continue;
 
-                var root = candidate.transform?.root?.gameObject ?? candidate;
-                if (root.scene.IsValid() || !PrefabContainsMesh(root, meshName))
-                    continue;
+                foreach (var assetName in bundle.GetAllAssetNames() ?? Array.Empty<string>())
+                {
+                    if (!string.Equals(
+                            Path.GetFileName(assetName),
+                            expectedFileName,
+                            StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                return root;
+                    var prefab = bundle.LoadAsset<GameObject>(assetName);
+                    if (prefab == null)
+                        continue;
+
+                    UnityEngine.Debug.Log(
+                        "[UnderPressure] Prefab nativo de pared cargado: " + assetName);
+                    return prefab;
+                }
             }
 
             UnityEngine.Debug.LogError(
-                "[UnderPressure] No se encontro el prefab nativo que contiene la malla: " + meshName);
+                "[UnderPressure] No se encontro el asset nativo de pared: " + expectedFileName);
             return null;
-        }
-
-        private static bool PrefabContainsMesh(GameObject prefab, string meshName)
-        {
-            foreach (var meshFilter in prefab.GetComponentsInChildren<MeshFilter>(true))
-            {
-                var mesh = meshFilter?.sharedMesh;
-                if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
-                    return true;
-            }
-
-            var meshesField = AccessTools.Field(typeof(MeshRandomizer), "_meshes");
-            if (meshesField == null)
-                return false;
-
-            foreach (var randomizer in prefab.GetComponentsInChildren<MeshRandomizer>(true))
-            {
-                var meshes = meshesField.GetValue(randomizer) as Mesh[];
-                if (meshes == null)
-                    continue;
-
-                foreach (var mesh in meshes)
-                    if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
-                        return true;
-            }
-
-            return false;
         }
         internal static bool TryGetConfiguredExteriorWallDefinition(
             Room room,
