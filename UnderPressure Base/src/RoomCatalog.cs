@@ -19,6 +19,38 @@ namespace UnderPressure
     public static class RoomCatalog
     {
         // =====================================================================
+        // ESTILOS DE PARED
+        // =====================================================================
+
+        public const int NoWallStyle = 0;
+        public const int WallStyle1 = 1;
+
+        public static readonly WallStyleDefinition Style1 = new WallStyleDefinition(WallStyle1)
+        {
+            Geometry = new WallGeometry
+            {
+                CornerInner = NativeMesh("Wall_Corner_A_V1_0"),
+                CornerOuter = NativeMesh("Wall_Corner_B_V1_0"),
+
+                Wall = NativeMesh("Wall_Blank_A_V1_0"),
+                WallCornerLeft = NativeMesh("Wall_Blank_SL_A_V1_0"),
+                WallCornerRight = NativeMesh("Wall_Blank_SR_A_V1_0"),
+                WallCornerBoth = NativeMesh("Wall_Blank_Short_A_V1_0"),
+
+                Door = NativeMesh("Wall_DoorFrame_A_V1_1"),
+
+                Window = NativeMesh("Wall_WinFrame_Short_A_V1_0"),
+                WindowCornerLeft = NativeMesh("Wall_Winframe_SL_A_V1_1"),
+                WindowCornerRight = NativeMesh("Wall_Winframe_SR_A_V1_1")
+            }
+        };
+
+        public static readonly WallStyleDefinition[] WallStyles =
+        {
+            Style1
+        };
+
+        // =====================================================================
         // SALAS
         // =====================================================================
 
@@ -71,29 +103,11 @@ namespace UnderPressure
 
             Visuals = new RoomVisuals
             {
-                // El suelo reutiliza la baldosa comun del hospital. Las paredes se
-                // dejan vacias hasta que decidamos que meshes nativas queremos usar.
                 UseHospitalFloorTile = true,
                 WallThickness = null,
                 Floor = null,
-                Interior = new WallGeometry(),
-                Exterior = new WallGeometry
-                {
-                    WallBack = NativePrefab("Wall_Blank_A_V1_0", "Wall_Blank_SL_A_V1_02"),
-
-                    // Verificado en RoomAlgorithms sobre el CorridorFloorPlan: el borde de
-                    // una sala rectangular usa Wall en los tramos centrales y
-                    // WallCornerLeft/Right en los extremos. Reutilizamos la misma pared
-                    // plana mientras no definamos piezas especificas para esos extremos.
-                    Wall = NativePrefab("Wall_Blank_A_V1_0", "Wall_Blank_SL_A_V1_02"),
-                    WallCornerLeft = NativePrefab("Wall_Blank_A_V1_0", "Wall_Blank_SL_A_V1_02"),
-                    WallCornerRight = NativePrefab("Wall_Blank_A_V1_0", "Wall_Blank_SL_A_V1_02"),
-                    WallCornerBoth = NativePrefab("Wall_Blank_A_V1_0", "Wall_Blank_SL_A_V1_02"),
-
-                    // Verificado: para el CorridorFloorPlan la habitacion es un hueco;
-                    // por eso sus cuatro esquinas exteriores se generan como CornerOuter.
-                    CornerOuter = NativePrefab("Wall_Corner_B_V1", "Wall_Corner_B_V1_0")
-                },
+                InteriorWallStyle = NoWallStyle,
+                ExteriorWallStyle = WallStyle1,
 
                 FloorMaterialAsset = "Assets/EnergyRoom/EnergyFloor.mat",
                 InteriorMaterialAsset = "Assets/EnergyRoom/EnergyInterior.mat",
@@ -108,8 +122,8 @@ namespace UnderPressure
             Visuals = new RoomVisuals
             {
                 UseHospitalFloorTile = true,
-                Interior = new WallGeometry(),
-                Exterior = new WallGeometry()
+                InteriorWallStyle = NoWallStyle,
+                ExteriorWallStyle = NoWallStyle
             }
         };
 
@@ -119,8 +133,8 @@ namespace UnderPressure
             Visuals = new RoomVisuals
             {
                 UseHospitalFloorTile = true,
-                Interior = new WallGeometry(),
-                Exterior = new WallGeometry()
+                InteriorWallStyle = NoWallStyle,
+                ExteriorWallStyle = NoWallStyle
             }
         };
 
@@ -130,8 +144,8 @@ namespace UnderPressure
             Visuals = new RoomVisuals
             {
                 UseHospitalFloorTile = true,
-                Interior = new WallGeometry(),
-                Exterior = new WallGeometry()
+                InteriorWallStyle = NoWallStyle,
+                ExteriorWallStyle = NoWallStyle
             }
         };
 
@@ -190,11 +204,9 @@ namespace UnderPressure
             public bool UseHospitalFloorTile;
             public float? WallThickness;
 
-            // Geometria y material estan separados. Las piezas de pared usan los
-            // GameObject prefab que espera WallsDefinition; el mesh queda dentro del prefab.
             public PrefabReference Floor;
-            public WallGeometry Interior = new WallGeometry();
-            public WallGeometry Exterior = new WallGeometry();
+            public int InteriorWallStyle;
+            public int ExteriorWallStyle;
 
             public string FloorMaterialAsset;
             public string InteriorMaterialAsset;
@@ -208,6 +220,17 @@ namespace UnderPressure
             public string NativePrefabName;
             public string NativeMeshName;
             public string BundlePrefabAsset;
+        }
+
+        public sealed class WallStyleDefinition
+        {
+            public WallStyleDefinition(int number)
+            {
+                Number = number;
+            }
+
+            public int Number;
+            public WallGeometry Geometry = new WallGeometry();
         }
 
         public sealed class WallGeometry
@@ -644,8 +667,12 @@ namespace UnderPressure
         private static BuiltGeometry BuildGeometry(RoomEntry entry)
         {
             var visuals = entry.Visuals ?? new RoomVisuals();
-            var interior = BuildWallDefinition(entry.Key + " Interior", visuals.Interior);
-            var exterior = BuildWallDefinition(entry.Key + " Exterior", visuals.Exterior);
+            var interior = BuildWallDefinitionForStyle(
+                visuals.InteriorWallStyle,
+                entry.Key + " Interior");
+            var exterior = BuildWallDefinitionForStyle(
+                visuals.ExteriorWallStyle,
+                entry.Key + " Exterior");
 
             var interiorShared = ScriptableObject.CreateInstance<SharedInstance_TH20TH20_RoomWallDefinition>();
             interiorShared.name = "UnderPressure " + entry.Key + " Walls";
@@ -659,6 +686,41 @@ namespace UnderPressure
                 Exterior = exterior,
                 InteriorShared = interiorShared
             };
+        }
+
+        public static WallStyleDefinition FindWallStyle(int number)
+        {
+            if (number <= NoWallStyle)
+                return null;
+
+            foreach (var style in WallStyles)
+                if (style != null && style.Number == number)
+                    return style;
+
+            return null;
+        }
+
+        private static RoomWallDefinition BuildWallDefinitionForStyle(
+            int styleNumber,
+            string usageName)
+        {
+            if (styleNumber == NoWallStyle)
+                return BuildWallDefinition(usageName, null);
+
+            if (BuiltWallStyles.TryGetValue(styleNumber, out var cached))
+                return cached;
+
+            var style = FindWallStyle(styleNumber);
+            if (style == null)
+            {
+                UnityEngine.Debug.LogError(
+                    "[UnderPressure] Estilo de pared no registrado: " + styleNumber);
+                return BuildWallDefinition(usageName, null);
+            }
+
+            var built = BuildWallDefinition("Style " + styleNumber, style.Geometry);
+            BuiltWallStyles[styleNumber] = built;
+            return built;
         }
 
         private static RoomWallDefinition BuildWallDefinition(string name, WallGeometry source)
@@ -1310,6 +1372,9 @@ namespace UnderPressure
         private static readonly Dictionary<RoomEntry, BuiltGeometry> GeometryCache =
             new Dictionary<RoomEntry, BuiltGeometry>();
 
+        private static readonly Dictionary<int, RoomWallDefinition> BuiltWallStyles =
+            new Dictionary<int, RoomWallDefinition>();
+
         private static readonly Dictionary<Mesh, GameObject> MeshPrefabCache =
             new Dictionary<Mesh, GameObject>();
 
@@ -1345,10 +1410,10 @@ namespace UnderPressure
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
     }
 
-    // CorridorWallsVisual normally replaces every room's _wallsExterior with the
-    // level-wide CorridorWallDefinition when that override exists. That is why
-    // changing RoomCatalog.Exterior could have no visible effect. Custom rooms
-    // with explicit exterior geometry must bypass that global override.
+    // CorridorWallsVisual sustituye _wallsExterior por la definicion global del
+    // pasillo cuando existe ese reemplazo. Por eso cambiar el estilo exterior
+    // de RoomCatalog podria no tener efecto visible.
+    // Las salas con estilo exterior explicito deben evitar ese reemplazo global.
     [HarmonyPatch(typeof(CorridorWallsVisual), "GetRoomExteriorWallDefinition")]
     internal static class RoomCatalogCorridorDefinitionPatch
     {
