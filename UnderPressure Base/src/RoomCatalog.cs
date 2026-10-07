@@ -25,27 +25,12 @@ namespace UnderPressure
         public const int NativeStyle = 0;
         public const int WallStyle1 = 1;
 
-        // Cada plantilla contiene las 11 piezas minimas de un estilo completo:
-        // cuatro paredes, dos esquinas, una puerta y cuatro ventanas.
+        // Cada plantilla reutiliza una WallDef nativa completa. De este modo se
+        // conservan juntas sus paredes, esquinas, cuatro puertas y cuatro ventanas.
         public static readonly WallStyleDefinition Style1 = new WallStyleDefinition(WallStyle1)
         {
-            Geometry = new WallGeometry
-            {
-                CornerInner = NativePrefab("I_Wall_Corner_A_V1_1"),
-                CornerOuter = NativePrefab("I_Wall_Corner_B_V1"),
-
-                Wall = NativePrefab("I_Wall_Blank_A_V1_2"),
-                WallCornerLeft = NativePrefab("I_Wall_Blank_SL_A_V1_0"),
-                WallCornerRight = NativePrefab("I_Wall_Blank_SR_A_V1_2"),
-                WallCornerBoth = NativePrefab("Wall_Blank_Short_A_V1"),
-                // La puerta usa la geometria global del juego.
-                Door = null,
-
-                Window = NativePrefab("Wall_Winframe_A_V1"),
-                WindowCornerLeft = NativePrefab("Wall_Winframe_SL_A_V1"),
-                WindowCornerRight = NativePrefab("Wall_Winframe_SR_A_V1"),
-                WindowCornerBoth = NativePrefab("Wall_Winframe_Short_A_V1")
-            }
+            SourceRoomType = RoomDefinition.Type.GeneralDiagnosis,
+            UseExteriorWalls = false
         };
 
         public static readonly WallStyleDefinition[] WallStyles =
@@ -220,7 +205,6 @@ namespace UnderPressure
 
         public sealed class PrefabReference
         {
-            public string NativePrefabName;
             public string BundlePrefabAsset;
         }
 
@@ -232,29 +216,9 @@ namespace UnderPressure
             }
 
             public int Number;
-            public WallGeometry Geometry = new WallGeometry();
-        }
-
-        public sealed class WallGeometry
-        {
-
-
-            public PrefabReference Wall;
-            public PrefabReference WallCornerLeft;
-            public PrefabReference WallCornerRight;
-            public PrefabReference WallCornerBoth;
-
-            public PrefabReference CornerInner;
-            public PrefabReference CornerOuter;
-
-            public PrefabReference Door;
-
-
-            public PrefabReference Window;
-            public PrefabReference WindowCornerLeft;
-            public PrefabReference WindowCornerRight;
-            public PrefabReference WindowCornerBoth;
-
+            public RoomDefinition.Type SourceRoomType;
+            public bool UseExteriorWalls;
+            internal RoomWallDefinition ResolvedDefinition;
         }
 
         public sealed class SurfaceMaterials
@@ -596,11 +560,6 @@ namespace UnderPressure
         // GEOMETRIA
         // =====================================================================
 
-        public static PrefabReference NativePrefab(string prefabName)
-        {
-            return new PrefabReference { NativePrefabName = prefabName };
-        }
-
         public static PrefabReference BundlePrefab(string assetPath)
         {
             return new PrefabReference { BundlePrefabAsset = assetPath };
@@ -646,14 +605,20 @@ namespace UnderPressure
         private static BuiltGeometry BuildGeometry(RoomEntry entry)
         {
             var visuals = entry.Visuals ?? new RoomVisuals();
-            var interior = visuals.InteriorWallStyle == NativeStyle ? NativeInteriorWalls : BuildWallDefinitionForStyle(visuals.InteriorWallStyle, entry.Key + " Interior");
-            var exterior = visuals.ExteriorWallStyle == NativeStyle ? NativeExteriorWalls : BuildWallDefinitionForStyle(visuals.ExteriorWallStyle, entry.Key + " Exterior");
+            var interior = ResolveWallDefinitionForStyle(
+                visuals.InteriorWallStyle,
+                NativeInteriorWalls,
+                entry.Key + " Interior");
+            var exterior = ResolveWallDefinitionForStyle(
+                visuals.ExteriorWallStyle,
+                NativeExteriorWalls,
+                entry.Key + " Exterior");
 
             var interiorShared = NativeBlueprintWalls;
 
             return new BuiltGeometry
             {
-                Floor = ResolvePrefab(visuals.Floor, entry.Key + " Floor"),
+                Floor = ResolvePrefab(visuals.Floor),
                 Interior = interior,
                 Exterior = exterior,
                 InteriorShared = interiorShared
@@ -662,22 +627,44 @@ namespace UnderPressure
 
         private static void ResolveNativeWallDefaults(SharedInstance<RoomDefinition>[] rooms)
         {
-            IndexNativeWallPrefabs(rooms);
+            foreach (var style in WallStyles)
+                if (style != null)
+                    style.ResolvedDefinition = null;
+
             foreach (var shared in rooms)
             {
                 var definition = shared?.Instance;
-                if (definition == null || definition._type != RoomDefinition.Type.GPOffice)
+                if (definition == null)
                     continue;
 
-                NativeInteriorWalls = definition._wallsInterior;
-                NativeExteriorWalls = definition._wallsExterior;
-                NativeBlueprintWalls = BlueprintWallDefinitionField?.GetValue(definition)
-                    as SharedInstance<RoomWallDefinition>;
-                return;
+                if (definition._type == RoomDefinition.Type.GPOffice)
+                {
+                    NativeInteriorWalls = definition._wallsInterior;
+                    NativeExteriorWalls = definition._wallsExterior;
+                    NativeBlueprintWalls = BlueprintWallDefinitionField?.GetValue(definition)
+                        as SharedInstance<RoomWallDefinition>;
+                }
+
+                foreach (var style in WallStyles)
+                {
+                    if (style == null || definition._type != style.SourceRoomType)
+                        continue;
+
+                    style.ResolvedDefinition = style.UseExteriorWalls
+                        ? definition._wallsExterior
+                        : definition._wallsInterior;
+                }
             }
 
-            UnityEngine.Debug.LogError(
-                "[UnderPressure] No se encontro la Consulta para obtener la geometria nativa.");
+            if (NativeInteriorWalls == null || NativeExteriorWalls == null)
+                UnityEngine.Debug.LogError(
+                    "[UnderPressure] No se encontro la Consulta para obtener la geometria nativa.");
+
+            foreach (var style in WallStyles)
+                if (style != null && style.ResolvedDefinition == null)
+                    UnityEngine.Debug.LogError(
+                        "[UnderPressure] No se encontro la sala nativa del estilo de pared " +
+                        style.Number + ": " + style.SourceRoomType);
         }
 
         public static WallStyleDefinition FindWallStyle(int number)
@@ -692,62 +679,26 @@ namespace UnderPressure
             return null;
         }
 
-        private static RoomWallDefinition BuildWallDefinitionForStyle(
+        private static RoomWallDefinition ResolveWallDefinitionForStyle(
             int styleNumber,
+            RoomWallDefinition nativeDefault,
             string usageName)
         {
             if (styleNumber == NativeStyle)
-                return BuildWallDefinition(usageName, null);
-
-            if (BuiltWallStyles.TryGetValue(styleNumber, out var cached))
-                return cached;
+                return nativeDefault;
 
             var style = FindWallStyle(styleNumber);
-            if (style == null)
+            if (style?.ResolvedDefinition == null)
             {
                 UnityEngine.Debug.LogError(
-                    "[UnderPressure] Estilo de pared no registrado: " + styleNumber);
-                return BuildWallDefinition(usageName, null);
+                    "[UnderPressure] Estilo de pared no resuelto para " + usageName +
+                    ": " + styleNumber);
+                return nativeDefault;
             }
 
-            var built = BuildWallDefinition("Style " + styleNumber, style.Geometry);
-            BuiltWallStyles[styleNumber] = built;
-            return built;
+            return style.ResolvedDefinition;
         }
-
-        private static RoomWallDefinition BuildWallDefinition(string name, WallGeometry source)
-        {
-            source = source ?? new WallGeometry();
-
-            var walls = new WallsDefinition
-            {
-
-                Wall = ResolvePrefab(source.Wall, name + " Wall"),
-                WallCornerLeft = ResolvePrefab(source.WallCornerLeft, name + " WallCornerLeft"),
-                WallCornerRight = ResolvePrefab(source.WallCornerRight, name + " WallCornerRight"),
-                WallCornerBoth = ResolvePrefab(source.WallCornerBoth, name + " WallCornerBoth"),
-                CornerInner = ResolvePrefab(source.CornerInner, name + " CornerInner"),
-                CornerOuter = ResolvePrefab(source.CornerOuter, name + " CornerOuter"),
-                Door = ResolvePrefab(source.Door, name + " Door"),
-
-                Window = ResolvePrefab(source.Window, name + " Window"),
-                WindowCornerLeft = ResolvePrefab(source.WindowCornerLeft, name + " WindowCornerLeft"),
-                WindowCornerRight = ResolvePrefab(source.WindowCornerRight, name + " WindowCornerRight"),
-                WindowCornerBoth = ResolvePrefab(source.WindowCornerBoth, name + " WindowCornerBoth"),
-
-            };
-
-            var wallsShared = ScriptableObject.CreateInstance<SharedInstance_TH20TH20_WallsDefinition>();
-            wallsShared.name = "UnderPressure " + name;
-            wallsShared.hideFlags = HideFlags.HideAndDontSave;
-            wallsShared.Instance = walls;
-
-            var roomWall = new RoomWallDefinition();
-            RoomWallWallsField?.SetValue(roomWall, wallsShared);
-            return roomWall;
-        }
-
-        private static GameObject ResolvePrefab(PrefabReference reference, string generatedName)
+        private static GameObject ResolvePrefab(PrefabReference reference)
         {
             if (reference == null)
                 return null;
@@ -759,85 +710,10 @@ namespace UnderPressure
                     return bundlePrefab;
             }
 
-            if (!string.IsNullOrEmpty(reference.NativePrefabName))
-                return ResolveNativePrefab(reference.NativePrefabName);
 
             return null;
         }
 
-        private static GameObject ResolveNativePrefab(string prefabName)
-        {
-            if (string.IsNullOrEmpty(prefabName))
-                return null;
-
-            if (NativeWallPrefabs.TryGetValue(prefabName, out var prefab) && prefab != null)
-                return prefab;
-
-            var rootName = RemovePrefabVariantSuffix(prefabName);
-            if (NativeWallPrefabs.TryGetValue(rootName, out prefab) && prefab != null)
-                return prefab;
-
-            UnityEngine.Debug.LogError(
-                "[UnderPressure] No se encontro la referencia nativa del prefab: " +
-                prefabName + ".prefab");
-            return null;
-        }
-
-        private static void IndexNativeWallPrefabs(SharedInstance<RoomDefinition>[] rooms)
-        {
-            NativeWallPrefabs.Clear();
-            foreach (var shared in rooms ?? Array.Empty<SharedInstance<RoomDefinition>>())
-            {
-                var definition = shared?.Instance;
-                if (definition == null || Find(definition) != null)
-                    continue;
-
-                IndexWallDefinition(definition._wallsInterior);
-                IndexWallDefinition(definition._wallsExterior);
-
-                var blueprint = BlueprintWallDefinitionField?.GetValue(definition)
-                    as SharedInstance<RoomWallDefinition>;
-                IndexWallDefinition(blueprint?.Instance);
-            }
-        }
-
-        private static void IndexWallDefinition(RoomWallDefinition definition)
-        {
-            var walls = definition?.GetWallsDefinition();
-            if (walls == null)
-                return;
-
-            foreach (var field in typeof(WallsDefinition).GetFields(
-                         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-            {
-                if (!typeof(GameObject).IsAssignableFrom(field.FieldType))
-                    continue;
-
-                var candidate = field.GetValue(walls) as GameObject;
-                var prefab = candidate?.transform?.root?.gameObject ?? candidate;
-                if (prefab == null || string.IsNullOrEmpty(prefab.name))
-                    continue;
-
-                if (!NativeWallPrefabs.ContainsKey(prefab.name))
-                    NativeWallPrefabs.Add(prefab.name, prefab);
-            }
-        }
-
-        private static string RemovePrefabVariantSuffix(string prefabName)
-        {
-            var separator = prefabName.LastIndexOf('_');
-            if (separator <= 0 || separator == prefabName.Length - 1)
-                return prefabName;
-
-            for (var index = separator + 1; index < prefabName.Length; ++index)
-                if (!char.IsDigit(prefabName[index]))
-                    return prefabName;
-
-            var rootName = prefabName.Substring(0, separator);
-            return rootName.LastIndexOf("_V", StringComparison.Ordinal) >= 0
-                ? rootName
-                : prefabName;
-        }
         internal static bool TryGetConfiguredExteriorWallDefinition(
             Room room,
             out RoomWallDefinition wallDefinition)
@@ -1275,19 +1151,11 @@ namespace UnderPressure
         private static readonly Dictionary<RoomEntry, BuiltGeometry> GeometryCache =
             new Dictionary<RoomEntry, BuiltGeometry>();
 
-        private static readonly Dictionary<int, RoomWallDefinition> BuiltWallStyles =
-            new Dictionary<int, RoomWallDefinition>();
-
-        private static readonly Dictionary<string, GameObject> NativeWallPrefabs =
-            new Dictionary<string, GameObject>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<RoomEntry, SurfaceMaterials> SurfaceMaterialSets =
             new Dictionary<RoomEntry, SurfaceMaterials>();
 
         private static readonly List<WeakReference> TrackedRoomVisuals = new List<WeakReference>();
         private static readonly List<WeakReference> CorridorVisuals = new List<WeakReference>();
-
-        private static readonly FieldInfo RoomWallWallsField =
-            AccessTools.Field(typeof(RoomWallDefinition), "WallsDefinition");
 
         private static readonly FieldInfo FloorPlanField =
             AccessTools.Field(typeof(RoomFloorPlanVisual), "_floorPlan");
