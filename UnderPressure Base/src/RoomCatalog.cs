@@ -31,40 +31,20 @@ namespace UnderPressure
         {
             Geometry = new WallGeometry
             {
-                CornerInner = NativePrefab(
-                    "Wall_Corner_A_V1",
-                    "D_Outer_Wall_Corner_A_V1"),
-                CornerOuter = NativePrefab(
-                    "Wall_Corner_B_V1",
-                    "D_Outer_Wall_Corner_B_V1"),
+                CornerInner = NativeMesh("Wall_Corner_A_V1"),
+                CornerOuter = NativeMesh("Wall_Corner_B_V1_4"),
 
-                Wall = NativePrefab(
-                    "Wall_Blank_A_V1",
-                    "D_Outer_Wall_Blank_A_V1"),
-                WallCornerLeft = NativePrefab(
-                    "Wall_Blank_SL_A_V1",
-                    "D_Outer_Wall_Blank_SL_A_V1"),
-                WallCornerRight = NativePrefab(
-                    "Wall_Blank_SR_A_V1",
-                    "D_Outer_Wall_Blank_SR_A_V1"),
-                WallCornerBoth = NativePrefab(
-                    "Wall_Blank_Short_A_V1",
-                    "D_Outer_Wall_Blank_Short_A_V1"),
+                Wall = NativeMesh("Wall_Blank_A_V1"),
+                WallCornerLeft = NativeMesh("Wall_Blank_SL_A_V1_3"),
+                WallCornerRight = NativeMesh("Wall_Blank_SL_A_V1_3"),
+                WallCornerBoth = NativeMesh("Wall_Blank_Short_A_V1"),
 
-                Door = NativeMesh("Wall_DoorFrame_A_V1"),
+                Door = NativeMesh("Wall_DoorFrame_A_V1_1"),
 
-                Window = NativePrefab(
-                    "Wall_Winframe_A_V1",
-                    "D_Outer_Wall_Winframe_A_V1"),
-                WindowCornerLeft = NativePrefab(
-                    "Wall_Winframe_SL_A_V1",
-                    "D_Outer_Wall_WinFrame_SL_A_1"),
-                WindowCornerRight = NativePrefab(
-                    "Wall_Winframe_SR_A_V1",
-                    "D_Outer_Wall_Winframe_SR_A_V1"),
-                WindowCornerBoth = NativePrefab(
-                    "Wall_Winframe_Short_A_V1",
-                    "D_Outer_Wall_Winframe_Short_A_V1")
+                Window = NativeMesh("Wall_Winframe_A_V1"),
+                WindowCornerLeft = NativeMesh("Wall_Winframe_SL_A_V1"),
+                WindowCornerRight = NativeMesh("Wall_Winframe_SR_A_V1"),
+                WindowCornerBoth = NativeMesh("Wall_Winframe_Short_A_V1")
             }
         };
 
@@ -240,7 +220,6 @@ namespace UnderPressure
 
         public sealed class PrefabReference
         {
-            public string NativePrefabName;
             public string NativeMeshName;
             public string BundlePrefabAsset;
         }
@@ -617,20 +596,6 @@ namespace UnderPressure
         // GEOMETRIA
         // =====================================================================
 
-        public static PrefabReference NativePrefab(string prefabName)
-        {
-            return new PrefabReference { NativePrefabName = prefabName };
-        }
-
-        public static PrefabReference NativePrefab(string prefabName, string meshName)
-        {
-            return new PrefabReference
-            {
-                NativePrefabName = prefabName,
-                NativeMeshName = meshName
-            };
-        }
-
         public static PrefabReference NativeMesh(string meshName)
         {
             return new PrefabReference { NativeMeshName = meshName };
@@ -697,86 +662,21 @@ namespace UnderPressure
 
         private static void ResolveNativeWallDefaults(SharedInstance<RoomDefinition>[] rooms)
         {
-            var interiorCounts = new Dictionary<WallsDefinition, int>();
-            var exteriorCounts = new Dictionary<WallsDefinition, int>();
-            var blueprintCounts = new Dictionary<WallsDefinition, int>();
-            var interiorValues = new Dictionary<WallsDefinition, RoomWallDefinition>();
-            var exteriorValues = new Dictionary<WallsDefinition, RoomWallDefinition>();
-            var blueprintValues =
-                new Dictionary<WallsDefinition, SharedInstance<RoomWallDefinition>>();
-
             foreach (var shared in rooms)
             {
                 var definition = shared?.Instance;
-                if (definition == null || Find(definition) != null)
+                if (definition == null || definition._type != RoomDefinition.Type.GPOffice)
                     continue;
 
-                CountWallDefinition(definition._wallsInterior, interiorCounts, interiorValues);
-                CountWallDefinition(definition._wallsExterior, exteriorCounts, exteriorValues);
-
-                var blueprint = BlueprintWallDefinitionField?.GetValue(definition)
+                NativeInteriorWalls = definition._wallsInterior;
+                NativeExteriorWalls = definition._wallsExterior;
+                NativeBlueprintWalls = BlueprintWallDefinitionField?.GetValue(definition)
                     as SharedInstance<RoomWallDefinition>;
-                var blueprintWalls = blueprint?.Instance?.GetWallsDefinition();
-                if (blueprintWalls == null || !HasAnyWallPiece(blueprintWalls))
-                    continue;
-
-                blueprintCounts[blueprintWalls] = blueprintCounts.TryGetValue(blueprintWalls, out var count)
-                    ? count + 1
-                    : 1;
-                if (!blueprintValues.ContainsKey(blueprintWalls))
-                    blueprintValues[blueprintWalls] = blueprint;
-            }
-
-            NativeInteriorWalls = FindMostCommonWall(interiorCounts, interiorValues);
-            NativeExteriorWalls = FindMostCommonWall(exteriorCounts, exteriorValues);
-            NativeBlueprintWalls = FindMostCommonBlueprint(blueprintCounts, blueprintValues);
-        }
-
-        private static void CountWallDefinition(
-            RoomWallDefinition definition,
-            IDictionary<WallsDefinition, int> counts,
-            IDictionary<WallsDefinition, RoomWallDefinition> values)
-        {
-            var walls = definition?.GetWallsDefinition();
-            if (walls == null || !HasAnyWallPiece(walls))
                 return;
-
-            counts[walls] = counts.TryGetValue(walls, out var count) ? count + 1 : 1;
-            if (!values.ContainsKey(walls))
-                values[walls] = definition;
-        }
-
-        private static RoomWallDefinition FindMostCommonWall(
-            IDictionary<WallsDefinition, int> counts,
-            IDictionary<WallsDefinition, RoomWallDefinition> values)
-        {
-            var walls = FindMostCommonWalls(counts);
-            return walls != null && values.TryGetValue(walls, out var value) ? value : null;
-        }
-
-        private static SharedInstance<RoomWallDefinition> FindMostCommonBlueprint(
-            IDictionary<WallsDefinition, int> counts,
-            IDictionary<WallsDefinition, SharedInstance<RoomWallDefinition>> values)
-        {
-            var walls = FindMostCommonWalls(counts);
-            return walls != null && values.TryGetValue(walls, out var value) ? value : null;
-        }
-
-        private static WallsDefinition FindMostCommonWalls(
-            IDictionary<WallsDefinition, int> counts)
-        {
-            WallsDefinition selected = null;
-            var highestCount = 0;
-            foreach (var pair in counts)
-            {
-                if (pair.Value <= highestCount)
-                    continue;
-
-                selected = pair.Key;
-                highestCount = pair.Value;
             }
 
-            return selected;
+            UnityEngine.Debug.LogError(
+                "[UnderPressure] No se encontro la Consulta para obtener la geometria nativa.");
         }
 
         public static WallStyleDefinition FindWallStyle(int number)
@@ -858,118 +758,10 @@ namespace UnderPressure
                     return bundlePrefab;
             }
 
-            if (!string.IsNullOrEmpty(reference.NativePrefabName))
-            {
-                var nativePrefab = ResolveNativePrefab(reference.NativePrefabName, reference.NativeMeshName);
-                if (nativePrefab != null)
-                    return nativePrefab;
-            }
-
-            // Fallback determinista: si el prefab nativo no esta cargado pero si la malla,
-            // construimos el contenedor minimo que MeshUtils.SetStaticMeshFromPrefab espera.
             if (!string.IsNullOrEmpty(reference.NativeMeshName))
                 return CreateMeshPrefab(generatedName, ResolveNative<Mesh>(reference.NativeMeshName));
 
             return null;
-        }
-
-        private static GameObject ResolveNativePrefab(string prefabName, string expectedMeshName)
-        {
-            if (string.IsNullOrEmpty(prefabName))
-                return null;
-
-            GameObject firstNamedPrefab = null;
-            GameObject firstNamedAsset = null;
-            GameObject firstMeshMatch = null;
-
-            foreach (var candidate in Resources.FindObjectsOfTypeAll<GameObject>())
-            {
-                if (candidate == null ||
-                    !string.Equals(candidate.name, prefabName, StringComparison.Ordinal))
-                    continue;
-
-                // MeshUtils.SetStaticMeshFromPrefab() exige que el prefab tenga al menos
-                // un MeshFilter y un MeshRenderer en su jerarquia.
-                if (candidate.GetComponentInChildren<MeshFilter>(true) == null ||
-                    candidate.GetComponentInChildren<MeshRenderer>(true) == null)
-                    continue;
-
-                if (firstNamedPrefab == null)
-                    firstNamedPrefab = candidate;
-
-                // Los assets/prefabs nativos no pertenecen a una Scene. Los preferimos
-                // frente a posibles instancias runtime con el mismo nombre.
-                if (!candidate.scene.IsValid() && firstNamedAsset == null)
-                    firstNamedAsset = candidate;
-
-                if (string.IsNullOrEmpty(expectedMeshName) ||
-                    !PrefabContainsMesh(candidate, expectedMeshName))
-                    continue;
-
-                if (!candidate.scene.IsValid())
-                    return candidate;
-
-                if (firstMeshMatch == null)
-                    firstMeshMatch = candidate;
-            }
-
-            if (firstMeshMatch != null)
-                return firstMeshMatch;
-
-            var resolved = firstNamedAsset ?? firstNamedPrefab;
-            if (resolved != null)
-            {
-                // IMPORTANTE: el juego puede obtener la malla real desde MeshRandomizer.
-                // El nombre de prefab es la referencia autoritativa; el nombre de malla
-                // solo sirve para verificar/seleccionar cuando sea posible.
-                if (!string.IsNullOrEmpty(expectedMeshName))
-                {
-                    UnityEngine.Debug.LogWarning(
-                        "[UnderPressure] Prefab nativo encontrado por nombre '" + prefabName +
-                        "', pero no se pudo confirmar la malla '" + expectedMeshName +
-                        "'. Se usara el prefab exacto, igual que hace el juego nativo.");
-                }
-
-                return resolved;
-            }
-
-            UnityEngine.Debug.LogError(
-                "[UnderPressure] No se encontro un prefab nativo util: " + prefabName);
-            return null;
-        }
-
-        private static bool PrefabContainsMesh(GameObject prefab, string meshName)
-        {
-            if (prefab == null || string.IsNullOrEmpty(meshName))
-                return false;
-
-            foreach (var meshFilter in prefab.GetComponentsInChildren<MeshFilter>(true))
-            {
-                var mesh = meshFilter?.sharedMesh;
-                if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
-                    return true;
-            }
-
-            // MeshUtils.SetStaticMeshFromPrefab() usa MeshRandomizer.GetMesh() cuando
-            // existe. Por tanto una malla valida puede estar en _meshes y NO ser la
-            // sharedMesh actual del MeshFilter. El resolver anterior ignoraba esto y
-            // podia devolver null para un prefab perfectamente valido.
-            var meshesField = AccessTools.Field(typeof(MeshRandomizer), "_meshes");
-            if (meshesField == null)
-                return false;
-
-            foreach (var randomizer in prefab.GetComponentsInChildren<MeshRandomizer>(true))
-            {
-                var meshes = meshesField.GetValue(randomizer) as Mesh[];
-                if (meshes == null)
-                    continue;
-
-                foreach (var mesh in meshes)
-                    if (mesh != null && string.Equals(mesh.name, meshName, StringComparison.Ordinal))
-                        return true;
-            }
-
-            return false;
         }
 
         private static GameObject CreateMeshPrefab(string name, Mesh mesh)
@@ -1050,34 +842,10 @@ namespace UnderPressure
             if (wallDefinition == null)
                 return false;
 
-            var walls = wallDefinition.GetWallsDefinition();
-            if (walls == null)
-                return false;
-
             foreach (var pair in GeometryCache)
             {
                 var geometry = pair.Value;
-                if (geometry?.Exterior == null)
-                    continue;
-
-                if (ReferenceEquals(geometry.Exterior, wallDefinition))
-                    return true;
-
-                var configuredWalls = geometry.Exterior.GetWallsDefinition();
-                if (configuredWalls == null)
-                    continue;
-
-                // Algunas rutas del juego pueden conservar la WallsDefinition pero
-                // trabajar con otra instancia de RoomWallDefinition. Aceptamos tambien
-                // esa identidad y, como ultimo respaldo, las mismas piezas principales.
-                if (ReferenceEquals(configuredWalls, walls))
-                    return true;
-
-                if (configuredWalls.Wall != null && ReferenceEquals(configuredWalls.Wall, walls.Wall))
-                    return true;
-
-                if (configuredWalls.CornerOuter != null &&
-                    ReferenceEquals(configuredWalls.CornerOuter, walls.CornerOuter))
+                if (geometry != null && ReferenceEquals(geometry.Exterior, wallDefinition))
                     return true;
             }
 
