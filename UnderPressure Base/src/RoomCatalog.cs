@@ -51,9 +51,7 @@ namespace UnderPressure
                     "Wall_Blank_Short_A_V1",
                     "D_Outer_Wall_Blank_Short_A_V1"),
 
-                Door = NativePrefab(
-                    "I_Wall_DoorFrame_A_V1",
-                    "Wall_DoorFrame_A_V1"),
+                Door = NativeMesh("Wall_DoorFrame_A_V1"),
 
                 Window = NativePrefab(
                     "Wall_Winframe_A_V1",
@@ -260,8 +258,7 @@ namespace UnderPressure
 
         public sealed class WallGeometry
         {
-            public PrefabReference WallBack;
-            public PrefabReference WindowBack;
+
 
             public PrefabReference Wall;
             public PrefabReference WallCornerLeft;
@@ -279,13 +276,6 @@ namespace UnderPressure
             public PrefabReference WindowCornerRight;
             public PrefabReference WindowCornerBoth;
 
-            public PrefabReference Pillar;
-            public PrefabReference PillarCornerLeft;
-            public PrefabReference PillarCornerRight;
-            public PrefabReference PillarCornerBoth;
-
-            public PrefabReference FillerLeft;
-            public PrefabReference FillerRight;
         }
 
         public sealed class SurfaceMaterials
@@ -830,26 +820,20 @@ namespace UnderPressure
 
             var walls = new WallsDefinition
             {
-                WallBack = ResolvePrefab(source.WallBack, name + " WallBack"),
-                WindowBack = ResolvePrefab(source.WindowBack, name + " WindowBack"),
+
                 Wall = ResolvePrefab(source.Wall, name + " Wall"),
                 WallCornerLeft = ResolvePrefab(source.WallCornerLeft, name + " WallCornerLeft"),
                 WallCornerRight = ResolvePrefab(source.WallCornerRight, name + " WallCornerRight"),
                 WallCornerBoth = ResolvePrefab(source.WallCornerBoth, name + " WallCornerBoth"),
                 CornerInner = ResolvePrefab(source.CornerInner, name + " CornerInner"),
                 CornerOuter = ResolvePrefab(source.CornerOuter, name + " CornerOuter"),
-                Door = NativeExteriorWalls?.GetWallsDefinition()?.Door,
+                Door = ResolvePrefab(source.Door, name + " Door"),
 
                 Window = ResolvePrefab(source.Window, name + " Window"),
                 WindowCornerLeft = ResolvePrefab(source.WindowCornerLeft, name + " WindowCornerLeft"),
                 WindowCornerRight = ResolvePrefab(source.WindowCornerRight, name + " WindowCornerRight"),
                 WindowCornerBoth = ResolvePrefab(source.WindowCornerBoth, name + " WindowCornerBoth"),
-                Pillar = ResolvePrefab(source.Pillar, name + " Pillar"),
-                PillarCornerLeft = ResolvePrefab(source.PillarCornerLeft, name + " PillarCornerLeft"),
-                PillarCornerRight = ResolvePrefab(source.PillarCornerRight, name + " PillarCornerRight"),
-                PillarCornerBoth = ResolvePrefab(source.PillarCornerBoth, name + " PillarCornerBoth"),
-                FillerLeft = ResolvePrefab(source.FillerLeft, name + " FillerLeft"),
-                FillerRight = ResolvePrefab(source.FillerRight, name + " FillerRight")
+
             };
 
             var wallsShared = ScriptableObject.CreateInstance<SharedInstance_TH20TH20_WallsDefinition>();
