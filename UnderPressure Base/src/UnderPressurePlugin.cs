@@ -32,6 +32,7 @@ namespace UnderPressure
         internal static ConfigEntry<bool> DisableAwardsSetting { get; private set; }
         internal static ConfigEntry<bool> ResalePenaltiesSetting { get; private set; }
         internal static ConfigEntry<bool> DismissalSeveranceSetting { get; private set; }
+        internal static ConfigEntry<bool> PatientTreatmentSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveReputationSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveExpansionSetting { get; private set; }
@@ -79,6 +80,8 @@ namespace UnderPressure
             IsModEnabled && ResalePenaltiesSetting != null && ResalePenaltiesSetting.Value;
         internal static bool ShouldUseDismissalSeverance =>
             IsModEnabled && DismissalSeveranceSetting != null && DismissalSeveranceSetting.Value;
+        internal static bool ShouldUsePatientTreatment =>
+            IsModEnabled && PatientTreatmentSetting != null && PatientTreatmentSetting.Value;
         internal static ManualLogSource Log { get; private set; }
 
         private void Awake()
@@ -142,6 +145,11 @@ namespace UnderPressure
             DismissalSeveranceSetting = Config.Bind(
                 "Personal", "DismissalSeverance", true,
                 ModLocalization.Get("tooltip.dismissal_severance"));
+            PatientTreatmentSetting = Config.Bind(
+                "Jugabilidad", "PatientTreatment", true,
+                ModLocalization.Get("tooltip.patient_treatment"));
+            PatientTreatmentSetting.SettingChanged += (sender, args) =>
+                PatientTreatmentReputation.Refresh();
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
             AdaptiveReputationSetting = Config.Bind("Dificultad adaptable", "Reputation", false,
@@ -174,6 +182,7 @@ namespace UnderPressure
                 Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
+            PatientTreatmentReputation.Refresh();
             Logger.LogInfo($"{PluginName} {PluginVersion} cargado.");
         }
 
@@ -195,6 +204,7 @@ namespace UnderPressure
 
         private void OnDestroy()
         {
+            PatientTreatmentReputation.RestoreAll();
             _harmony?.UnpatchSelf();
             _harmony = null;
         }

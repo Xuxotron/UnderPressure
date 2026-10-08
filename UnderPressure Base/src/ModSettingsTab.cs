@@ -88,6 +88,8 @@ namespace UnderPressure
         private TMP_Text _resalePenaltiesLabel;
         private Toggle _dismissalSeveranceToggle;
         private TMP_Text _dismissalSeveranceLabel;
+        private Toggle _patientTreatmentToggle;
+        private TMP_Text _patientTreatmentLabel;
         private Toggle _masterToggle;
         private TMP_Text _tabLabel;
         private TMP_Text _nativeSliderLabel;
@@ -399,6 +401,18 @@ namespace UnderPressure
                 _dismissalSeveranceToggle.isOn = UnderPressurePlugin.ShouldUseDismissalSeverance;
                 _dismissalSeveranceToggle.onValueChanged.AddListener(SetDismissalSeverance);
             }
+            var patientTreatmentRow = Instantiate(settingRow, rightSection);
+            patientTreatmentRow.name = "Patient Treatment";
+            RemoveLocalisers(patientTreatmentRow);
+            SetStretchRow((RectTransform)patientTreatmentRow, -327f, 45f, 12f);
+            _patientTreatmentToggle = patientTreatmentRow.GetComponentInChildren<Toggle>(true);
+            _patientTreatmentLabel = patientTreatmentRow.GetComponentInChildren<TMP_Text>(true);
+            if (_patientTreatmentToggle != null)
+            {
+                _patientTreatmentToggle.onValueChanged.RemoveAllListeners();
+                _patientTreatmentToggle.isOn = UnderPressurePlugin.ShouldUsePatientTreatment;
+                _patientTreatmentToggle.onValueChanged.AddListener(SetPatientTreatment);
+            }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
             ConfigureRowTooltip(separateReputationPrestigeRow, _separateReputationPrestigeLabel,
@@ -423,9 +437,11 @@ namespace UnderPressure
                 "tooltip.resale_penalties");
             ConfigureRowTooltip(dismissalSeveranceRow, _dismissalSeveranceLabel,
                 "tooltip.dismissal_severance");
+            ConfigureRowTooltip(patientTreatmentRow, _patientTreatmentLabel,
+                "tooltip.patient_treatment");
             var uiRect = (RectTransform)section;
-            SetHalfSectionRect(uiRect, -8f, 346f, true);
-            SetHalfSectionRect((RectTransform)rightSection, -8f, 346f, false);
+            SetHalfSectionRect(uiRect, -8f, 391f, true);
+            SetHalfSectionRect((RectTransform)rightSection, -8f, 391f, false);
             StretchBackground(section);
             StretchBackground(rightSection);
             BuildGameplaySection(content, nativeVideoRow, section);
@@ -437,17 +453,17 @@ namespace UnderPressure
             if (nativeVideoRow == null)
                 return;
 
-            var treatmentVolume = CreateEmptySection(uiSection, content, "Treatment Volume", -370f, 82f);
+            var treatmentVolume = CreateEmptySection(uiSection, content, "Treatment Volume", -415f, 82f);
             CreateSliderRow(treatmentVolume, nativeVideoRow, "mod.treatment_volume",
                 UnderPressurePlugin.TreatmentVolumeSetting, -10f, null,
                 0f, 100f, false, false, FormatVolumePercentage);
 
-            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -468f, 82f);
+            var global = CreateEmptySection(uiSection, content, "Global Difficulty", -513f, 82f);
             CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
                 UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -566f,
+                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -611f,
                 new[]
                 {
                     new SliderSpec("mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting),
@@ -456,7 +472,7 @@ namespace UnderPressure
                     new SliderSpec("mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting)
                 });
             var reputation = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -866f,
+                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -911f,
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
@@ -465,7 +481,7 @@ namespace UnderPressure
                     new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1166f,
+                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1211f,
                 new[]
                 {
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
@@ -477,7 +493,7 @@ namespace UnderPressure
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1458f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1503f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,
@@ -890,12 +906,18 @@ namespace UnderPressure
             UnderPressurePlugin.DismissalSeveranceSetting.Value = value;
         }
 
+        private static void SetPatientTreatment(bool value)
+        {
+            UnderPressurePlugin.PatientTreatmentSetting.Value = value;
+        }
+
         private static void SetMasterEnabled(bool value)
         {
             UnderPressurePlugin.EnabledSetting.Value = value;
             RoomPowerDisplay.NotifySettingChanged();
             ElectricityFeatures.NotifySettingChanged();
             HospitalLightingPrototype.NotifySettingChanged();
+            PatientTreatmentReputation.Refresh();
         }
 
         private void ShowModTab()
@@ -958,6 +980,8 @@ namespace UnderPressure
                 _resalePenaltiesLabel.text = ModLocalization.Get("mod.resale_penalties");
             if (_dismissalSeveranceLabel != null)
                 _dismissalSeveranceLabel.text = ModLocalization.Get("mod.dismissal_severance");
+            if (_patientTreatmentLabel != null)
+                _patientTreatmentLabel.text = ModLocalization.Get("mod.patient_treatment");
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);

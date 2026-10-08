@@ -14,6 +14,7 @@ mod.disable_diagnosis_charges,,,,,
 mod.disable_awards,,,,,
 mod.resale_penalties,,,,,
 mod.dismissal_severance,,,,,
+mod.patient_treatment,,,,,
 mod.section.gameplay,Сложность и экономика,Trudność i ekonomia,난이도 및 경제,难度与经济,難度與經濟
 mod.section.economy,Экономическая сложность,Trudność ekonomiczna,경제 난이도,经济难度,經濟難度
 mod.section.reputation,Сложность репутации,Trudność reputacji,평판 난이도,声誉难度,聲譽難度
@@ -56,6 +57,7 @@ tooltip.disable_diagnosis_charges,,,,,
 tooltip.disable_awards,,,,,
 tooltip.resale_penalties,,,,,
 tooltip.dismissal_severance,,,,,
+tooltip.patient_treatment,,,,,
 tooltip.global_difficulty,Устанавливает одинаковое значение всех модификаторов сложности.,Ustawia tę samą wartość wszystkich modyfikatorów trudności.,모든 난이도 조정값을 같은 값으로 설정합니다.,将所有难度调整项设为相同数值。,將所有難度調整項設為相同數值。
 tooltip.staff_salaries,Одинаково повышает зарплаты и ожидания сотрудников.,Zwiększa jednakowo płace i oczekiwania płacowe.,직원 급여와 기대 급여를 같은 비율로 높입니다.,同比提高员工薪资和薪资期望。,同比提高員工薪資和薪資期望。
 tooltip.patient_income,Одинаково снижает платежи пациентов и терпимость к ценам.,Zmniejsza jednakowo opłaty pacjentów i tolerancję cenową.,환자 지불액과 가격 허용치를 같은 비율로 낮춥니다.,同比降低患者付款和价格容忍度。,同比降低病患付款和價格容忍度。
