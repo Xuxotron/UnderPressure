@@ -31,6 +31,7 @@ namespace UnderPressure
         internal static ConfigEntry<bool> DisableDiagnosisChargesSetting { get; private set; }
         internal static ConfigEntry<bool> DisableAwardsSetting { get; private set; }
         internal static ConfigEntry<bool> ResalePenaltiesSetting { get; private set; }
+        internal static ConfigEntry<bool> DismissalSeveranceSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveEconomySetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveReputationSetting { get; private set; }
         internal static ConfigEntry<bool> AdaptiveExpansionSetting { get; private set; }
@@ -76,6 +77,8 @@ namespace UnderPressure
             IsModEnabled && DisableAwardsSetting != null && DisableAwardsSetting.Value;
         internal static bool ShouldUseResalePenalties =>
             IsModEnabled && ResalePenaltiesSetting != null && ResalePenaltiesSetting.Value;
+        internal static bool ShouldUseDismissalSeverance =>
+            IsModEnabled && DismissalSeveranceSetting != null && DismissalSeveranceSetting.Value;
         internal static ManualLogSource Log { get; private set; }
 
         private void Awake()
@@ -136,6 +139,9 @@ namespace UnderPressure
             ResalePenaltiesSetting = Config.Bind(
                 "Jugabilidad", "ResalePenalties", true,
                 ModLocalization.Get("tooltip.resale_penalties"));
+            DismissalSeveranceSetting = Config.Bind(
+                "Personal", "DismissalSeverance", true,
+                ModLocalization.Get("tooltip.dismissal_severance"));
             AdaptiveEconomySetting = Config.Bind("Dificultad adaptable", "Economy", false,
                 "Reserva la dificultad económica para su ajuste automático.");
             AdaptiveReputationSetting = Config.Bind("Dificultad adaptable", "Reputation", false,

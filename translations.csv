@@ -22,6 +22,7 @@ mod.unlock_lamps,Unlock lamps,Desbloquear lámparas,,,,
 mod.disable_diagnosis_charges,Free diagnoses,Diagnósticos gratis,,,,
 mod.disable_awards,Disable awards,Desactivar premios,,,,
 mod.resale_penalties,Resale penalty,Penalización de reventa,,,,
+mod.dismissal_severance,Dismissal severance,Indemnización por despido,,,,
 mod.section.gameplay,Difficulty and economy,Dificultad y economía,Difficulté et économie,Schwierigkeit und Wirtschaft,Difficoltà ed economia,Dificuldade e economia
 mod.section.economy,Economy difficulty,Dificultad de economía,Difficulté économique,Wirtschaftsschwierigkeit,Difficoltà economica,Dificuldade económica
 mod.section.reputation,Reputation difficulty,Dificultad de reputación,Difficulté de réputation,Rufschwierigkeit,Difficoltà reputazione,Dificuldade de reputação
@@ -66,6 +67,7 @@ tooltip.unlock_lamps,Unlock the GP Psychiatry Staff Room and Marketing lamps and
 tooltip.disable_diagnosis_charges,Patients are not charged in the GP's Office or any other diagnosis room. Treatment charges are unchanged.,No se cobra a los pacientes en Consulta ni en ninguna otra sala de diagnóstico. Los cobros de tratamiento no cambian.,,,,
 tooltip.disable_awards,Disables the yearly awards ceremony and prevents awards rewards and staff bonuses from being granted.,Desactiva la ceremonia anual y evita conceder premios recompensas y bonificaciones al personal.,,,,
 tooltip.resale_penalties,Selling objects returns 80% of their value. Destroying a room returns 50% of its construction value and 80% of its contained objects.,Vender objetos devuelve el 80% de su valor. Destruir una sala devuelve el 50% de su construcción y el 80% de los objetos que contiene.,,,,
+tooltip.dismissal_severance,When an employee is fired pay 5% of their current monthly salary for each completed month worked up to 24 months (120%).,Al despedir a un empleado paga un 5% de su sueldo mensual actual por cada mes completo trabajado hasta un máximo de 24 meses (120%).,,,,
 tooltip.global_difficulty,Set every difficulty modifier to the same value.,Iguala todos los modificadores de dificultad.,Règle tous les modificateurs de difficulté sur la même valeur.,Setzt alle Schwierigkeitsmodifikatoren auf denselben Wert.,Imposta tutti i modificatori di difficoltà sullo stesso valore.,Define todos os modificadores de dificuldade para o mesmo valor.
 tooltip.treatment_volume,"Controls the volume of the cure, failure, and death sounds.","Controla el volumen de los sonidos de curación, fracaso y muerte.",,,,
 tooltip.staff_salaries,Increase staff salaries and salary expectations equally.,Aumenta por igual los sueldos y las expectativas salariales.,Augmente à parts égales les salaires et les attentes salariales.,Erhöht Gehälter und Gehaltserwartungen gleichermaßen.,Aumenta allo stesso modo stipendi e aspettative salariali.,Aumenta igualmente salários e expectativas salariais.

@@ -86,6 +86,8 @@ namespace UnderPressure
         private TMP_Text _disableAwardsLabel;
         private Toggle _resalePenaltiesToggle;
         private TMP_Text _resalePenaltiesLabel;
+        private Toggle _dismissalSeveranceToggle;
+        private TMP_Text _dismissalSeveranceLabel;
         private Toggle _masterToggle;
         private TMP_Text _tabLabel;
         private TMP_Text _nativeSliderLabel;
@@ -385,6 +387,18 @@ namespace UnderPressure
                 _resalePenaltiesToggle.isOn = UnderPressurePlugin.ShouldUseResalePenalties;
                 _resalePenaltiesToggle.onValueChanged.AddListener(SetResalePenalties);
             }
+            var dismissalSeveranceRow = Instantiate(settingRow, section);
+            dismissalSeveranceRow.name = "Dismissal Severance";
+            RemoveLocalisers(dismissalSeveranceRow);
+            SetStretchRow((RectTransform)dismissalSeveranceRow, -282f, 45f, 12f);
+            _dismissalSeveranceToggle = dismissalSeveranceRow.GetComponentInChildren<Toggle>(true);
+            _dismissalSeveranceLabel = dismissalSeveranceRow.GetComponentInChildren<TMP_Text>(true);
+            if (_dismissalSeveranceToggle != null)
+            {
+                _dismissalSeveranceToggle.onValueChanged.RemoveAllListeners();
+                _dismissalSeveranceToggle.isOn = UnderPressurePlugin.ShouldUseDismissalSeverance;
+                _dismissalSeveranceToggle.onValueChanged.AddListener(SetDismissalSeverance);
+            }
             ConfigureRowTooltip(settingRow, _skipIntroLabel, "tooltip.skip_intro");
             ConfigureRowTooltip(tutorialRow, _disableTutorialLabel, "tooltip.disable_tutorial");
             ConfigureRowTooltip(separateReputationPrestigeRow, _separateReputationPrestigeLabel,
@@ -407,6 +421,8 @@ namespace UnderPressure
                 "tooltip.disable_awards");
             ConfigureRowTooltip(resalePenaltiesRow, _resalePenaltiesLabel,
                 "tooltip.resale_penalties");
+            ConfigureRowTooltip(dismissalSeveranceRow, _dismissalSeveranceLabel,
+                "tooltip.dismissal_severance");
             var uiRect = (RectTransform)section;
             SetHalfSectionRect(uiRect, -8f, 346f, true);
             SetHalfSectionRect((RectTransform)rightSection, -8f, 346f, false);
@@ -869,6 +885,11 @@ namespace UnderPressure
             UnderPressurePlugin.ResalePenaltiesSetting.Value = value;
         }
 
+        private static void SetDismissalSeverance(bool value)
+        {
+            UnderPressurePlugin.DismissalSeveranceSetting.Value = value;
+        }
+
         private static void SetMasterEnabled(bool value)
         {
             UnderPressurePlugin.EnabledSetting.Value = value;
@@ -935,6 +956,8 @@ namespace UnderPressure
                 _disableAwardsLabel.text = ModLocalization.Get("mod.disable_awards");
             if (_resalePenaltiesLabel != null)
                 _resalePenaltiesLabel.text = ModLocalization.Get("mod.resale_penalties");
+            if (_dismissalSeveranceLabel != null)
+                _dismissalSeveranceLabel.text = ModLocalization.Get("mod.dismissal_severance");
             foreach (var binding in _sliders)
             {
                 binding.Label.text = ModLocalization.Get(binding.Key);
