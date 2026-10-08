@@ -47,9 +47,12 @@ namespace UnderPressure.PowerGrid
         private const int DefaultContractedEnergy = 1000;
         private const int LegacyDefaultContractedEnergy = 2000;
         private const int NoPendingContractedEnergy = -1;
-        private static readonly int[] ContractedEnergyMonthlyCosts =
+        private const decimal ContractedEnergyBaseRate = 2000m;
+        private const decimal ContractedEnergyRateIncrease = 8000m;
+        private const decimal ContractedEnergyRateIntervals = 9m;
+        private static readonly decimal[] ContractedEnergySurcharges =
         {
-            0, 10000, 20800, 33000, 48000, 67500, 93000, 126000, 172000, 229500, 300000
+            0m, 0m, 0.04m, 0.10m, 0.20m, 0.35m, 0.55m, 0.80m, 1.15m, 1.55m, 2m
         };
         private const int EnergyHundredths = 100;
         private const int BatteryMaximumHundredths = 200 * EnergyHundredths;
@@ -1459,14 +1462,26 @@ namespace UnderPressure.PowerGrid
         {
             var active = Active;
             if (active == null || level == null || !ReferenceEquals(active._level, level))
-                return ContractedEnergyMonthlyCosts[DefaultContractedEnergy / 1000];
+                return CalculateContractedEnergyMonthlyCost(DefaultContractedEnergy);
             if (!active._energyStateInitialised) active.RefreshEnergyCapacity();
             active.ApplyPendingContractIfDue();
-            return ContractedEnergyMonthlyCosts[NormaliseSelectableContractedEnergy(active._contractedEnergy) / 1000];
+            return CalculateContractedEnergyMonthlyCost(active._contractedEnergy);
         }
 
         internal static int GetMonthlyCostForContractedEnergy(int value) =>
-            ContractedEnergyMonthlyCosts[NormaliseSelectableContractedEnergy(value) / 1000];
+            CalculateContractedEnergyMonthlyCost(value);
+
+        private static int CalculateContractedEnergyMonthlyCost(int value)
+        {
+            var blocks = NormaliseSelectableContractedEnergy(value) / 1000;
+            if (blocks == 0) return 0;
+
+            // La tarifa por bloque aumenta linealmente de 2.000 a 10.000 antes de aplicar el recargo.
+            var ratePerBlock = ContractedEnergyBaseRate +
+                               ContractedEnergyRateIncrease / ContractedEnergyRateIntervals * (blocks - 1);
+            var cost = blocks * ratePerBlock * (1m + ContractedEnergySurcharges[blocks]);
+            return decimal.ToInt32(decimal.Round(cost, 0, MidpointRounding.AwayFromZero));
+        }
 
         private void ApplyPendingContractIfDue()
         {
