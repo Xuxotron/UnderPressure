@@ -11,9 +11,10 @@ namespace UnderPressure
 {
     internal static class DismissalSeverance
     {
-        private const int MaximumComputableMonths = 24;
-        private const double DaysPerYear = 365d;
-        private const double MonthsPerYear = 12d;
+        private const int MaximumComputableMonths = 48;
+        private const int MonthsPerYear = 12;
+        private const double DaysPerYear = 365.25d;
+        private const double DaysPerMonth = 30.4375d;
         private static readonly Type ModifyBalanceParamsType =
             AccessTools.Inner(typeof(FinanceManager), "ModifyBalanceParams");
         private static readonly MethodInfo ModifyBalanceMethod =
@@ -23,23 +24,25 @@ namespace UnderPressure
 
         internal static int CalculateComputableMonths(Staff staff)
         {
-            if (staff == null || GameAlgorithms.Config == null ||
-                GameAlgorithms.Config.SecondsPerDay <= 0f)
+            if (staff == null)
                 return 0;
 
-            // La antigüedad almacenada no se modifica: solo se limita el resultado de esta fórmula.
-            var daysWorked = staff.TotalTimeInHospital / GameAlgorithms.Config.SecondsPerDay;
-            var completedMonths = (int)Math.Floor(daysWorked * MonthsPerYear / DaysPerYear);
+            // Se replica el desglose visible del juego y se descartan los días sobrantes.
+            var completedDays = staff.DaysInHospital;
+            var completedYears = (int)Math.Floor(completedDays / DaysPerYear);
+            var remainingDays = completedDays - (int)(completedYears * DaysPerYear);
+            var completedMonths = completedYears * MonthsPerYear +
+                (int)Math.Floor(remainingDays / DaysPerMonth);
             return Mathf.Clamp(completedMonths, 0, MaximumComputableMonths);
         }
 
-        internal static int CalculateAmount(int currentMonthlySalary, int computableMonths)
+        internal static int CalculateAmount(int currentSalary, int computableMonths)
         {
-            if (currentMonthlySalary <= 0 || computableMonths <= 0)
+            if (currentSalary <= 0 || computableMonths <= 0)
                 return 0;
 
-            var amount = (double)currentMonthlySalary *
-                Math.Min(computableMonths, MaximumComputableMonths) * 0.05d;
+            var amount = (double)currentSalary *
+                Math.Min(computableMonths, MaximumComputableMonths) * 0.02d;
             return amount >= int.MaxValue
                 ? int.MaxValue
                 : Mathf.RoundToInt((float)amount);
