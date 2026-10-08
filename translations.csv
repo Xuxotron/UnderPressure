@@ -23,6 +23,7 @@ mod.disable_diagnosis_charges,Free diagnoses,Diagnósticos gratis,,,,
 mod.disable_awards,Disable awards,Desactivar premios,,,,
 mod.resale_penalties,Resale penalty,Penalización de reventa,,,,
 mod.dismissal_severance,Dismissal severance,Indemnización por despido,,,,
+staff.dismissal_penalty,Dismissal penalty: {0},Penalización por despido: {0},,,,
 mod.patient_treatment,Demanding Patients,Pacientes exigentes,,,,
 mod.section.gameplay,Difficulty and economy,Dificultad y economía,Difficulté et économie,Schwierigkeit und Wirtschaft,Difficoltà ed economia,Dificuldade e economia
 mod.section.economy,Economy difficulty,Dificultad de economía,Difficulté économique,Wirtschaftsschwierigkeit,Difficoltà economica,Dificuldade económica

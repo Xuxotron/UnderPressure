@@ -14,6 +14,7 @@ mod.disable_diagnosis_charges,,,,,
 mod.disable_awards,,,,,
 mod.resale_penalties,,,,,
 mod.dismissal_severance,,,,,
+staff.dismissal_penalty,,,,,
 mod.patient_treatment,,,,,
 mod.section.gameplay,Сложность и экономика,Trudność i ekonomia,난이도 및 경제,难度与经济,難度與經濟
 mod.section.economy,Экономическая сложность,Trudność ekonomiczna,경제 난이도,经济难度,經濟難度
