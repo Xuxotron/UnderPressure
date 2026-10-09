@@ -13,7 +13,7 @@ namespace UnderPressure
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure";
         public const string PluginName = "Bajo Presión";
-        public const string PluginVersion = "0.1.0";
+        public const string PluginVersion = "0.1.1";
 
         private Harmony _harmony;
 
@@ -63,8 +63,9 @@ namespace UnderPressure
             IsModEnabled && (ShowRoomEffectivenessSetting == null || ShowRoomEffectivenessSetting.Value);
         internal static bool ShouldUseImperfectStaff =>
             IsModEnabled && ImperfectStaffSetting != null && ImperfectStaffSetting.Value;
-        internal static bool ShouldShowElectricity =>
+        public static bool ElectricityGameplayEnabled =>
             IsModEnabled && ShowElectricitySetting != null && ShowElectricitySetting.Value;
+        internal static bool ShouldShowElectricity => ElectricityGameplayEnabled;
         internal static bool ShouldSeparateReputationAndPrestige =>
             IsModEnabled && SeparateReputationPrestigeSetting != null && SeparateReputationPrestigeSetting.Value;
         internal static bool ShouldUsePermanentMachineWear =>
@@ -121,7 +122,7 @@ namespace UnderPressure
                 "Los nuevos candidatos tienen dos rasgos positivos y uno negativo.");
             ShowElectricitySetting = Config.Bind(
                 "Interfaz", "ShowElectricity", false,
-                "Sustituye Activos materiales por la factura eléctrica en la gráfica y muestra el gasto en objetos.");
+                ModLocalization.Get("tooltip.show_electricity"));
             SeparateReputationPrestigeSetting = Config.Bind(
                 "Jugabilidad", "SeparateReputationAndPrestige", true,
                 "La reputación aumenta por sí sola la llegada de pacientes con bonificación doble; el prestigio solo aumenta las plazas de candidatos.");

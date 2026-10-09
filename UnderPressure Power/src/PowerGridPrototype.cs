@@ -222,6 +222,7 @@ namespace UnderPressure.PowerGrid
 
         internal static bool IsCellPlacementValid(RoomItem item)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return true;
             var active = Active;
             return active == null || item == null || active.IsCellPlacementValidInternal(item);
         }
@@ -246,6 +247,7 @@ namespace UnderPressure.PowerGrid
 
         internal static bool IsPanelPlacementValid(RoomItem item)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return true;
             var active = Active;
             return active == null || item == null || active.IsPanelPlacementValidInternal(item);
         }
@@ -302,7 +304,9 @@ namespace UnderPressure.PowerGrid
             if (_networkDirty) RebuildNetwork();
             if (_toolPanel == null) TryCreateToolPanel();
             if (_energyHudRoot == null) TryCreateEnergyHud();
-            RefreshEnergyHud();
+            if (_energyHudRoot != null)
+                _energyHudRoot.gameObject.SetActive(UnderPressurePlugin.ElectricityGameplayEnabled);
+            if (UnderPressurePlugin.ElectricityGameplayEnabled) RefreshEnergyHud();
             var active = Convert.ToInt32(ManagerModeField.GetValue(_manager)) == ElectricityMode;
             BlocksWorldSelection = active && _toolMode != ToolMode.None;
             if (active != _electricityViewActive)
@@ -1560,6 +1564,7 @@ namespace UnderPressure.PowerGrid
 
         internal static int GetContractedEnergyMonthlyCost(Level level)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return 0;
             var active = Active;
             if (active == null || level == null || !ReferenceEquals(active._level, level))
                 return CalculateContractedEnergyMonthlyCost(DefaultContractedEnergy);
@@ -2052,6 +2057,7 @@ namespace UnderPressure.PowerGrid
 
         internal static void RecordTaskEnergy(FinanceManager manager, int amount)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return;
             var active = Active;
             if (active == null || amount <= 0 || !ReferenceEquals(active._level?.FinanceManager, manager)) return;
             active.ConsumeTaskEnergyImmediately(amount);
@@ -2093,6 +2099,7 @@ namespace UnderPressure.PowerGrid
 
         internal static void ConsumeDailyMonthlyEnergy(Level level)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return;
             var active = Active;
             if (active == null || level == null || !ReferenceEquals(active._level, level)) return;
             active.ApplyPendingContractIfDue();
@@ -2143,6 +2150,7 @@ namespace UnderPressure.PowerGrid
         internal static bool TryGetAccruedDailyEnergyBill(FinanceManager manager, out int amount)
         {
             amount = 0;
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return false;
             var active = Active;
             if (active == null || manager == null || !ReferenceEquals(active._level?.FinanceManager, manager))
                 return false;
@@ -2367,6 +2375,7 @@ namespace UnderPressure.PowerGrid
 
         internal static int ConnectedLowVoltageTiles(RoomItem panel)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return 0;
             var active = Active;
             if (active == null || panel == null || !EnergyRoomItems.IsPanel(panel)) return 0;
             var panelCell = GetPanelCell(panel);
@@ -2821,6 +2830,7 @@ namespace UnderPressure.PowerGrid
 
         internal static bool IsPowered(RoomItem item)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return true;
             var active = Active;
             // Before the level data-view has created the grid controller, retain native
             // behaviour instead of temporarily disabling every electrical object.

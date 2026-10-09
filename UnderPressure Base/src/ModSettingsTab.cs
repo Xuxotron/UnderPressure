@@ -260,7 +260,7 @@ namespace UnderPressure
             var separateReputationPrestigeRow = Instantiate(settingRow, rightSection);
             separateReputationPrestigeRow.name = "Separate Reputation And Prestige";
             RemoveLocalisers(separateReputationPrestigeRow);
-            SetStretchRow((RectTransform)separateReputationPrestigeRow, -102f, 45f, 12f);
+            SetStretchRow((RectTransform)separateReputationPrestigeRow, -147f, 45f, 12f);
             _separateReputationPrestigeToggle = separateReputationPrestigeRow.GetComponentInChildren<Toggle>(true);
             _separateReputationPrestigeLabel = separateReputationPrestigeRow.GetComponentInChildren<TMP_Text>(true);
             if (_separateReputationPrestigeToggle != null)
@@ -272,7 +272,7 @@ namespace UnderPressure
             var autoLoadLastSaveRow = Instantiate(settingRow, rightSection);
             autoLoadLastSaveRow.name = "Auto Load Last Level";
             RemoveLocalisers(autoLoadLastSaveRow);
-            SetStretchRow((RectTransform)autoLoadLastSaveRow, -147f, 45f, 12f);
+            SetStretchRow((RectTransform)autoLoadLastSaveRow, -102f, 45f, 12f);
             _autoLoadLastSaveToggle = autoLoadLastSaveRow.GetComponentInChildren<Toggle>(true);
             _autoLoadLastSaveLabel = autoLoadLastSaveRow.GetComponentInChildren<TMP_Text>(true);
             if (_autoLoadLastSaveToggle != null)
@@ -284,7 +284,7 @@ namespace UnderPressure
             var effectivenessRow = Instantiate(settingRow, section);
             effectivenessRow.name = "Show Room Effectiveness";
             RemoveLocalisers(effectivenessRow);
-            SetStretchRow((RectTransform)effectivenessRow, -12f, 45f, 12f);
+            SetStretchRow((RectTransform)effectivenessRow, -57f, 45f, 12f);
             _roomEffectivenessToggle = effectivenessRow.GetComponentInChildren<Toggle>(true);
             _roomEffectivenessLabel = effectivenessRow.GetComponentInChildren<TMP_Text>(true);
             if (_roomEffectivenessToggle != null)
@@ -296,7 +296,7 @@ namespace UnderPressure
             var imperfectRow = Instantiate(settingRow, section);
             imperfectRow.name = "Imperfect Staff";
             RemoveLocalisers(imperfectRow);
-            SetStretchRow((RectTransform)imperfectRow, -57f, 45f, 12f);
+            SetStretchRow((RectTransform)imperfectRow, -102f, 45f, 12f);
             _imperfectStaffToggle = imperfectRow.GetComponentInChildren<Toggle>(true);
             _imperfectStaffLabel = imperfectRow.GetComponentInChildren<TMP_Text>(true);
             if (_imperfectStaffToggle != null)
@@ -308,7 +308,7 @@ namespace UnderPressure
             var electricityRow = Instantiate(settingRow, section);
             electricityRow.name = "Show Electricity";
             RemoveLocalisers(electricityRow);
-            SetStretchRow((RectTransform)electricityRow, -102f, 45f, 12f);
+            SetStretchRow((RectTransform)electricityRow, -12f, 45f, 12f);
             _electricityToggle = electricityRow.GetComponentInChildren<Toggle>(true);
             _electricityLabel = electricityRow.GetComponentInChildren<TMP_Text>(true);
             if (_electricityToggle != null)
@@ -332,7 +332,7 @@ namespace UnderPressure
             var visualLightingRow = Instantiate(settingRow, rightSection);
             visualLightingRow.name = "Hospital Lighting";
             RemoveLocalisers(visualLightingRow);
-            SetStretchRow((RectTransform)visualLightingRow, -282f, 45f, 12f);
+            SetStretchRow((RectTransform)visualLightingRow, -327f, 45f, 12f);
             _visualLightingToggle = visualLightingRow.GetComponentInChildren<Toggle>(true);
             _visualLightingLabel = visualLightingRow.GetComponentInChildren<TMP_Text>(true);
             if (_visualLightingToggle != null)
@@ -404,7 +404,7 @@ namespace UnderPressure
             var patientTreatmentRow = Instantiate(settingRow, rightSection);
             patientTreatmentRow.name = "Patient Treatment";
             RemoveLocalisers(patientTreatmentRow);
-            SetStretchRow((RectTransform)patientTreatmentRow, -327f, 45f, 12f);
+            SetStretchRow((RectTransform)patientTreatmentRow, -282f, 45f, 12f);
             _patientTreatmentToggle = patientTreatmentRow.GetComponentInChildren<Toggle>(true);
             _patientTreatmentLabel = patientTreatmentRow.GetComponentInChildren<TMP_Text>(true);
             if (_patientTreatmentToggle != null)

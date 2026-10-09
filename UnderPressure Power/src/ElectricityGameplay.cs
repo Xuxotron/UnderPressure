@@ -87,6 +87,7 @@ namespace UnderPressure.PowerGrid
 
         internal static bool CanOperateRoom(Room room)
         {
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return true;
             if (room?.Definition == null) return true;
             var items = room.FloorPlan?.Items;
             if (items == null) return true;
@@ -103,7 +104,8 @@ namespace UnderPressure.PowerGrid
 
         internal static bool RequiresPower(IRoomItemDefinition definition)
         {
-            if (!_configured || definition == null || EnergyRoomItems.IsTransformer(definition) ||
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled || !_configured || definition == null ||
+                EnergyRoomItems.IsTransformer(definition) ||
                 EnergyRoomItems.IsCell(definition) ||
                 EnergyRoomItems.IsPanel(definition)) return false;
             if (definition.EnergyCost(0) > 0) return true;
@@ -189,7 +191,7 @@ namespace UnderPressure.PowerGrid
 
         internal static int GetDailyRecurringDemand(Level level)
         {
-            if (level?.WorldState?.AllRooms == null) return 0;
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled || level?.WorldState?.AllRooms == null) return 0;
             var total = 0;
             foreach (var room in level.WorldState.AllRooms)
             {
@@ -357,11 +359,14 @@ namespace UnderPressure.PowerGrid
         {
             internal int OriginalInstalled;
             internal bool UsesDailyAccumulator;
+            internal bool Modified;
         }
 
         [HarmonyPriority(Priority.First)]
         private static void Prefix(FinanceManager __instance, out BillState __state)
         {
+            __state = default(BillState);
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return;
             var level = LevelField?.GetValue(__instance) as Level;
             var installed = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
             var usesDailyAccumulator = PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var monthly);
@@ -371,7 +376,8 @@ namespace UnderPressure.PowerGrid
             __state = new BillState
             {
                 OriginalInstalled = installed,
-                UsesDailyAccumulator = usesDailyAccumulator
+                UsesDailyAccumulator = usesDailyAccumulator,
+                Modified = true
             };
             var multiplier = 1f - EnergyCampaignSystem.GetEffect(level, EnergyCampaignKind.HackPowerCompany);
             monthly = Mathf.RoundToInt(monthly * Mathf.Clamp01(multiplier));
@@ -385,6 +391,7 @@ namespace UnderPressure.PowerGrid
 
         private static Exception Finalizer(Exception __exception, FinanceManager __instance, BillState __state)
         {
+            if (!__state.Modified) return __exception;
             // La campaña reduce el dinero pagado, no la demanda física. El total diario ya
             // facturado se reinicia, mientras el valor nativo instalado se conserva para que
             // añadir o retirar objetos continúe funcionando normalmente.
