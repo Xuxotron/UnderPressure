@@ -308,9 +308,6 @@ namespace UnderPressure
             _level.VisualManager.RoomLightingManager.EnableDesaturatedHospital();
             if (_mode == CustomMode.Electricity)
             {
-                _level.BuildEvents.OnRoomItemAdded += OnRoomItemAdded;
-                _level.BuildEvents.OnRoomBuiltEvent += OnRoomBuilt;
-                RefreshElectricityItems();
                 SetButtonStates();
                 return;
             }
@@ -339,35 +336,11 @@ namespace UnderPressure
             staff.Visual.SetValueMaterial(Color.white);
         }
 
-        private void RefreshElectricityItems()
-        {
-            foreach (var room in _level.WorldState.AllRooms)
-                OnRoomBuilt(room, 0);
-        }
-
-        private void OnRoomBuilt(Room room, int unused)
-        {
-            if (room == null || room.FloorPlan == null) return;
-            foreach (var item in room.FloorPlan.Items)
-                OnRoomItemAdded(item, room.FloorPlan);
-        }
-
-        private void OnRoomItemAdded(RoomItem item, FloorPlan unused)
-        {
-            if (item == null || item.Visual == null) return;
-            item.Visual.SetValueMaterial((item.EnergyCost > 0 ||
-                ElectricityFeatures.ConsumesElectricity(item.Definition))
-                ? new Color(1f, 0.44f, 0.07f) : Color.white);
-            item.Visual.EnableValueMaterial();
-        }
-
         private void DisableCustomView()
         {
             if (_mode == CustomMode.None) return;
             if (_mode == CustomMode.Electricity)
             {
-                _level.BuildEvents.OnRoomItemAdded -= OnRoomItemAdded;
-                _level.BuildEvents.OnRoomBuiltEvent -= OnRoomBuilt;
                 foreach (var room in _level.WorldState.AllRooms)
                     foreach (var item in room.FloorPlan.Items)
                         if (item != null && item.Visual != null)

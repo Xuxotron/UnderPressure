@@ -146,6 +146,8 @@ namespace UnderPressure.PowerGrid
         private Vector3 _panelOpenPosition;
         private float _panelOpenAmount;
         private bool _electricityViewActive;
+        private bool _electricityGameplayStateKnown;
+        private bool _electricityGameplayEnabled;
         private ToolMode _toolMode;
         private bool _showFlow;
         private bool _dragging;
@@ -304,9 +306,16 @@ namespace UnderPressure.PowerGrid
             if (_networkDirty) RebuildNetwork();
             if (_toolPanel == null) TryCreateToolPanel();
             if (_energyHudRoot == null) TryCreateEnergyHud();
+            var electricityGameplayEnabled = UnderPressurePlugin.ElectricityGameplayEnabled;
             if (_energyHudRoot != null)
-                _energyHudRoot.gameObject.SetActive(UnderPressurePlugin.ElectricityGameplayEnabled);
-            if (UnderPressurePlugin.ElectricityGameplayEnabled) RefreshEnergyHud();
+                _energyHudRoot.gameObject.SetActive(electricityGameplayEnabled);
+            if (electricityGameplayEnabled) RefreshEnergyHud();
+            if (!_electricityGameplayStateKnown || _electricityGameplayEnabled != electricityGameplayEnabled)
+            {
+                _electricityGameplayStateKnown = true;
+                _electricityGameplayEnabled = electricityGameplayEnabled;
+                if (_electricityViewActive) RefreshElectricItemColors();
+            }
             var active = Convert.ToInt32(ManagerModeField.GetValue(_manager)) == ElectricityMode;
             BlocksWorldSelection = active && _toolMode != ToolMode.None;
             if (active != _electricityViewActive)
@@ -2759,6 +2768,7 @@ namespace UnderPressure.PowerGrid
         private void RefreshElectricItemColors()
         {
             if (!_electricityViewActive || _level?.WorldState?.AllRooms == null) return;
+            var electricityGameplayEnabled = UnderPressurePlugin.ElectricityGameplayEnabled;
 
             var cells = EnergyRoomItems.Cell == null
                 ? null
@@ -2768,7 +2778,8 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!EnergyRoomItems.IsCell(cell) || cell.Visual == null) continue;
                     var connector = GetCellConnector(cell);
-                    cell.Visual.SetValueMaterial(_overloadedCellCells.Contains(connector)
+                    cell.Visual.SetValueMaterial(electricityGameplayEnabled &&
+                        _overloadedCellCells.Contains(connector)
                         ? PanelOverloadColor
                         : PanelCellColor);
                     cell.Visual.EnableValueMaterial();
@@ -2784,10 +2795,12 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!EnergyRoomItems.IsPanel(panel) || panel.Visual == null) continue;
                     var panelCell = GetPanelCell(panel);
-                    var overloaded = _overloadedPanelCells.Contains(panelCell) ||
-                                     IsPanelFedByOverloadedCell(panelCell);
-                    var powered = !_gridOverloaded && IsPanelFunctional(panelCell) &&
-                                  _activePanelCells.Contains(panelCell);
+                    var overloaded = electricityGameplayEnabled &&
+                                     (_overloadedPanelCells.Contains(panelCell) ||
+                                      IsPanelFedByOverloadedCell(panelCell));
+                    var powered = !electricityGameplayEnabled ||
+                                  (!_gridOverloaded && IsPanelFunctional(panelCell) &&
+                                   _activePanelCells.Contains(panelCell));
                     panel.Visual.SetValueMaterial(overloaded
                         ? PanelOverloadColor
                         : powered ? PanelCellColor : UnpoweredObjectColor);
@@ -2801,18 +2814,17 @@ namespace UnderPressure.PowerGrid
                 foreach (var item in items)
                 {
                     if (item?.Visual == null || EnergyRoomItems.IsPanel(item) || EnergyRoomItems.IsCell(item) ||
-                        !ElectricityGameplay.RequiresPower(item)) continue;
-                    var isLowVoltage = ElectricityGameplay.TryGetPowerType(item.Definition, out var power) &&
-                                       power == Power.Bajo;
+                        !ElectricityGameplay.TryGetPowerType(item.Definition, out var power)) continue;
+                    var isLowVoltage = power == Power.Bajo;
                     var overloaded = false;
-                    bool powered;
-                    if (isLowVoltage)
+                    var powered = true;
+                    if (electricityGameplayEnabled && isLowVoltage)
                     {
                         powered = TryGetLowVoltagePanel(item, out var panel) &&
                                   IsPanelOperational(panel);
                         overloaded = _overloadedPanelCells.Contains(panel);
                     }
-                    else
+                    else if (electricityGameplayEnabled)
                     {
                         powered = IsItemPoweredInternal(item);
                         overloaded = TryGetHighVoltageCell(item, out var source) &&
