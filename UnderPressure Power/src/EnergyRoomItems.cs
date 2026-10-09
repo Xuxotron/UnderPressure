@@ -69,6 +69,7 @@ namespace UnderPressure.PowerGrid
         private static readonly Guid CellGuid = new Guid("5c382c42-4eb7-4c8a-8aca-a5f902481104");
         private static readonly MethodInfo MemberwiseCloneMethod = AccessTools.Method(typeof(object), "MemberwiseClone");
         private static RuntimeAnimatorController[] _panelRepairAnimationGraphs;
+        private static RoomItemDefinition _panelMaintenanceSocketSource;
 
         internal const string BatteryTag = "under pressure energy battery";
         internal const string PanelTag = ElectricalPanelNativeParameters.ElectricalPanelDebugTag;
@@ -119,6 +120,9 @@ namespace UnderPressure.PowerGrid
                     $"cellPrefab={PowerGridPlugin.ElectricalCellPrefab != null}.");
                 return false;
             }
+
+            _panelMaintenanceSocketSource = nurseLocker;
+            if (!CopyPanelInteractionSocket(PowerGridPlugin.PowerPanelPrefab, nurseLocker)) return false;
 
             var additions = new List<SharedInstance<RoomItemDefinition>>();
             if (Battery == null)
@@ -275,11 +279,14 @@ namespace UnderPressure.PowerGrid
         {
             if (Panel != null && panelPrefab != null && panelIcon != null)
             {
-                Set(Panel, "_prefab", panelPrefab);
-                Set(Panel, "_blueprintPrefab", panelPrefab);
-                Set(Panel, "_icon", panelIcon);
-                Set(Panel, "_iconWithoutBacking", panelIcon);
-                RefreshPlacedPanelPrefabInstances();
+                if (CopyPanelInteractionSocket(panelPrefab, _panelMaintenanceSocketSource))
+                {
+                    Set(Panel, "_prefab", panelPrefab);
+                    Set(Panel, "_blueprintPrefab", panelPrefab);
+                    Set(Panel, "_icon", panelIcon);
+                    Set(Panel, "_iconWithoutBacking", panelIcon);
+                    RefreshPlacedPanelPrefabInstances();
+                }
             }
 
             if (Transformer != null && transformerPrefab != null)
@@ -639,6 +646,44 @@ namespace UnderPressure.PowerGrid
             clone.Exclusive = true;
             clone.MaxQueue = 1;
             return clone;
+        }
+
+        private static bool CopyPanelInteractionSocket(GameObject panelPrefab,
+            RoomItemDefinition nurseLocker)
+        {
+            var lockerPrefab = nurseLocker?.GetPrefab(0);
+            var sourceSocket = FindTransform(lockerPrefab?.transform,
+                ElectricalPanelPrefabParameters.MaintenanceSocket);
+            var panelSocket = FindTransform(panelPrefab?.transform,
+                ElectricalPanelPrefabParameters.MaintenanceSocket);
+            if (panelPrefab == null || lockerPrefab == null || sourceSocket == null || panelSocket == null)
+            {
+                PowerGridPlugin.Log.LogError(
+                    "No se pudo copiar el punto de interacción nativo de la taquilla al cuadro eléctrico: " +
+                    $"origen={sourceSocket != null}, destino={panelSocket != null}.");
+                return false;
+            }
+
+            var rootPosition = lockerPrefab.transform.InverseTransformPoint(sourceSocket.position);
+            var rootRotation = Quaternion.Inverse(lockerPrefab.transform.rotation) * sourceSocket.rotation;
+            panelSocket.position = panelPrefab.transform.TransformPoint(rootPosition);
+            panelSocket.rotation = panelPrefab.transform.rotation * rootRotation;
+            PowerGridPlugin.Log.LogInfo(
+                "Punto de interacción nativo de taquilla copiado al cuadro: posición=" +
+                rootPosition + ", rotación=" + rootRotation.eulerAngles + ".");
+            return true;
+        }
+
+        private static Transform FindTransform(Transform root, string objectName)
+        {
+            if (root == null) return null;
+            if (string.Equals(root.name, objectName, StringComparison.Ordinal)) return root;
+            for (var index = 0; index < root.childCount; index++)
+            {
+                var found = FindTransform(root.GetChild(index), objectName);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         internal static RuntimeAnimatorController GetPanelRepairAnimationGraph(Character character)
