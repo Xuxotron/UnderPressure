@@ -121,14 +121,19 @@ namespace UnderPressure.PowerGrid
         private Level _level;
         private static readonly Color PoweredColor = new Color(1f, 0.61f, 0.20f, 1f);
         private static readonly Color PreviewAddColor = new Color(1f, 0.76f, 0.30f, 1f);
+        private static readonly Color HoverPreviewAddColor = new Color(1f, 0.76f, 0.30f, 0.5f);
         private static readonly Color LowVoltageColor = new Color(1f, 0.86f, 0.08f, 1f);
         private static readonly Color LowVoltagePreviewColor = new Color(1f, 0.94f, 0.30f, 1f);
+        private static readonly Color LowVoltageHoverPreviewColor = new Color(1f, 0.94f, 0.30f, 0.5f);
         private static readonly Color LowVoltageDisconnectedColor = new Color(0.62f, 0.65f, 0.68f, 1f);
         private static readonly Color PanelCellColor = new Color(0.08f, 0.78f, 0.72f, 1f);
         private static readonly Color PanelOverloadColor = new Color(0.92f, 0.10f, 0.08f, 1f);
         private static readonly Color DisconnectedColor = new Color(0.32f, 0.35f, 0.38f, 1f);
         private static readonly Color UnpoweredObjectColor = new Color(0.27f, 0.29f, 0.32f, 1f);
         private GameObject _visualRoot;
+        private GameObject _hoverPreview;
+        private PowerCoord _hoverPreviewCoord;
+        private ToolMode _hoverPreviewMode;
         private GameObject _generatorAreaVisual;
         private GameObject _panelAreaVisual;
         private RectTransform _toolPanel;
@@ -323,15 +328,25 @@ namespace UnderPressure.PowerGrid
             if (!active) return;
 
             var input = _level.InputManager;
-            if (input == null || input.IsMouseOverGuiOrDraggingScrollbar()) return;
+            if (input == null || input.IsMouseOverGuiOrDraggingScrollbar())
+            {
+                DestroyHoverPreview();
+                return;
+            }
             if (Input.GetKeyDown(KeyCode.Delete))
             {
                 DeleteCableUnderCursor();
                 return;
             }
-            if (_toolMode == ToolMode.None) return;
+            if (_toolMode == ToolMode.None)
+            {
+                DestroyHoverPreview();
+                return;
+            }
+            if (!_dragging) RefreshHoverPreview();
             if (!_dragging && input.GetMouseDownOnScene((MouseButton)0))
             {
+                DestroyHoverPreview();
                 _dragging = true;
                 _dragStart = CursorPowerCoord();
                 _dragEnd = _dragStart;
@@ -360,6 +375,7 @@ namespace UnderPressure.PowerGrid
             }
             _toolMode = mode;
             CancelDrag();
+            DestroyHoverPreview();
             RefreshToolButtonColors();
             PowerGridPlugin.Log.LogInfo("Herramienta electrica seleccionada: " + mode + ".");
         }
@@ -931,6 +947,33 @@ namespace UnderPressure.PowerGrid
                     lowVoltage ? LowVoltagePreviewColor : PreviewAddColor,
                     lowVoltage ? "LowVoltagePreview" : "HighVoltagePreview"));
             }
+        }
+
+        private void RefreshHoverPreview()
+        {
+            if (_toolMode != ToolMode.HighVoltage && _toolMode != ToolMode.LowVoltage)
+            {
+                DestroyHoverPreview();
+                return;
+            }
+
+            var coord = CursorPowerCoord();
+            var lowVoltage = _toolMode == ToolMode.LowVoltage;
+            var existing = lowVoltage ? _lowVoltageCells : _cells;
+            if (!CanAddCable(coord, existing, lowVoltage))
+            {
+                DestroyHoverPreview();
+                return;
+            }
+            if (_hoverPreview != null && _hoverPreviewCoord.Equals(coord) &&
+                _hoverPreviewMode == _toolMode) return;
+
+            DestroyHoverPreview();
+            _hoverPreviewCoord = coord;
+            _hoverPreviewMode = _toolMode;
+            _hoverPreview = CreateTileVisual(coord,
+                lowVoltage ? LowVoltageHoverPreviewColor : HoverPreviewAddColor,
+                lowVoltage ? "LowVoltageHoverPreview" : "HighVoltageHoverPreview");
         }
 
         private List<PowerCoord> BuildValidDrag()
@@ -2997,6 +3040,7 @@ namespace UnderPressure.PowerGrid
         {
             _toolMode = ToolMode.None;
             CancelDrag();
+            DestroyHoverPreview();
             RefreshToolButtonColors();
         }
 
@@ -3026,6 +3070,13 @@ namespace UnderPressure.PowerGrid
             _previewVisuals.Clear();
         }
 
+        private void DestroyHoverPreview()
+        {
+            if (_hoverPreview != null) Object.Destroy(_hoverPreview);
+            _hoverPreview = null;
+            _hoverPreviewMode = ToolMode.None;
+        }
+
         private void LogDefinitions()
         {
             var rooms = _level.WorldState.AvailableRooms;
@@ -3045,6 +3096,7 @@ namespace UnderPressure.PowerGrid
             if (ReferenceEquals(Active, this)) Active = null;
             BlocksWorldSelection = false;
             UnsubscribeBuildEvents();
+            DestroyHoverPreview();
             DestroyPreview();
             DestroyFlowVisuals();
             DestroyPathAreaVisuals();
