@@ -44,6 +44,7 @@ namespace UnderPressure
         internal static ConfigEntry<int> MachineWearSetting { get; private set; }
         internal static ConfigEntry<int> StaffSalariesSetting { get; private set; }
         internal static ConfigEntry<int> HungerThirstSetting { get; private set; }
+        internal static ConfigEntry<int> BoredomSetting { get; private set; }
         internal static ConfigEntry<int> HappinessSetting { get; private set; }
         internal static ConfigEntry<int> HygieneSetting { get; private set; }
         internal static ConfigEntry<int> PatientIncomeSetting { get; private set; }
@@ -164,6 +165,7 @@ namespace UnderPressure
             MachineWearSetting = BindPercentage("MachineWear", "Velocidad de desgaste de las máquinas.");
             StaffSalariesSetting = BindPercentage("EmployeeSalaries", "Salarios pagados a los empleados.");
             HungerThirstSetting = BindPercentage("HungerAndThirst", "Velocidad de aumento del hambre y la sed.");
+            BoredomSetting = BindPercentage("Boredom", "Velocidad de aumento del aburrimiento.");
             HappinessSetting = BindPercentage("Happiness", "Velocidad de cambio de la felicidad.");
             HygieneSetting = BindPercentage("Hygiene", "Velocidad de deterioro de la higiene.");
             PatientIncomeSetting = BindPercentage("PatientIncomeDifficulty", "Reduce conjuntamente los pagos y la tolerancia del paciente al sobreprecio.");

@@ -476,9 +476,9 @@ namespace UnderPressure
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
+                    new SliderSpec("mod.boredom", UnderPressurePlugin.BoredomSetting),
                     new SliderSpec("mod.happiness", UnderPressurePlugin.HappinessSetting),
-                    new SliderSpec("mod.hygiene", UnderPressurePlugin.HygieneSetting),
-                    new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting)
+                    new SliderSpec("mod.hygiene", UnderPressurePlugin.HygieneSetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
                 "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1211f,
@@ -487,13 +487,14 @@ namespace UnderPressure
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
                     new SliderSpec("mod.treatment_chance", UnderPressurePlugin.TreatmentChanceSetting),
                     new SliderSpec("mod.patient_arrival", UnderPressurePlugin.PatientArrivalSetting),
+                    new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting),
                     new SliderSpec("mod.machine_wear", UnderPressurePlugin.MachineWearSetting)
                 });
             _checkAlignmentReference = economy.Toggle;
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1503f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1556f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,
@@ -514,7 +515,8 @@ namespace UnderPressure
             Transform nativeVideoRow, string titleKey, ConfigEntry<bool> setting, float y,
             SliderSpec[] specs)
         {
-            var section = CreateEmptySection(template, content, titleKey, y, 284f);
+            var section = CreateEmptySection(template, content, titleKey, y,
+                72f + specs.Length * 53f);
             var title = Instantiate(_skipIntroLabel, section);
             title.name = titleKey + " Title";
             RemoveLocalisers(title.transform);

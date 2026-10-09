@@ -39,6 +39,7 @@ mod.treatment_chance,Treatment failure risk,Riesgo de tratamiento fallido,Risque
 mod.machine_wear,Machine wear,Desgaste de máquinas,Usure des machines,Maschinenverschleiß,Usura macchinari,Desgaste das máquinas
 mod.staff_salaries,Employee salaries,Salarios de empleados,Salaires du personnel,Mitarbeitergehälter,Stipendi dipendenti,Salários dos funcionários
 mod.hunger_thirst,Increased hunger and thirst,Aumento del hambre y la sed,Augmentation de la faim et de la soif,Mehr Hunger und Durst,Aumento fame e sete,Aumento da fome e sede
+mod.boredom,Increased boredom,Aumento del aburrimiento,,,,
 mod.happiness,Faster happiness loss,Disminución de la felicidad,Baisse accélérée du bonheur,Schnellerer Glücksverlust,Calo più rapido della felicità,Perda de felicidade mais rápida
 mod.hygiene,More demanding hygiene,Higiene más exigente,Hygiène plus exigeante,Anspruchsvollere Hygiene,Igiene più esigente,Higiene mais exigente
 mod.patient_income,Cheaper treatment,Tratamiento más barato,Difficulté des revenus par patient,Einnahmeschwierigkeit pro Patient,Difficoltà entrate per paziente,Dificuldade de receitas por paciente
@@ -78,6 +79,7 @@ tooltip.patient_income,Reduce patient payments and price tolerance equally.,Redu
 tooltip.applicant_wait,Increase the wait between new job applicants.,Aumenta la espera entre nuevos candidatos.,Augmente le délai entre les nouveaux candidats.,Erhöht die Wartezeit zwischen neuen Bewerbern.,Aumenta l'attesa tra i nuovi candidati.,Aumenta a espera entre novos candidatos.
 tooltip.electricity_bill,Increase the monthly electricity bill.,Aumenta la factura mensual de electricidad.,Augmente la facture mensuelle d'électricité.,Erhöht die monatliche Stromrechnung.,Aumenta la bolletta elettrica mensile.,Aumenta a fatura mensal de eletricidade.
 tooltip.hunger_thirst,Make patient hunger and thirst rise faster.,Acelera el aumento del hambre y la sed.,Accélère l'augmentation de la faim et de la soif.,Lässt Hunger und Durst der Patienten schneller steigen.,Fa aumentare più rapidamente fame e sete dei pazienti.,Faz a fome e a sede dos pacientes aumentarem mais depressa.
+tooltip.boredom,Make patient boredom rise faster.,Acelera el aumento del aburrimiento de los pacientes.,,,,
 tooltip.happiness,Make patient happiness fall faster.,Acelera la pérdida de felicidad.,Accélère la baisse du bonheur des patients.,Lässt das Glück der Patienten schneller sinken.,Fa diminuire più rapidamente la felicità dei pazienti.,Faz a felicidade dos pacientes diminuir mais depressa.
 tooltip.hygiene,Make hygiene deteriorate faster.,Acelera el deterioro de la higiene.,Accélère la dégradation de l'hygiène.,Lässt die Hygiene schneller sinken.,Fa peggiorare più rapidamente l'igiene.,Faz a higiene deteriorar-se mais depressa.
 tooltip.health_decay,Make patient health deteriorate faster.,Acelera el deterioro de la salud.,Accélère la dégradation de la santé des patients.,Lässt die Gesundheit der Patienten schneller sinken.,Fa peggiorare più rapidamente la salute dei pazienti.,Faz a saúde dos pacientes deteriorar-se mais depressa.

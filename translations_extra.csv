@@ -27,6 +27,7 @@ mod.health_decay,Ухудшение здоровья пациентов,Pogorsze
 mod.diagnosis_chance,Сложность диагностики,Trudność diagnozy,진단 난이도,诊断难度,診斷難度
 mod.treatment_chance,Риск неудачи лечения,Ryzyko niepowodzenia leczenia,치료 실패 위험,治疗失败风险,治療失敗風險
 mod.machine_wear,Износ оборудования,Zużycie maszyn,기계 마모,机器损耗,機器損耗
+mod.boredom,,,,,
 mod.staff_salaries,Зарплаты сотрудников,Wynagrodzenia pracowników,직원 급여,员工薪资,員工薪資
 mod.hunger_thirst,Усиление голода и жажды,Szybszy wzrost głodu i pragnienia,배고픔과 목마름 증가,饥饿与口渴加剧,飢餓與口渴加劇
 mod.happiness,Быстрое падение счастья,Szybszy spadek zadowolenia,행복도 감소 가속,幸福度下降加快,幸福度下降加快
@@ -72,6 +73,7 @@ tooltip.diagnosis_chance,Снижает эффективность диагно�
 tooltip.treatment_chance,Снижает вероятность успешного лечения.,Zmniejsza szansę powodzenia leczenia.,치료 성공 확률을 낮춥니다.,降低治疗成功概率。,降低治療成功機率。
 tooltip.patient_arrival,Увеличивает частоту прибытия пациентов.,Zwiększa częstotliwość przybywania pacjentów.,환자 방문 빈도를 높입니다.,提高患者到访频率。,提高病患到訪頻率。
 tooltip.machine_wear,Ускоряет износ оборудования.,Przyspiesza zużycie maszyn.,기계가 더 빨리 마모됩니다.,使机器损耗得更快。,使機器損耗得更快。
+tooltip.boredom,,,,,
 tooltip.adaptive.economy,Настраивает шкалы по доступным деньгам. +1% за каждые 10000 $ до +100%.,Ustawia suwaki według dostępnej gotówki. +1% za każde 10000 $ do +100%.,보유 자금에 따라 조정합니다. 10000 $마다 +1%이며 최대 +100%입니다.,按可用现金调整。每 10000 $ 增加 1%且最高为 +100%。,按可用現金調整。每 10000 $ 增加 1%且最高為 +100%。
 tooltip.adaptive.reputation,Настраивает шкалы по репутации. +1% за очко до +100%.,Ustawia suwaki według reputacji. +1% za punkt do +100%.,평판에 따라 조정합니다. 1점마다 +1%이며 최대 +100%입니다.,按声誉调整。每点增加 1%且最高为 +100%。,按聲譽調整。每點增加 1%且最高為 +100%。
 tooltip.adaptive.expansion,Настраивает шкалы по уровню больницы. +5% за уровень до +100%.,Ustawia suwaki według poziomu szpitala. +5% za poziom do +100%.,병원 레벨에 따라 조정합니다. 레벨당 +5%이며 최대 +100%입니다.,按医院等级调整。每级增加 5%且最高为 +100%。,按醫院等級調整。每級增加 5%且最高為 +100%。

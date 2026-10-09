@@ -375,6 +375,9 @@ namespace UnderPressure
                 string.Equals(__0, "Thirst", StringComparison.OrdinalIgnoreCase))
                 __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
                     UnderPressurePlugin.HungerThirstSetting));
+            else if (string.Equals(__0, "Boredom", StringComparison.OrdinalIgnoreCase))
+                __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
+                    UnderPressurePlugin.BoredomSetting));
             else if (string.Equals(__0, "Happiness", StringComparison.OrdinalIgnoreCase))
                 __result *= GameplayModifier.Factor(AdaptiveDifficulty.GetValue(
                     UnderPressurePlugin.HappinessSetting));

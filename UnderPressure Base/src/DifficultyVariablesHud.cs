@@ -151,12 +151,12 @@ namespace UnderPressure
                 UnderPressurePlugin.AdaptiveReputationSetting.Value, reputationSource);
             AddStandard(labels, adjustments, results, "mod.hunger_thirst",
                 UnderPressurePlugin.HungerThirstSetting, false);
+            AddStandard(labels, adjustments, results, "mod.boredom",
+                UnderPressurePlugin.BoredomSetting, false);
             AddStandard(labels, adjustments, results, "mod.happiness",
                 UnderPressurePlugin.HappinessSetting, false);
             AddStandard(labels, adjustments, results, "mod.hygiene",
                 UnderPressurePlugin.HygieneSetting, false);
-            AddStandard(labels, adjustments, results, "mod.health_decay",
-                UnderPressurePlugin.HealthDecaySetting, false);
 
             var expansionSource = Mathf.Clamp(_level.PrestigeTracker.Level * 5, 0, 100);
             AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.expansion"),
@@ -167,6 +167,8 @@ namespace UnderPressure
                 UnderPressurePlugin.TreatmentChanceSetting, true);
             AddStandard(labels, adjustments, results, "mod.patient_arrival",
                 UnderPressurePlugin.PatientArrivalSetting, false);
+            AddStandard(labels, adjustments, results, "mod.health_decay",
+                UnderPressurePlugin.HealthDecaySetting, false);
             AddStandard(labels, adjustments, results, "mod.machine_wear",
                 UnderPressurePlugin.MachineWearSetting, false);
 
