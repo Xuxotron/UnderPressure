@@ -199,6 +199,17 @@ namespace UnderPressure.PowerGrid
             active._networkDirty = true;
         }
 
+        internal static void NotifyPanelMaintenanceChanged(RoomItem panel)
+        {
+            var active = Active;
+            if (active == null || panel == null || !EnergyRoomItems.IsPanel(panel)) return;
+            var panelCell = GetPanelCell(panel);
+            var shouldBeActive = active._panelHighVoltageSource.ContainsKey(panelCell) &&
+                                 panel.IsFunctional();
+            if (active._activePanelCells.Contains(panelCell) != shouldBeActive)
+                active._networkDirty = true;
+        }
+
         internal static FloorPlan CurrentBuildingFloorPlan =>
             Active?._level?.BuildingLogic?.CurrentBlueprintFloorPlan;
 
@@ -1760,8 +1771,8 @@ namespace UnderPressure.PowerGrid
                     if (_tilePowerValue.TryGetValue(neighbour, out var highDistance) && highDistance > 0 &&
                         _highVoltageCellSource.TryGetValue(neighbour, out var source))
                     {
-                        _activePanelCells.Add(panel);
                         _panelHighVoltageSource[panel] = source;
+                        if (IsPanelFunctional(panel)) _activePanelCells.Add(panel);
                         break;
                     }
 
@@ -2214,6 +2225,8 @@ namespace UnderPressure.PowerGrid
             if (_lowVoltagePanelSource.TryGetValue(cable, out var panel) &&
                 _overloadedPanelCells.Contains(panel)) return PanelOverloadColor;
             var powered = !_gridOverloaded &&
+                          _lowVoltagePanelSource.TryGetValue(cable, out panel) &&
+                          IsPanelFunctional(panel) &&
                           _lowVoltagePowerValue.TryGetValue(cable, out var distance) && distance > 0;
             return powered ? LowVoltageColor : LowVoltageDisconnectedColor;
         }
@@ -2270,6 +2283,7 @@ namespace UnderPressure.PowerGrid
             var panelCell = GetPanelCell(panel);
             var overloaded = active._overloadedPanelCells.Contains(panelCell) ||
                              active.IsPanelFedByOverloadedCell(panelCell);
+            if (!active.IsPanelFunctional(panelCell)) return 0;
             var powered = !active._gridOverloaded && active._activePanelCells.Contains(panelCell);
             // El gris de la vista eléctrica representa un cuadro sin alimentación.
             // Aunque tenga cableado de baja tensión asignado, en ese estado no se desgasta.
@@ -2674,7 +2688,8 @@ namespace UnderPressure.PowerGrid
                     var panelCell = GetPanelCell(panel);
                     var overloaded = _overloadedPanelCells.Contains(panelCell) ||
                                      IsPanelFedByOverloadedCell(panelCell);
-                    var powered = !_gridOverloaded && _activePanelCells.Contains(panelCell);
+                    var powered = !_gridOverloaded && IsPanelFunctional(panelCell) &&
+                                  _activePanelCells.Contains(panelCell);
                     panel.Visual.SetValueMaterial(overloaded
                         ? PanelOverloadColor
                         : powered ? PanelCellColor : UnpoweredObjectColor);
@@ -2696,8 +2711,7 @@ namespace UnderPressure.PowerGrid
                     if (isLowVoltage)
                     {
                         powered = TryGetLowVoltagePanel(item, out var panel) &&
-                                  _activePanelCells.Contains(panel) &&
-                                  !_overloadedPanelCells.Contains(panel) && !_gridOverloaded;
+                                  IsPanelOperational(panel);
                         overloaded = _overloadedPanelCells.Contains(panel);
                     }
                     else
@@ -2730,16 +2744,21 @@ namespace UnderPressure.PowerGrid
             if (EnergyRoomItems.IsPanel(item))
             {
                 var panel = GetPanelCell(item);
-                return _activePanelCells.Contains(panel) && !_overloadedPanelCells.Contains(panel) &&
-                       !IsPanelFedByOverloadedCell(panel);
+                return IsPanelOperational(panel);
             }
             if (!ElectricityGameplay.TryGetPowerType(item.Definition, out var power)) return true;
             if (power == Power.Bajo)
                 return TryGetLowVoltagePanel(item, out var panel) &&
-                       _activePanelCells.Contains(panel) && !_overloadedPanelCells.Contains(panel) &&
-                       !IsPanelFedByOverloadedCell(panel);
+                       IsPanelOperational(panel);
             return TryGetHighVoltageCell(item, out var source) && !_overloadedCellCells.Contains(source);
         }
+
+        private bool IsPanelFunctional(PowerCoord panel) =>
+            _panelsByCell.TryGetValue(panel, out var item) && item != null && item.IsFunctional();
+
+        private bool IsPanelOperational(PowerCoord panel) =>
+            !_gridOverloaded && IsPanelFunctional(panel) && _activePanelCells.Contains(panel) &&
+            !_overloadedPanelCells.Contains(panel) && !IsPanelFedByOverloadedCell(panel);
 
         private bool TryGetLowVoltagePanel(RoomItem item, out PowerCoord panel)
         {

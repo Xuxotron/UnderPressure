@@ -25,6 +25,20 @@ namespace UnderPressure.PowerGrid
     }
 
     /// <summary>
+    /// La red debe recalcularse cuando el cuadro cruza el umbral nativo entre
+    /// funcional y averiado, tanto al desgastarse como al ser reparado.
+    /// </summary>
+    [HarmonyPatch(typeof(RoomItem), "MaintenanceLevelChanged")]
+    internal static class ElectricalPanelMaintenanceNetworkPatch
+    {
+        private static void Postfix(RoomItem __instance)
+        {
+            if (EnergyRoomItems.IsPanel(__instance))
+                PowerGridPrototype.NotifyPanelMaintenanceChanged(__instance);
+        }
+    }
+
+    /// <summary>
     /// Los cuadros guardados antes de incorporar Maintenance conservan _attributes = null.
     /// RoomItem.RestoreFromSave no reconstruye ese campo desde la definición actual, por lo
     /// que se aplica la misma inicialización privada que usa el constructor de un objeto nuevo.
