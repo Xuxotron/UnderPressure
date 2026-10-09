@@ -56,6 +56,7 @@ namespace UnderPressure.PowerGrid
         };
         private const int EnergyHundredths = 100;
         private const int BatteryMaximumHundredths = 200 * EnergyHundredths;
+        private const int BlackoutDurationDays = 10;
         private const int DefaultCellCapacity = 800;
         private const float PowerTileSize = 1f;
         private const float PanelAnimationSpeed = 7f;
@@ -167,6 +168,7 @@ namespace UnderPressure.PowerGrid
         private float _dailyEnergyRemainder;
         private int _accruedDailyEnergyBill;
         private bool _gridOverloaded;
+        private int _blackoutDaysRemaining;
         private RectTransform _energyHudRoot;
         private RectTransform _energyHudFill;
         private TMP_Text _energyHudFirstValue;
@@ -492,6 +494,7 @@ namespace UnderPressure.PowerGrid
                 var taskEnergyWasAppliedImmediately = false;
                 _pendingContractedEnergy = NoPendingContractedEnergy;
                 _contractActivationMonth = -1;
+                _blackoutDaysRemaining = 0;
                 for (var index = 1; index < lines.Length; ++index)
                 {
                     var parts = lines[index].Split(',');
@@ -621,6 +624,29 @@ namespace UnderPressure.PowerGrid
                         _energyStateInitialised = true;
                         taskEnergyWasAppliedImmediately = true;
                     }
+                    if (parts.Length == 10 && parts[0] == "E7" &&
+                        int.TryParse(parts[1], out contracted) && int.TryParse(parts[2], out pendingContracted) &&
+                        int.TryParse(parts[3], out activationMonth) && int.TryParse(parts[4], out dailyEnergy) &&
+                        int.TryParse(parts[5], out taskEnergy) && int.TryParse(parts[6], out currentTasks) &&
+                        int.TryParse(parts[7], out accruedContractBill) &&
+                        (parts[8] == "0" || parts[8] == "1") &&
+                        int.TryParse(parts[9], out var blackoutDaysRemaining))
+                    {
+                        _contractedEnergy = NormaliseSelectableContractedEnergy(contracted);
+                        _pendingContractedEnergy = pendingContracted < 0
+                            ? NoPendingContractedEnergy
+                            : NormaliseSelectableContractedEnergy(pendingContracted);
+                        _contractActivationMonth = _pendingContractedEnergy < 0 ? -1 : Math.Max(0, activationMonth);
+                        _lastDailyEnergy = Math.Max(0, dailyEnergy);
+                        _lastTaskEnergy = Math.Max(0, taskEnergy);
+                        _currentDayTaskEnergy = Math.Max(0, currentTasks);
+                        _dailyEnergyRemainder = 0f;
+                        _accruedDailyEnergyBill = Math.Max(0, accruedContractBill);
+                        _blackoutDaysRemaining = Mathf.Clamp(blackoutDaysRemaining, 0, BlackoutDurationDays);
+                        _gridOverloaded = _blackoutDaysRemaining > 0 || parts[8] == "1";
+                        _energyStateInitialised = true;
+                        taskEnergyWasAppliedImmediately = true;
+                    }
                     if (parts.Length == 6 && parts[0] == "B" && int.TryParse(parts[1], out var batteryId) &&
                         int.TryParse(parts[2], out var maximumHundredths) &&
                         int.TryParse(parts[3], out var chargeHundredths) && TryFloat(parts[4], out var worldX) &&
@@ -701,10 +727,10 @@ namespace UnderPressure.PowerGrid
                 var lines = new List<string>(ordered.Count + orderedLow.Count + 32) { "UNDERPRESSURE_SAVE_1" };
                 foreach (var coord in ordered) lines.Add("C," + coord.X + "," + coord.Y);
                 foreach (var coord in orderedLow) lines.Add("L," + coord.X + "," + coord.Y);
-                lines.Add("E6," + _contractedEnergy + "," + _pendingContractedEnergy + "," +
+                lines.Add("E7," + _contractedEnergy + "," + _pendingContractedEnergy + "," +
                           _contractActivationMonth + "," + _lastDailyEnergy + "," + _lastTaskEnergy + "," +
                           _currentDayTaskEnergy + "," + _accruedDailyEnergyBill + "," +
-                          (_gridOverloaded ? "1" : "0"));
+                          (_gridOverloaded ? "1" : "0") + "," + _blackoutDaysRemaining);
                 var orderedBatteries = new List<BatteryState>(_batteryStates.Values);
                 orderedBatteries.Sort((left, right) => left.Item.ID.CompareTo(right.Item.ID));
                 foreach (var battery in orderedBatteries)
@@ -2074,7 +2100,7 @@ namespace UnderPressure.PowerGrid
 
         private void ConsumeTaskEnergyImmediately(int amount)
         {
-            if (amount <= 0) return;
+            if (amount <= 0 || _blackoutDaysRemaining > 0) return;
             if (!_energyStateInitialised) RefreshEnergyCapacity();
             ReconcileBatteryStates();
             RefreshBatteryEnergy();
@@ -2092,31 +2118,29 @@ namespace UnderPressure.PowerGrid
             var currentBatteryDemand = Math.Max(0, currentConsumptionHundredths - contractedHundredths);
             var additionalBatteryDemand = Math.Max(0, currentBatteryDemand - previousBatteryDemand);
             var batteryAvailable = _batteryEnergyHundredths;
-            var wasOverloaded = _gridOverloaded;
-            if (!_gridOverloaded) _gridOverloaded = additionalBatteryDemand > batteryAvailable;
             DischargeBatteries(Math.Min(additionalBatteryDemand, batteryAvailable));
             RefreshBatteryEnergy();
             _energyCapacityHundredths = contractedHundredths + _batteryEnergyHundredths;
+            var depleted = currentConsumptionHundredths > 0 &&
+                           currentConsumptionHundredths >= _energyCapacityHundredths;
+            _gridOverloaded = depleted;
+            if (depleted) StartBlackout();
             RefreshEnergyHud();
             RefreshElectricItemColors();
             RefreshNetworkOutageVisuals();
-            if (!wasOverloaded && _gridOverloaded)
-                PowerGridPlugin.Log.LogWarning("Red electrica caida durante una tarea: el consumo " +
-                                               (_lastDailyEnergy + _lastTaskEnergy) +
-                                               " supera la energia disponible.");
         }
 
         internal static void ConsumeDailyMonthlyEnergy(Level level)
         {
-            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return;
             var active = Active;
             if (active == null || level == null || !ReferenceEquals(active._level, level)) return;
+            if (active.AdvanceBlackoutDay()) return;
+            if (!UnderPressurePlugin.ElectricityGameplayEnabled) return;
             active.ApplyPendingContractIfDue();
             active.ReconcileBatteryStates();
             var recurringDailyEnergy = Math.Max(0, ElectricityGameplay.GetDailyRecurringDemand(level));
             active.AccumulateDailyEnergyBill(recurringDailyEnergy);
             active._dailyEnergyRemainder = 0f;
-            var wasOverloaded = active._gridOverloaded;
             active._gridOverloaded = false;
             var dailyEnergy = recurringDailyEnergy + active.CountPoweredHighVoltageCables();
             active._lastDailyEnergy = Math.Max(0, dailyEnergy);
@@ -2130,22 +2154,51 @@ namespace UnderPressure.PowerGrid
             var dailyConsumptionHundredths = dailyConsumption * EnergyHundredths;
             var contractedHundredths = Math.Max(0, active._contractedEnergy) * EnergyHundredths;
             var batteryDemandHundredths = Math.Max(0, dailyConsumptionHundredths - contractedHundredths);
-            active._gridOverloaded = dailyConsumptionHundredths > availableHundredths;
             active.DischargeBatteries(Math.Min(batteryDemandHundredths, active._batteryEnergyHundredths));
             active.RefreshBatteryEnergy();
             active._energyCapacityHundredths = contractedHundredths + active._batteryEnergyHundredths;
+            var depleted = dailyConsumptionHundredths > 0 &&
+                           dailyConsumptionHundredths >= active._energyCapacityHundredths;
+            active._gridOverloaded = depleted;
+            if (depleted) active.StartBlackout();
             active.RefreshEnergyHud();
             active.RefreshElectricItemColors();
             active.RefreshNetworkOutageVisuals();
-            if (active._gridOverloaded != wasOverloaded)
-                PowerGridPlugin.Log.LogWarning(active._gridOverloaded
-                    ? "Red electrica caida: el consumo diario " + dailyConsumption +
-                      " supera la energia disponible " + FormatEnergy(availableHundredths) + "."
-                    : "Red electrica recuperada al comenzar el nuevo dia.");
-            else
+            if (!depleted)
                 PowerGridPlugin.Log.LogInfo("Consumo electrico diario: " + dailyConsumption + "/" +
                                             FormatEnergy(availableHundredths) + " (Diario " + active._lastDailyEnergy +
                                             ", Tareas " + active._lastTaskEnergy + ").");
+        }
+
+        private void StartBlackout()
+        {
+            if (_blackoutDaysRemaining > 0) return;
+            _blackoutDaysRemaining = BlackoutDurationDays;
+            _gridOverloaded = true;
+            PowerGridPlugin.Log.LogWarning("Red electrica agotada: comienza un apagon de " +
+                                           BlackoutDurationDays + " dias.");
+        }
+
+        private bool AdvanceBlackoutDay()
+        {
+            if (_blackoutDaysRemaining <= 0) return false;
+            _blackoutDaysRemaining--;
+            if (_blackoutDaysRemaining > 0) return true;
+
+            _gridOverloaded = false;
+            _lastDailyEnergy = 0;
+            _lastTaskEnergy = 0;
+            _currentDayTaskEnergy = 0;
+            ReconcileBatteryStates();
+            RechargeBatteries();
+            RefreshBatteryEnergy();
+            _energyCapacityHundredths = Math.Max(0, _contractedEnergy) * EnergyHundredths +
+                                        _batteryEnergyHundredths;
+            RefreshEnergyHud();
+            RefreshElectricItemColors();
+            RefreshNetworkOutageVisuals();
+            PowerGridPlugin.Log.LogWarning("Suministro electrico restablecido tras diez dias de apagon.");
+            return true;
         }
 
         private void AccumulateDailyEnergyBill(int amount)
