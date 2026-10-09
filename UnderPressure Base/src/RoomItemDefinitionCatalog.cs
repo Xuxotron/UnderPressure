@@ -355,6 +355,7 @@ namespace UnderPressure
         public const string MaterialName = "Material #25"; // Nombre del material asignado a las mallas.
         public const string AnimatorRoot = "A_Prop_power_panel_V1"; // Raíz del Animator propio del cuadro.
         public const string AnimationClipName = "Take 001"; // Clip de apertura y cierre incluido en el FBX.
+        public const string NativeMaintenanceSocket = "NURSE_LOCKER_BASE_RIG:START_FRONT"; // Punto de origen en la taquilla nativa.
         public const string MaintenanceSocket = "POWER_PANEL__BASE_RIG:START_FRONT"; // Punto de interacción del conserje.
     }
 

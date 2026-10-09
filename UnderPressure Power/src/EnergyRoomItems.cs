@@ -653,7 +653,7 @@ namespace UnderPressure.PowerGrid
         {
             var lockerPrefab = nurseLocker?.GetPrefab(0);
             var sourceSocket = FindTransform(lockerPrefab?.transform,
-                ElectricalPanelPrefabParameters.MaintenanceSocket);
+                ElectricalPanelPrefabParameters.NativeMaintenanceSocket);
             var panelSocket = FindTransform(panelPrefab?.transform,
                 ElectricalPanelPrefabParameters.MaintenanceSocket);
             if (panelPrefab == null || lockerPrefab == null || sourceSocket == null || panelSocket == null)
