@@ -59,6 +59,8 @@ namespace UnderPressure.PowerGrid
         private const int DefaultCellCapacity = 800;
         private const float PowerTileSize = 1f;
         private const float PanelAnimationSpeed = 7f;
+        private const int MaximumCellCableOutputs = 1;
+        private const int MaximumPanelCableOutputs = 3;
         // The drawer is a sibling of the native HUD, whose parent is scaled at runtime.
         // These values produce the 95 px visible height from the supplied reference and
         // leave enough horizontal body for both complete text buttons.
@@ -226,7 +228,7 @@ namespace UnderPressure.PowerGrid
                 _panelCells.Contains(connector)) return false;
             if (_powerCellsByConnector.TryGetValue(connector, out var existingCell) &&
                 !ReferenceEquals(existingCell, item)) return false;
-            if (CountCardinalNeighbours(connector, _cells) > 1) return false;
+            if (!HasValidSourceConnections(connector, _cells, MaximumCellCableOutputs)) return false;
 
             foreach (var neighbour in CardinalNeighbours(connector))
             {
@@ -250,7 +252,7 @@ namespace UnderPressure.PowerGrid
                 _generatorCells.Contains(connector)) return false;
             if (_panelsByCell.TryGetValue(connector, out var existingPanel) &&
                 !ReferenceEquals(existingPanel, item)) return false;
-            if (CountCardinalNeighbours(connector, _lowVoltageCells) > 1) return false;
+            if (!HasValidSourceConnections(connector, _lowVoltageCells, MaximumPanelCableOutputs)) return false;
 
             foreach (var neighbour in CardinalNeighbours(connector))
             {
@@ -975,8 +977,12 @@ namespace UnderPressure.PowerGrid
             foreach (var attached in attachedNeighbours)
                 if (CountNetworkConnections(attached, sameVoltage, sourceCells) >= 2)
                     return false;
+            var maximumSourceOutputs = lowVoltage
+                ? MaximumPanelCableOutputs
+                : MaximumCellCableOutputs;
             foreach (var source in neighbours)
-                if (sourceCells.Contains(source) && CountCardinalNeighbours(source, sameVoltage) >= 1)
+                if (sourceCells.Contains(source) &&
+                    CountCardinalNeighbours(source, sameVoltage) >= maximumSourceOutputs)
                     return false;
             if (attachedNeighbours.Count == 2 &&
                 !CanReconnectDisconnectedEnds(attachedNeighbours[0], attachedNeighbours[1], sameVoltage,
@@ -1098,6 +1104,21 @@ namespace UnderPressure.PowerGrid
             foreach (var neighbour in CardinalNeighbours(coord))
                 if (cells.Contains(neighbour)) count++;
             return count;
+        }
+
+        private static bool HasValidSourceConnections(PowerCoord connector,
+            HashSet<PowerCoord> cables, int maximumOutputs)
+        {
+            var outputs = 0;
+            foreach (var cable in CardinalNeighbours(connector))
+            {
+                if (!cables.Contains(cable)) continue;
+                if (++outputs > maximumOutputs) return false;
+                // Una fuente solo puede añadirse a extremos; un cable con dos vecinos
+                // propios pertenece al tramo intermedio de una red ya construida.
+                if (CountCardinalNeighbours(cable, cables) > 1) return false;
+            }
+            return true;
         }
 
         private static int CountNetworkConnections(PowerCoord coord, HashSet<PowerCoord> cables,

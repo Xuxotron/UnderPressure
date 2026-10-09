@@ -837,7 +837,7 @@ namespace UnderPressure.PowerGrid
     }
 
     [HarmonyPatch(typeof(CursorRoomItem), "ValidatePlacement")]
-    internal static class EnergyCellPlacementLimitPatch
+    internal static class EnergySourcePlacementPatch
     {
         private static readonly FieldInfo ItemField = AccessTools.Field(typeof(CursorRoomItem), "_roomItem");
         private static readonly FieldInfo FloorPlanField = AccessTools.Field(typeof(CursorRoomItem), "_floorPlan");
