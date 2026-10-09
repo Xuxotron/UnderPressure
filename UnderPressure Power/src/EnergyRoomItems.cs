@@ -807,6 +807,14 @@ namespace UnderPressure.PowerGrid
         internal static string ConnectionTranslation => ConnectionText.Translation;
     }
 
+    internal static class EnergyPanelPlacement
+    {
+        private static readonly LocalisedString ConnectionText =
+            EnergyLocalization.Create("energy.panel.invalid_connection");
+
+        internal static string ConnectionTranslation => ConnectionText.Translation;
+    }
+
     [HarmonyPatch(typeof(RoomItemDefinition), nameof(RoomItemDefinition.GetCost))]
     internal static class EnergyCellDefinitionCostPatch
     {
@@ -838,14 +846,24 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(CursorRoomItem __instance, ref bool __result)
         {
             var item = ItemField?.GetValue(__instance) as RoomItem;
-            if (!EnergyRoomItems.IsCell(item)) return;
-            if (!PowerGridPrototype.IsCellPlacementValid(item))
+            var isCell = EnergyRoomItems.IsCell(item);
+            var isPanel = EnergyRoomItems.IsPanel(item);
+            if (!isCell && !isPanel) return;
+            var validConnection = isCell
+                ? PowerGridPrototype.IsCellPlacementValid(item)
+                : PowerGridPrototype.IsPanelPlacementValid(item);
+            if (!validConnection)
             {
-                item.SetValid(false, "Conexion de celda electrica no valida",
-                    EnergyCellPricing.ConnectionTranslation);
+                item.SetValid(false, isCell
+                        ? "Conexion de celda electrica no valida"
+                        : "Conexion de cuadro electrico no valida",
+                    isCell
+                        ? EnergyCellPricing.ConnectionTranslation
+                        : EnergyPanelPlacement.ConnectionTranslation);
                 __result = false;
                 return;
             }
+            if (!isCell) return;
             var editMode = EditModeField?.GetValue(__instance);
             if (editMode != null && Convert.ToInt32(editMode) != 0) return;
             var plan = FloorPlanField?.GetValue(__instance) as FloorPlan;

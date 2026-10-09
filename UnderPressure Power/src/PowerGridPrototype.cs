@@ -226,12 +226,37 @@ namespace UnderPressure.PowerGrid
                 _panelCells.Contains(connector)) return false;
             if (_powerCellsByConnector.TryGetValue(connector, out var existingCell) &&
                 !ReferenceEquals(existingCell, item)) return false;
+            if (CountCardinalNeighbours(connector, _cells) > 1) return false;
 
             foreach (var neighbour in CardinalNeighbours(connector))
             {
                 if (!_highVoltageCellSource.TryGetValue(neighbour, out var source)) continue;
                 if (!_powerCellsByConnector.TryGetValue(source, out var sourceCell) ||
                     !ReferenceEquals(sourceCell, item)) return false;
+            }
+            return true;
+        }
+
+        internal static bool IsPanelPlacementValid(RoomItem item)
+        {
+            var active = Active;
+            return active == null || item == null || active.IsPanelPlacementValidInternal(item);
+        }
+
+        private bool IsPanelPlacementValidInternal(RoomItem item)
+        {
+            var connector = GetPanelCell(item);
+            if (_cells.Contains(connector) || _lowVoltageCells.Contains(connector) ||
+                _generatorCells.Contains(connector)) return false;
+            if (_panelsByCell.TryGetValue(connector, out var existingPanel) &&
+                !ReferenceEquals(existingPanel, item)) return false;
+            if (CountCardinalNeighbours(connector, _lowVoltageCells) > 1) return false;
+
+            foreach (var neighbour in CardinalNeighbours(connector))
+            {
+                if (!_lowVoltagePanelSource.TryGetValue(neighbour, out var source)) continue;
+                if (!_panelsByCell.TryGetValue(source, out var sourcePanel) ||
+                    !ReferenceEquals(sourcePanel, item)) return false;
             }
             return true;
         }
