@@ -462,8 +462,12 @@ namespace UnderPressure
             CreateSliderRow(global, nativeVideoRow, "mod.global_difficulty",
                 UnderPressurePlugin.GlobalDifficultySetting, -10f, ApplyGlobalDifficulty);
 
+            var patientArrival = CreateEmptySection(uiSection, content, "Patient Visit Frequency", -611f, 82f);
+            CreateSliderRow(patientArrival, nativeVideoRow, "mod.patient_arrival",
+                UnderPressurePlugin.PatientArrivalSetting, -10f);
+
             var economy = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -611f,
+                "mod.section.economy", UnderPressurePlugin.AdaptiveEconomySetting, -709f,
                 new[]
                 {
                     new SliderSpec("mod.staff_salaries", UnderPressurePlugin.StaffSalariesSetting),
@@ -472,7 +476,7 @@ namespace UnderPressure
                     new SliderSpec("mod.electricity_bill", UnderPressurePlugin.ElectricityBillSetting)
                 });
             var reputation = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -911f,
+                "mod.section.reputation", UnderPressurePlugin.AdaptiveReputationSetting, -1009f,
                 new[]
                 {
                     new SliderSpec("mod.hunger_thirst", UnderPressurePlugin.HungerThirstSetting),
@@ -481,12 +485,11 @@ namespace UnderPressure
                     new SliderSpec("mod.hygiene", UnderPressurePlugin.HygieneSetting)
                 });
             var expansion = CreateDifficultyGroup(uiSection, content, nativeVideoRow,
-                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1211f,
+                "mod.section.expansion", UnderPressurePlugin.AdaptiveExpansionSetting, -1309f,
                 new[]
                 {
                     new SliderSpec("mod.diagnosis_chance", UnderPressurePlugin.DiagnosisChanceSetting),
                     new SliderSpec("mod.treatment_chance", UnderPressurePlugin.TreatmentChanceSetting),
-                    new SliderSpec("mod.patient_arrival", UnderPressurePlugin.PatientArrivalSetting),
                     new SliderSpec("mod.health_decay", UnderPressurePlugin.HealthDecaySetting),
                     new SliderSpec("mod.machine_wear", UnderPressurePlugin.MachineWearSetting)
                 });
@@ -494,7 +497,7 @@ namespace UnderPressure
 
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1556f);
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x, 1601f);
         }
 
         private Transform CreateEmptySection(Transform template, Transform content, string name,

@@ -131,6 +131,8 @@ namespace UnderPressure
             var results = new StringBuilder();
             AddHeading(labels, adjustments, results, ModLocalization.Get("hud.variables.title"),
                 ModLocalization.Get("hud.variables.adjustment"), ModLocalization.Get("hud.variables.result"));
+            AddStandard(labels, adjustments, results, "mod.patient_arrival",
+                UnderPressurePlugin.PatientArrivalSetting, false);
 
             var economySource = AdaptiveDifficulty.EconomyValue(_level);
             AddGroup(labels, adjustments, results, ModLocalization.Get("hud.variables.economy"),
@@ -165,8 +167,6 @@ namespace UnderPressure
                 UnderPressurePlugin.DiagnosisChanceSetting, true);
             AddStandard(labels, adjustments, results, "mod.treatment_chance",
                 UnderPressurePlugin.TreatmentChanceSetting, true);
-            AddStandard(labels, adjustments, results, "mod.patient_arrival",
-                UnderPressurePlugin.PatientArrivalSetting, false);
             AddStandard(labels, adjustments, results, "mod.health_decay",
                 UnderPressurePlugin.HealthDecaySetting, false);
             AddStandard(labels, adjustments, results, "mod.machine_wear",

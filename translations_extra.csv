@@ -28,7 +28,7 @@ mod.diagnosis_chance,Сложность диагностики,Trudność diagno
 mod.treatment_chance,Риск неудачи лечения,Ryzyko niepowodzenia leczenia,치료 실패 위험,治疗失败风险,治療失敗風險
 mod.machine_wear,Износ оборудования,Zużycie maszyn,기계 마모,机器损耗,機器損耗
 mod.boredom,,,,,
-mod.staff_salaries,Зарплаты сотрудников,Wynagrodzenia pracowników,직원 급여,员工薪资,員工薪資
+mod.staff_salaries,Повышение зарплат,Podwyżka wynagrodzeń,급여 인상,工资上涨,薪資調升
 mod.hunger_thirst,Усиление голода и жажды,Szybszy wzrost głodu i pragnienia,배고픔과 목마름 증가,饥饿与口渴加剧,飢餓與口渴加劇
 mod.happiness,Быстрое падение счастья,Szybszy spadek zadowolenia,행복도 감소 가속,幸福度下降加快,幸福度下降加快
 mod.hygiene,Повышенные требования к гигиене,Bardziej wymagająca higiena,위생 요구 증가,卫生要求提高,衛生要求提高

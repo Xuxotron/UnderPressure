@@ -179,7 +179,6 @@ namespace UnderPressure
         private static bool IsExpansionSetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
             ReferenceEquals(setting, UnderPressurePlugin.DiagnosisChanceSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.TreatmentChanceSetting) ||
-            ReferenceEquals(setting, UnderPressurePlugin.PatientArrivalSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.HealthDecaySetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.MachineWearSetting);
     }

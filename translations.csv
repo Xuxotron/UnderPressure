@@ -37,7 +37,7 @@ mod.health_decay,Health deterioration,Deterioro de salud,Détérioration de la s
 mod.diagnosis_chance,Diagnosis difficulty,Dificultad del diagnóstico,Difficulté du diagnostic,Diagnoseschwierigkeit,Difficoltà diagnosi,Dificuldade do diagnóstico
 mod.treatment_chance,Treatment failure risk,Riesgo de tratamiento fallido,Risque d'échec du traitement,Behandlungsfehlerrisiko,Rischio fallimento trattamento,Risco de falha do tratamento
 mod.machine_wear,Machine wear,Desgaste de máquinas,Usure des machines,Maschinenverschleiß,Usura macchinari,Desgaste das máquinas
-mod.staff_salaries,Employee salaries,Salarios de empleados,Salaires du personnel,Mitarbeitergehälter,Stipendi dipendenti,Salários dos funcionários
+mod.staff_salaries,Salary increase,Aumento de salarios,Augmentation des salaires,Gehaltserhöhung,Aumento degli stipendi,Aumento salarial
 mod.hunger_thirst,Increased hunger and thirst,Aumento del hambre y la sed,Augmentation de la faim et de la soif,Mehr Hunger und Durst,Aumento fame e sete,Aumento da fome e sede
 mod.boredom,Increased boredom,Aumento del aburrimiento,,,,
 mod.happiness,Faster happiness loss,Disminución de la felicidad,Baisse accélérée du bonheur,Schnellerer Glücksverlust,Calo più rapido della felicità,Perda de felicidade mais rápida
