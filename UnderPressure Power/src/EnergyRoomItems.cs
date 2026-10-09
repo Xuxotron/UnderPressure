@@ -642,7 +642,9 @@ namespace UnderPressure.PowerGrid
             clone.DisableLookAt = lockerInteraction.DisableLookAt;
             clone.DisableNavAgent = lockerInteraction.DisableNavAgent;
             clone.IncludeInBounds = lockerInteraction.IncludeInBounds;
-            clone.IgnoreStartRotation = lockerInteraction.IgnoreStartRotation;
+            // El cuadro está pegado a una pared: exigir la rotación exacta del socket hace que
+            // el NavMesh rechace la aproximación aunque el bedel alcance correctamente el punto.
+            clone.IgnoreStartRotation = true;
             clone.Exclusive = true;
             clone.MaxQueue = 1;
             return clone;
