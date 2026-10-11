@@ -143,7 +143,7 @@ namespace UnderPressure.PowerGrid
             Definition = RoomCatalog.EnsureDefinition(
                 metagame,
                 RoomCatalog.Energy,
-                EnergyLocalization.Create,
+                global::UnderPressure.ModLocalization.Create,
                 BuildRequirementMap(),
                 BuildStaffMap());
 

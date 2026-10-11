@@ -76,10 +76,10 @@ namespace UnderPressure.PowerGrid
             AccessTools.Field(typeof(StatusIconQueuePosition), "_queuePositionText");
         private static readonly FieldInfo StatusIconHudElementField =
             AccessTools.Field(typeof(StatusIcon), "_inWorldHUDElement");
-        private static readonly LocalisedString EnergyText = EnergyLocalization.Create("energy.label");
-        private static readonly LocalisedString BatteryText = EnergyLocalization.Create("energy.battery.name");
-        private static readonly LocalisedString DailyText = EnergyLocalization.Create("energy.daily");
-        private static readonly LocalisedString TasksText = EnergyLocalization.Create("energy.tasks");
+        private static readonly LocalisedString EnergyText = global::UnderPressure.ModLocalization.Create("energy.label");
+        private static readonly LocalisedString BatteryText = global::UnderPressure.ModLocalization.Create("energy.battery.name");
+        private static readonly LocalisedString DailyText = global::UnderPressure.ModLocalization.Create("energy.daily");
+        private static readonly LocalisedString TasksText = global::UnderPressure.ModLocalization.Create("energy.tasks");
 
         private readonly HashSet<PowerCoord> _cells = new HashSet<PowerCoord>();
         private readonly Dictionary<PowerCoord, GameObject> _cellVisuals = new Dictionary<PowerCoord, GameObject>();
@@ -1647,7 +1647,7 @@ namespace UnderPressure.PowerGrid
         private DynamicButton CreateToolButton(DynamicButton template, Transform parent, string name,
             string localisationKey, float x, float y, float width, float height, float scale, ToolMode mode)
         {
-            EnergyLocalization.Create(localisationKey);
+            global::UnderPressure.ModLocalization.Create(localisationKey);
             var button = Instantiate(template, parent);
             button.name = name;
             button.gameObject.SetActive(true);

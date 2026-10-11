@@ -151,8 +151,8 @@ namespace UnderPressure.PowerGrid
                 Panel = ElectricalPanelNativeParameters.CreateElectricalPanel(
                     new ElectricalPanelNativeParameters.ElectricalPanelRuntimeContext
                     {
-                        Name = EnergyLocalization.Create("energy.panel.name"),
-                        Description = EnergyLocalization.Create("energy.panel.description"),
+                        Name = global::UnderPressure.ModLocalization.Create("energy.panel.name"),
+                        Description = global::UnderPressure.ModLocalization.Create("energy.panel.description"),
                         Prefab = PowerGridPlugin.PowerPanelPrefab,
                         Icon = PowerGridPlugin.PowerPanelSprite,
                         MaintenanceInteraction = maintenanceInteraction,
@@ -410,8 +410,8 @@ namespace UnderPressure.PowerGrid
             var clone = (RoomItemDefinition)MemberwiseCloneMethod.Invoke(source, null);
             Set(clone, "_guid", guid);
             Set(clone, "_debugTag", tag);
-            Set(clone, "_localisedName", EnergyLocalization.Create(nameKey));
-            var description = EnergyLocalization.Create(descriptionKey);
+            Set(clone, "_localisedName", global::UnderPressure.ModLocalization.Create(nameKey));
+            var description = global::UnderPressure.ModLocalization.Create(descriptionKey);
             Set(clone, "_localisedDescription", description);
             Set(clone, "_functionalDescription", description);
             Set(clone, "_initiallyAvailable", true);
@@ -769,9 +769,9 @@ namespace UnderPressure.PowerGrid
     {
         internal const int BaseCost = 5000;
         internal const int MaximumPerRoom = 5;
-        private static readonly LocalisedString LimitText = EnergyLocalization.Create("energy.cell.limit");
+        private static readonly LocalisedString LimitText = global::UnderPressure.ModLocalization.Create("energy.cell.limit");
         private static readonly LocalisedString ConnectionText =
-            EnergyLocalization.Create("energy.cell.invalid_connection");
+            global::UnderPressure.ModLocalization.Create("energy.cell.invalid_connection");
 
         internal static int CostForIndex(int index)
         {
@@ -810,7 +810,7 @@ namespace UnderPressure.PowerGrid
     internal static class EnergyPanelPlacement
     {
         private static readonly LocalisedString ConnectionText =
-            EnergyLocalization.Create("energy.panel.invalid_connection");
+            global::UnderPressure.ModLocalization.Create("energy.panel.invalid_connection");
 
         internal static string ConnectionTranslation => ConnectionText.Translation;
     }

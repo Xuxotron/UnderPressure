@@ -78,11 +78,11 @@ namespace UnderPressure.PowerGrid
     internal static class EnergyCampaignRuntime
     {
         internal static readonly StatusIcon.Type StatusIconType = (StatusIcon.Type)43;
-        private static readonly LocalisedString HackName = EnergyLocalization.Create("energy.campaign.hack.name");
-        private static readonly LocalisedString DebugName = EnergyLocalization.Create("energy.campaign.debug.name");
-        private static readonly LocalisedString ClimateName = EnergyLocalization.Create("energy.campaign.climate.name");
-        private static readonly LocalisedString StartAction = EnergyLocalization.Create("energy.campaign.start_action");
-        private static readonly LocalisedString MonthsText = EnergyLocalization.Create("energy.campaign.months");
+        private static readonly LocalisedString HackName = global::UnderPressure.ModLocalization.Create("energy.campaign.hack.name");
+        private static readonly LocalisedString DebugName = global::UnderPressure.ModLocalization.Create("energy.campaign.debug.name");
+        private static readonly LocalisedString ClimateName = global::UnderPressure.ModLocalization.Create("energy.campaign.climate.name");
+        private static readonly LocalisedString StartAction = global::UnderPressure.ModLocalization.Create("energy.campaign.start_action");
+        private static readonly LocalisedString MonthsText = global::UnderPressure.ModLocalization.Create("energy.campaign.months");
         private static readonly Dictionary<RoomItem, EnergyCampaignController> Controllers = new Dictionary<RoomItem, EnergyCampaignController>();
         private static GameObject _hoverPrefab;
         private static GameObject _selectPrefab;

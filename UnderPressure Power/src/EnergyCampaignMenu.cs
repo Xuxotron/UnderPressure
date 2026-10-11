@@ -23,35 +23,35 @@ namespace UnderPressure.PowerGrid
     {
         private static readonly LocalisedString[] Names =
         {
-            EnergyLocalization.Create("energy.campaign.hack.name"),
-            EnergyLocalization.Create("energy.campaign.debug.name"),
-            EnergyLocalization.Create("energy.campaign.climate.name")
+            global::UnderPressure.ModLocalization.Create("energy.campaign.hack.name"),
+            global::UnderPressure.ModLocalization.Create("energy.campaign.debug.name"),
+            global::UnderPressure.ModLocalization.Create("energy.campaign.climate.name")
         };
 
         private static readonly LocalisedString[] Descriptions =
         {
-            EnergyLocalization.Create("energy.campaign.hack.description"),
-            EnergyLocalization.Create("energy.campaign.debug.description"),
-            EnergyLocalization.Create("energy.campaign.climate.description")
+            global::UnderPressure.ModLocalization.Create("energy.campaign.hack.description"),
+            global::UnderPressure.ModLocalization.Create("energy.campaign.debug.description"),
+            global::UnderPressure.ModLocalization.Create("energy.campaign.climate.description")
         };
 
-        private static readonly LocalisedString DurationText = EnergyLocalization.Create(
+        private static readonly LocalisedString DurationText = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.duration");
-        private static readonly LocalisedString MonthsText = EnergyLocalization.Create(
+        private static readonly LocalisedString MonthsText = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.months");
-        private static readonly LocalisedString CapacityText = EnergyLocalization.Create(
+        private static readonly LocalisedString CapacityText = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.capacity");
-        private static readonly LocalisedString StartText = EnergyLocalization.Create(
+        private static readonly LocalisedString StartText = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.start");
-        private static readonly LocalisedString ActiveText = EnergyLocalization.Create(
+        private static readonly LocalisedString ActiveText = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.active_button");
-        private static readonly LocalisedString HeaderTitle = EnergyLocalization.Create(
+        private static readonly LocalisedString HeaderTitle = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.header");
-        private static readonly LocalisedString HeaderAction = EnergyLocalization.Create(
+        private static readonly LocalisedString HeaderAction = global::UnderPressure.ModLocalization.Create(
             "energy.campaign.start_action");
-        private static readonly LocalisedString ContractedPowerText = EnergyLocalization.Create(
+        private static readonly LocalisedString ContractedPowerText = global::UnderPressure.ModLocalization.Create(
             "energy.contract.power");
-        private static readonly LocalisedString MonthlyCostText = EnergyLocalization.Create(
+        private static readonly LocalisedString MonthlyCostText = global::UnderPressure.ModLocalization.Create(
             "energy.contract.monthly_cost");
 
         private static EnergyCampaignMenu _instance;

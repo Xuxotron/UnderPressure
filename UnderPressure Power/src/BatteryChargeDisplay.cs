@@ -11,7 +11,7 @@ namespace UnderPressure.PowerGrid
 {
     internal sealed class BatteryChargeDisplay : MonoBehaviour
     {
-        private static readonly LocalisedString MaximumCapacityText = EnergyLocalization.Create(
+        private static readonly LocalisedString MaximumCapacityText = global::UnderPressure.ModLocalization.Create(
             "energy.battery.maximum_capacity");
 
         private RoomItem _item;

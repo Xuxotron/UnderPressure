@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using HarmonyLib;
+using I2.Loc;
+using TH20;
 
 namespace UnderPressure
 {
@@ -33,6 +35,32 @@ namespace UnderPressure
             if (translations.TryGetValue(FallbackLanguage, out value) && !string.IsNullOrEmpty(value))
                 return value;
             return fallback;
+        }
+
+        public static LocalisedString Create(string key)
+        {
+            var value = LocalisedString.CreateNewTerm(key, Get(key, "en", key));
+            try
+            {
+                if (LocalizationManager.Sources == null || LocalizationManager.Sources.Count == 0)
+                    return value;
+                var source = LocalizationManager.Sources[0];
+                var term = source.GetTermData(key, false) ?? source.AddTerm(key, eTermType.Text, true);
+                var codes = source.GetLanguagesCode(false, false);
+                if (term?.Languages == null || codes == null) return value;
+                for (var index = 0; index < term.Languages.Length && index < codes.Count; ++index)
+                {
+                    var code = codes[index] ?? string.Empty;
+                    term.Languages[index] = Get(key, code, key);
+                }
+                source.UpdateDictionary(false);
+            }
+            catch (Exception exception)
+            {
+                UnderPressurePlugin.Log?.LogWarning(
+                    "No se pudieron registrar las traducciones de " + key + ": " + exception.Message);
+            }
+            return value;
         }
 
         private static string CurrentLanguageCode()
