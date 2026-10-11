@@ -2118,11 +2118,13 @@ namespace UnderPressure.PowerGrid
             var currentBatteryDemand = Math.Max(0, currentConsumptionHundredths - contractedHundredths);
             var additionalBatteryDemand = Math.Max(0, currentBatteryDemand - previousBatteryDemand);
             var batteryAvailable = _batteryEnergyHundredths;
+            var availableBeforeConsumption = (long)contractedHundredths +
+                                             previousBatteryDemand + batteryAvailable;
             DischargeBatteries(Math.Min(additionalBatteryDemand, batteryAvailable));
             RefreshBatteryEnergy();
             _energyCapacityHundredths = contractedHundredths + _batteryEnergyHundredths;
             var depleted = currentConsumptionHundredths > 0 &&
-                           currentConsumptionHundredths >= _energyCapacityHundredths;
+                           currentConsumptionHundredths >= availableBeforeConsumption;
             _gridOverloaded = depleted;
             if (depleted) StartBlackout();
             RefreshEnergyHud();
@@ -2158,7 +2160,7 @@ namespace UnderPressure.PowerGrid
             active.RefreshBatteryEnergy();
             active._energyCapacityHundredths = contractedHundredths + active._batteryEnergyHundredths;
             var depleted = dailyConsumptionHundredths > 0 &&
-                           dailyConsumptionHundredths >= active._energyCapacityHundredths;
+                           dailyConsumptionHundredths >= availableHundredths;
             active._gridOverloaded = depleted;
             if (depleted) active.StartBlackout();
             active.RefreshEnergyHud();
