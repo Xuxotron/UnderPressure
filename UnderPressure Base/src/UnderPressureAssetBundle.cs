@@ -1,8 +1,11 @@
-// Purpose: Loads and hot-reloads the shared Under Pressure AssetBundle for all mod assemblies.
+// Updated: 2026-10-08
+// Purpose: Loads, globally converts shaders in, and hot-reloads the shared Under Pressure AssetBundle for all mod assemblies.
 using System;
 using System.IO;
 using BepInEx.Logging;
 using UnityEngine;
+using UnderPressure.PowerGrid;
+using System.Collections.Generic;
 
 namespace UnderPressure
 {
@@ -92,7 +95,19 @@ namespace UnderPressure
 
                 _bundle = newBundle;
 
-                // En el arranque NO se hace LoadAllAssets ni se recorre asset por asset.
+                // GLOBAL Y ANTES DE LOS CONSUMIDORES:
+                // carga todos los materiales contenidos en el AssetBundle y sustituye sus
+                // shaders proxy por los shaders nativos del juego. Cualquier prefab, sala u
+                // objeto que se cargue después recibe ya su material convertido, sin llamadas
+                // específicas por asset.
+                var bundleMaterials = _bundle.LoadAllAssets<Material>() ?? Array.Empty<Material>();
+                var convertedMaterials = ShaderConversion.ConvertBundleMaterials(bundleMaterials);
+
+                _log?.LogInfo(
+                    "Conversión global de shaders del AssetBundle: " +
+                    convertedMaterials + " de " + bundleMaterials.Length +
+                    " materiales convertidos antes de cargar consumidores.");
+
                 // Solo se enumeran nombres cuando Ctrl+F1 necesita mostrarlos en pantalla.
                 if (showOverlay)
                     _overlayAssetNames = _bundle.GetAllAssetNames() ?? Array.Empty<string>();
@@ -215,6 +230,230 @@ namespace UnderPressure
                 {
                     _log?.LogError(errorPrefix + exception);
                 }
+            }
+        }
+    }
+}
+
+// Updated: 2026-10-08
+// Purpose: Replaces proxy shaders from the global Under Pressure AssetBundle with the real shaders already loaded by Two Point Hospital.
+namespace UnderPressure.PowerGrid
+{
+    public static class ShaderConversion
+    {
+        // Add future proxy -> native shader mappings here.
+        // The proxy and native name may be identical; they are still different Shader instances at runtime.
+        private static readonly Dictionary<string, string> ShaderMap =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "TH20 Standard", "TH20 Standard" }
+            };
+
+        /// <summary>
+        /// Converts every known proxy shader used by every material contained in the
+        /// Under Pressure AssetBundle. This is deliberately global: consumers do not
+        /// need to remember to convert individual rooms, prefabs or materials.
+        /// </summary>
+        public static int ConvertBundleMaterials(Material[] bundleMaterials)
+        {
+            if (bundleMaterials == null || bundleMaterials.Length == 0)
+                return 0;
+
+            var proxyShaders = new HashSet<Shader>();
+
+            foreach (var material in bundleMaterials)
+            {
+                if (material == null || material.shader == null)
+                    continue;
+
+                if (ShaderMap.ContainsKey(material.shader.name))
+                    proxyShaders.Add(material.shader);
+            }
+
+            if (proxyShaders.Count == 0)
+                return 0;
+
+            var totalConverted = 0;
+
+            foreach (var proxyShader in proxyShaders)
+            {
+                if (proxyShader == null)
+                    continue;
+
+                string nativeShaderName;
+                if (!ShaderMap.TryGetValue(proxyShader.name, out nativeShaderName))
+                    continue;
+
+                var nativeShader = ResolveNativeShader(
+                    proxyShader,
+                    nativeShaderName,
+                    proxyShaders);
+
+                if (nativeShader == null)
+                {
+                    Debug.LogWarning(
+                        "ShaderConversion: no se encontro el shader nativo '" +
+                        nativeShaderName + "' para sustituir el proxy '" +
+                        proxyShader.name + "'.");
+                    continue;
+                }
+
+                var convertedForShader = 0;
+
+                foreach (var material in bundleMaterials)
+                {
+                    if (material == null || material.shader != proxyShader)
+                        continue;
+
+                    ConvertMaterial(material, nativeShader);
+                    ++convertedForShader;
+                    ++totalConverted;
+                }
+
+                Debug.Log(
+                    "ShaderConversion GLOBAL: '" + proxyShader.name + "' -> '" +
+                    nativeShader.name + "': " + convertedForShader +
+                    " materiales del AssetBundle convertidos.");
+            }
+
+            return totalConverted;
+        }
+
+        /// <summary>
+        /// Compatibility entry point for older callers. New code should use
+        /// ConvertBundleMaterials with all materials from the shared AssetBundle.
+        /// </summary>
+        public static int ConvertKnownShaders(params Material[] materials)
+        {
+            return ConvertBundleMaterials(materials);
+        }
+
+        private static Shader ResolveNativeShader(
+            Shader proxyShader,
+            string nativeShaderName,
+            HashSet<Shader> bundleProxyShaders)
+        {
+            // First try Unity's global shader lookup. It is valid only if it does not
+            // resolve to any proxy Shader instance that came from our AssetBundle.
+            var found = Shader.Find(nativeShaderName);
+            if (IsValidNativeShader(found, nativeShaderName, bundleProxyShaders))
+                return found;
+
+            // If Shader.Find resolves to our proxy because both shaders have the same
+            // name, inspect materials already loaded by the game and choose the native
+            // Shader instance with that name that is referenced by the most materials.
+            var referenceCounts = new Dictionary<Shader, int>();
+
+            foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
+            {
+                if (material == null || material.shader == null)
+                    continue;
+
+                var candidate = material.shader;
+                if (!IsValidNativeShader(candidate, nativeShaderName, bundleProxyShaders))
+                    continue;
+
+                int count;
+                referenceCounts.TryGetValue(candidate, out count);
+                referenceCounts[candidate] = count + 1;
+            }
+
+            Shader best = null;
+            var bestCount = -1;
+
+            foreach (var pair in referenceCounts)
+            {
+                if (pair.Value <= bestCount)
+                    continue;
+
+                best = pair.Key;
+                bestCount = pair.Value;
+            }
+
+            // Last fallback: the native shader may already be loaded even when no
+            // currently loaded material references it.
+            if (best == null)
+            {
+                foreach (var candidate in Resources.FindObjectsOfTypeAll<Shader>())
+                {
+                    if (!IsValidNativeShader(candidate, nativeShaderName, bundleProxyShaders))
+                        continue;
+
+                    best = candidate;
+                    break;
+                }
+            }
+
+            return best;
+        }
+
+        private static bool IsValidNativeShader(
+            Shader candidate,
+            string nativeShaderName,
+            HashSet<Shader> bundleProxyShaders)
+        {
+            return candidate != null &&
+                   !bundleProxyShaders.Contains(candidate) &&
+                   string.Equals(candidate.name, nativeShaderName, StringComparison.Ordinal);
+        }
+
+        private static void ConvertMaterial(Material material, Shader nativeShader)
+        {
+            if (material == null || nativeShader == null || material.shader == nativeShader)
+                return;
+
+            var originalKeywords = material.shaderKeywords;
+            var originalRenderQueue = material.renderQueue;
+            var originalGiFlags = material.globalIlluminationFlags;
+            var originalEnableInstancing = material.enableInstancing;
+            var originalDoubleSidedGi = material.doubleSidedGI;
+            var snapshot = new Material(material);
+
+            try
+            {
+                material.shader = nativeShader;
+                material.CopyPropertiesFromMaterial(snapshot);
+
+                // Preserve material-level state explicitly across the shader swap.
+                material.shaderKeywords = originalKeywords;
+                material.renderQueue = originalRenderQueue;
+                material.globalIlluminationFlags = originalGiFlags;
+                material.enableInstancing = originalEnableInstancing;
+                material.doubleSidedGI = originalDoubleSidedGi;
+
+                SynchronizeConfirmedKeywords(material);
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(snapshot);
+            }
+        }
+
+        private static void SynchronizeConfirmedKeywords(Material material)
+        {
+            if (material == null || material.shader == null)
+                return;
+
+            if (!string.Equals(material.shader.name, "TH20 Standard", StringComparison.Ordinal))
+                return;
+
+            // Confirmed from native TH20 Standard materials: a populated normal-map
+            // slot requires the _NORMALMAP shader variant.
+            if (material.HasProperty("_BumpMap"))
+            {
+                if (material.GetTexture("_BumpMap") != null)
+                    material.EnableKeyword("_NORMALMAP");
+                else
+                    material.DisableKeyword("_NORMALMAP");
+            }
+
+            // Keep the room-lighting keyword consistent with the material property.
+            if (material.HasProperty("_ApplyRoomLighting"))
+            {
+                if (material.GetFloat("_ApplyRoomLighting") > 0.5f)
+                    material.DisableKeyword("_APPLYROOMLIGHTING_OFF");
+                else
+                    material.EnableKeyword("_APPLYROOMLIGHTING_OFF");
             }
         }
     }
