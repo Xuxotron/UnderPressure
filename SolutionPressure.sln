@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnderPressure", "UnderPress
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnderPressurePower", "UnderPressure Power\UnderPressurePower.csproj", "{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnderPressureEditor", "UnderPressure Editor\UnderPressureEditor.csproj", "{5127A4C9-C12E-474A-A3B1-74E975412E9A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D09727E5-8AFD-4DF8-8BE0-C5FDBA5067FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5127A4C9-C12E-474A-A3B1-74E975412E9A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5127A4C9-C12E-474A-A3B1-74E975412E9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5127A4C9-C12E-474A-A3B1-74E975412E9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5127A4C9-C12E-474A-A3B1-74E975412E9A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
