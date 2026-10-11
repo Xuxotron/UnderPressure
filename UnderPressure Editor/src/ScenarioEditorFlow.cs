@@ -25,8 +25,8 @@ namespace UnderPressure.Editor
 
         private const string MainButtonLayoutName = "Under Pressure - Scenario Editor Layout";
         private const string SelectorRootName = "Under Pressure - Scenario Level Selector";
-        private static readonly FieldInfo SandboxButtonField =
-            AccessTools.Field(typeof(OpeningScreenMenu), "_sandboxButton");
+        private static readonly FieldInfo NewCareerButtonField =
+            AccessTools.Field(typeof(OpeningScreenMenu), "_newCareerButton");
         private static readonly FieldInfo OpeningScreenAppField =
             AccessTools.Field(typeof(OpeningScreen), "_app");
         private static readonly FieldInfo OpeningScreenOperationField =
@@ -49,10 +49,10 @@ namespace UnderPressure.Editor
         internal static void AddMainMenuButton(OpeningScreenMenu menu)
         {
             if (menu == null) return;
-            var sandboxButton = SandboxButtonField?.GetValue(menu) as DynamicButton;
-            var sourceLayout = sandboxButton?.transform?.parent;
+            var sourceButton = NewCareerButtonField?.GetValue(menu) as DynamicButton;
+            var sourceLayout = sourceButton?.transform?.parent;
             var layoutParent = sourceLayout?.parent;
-            if (sandboxButton == null || sourceLayout == null || layoutParent == null)
+            if (sourceButton == null || sourceLayout == null || layoutParent == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
                     "No se encontró la estructura nativa de los botones del menú principal.");
