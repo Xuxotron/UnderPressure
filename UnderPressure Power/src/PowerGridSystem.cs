@@ -142,7 +142,6 @@ namespace UnderPressure.PowerGrid
         private int _lastDailyEnergy;
         private int _lastTaskEnergy;
         private int _currentDayTaskEnergy;
-        private float _dailyEnergyRemainder;
         private int _accruedDailyEnergyBill;
         private bool _gridOverloaded;
         private int _blackoutDaysRemaining;
@@ -364,19 +363,7 @@ namespace UnderPressure.PowerGrid
             RebuildPanelLoads();
             RebuildCellLoads();
 
-            foreach (var pair in _cellVisuals)
-            {
-                var powered = !_gridOverloaded &&
-                              _tilePowerValue.TryGetValue(pair.Key, out var distance) && distance > 0;
-                var overloaded = _highVoltageCellSource.TryGetValue(pair.Key, out var source) &&
-                                 _overloadedCellCells.Contains(source);
-                SetVisualColor(pair.Value, overloaded ? PanelOverloadColor :
-                    powered ? PoweredColor : DisconnectedColor);
-            }
-            foreach (var pair in _lowVoltageVisuals)
-            {
-                SetVisualColor(pair.Value, LowVoltageCableColor(pair.Key));
-            }
+            RefreshNetworkOutageVisuals();
             RebuildGeneratorVisual();
             RebuildPanelVisual();
             if (_showFlow) RebuildFlowVisuals();
@@ -597,7 +584,6 @@ namespace UnderPressure.PowerGrid
             active.ReconcileBatteryStates();
             var recurringDailyEnergy = Math.Max(0, ElectricityGameplay.GetDailyRecurringDemand(level));
             active.AccumulateDailyEnergyBill(recurringDailyEnergy);
-            active._dailyEnergyRemainder = 0f;
             active._gridOverloaded = false;
             var dailyEnergy = recurringDailyEnergy + active.CountPoweredHighVoltageCables();
             active._lastDailyEnergy = Math.Max(0, dailyEnergy);
@@ -963,34 +949,6 @@ namespace UnderPressure.PowerGrid
         private bool IsPanelFedByOverloadedCell(PowerCoord panel) =>
             _panelHighVoltageSource.TryGetValue(panel, out var source) &&
             _overloadedCellCells.Contains(source);
-
-        private static bool ConsumesElectricity(IRoomItemDefinition definition)
-        {
-            if (definition == null) return false;
-            // The transformer is part of the future generation system. It neither
-            // consumes power nor participates in the powered/unpowered tinting.
-            if (EnergyRoomItems.IsTransformer(definition)) return false;
-            if (definition.EnergyCost(0) > 0) return true;
-            foreach (var modifier in definition.InteractionAttributeModifiers ??
-                     Array.Empty<InteractionAttributeModifier>())
-            {
-                if (modifier == null) continue;
-                var reference = AccessTools.Field(typeof(InteractionAttributeModifier),
-                    "_financeModifier")?.GetValue(modifier);
-                if (reference == null) continue;
-                var type = reference.GetType();
-                FieldInfo instanceField = null;
-                while (type != null && instanceField == null)
-                {
-                    instanceField = type.GetField("Instance", BindingFlags.Instance |
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                    type = type.BaseType;
-                }
-                var finance = instanceField?.GetValue(reference) as FinanceModifier;
-                if (finance != null && finance.EnergyCost > 0) return true;
-            }
-            return false;
-        }
 
         private struct PowerCoord : IEquatable<PowerCoord>
         {

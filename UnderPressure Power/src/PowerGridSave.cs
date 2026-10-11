@@ -84,7 +84,7 @@ namespace UnderPressure.PowerGrid
                         int.TryParse(parts[5], out var width) && int.TryParse(parts[6], out var height))
                     {
                         roomRecords[roomIndex] = new ExtraRoomRecord(plot, anchorX, anchorY, width, height,
-                            parts[7], parts[8]);
+                            parts[7]);
                         continue;
                     }
                     if (parts.Length == 9 && parts[0] == "I" &&
@@ -108,9 +108,7 @@ namespace UnderPressure.PowerGrid
                             ElectricityGameplay.GetDailyRecurringDemand(_level));
                         _lastTaskEnergy = 0;
                         _currentDayTaskEnergy = 0;
-                        _dailyEnergyRemainder = parts.Length == 4 && TryFloat(parts[3], out var remainder)
-                            ? Mathf.Clamp(remainder, 0f, 0.999999f)
-                            : 0f;
+                        if (parts.Length == 4) TryFloat(parts[3], out var ignoredRemainder);
                         _gridOverloaded = false;
                         _energyStateInitialised = true;
                     }
@@ -125,7 +123,6 @@ namespace UnderPressure.PowerGrid
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
-                        _dailyEnergyRemainder = Mathf.Clamp(dailyRemainder, 0f, 0.999999f);
                         _gridOverloaded = parts[7] == "1";
                         _energyStateInitialised = true;
                     }
@@ -138,7 +135,6 @@ namespace UnderPressure.PowerGrid
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
-                        _dailyEnergyRemainder = Mathf.Clamp(dailyRemainder, 0f, 0.999999f);
                         _gridOverloaded = parts[6] == "1";
                         _energyStateInitialised = true;
                     }
@@ -151,7 +147,6 @@ namespace UnderPressure.PowerGrid
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
-                        _dailyEnergyRemainder = Mathf.Clamp(dailyRemainder, 0f, 0.999999f);
                         _gridOverloaded = parts[6] == "1";
                         _energyStateInitialised = true;
                         taskEnergyWasAppliedImmediately = true;
@@ -165,7 +160,6 @@ namespace UnderPressure.PowerGrid
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
-                        _dailyEnergyRemainder = 0f;
                         _accruedDailyEnergyBill = Math.Max(0, accruedDailyBill);
                         _gridOverloaded = parts[6] == "1";
                         _energyStateInitialised = true;
@@ -186,7 +180,6 @@ namespace UnderPressure.PowerGrid
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
-                        _dailyEnergyRemainder = 0f;
                         _accruedDailyEnergyBill = Math.Max(0, accruedContractBill);
                         _gridOverloaded = parts[8] == "1";
                         _energyStateInitialised = true;
@@ -208,7 +201,6 @@ namespace UnderPressure.PowerGrid
                         _lastDailyEnergy = Math.Max(0, dailyEnergy);
                         _lastTaskEnergy = Math.Max(0, taskEnergy);
                         _currentDayTaskEnergy = Math.Max(0, currentTasks);
-                        _dailyEnergyRemainder = 0f;
                         _accruedDailyEnergyBill = Math.Max(0, accruedContractBill);
                         _blackoutDaysRemaining = Mathf.Clamp(blackoutDaysRemaining, 0, BlackoutDurationDays);
                         _gridOverloaded = _blackoutDaysRemaining > 0 || parts[8] == "1";
@@ -556,7 +548,7 @@ namespace UnderPressure.PowerGrid
             internal readonly List<ExtraItemRecord> Items = new List<ExtraItemRecord>();
 
             internal ExtraRoomRecord(int plotIndex, int anchorX, int anchorY, int width, int height,
-                string tiles, string marker)
+                string tiles)
             {
                 PlotIndex = plotIndex;
                 AnchorX = anchorX;
