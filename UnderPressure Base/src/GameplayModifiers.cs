@@ -433,4 +433,70 @@ namespace UnderPressure
                 attribute.Modify(delta * percentage / 100f, 1f);
         }
     }
+    // Purpose: Disables annual award menus, processing, rewards, and records when configured.
+    [HarmonyPatch(typeof(HospitalHUDManager), "ShowYearlyReviewMenu")]
+    internal static class DisableAwardsEventPatch
+    {
+        private static readonly FieldInfo LevelField =
+            AccessTools.Field(typeof(HospitalHUDManager), "_level");
+
+        private static bool Prefix(HospitalHUDManager __instance)
+        {
+            if (!UnderPressurePlugin.ShouldDisableAwards) return true;
+
+            // Conserva el cierre anual de contadores sin abrir la ceremonia ni conceder premios.
+            var level = LevelField?.GetValue(__instance) as Level;
+            level?.HospitalAwardsManager?.OnEndAwardsCeremony();
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalAwardsManager), "CalculatePendingAwards")]
+    internal static class DisablePendingAwardsPatch
+    {
+        private static bool Prefix(HospitalAwardsManager __instance)
+        {
+            if (!UnderPressurePlugin.ShouldDisableAwards) return true;
+            __instance.PendingAwards?.Clear();
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalAwardsManager), "ProcessAwards")]
+    internal static class DisableAwardProcessingPatch
+    {
+        private static bool Prefix(ref List<HospitalAwardsManager.SimpleAwardInfo> __0)
+        {
+            if (!UnderPressurePlugin.ShouldDisableAwards) return true;
+            __0?.Clear();
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalAwardsManager), "GiveReward")]
+    internal static class DisableAwardRewardsPatch
+    {
+        private static bool Prefix() => !UnderPressurePlugin.ShouldDisableAwards;
+    }
+
+    [HarmonyPatch(typeof(HospitalAwardsManager), "SetAwardWon")]
+    internal static class DisableAwardRecordsPatch
+    {
+        private static bool Prefix() => !UnderPressurePlugin.ShouldDisableAwards;
+    }
+    // Purpose: Hides diagnosis price rows when diagnosis charging is disabled.
+    [HarmonyPatch(typeof(PricesMenu2Row), "Setup")]
+    internal static class HideFreeDiagnosisPriceRowsPatch
+    {
+        private static bool Prefix(PricesMenu2Row __instance, IPriceModifier modifiable)
+        {
+            if (!UnderPressurePlugin.ShouldDisableDiagnosisCharges || !(modifiable is RoomDefinition))
+                return true;
+
+            // Las filas de diagnóstico son las únicas cuyo modificable es una sala.
+            __instance.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(__instance.gameObject);
+            return false;
+        }
+    }
 }
