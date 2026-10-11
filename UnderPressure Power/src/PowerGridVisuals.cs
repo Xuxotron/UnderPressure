@@ -1152,20 +1152,26 @@ namespace UnderPressure.PowerGrid
 
         private void RebuildElectricityCostIndicators()
         {
-            DestroyElectricityCostIndicators();
             if (_level?.WorldState?.AllRooms == null || _level.StatusIconManager == null || _level.HUD == null)
+            {
+                SetElectricityCostIndicatorsActive(false);
                 return;
+            }
 
             var template = _level.StatusIconManager.GetStatusIcon(StatusIcon.Type.QueuePosition);
-            if (template == null) return;
+            if (template == null)
+            {
+                SetElectricityCostIndicatorsActive(false);
+                return;
+            }
+            var activeIndicators = new HashSet<int>();
             foreach (var pair in _powerCellsByConnector)
             {
                 var cell = pair.Value;
                 if (cell?.Visual?.GameObject == null) continue;
                 var load = _cellConnectedLoad.TryGetValue(pair.Key, out var connected) ? connected : 0;
                 var color = _overloadedCellCells.Contains(pair.Key) ? PanelOverloadColor : PanelCellColor;
-                var indicator = CreateElectricityCostIndicator(template, cell, load, color);
-                if (indicator != null) _electricityCostIndicators.Add(indicator);
+                ConfigureElectricityCostIndicator(template, cell, load, color, activeIndicators);
             }
             foreach (var pair in _panelsByCell)
             {
@@ -1175,8 +1181,7 @@ namespace UnderPressure.PowerGrid
                 var color = _overloadedPanelCells.Contains(pair.Key) || IsPanelFedByOverloadedCell(pair.Key)
                     ? PanelOverloadColor
                     : PanelCellColor;
-                var indicator = CreateElectricityCostIndicator(template, panel, load, color);
-                if (indicator != null) _electricityCostIndicators.Add(indicator);
+                ConfigureElectricityCostIndicator(template, panel, load, color, activeIndicators);
             }
             var transformers = EnergyRoomItems.Transformer == null
                 ? null
@@ -1186,9 +1191,8 @@ namespace UnderPressure.PowerGrid
                 {
                     if (!EnergyRoomItems.IsTransformer(transformer) || transformer?.Visual?.GameObject == null)
                         continue;
-                    var indicator = CreateElectricityCostIndicator(template, transformer,
-                        Math.Max(0, _contractedEnergy), null);
-                    if (indicator != null) _electricityCostIndicators.Add(indicator);
+                    ConfigureElectricityCostIndicator(template, transformer,
+                        Math.Max(0, _contractedEnergy), null, activeIndicators);
                 }
             foreach (var room in _level.WorldState.AllRooms)
             {
@@ -1203,17 +1207,42 @@ namespace UnderPressure.PowerGrid
                     var badgeColor = kind == ElectricityGameplay.CostKind.Monthly
                         ? new Color(0.42f, 0.84f, 1f, 1f)
                         : new Color(0.90f, 0.28f, 0.62f, 1f);
-                    var indicator = CreateElectricityCostIndicator(template, item, cost, badgeColor);
-                    if (indicator != null) _electricityCostIndicators.Add(indicator);
+                    ConfigureElectricityCostIndicator(template, item, cost, badgeColor, activeIndicators);
                 }
             }
+            RemoveUnusedElectricityCostIndicators(activeIndicators);
         }
 
-        private ElectricityCostIndicator CreateElectricityCostIndicator(StatusIcon template, RoomItem item, int cost,
-            Color? badgeColor)
+        private void ConfigureElectricityCostIndicator(StatusIcon template, RoomItem item, int cost,
+            Color? badgeColor, HashSet<int> activeIndicators)
+        {
+            if (!_electricityCostIndicators.TryGetValue(item.ID, out var indicator) ||
+                indicator?.Root == null)
+            {
+                if (indicator != null) RemoveElectricityCostIndicator(indicator);
+                indicator = CreateElectricityCostIndicator(template);
+                if (indicator == null) return;
+                _electricityCostIndicators[item.ID] = indicator;
+            }
+
+            activeIndicators.Add(item.ID);
+            var root = indicator.Root;
+            root.name = "UnderPressureElectricityCost_" + cost;
+            var value = cost.ToString(CultureInfo.InvariantCulture);
+            AccessTools.Property(indicator.Text.GetType(), "text")?.SetValue(indicator.Text, value, null);
+            for (var index = 0; index < indicator.Images.Length; ++index)
+                if (indicator.Images[index] != null)
+                    indicator.Images[index].color = badgeColor ?? indicator.DefaultImageColors[index];
+            ResetElectricityIndicatorWidth(indicator);
+            if (indicator.Text is TMP_Text label)
+                FitElectricityIndicatorWidth(root, label, value);
+            indicator.HudElement.Position = ElectricityIndicatorPosition(item);
+            root.SetActive(_electricityViewActive && _showFlow);
+        }
+
+        private ElectricityCostIndicator CreateElectricityCostIndicator(StatusIcon template)
         {
             var root = Object.Instantiate(template.gameObject);
-            root.name = "UnderPressureElectricityCost_" + cost;
             root.SetActive(false);
 
             var queueIcon = root.GetComponent<StatusIconQueuePosition>();
@@ -1227,23 +1256,62 @@ namespace UnderPressure.PowerGrid
 
             // Keep the exact queue-number visual while disabling its patient-specific update.
             queueIcon.enabled = false;
-            var value = cost.ToString(CultureInfo.InvariantCulture);
-            AccessTools.Property(text.GetType(), "text")?.SetValue(text, value, null);
-            if (badgeColor.HasValue)
-                foreach (var image in root.GetComponentsInChildren<Image>(true))
-                {
-                    if (image == null) continue;
-                    image.color = badgeColor.Value;
-                }
-
             var label = text as TMP_Text;
-            if (label != null)
-                FitElectricityIndicatorWidth(root, label, value);
-            hudElement.Position = ElectricityIndicatorPosition(item);
             hudElement.CanBeHidden = false;
             _level.HUD.AddElement(hudElement, _level.HUD.InWorldTransform);
-            root.SetActive(_electricityViewActive && _showFlow);
-            return new ElectricityCostIndicator { Root = root, HudElement = hudElement };
+            var images = root.GetComponentsInChildren<Image>(true);
+            var defaultImageColors = new Color[images.Length];
+            for (var index = 0; index < images.Length; ++index)
+                if (images[index] != null) defaultImageColors[index] = images[index].color;
+            var widthRects = new List<RectTransform>();
+            var defaultWidths = new List<float>();
+            var rootRect = root.transform as RectTransform;
+            if (rootRect != null) LayoutRebuilder.ForceRebuildLayoutImmediate(rootRect);
+            var cursor = label?.rectTransform;
+            while (cursor != null && (cursor == rootRect || cursor.IsChildOf(root.transform)))
+            {
+                widthRects.Add(cursor);
+                defaultWidths.Add(cursor.rect.width);
+                if (cursor == rootRect) break;
+                cursor = cursor.parent as RectTransform;
+            }
+            var layout = root.GetComponent<LayoutElement>();
+            return new ElectricityCostIndicator
+            {
+                Root = root,
+                HudElement = hudElement,
+                Text = text,
+                Images = images,
+                DefaultImageColors = defaultImageColors,
+                WidthRects = widthRects.ToArray(),
+                DefaultWidths = defaultWidths.ToArray(),
+                Layout = layout,
+                DefaultMinWidth = layout == null ? 0f : layout.minWidth,
+                DefaultPreferredWidth = layout == null ? 0f : layout.preferredWidth
+            };
+        }
+
+        private static void ResetElectricityIndicatorWidth(ElectricityCostIndicator indicator)
+        {
+            for (var index = 0; index < indicator.WidthRects.Length; ++index)
+                if (indicator.WidthRects[index] != null)
+                    indicator.WidthRects[index].SetSizeWithCurrentAnchors(
+                        RectTransform.Axis.Horizontal, indicator.DefaultWidths[index]);
+            if (indicator.Layout == null) return;
+            indicator.Layout.minWidth = indicator.DefaultMinWidth;
+            indicator.Layout.preferredWidth = indicator.DefaultPreferredWidth;
+        }
+
+        private void RemoveUnusedElectricityCostIndicators(HashSet<int> activeIndicators)
+        {
+            var removed = new List<int>();
+            foreach (var pair in _electricityCostIndicators)
+            {
+                if (activeIndicators.Contains(pair.Key)) continue;
+                RemoveElectricityCostIndicator(pair.Value);
+                removed.Add(pair.Key);
+            }
+            foreach (var itemId in removed) _electricityCostIndicators.Remove(itemId);
         }
 
         private static void FitElectricityIndicatorWidth(GameObject root, TMP_Text label, string value)
@@ -1422,7 +1490,7 @@ namespace UnderPressure.PowerGrid
         {
             foreach (var visual in _flowVisuals)
                 if (visual != null) visual.SetActive(active);
-            foreach (var indicator in _electricityCostIndicators)
+            foreach (var indicator in _electricityCostIndicators.Values)
                 if (indicator?.Root != null) indicator.Root.SetActive(active);
         }
 
@@ -1437,19 +1505,28 @@ namespace UnderPressure.PowerGrid
                 Object.Destroy(visual);
             }
             _flowVisuals.Clear();
-            DestroyElectricityCostIndicators();
+            SetElectricityCostIndicatorsActive(false);
+        }
+
+        private void SetElectricityCostIndicatorsActive(bool active)
+        {
+            foreach (var indicator in _electricityCostIndicators.Values)
+                if (indicator?.Root != null) indicator.Root.SetActive(active);
         }
 
         private void DestroyElectricityCostIndicators()
         {
-            foreach (var indicator in _electricityCostIndicators)
-            {
-                if (indicator == null) continue;
-                if (indicator.HudElement != null && _level?.HUD != null)
-                    _level.HUD.RemoveElement(indicator.HudElement);
-                if (indicator.Root != null) Object.Destroy(indicator.Root);
-            }
+            foreach (var indicator in _electricityCostIndicators.Values)
+                RemoveElectricityCostIndicator(indicator);
             _electricityCostIndicators.Clear();
+        }
+
+        private void RemoveElectricityCostIndicator(ElectricityCostIndicator indicator)
+        {
+            if (indicator == null) return;
+            if (indicator.HudElement != null && _level?.HUD != null)
+                _level.HUD.RemoveElement(indicator.HudElement);
+            if (indicator.Root != null) Object.Destroy(indicator.Root);
         }
 
         private void RefreshElectricItemColors()
@@ -1698,6 +1775,7 @@ namespace UnderPressure.PowerGrid
             DestroyHoverPreview();
             DestroyPreview();
             DestroyFlowVisuals();
+            DestroyElectricityCostIndicators();
             DestroyPathAreaVisuals();
             DestroyAreaVisual(ref _generatorAreaVisual);
             DestroyAreaVisual(ref _panelAreaVisual);

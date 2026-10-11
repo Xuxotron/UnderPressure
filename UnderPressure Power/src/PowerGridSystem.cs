@@ -90,8 +90,8 @@ namespace UnderPressure.PowerGrid
         private readonly List<GameObject> _previewVisuals = new List<GameObject>();
         private readonly List<GameObject> _pathAreaVisuals = new List<GameObject>();
         private readonly List<GameObject> _flowVisuals = new List<GameObject>();
-        private readonly List<ElectricityCostIndicator> _electricityCostIndicators =
-            new List<ElectricityCostIndicator>();
+        private readonly Dictionary<int, ElectricityCostIndicator> _electricityCostIndicators =
+            new Dictionary<int, ElectricityCostIndicator>();
         private readonly HashSet<PowerCoord> _hiddenDeletePreview = new HashSet<PowerCoord>();
         private readonly Dictionary<int, BatteryState> _batteryStates = new Dictionary<int, BatteryState>();
         private DataViewButtons _owner;
@@ -155,6 +155,14 @@ namespace UnderPressure.PowerGrid
         {
             internal GameObject Root;
             internal InWorldHUDElement HudElement;
+            internal Component Text;
+            internal Image[] Images;
+            internal Color[] DefaultImageColors;
+            internal RectTransform[] WidthRects;
+            internal float[] DefaultWidths;
+            internal LayoutElement Layout;
+            internal float DefaultMinWidth;
+            internal float DefaultPreferredWidth;
         }
         private bool _eventsSubscribed;
         private bool _restoringExtraState;
