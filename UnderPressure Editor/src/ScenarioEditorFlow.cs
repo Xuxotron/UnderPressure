@@ -26,8 +26,8 @@ namespace UnderPressure.Editor
 
         private const string MainButtonLayoutName = "Under Pressure - Scenario Editor Layout";
         private const string SelectorRootName = "Under Pressure - Scenario Level Selector";
-        private static readonly FieldInfo NewCareerButtonField =
-            AccessTools.Field(typeof(OpeningScreenMenu), "_newCareerButton");
+        private static readonly FieldInfo SettingsButtonField =
+            AccessTools.Field(typeof(OpeningScreenMenu), "_settingsButton");
         private static readonly FieldInfo OpeningScreenAppField =
             AccessTools.Field(typeof(OpeningScreen), "_app");
         private static readonly FieldInfo OpeningScreenOperationField =
@@ -53,7 +53,7 @@ namespace UnderPressure.Editor
         internal static void AddMainMenuButton(OpeningScreenMenu menu)
         {
             if (menu == null) return;
-            var sourceButton = NewCareerButtonField?.GetValue(menu) as DynamicButton;
+            var sourceButton = SettingsButtonField?.GetValue(menu) as DynamicButton;
             var sourceLayout = sourceButton?.transform?.parent;
             var layoutParent = sourceLayout?.parent;
             if (sourceButton == null || sourceLayout == null || layoutParent == null)
@@ -71,6 +71,7 @@ namespace UnderPressure.Editor
                 sourceLayout.gameObject, layoutParent, false);
             layout.name = MainButtonLayoutName;
             layout.transform.SetSiblingIndex(sourceLayout.GetSiblingIndex() + 1);
+            layout.SetActive(true);
 
             var button = layout.GetComponentInChildren<DynamicButton>(true);
             if (button == null)
@@ -91,6 +92,9 @@ namespace UnderPressure.Editor
 
             if (layoutParent is RectTransform rectTransform)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(rectTransform);
+
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Botón del editor de escenarios creado y visible en el menú principal.");
         }
 
         internal static void QueueSelectedLevel(MetagameStateBase state)
