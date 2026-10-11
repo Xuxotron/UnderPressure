@@ -8,6 +8,7 @@ using TMPro;
 using TH20;
 using TH20.UI;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.UI;
 
 namespace UnderPressure.Editor
@@ -31,13 +32,16 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(OpeningScreen), "_app");
         private static readonly FieldInfo OpeningScreenOperationField =
             AccessTools.Field(typeof(OpeningScreen), "_currentOperationCoroutine");
+        private static readonly FieldInfo OpeningScreenFadeOutField =
+            AccessTools.Field(typeof(OpeningScreen), "_directorFadeOut");
+        private static readonly FieldInfo OpeningScreenRootCanvasField =
+            AccessTools.Field(typeof(OpeningScreen), "_rootCanvas");
+        private static readonly FieldInfo OpeningScreenSceneContentField =
+            AccessTools.Field(typeof(OpeningScreen), "_sceneContent");
         private static readonly FieldInfo QuitButtonField =
             AccessTools.Field(typeof(EditHospitalMenu), "_quitButton");
         private static readonly FieldInfo ShouldAutoSaveField =
             AccessTools.Field(typeof(Level), "_shouldAutoSaveThisFrame");
-        private static readonly MethodInfo StartGameMethod =
-            AccessTools.Method(typeof(OpeningScreen), "StartGame");
-
         private static FlowState _state;
         private static OpeningScreen _openingScreen;
         private static GameObject _selectorRoot;
@@ -323,15 +327,9 @@ namespace UnderPressure.Editor
                 _state = FlowState.Loading;
                 DestroySelector();
 
-                // Se crea una metapartida nueva solo en memoria; los parches de guardado
-                // impiden que este proceso borre o escriba las partidas del jugador.
-                var routine = StartGameMethod?.Invoke(
-                    _openingScreen, new object[] { true, 0, true }) as IEnumerator;
-                if (routine == null)
-                    throw new InvalidOperationException(
-                        "El juego no devolvió su rutina normal de carga.");
-
-                var operation = _openingScreen.StartCoroutine(routine);
+                // Se evita StartGame porque entra en RestartAsync y borra los niveles del slot.
+                // LoadAsync crea la metapartida temporal sin leer ni eliminar partidas existentes.
+                var operation = _openingScreen.StartCoroutine(StartEditorSession(_openingScreen));
                 OpeningScreenOperationField?.SetValue(_openingScreen, operation);
             }
             catch (Exception exception)
@@ -341,6 +339,34 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogError(
                     "No se pudo cargar el hospital original en el editor: " + exception);
             }
+        }
+
+        private static IEnumerator StartEditorSession(OpeningScreen openingScreen)
+        {
+            var app = OpeningScreenAppField?.GetValue(openingScreen) as App;
+            var fadeOut = OpeningScreenFadeOutField?.GetValue(openingScreen) as PlayableDirector;
+            var rootCanvas = OpeningScreenRootCanvasField?.GetValue(openingScreen) as Canvas;
+            var sceneContent = OpeningScreenSceneContentField?.GetValue(openingScreen) as Transform;
+            if (app == null || fadeOut == null || rootCanvas == null || sceneContent == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se encontró la transición nativa necesaria para abrir el hospital.");
+                _selectedLevel = null;
+                _state = FlowState.None;
+                OpeningScreenOperationField?.SetValue(openingScreen, null);
+                yield break;
+            }
+
+            fadeOut.Play();
+            while (fadeOut.time < fadeOut.duration)
+                yield return null;
+
+            TooltipManager.Instance.PopGUIRoot(rootCanvas.transform);
+            sceneContent.gameObject.SetActive(false);
+
+            app.SetGameMode<GameModeCareer>();
+            yield return app.GameMode.LoadAsync(true, 0);
+            OpeningScreenOperationField?.SetValue(openingScreen, null);
         }
 
         private static void CancelSelection()
@@ -454,12 +480,6 @@ namespace UnderPressure.Editor
             if (ScenarioEditorFlow.IsRunning)
                 __result = false;
         }
-    }
-
-    [HarmonyPatch(typeof(SaveSystem), "DeleteAllLevelSaves", new[] { typeof(int) })]
-    internal static class ScenarioEditorDeleteSavesPatch
-    {
-        private static bool Prefix() => !ScenarioEditorFlow.IsRunning;
     }
 
     [HarmonyPatch(typeof(Level), "HandleAutosave")]
