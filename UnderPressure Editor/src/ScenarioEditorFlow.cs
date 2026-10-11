@@ -1,7 +1,10 @@
-// Conecta el editor nativo con una sesión aislada que nunca utiliza las partidas normales.
+// Abre el editor nativo sobre un nivel original sin crear ni cargar partidas Sandbox.
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using TMPro;
 using TH20;
 using TH20.UI;
 using UnityEngine;
@@ -21,28 +24,24 @@ namespace UnderPressure.Editor
         }
 
         private const string MainButtonLayoutName = "Under Pressure - Scenario Editor Layout";
+        private const string SelectorRootName = "Under Pressure - Scenario Level Selector";
         private static readonly FieldInfo SandboxButtonField =
             AccessTools.Field(typeof(OpeningScreenMenu), "_sandboxButton");
-        private static readonly FieldInfo NewTabButtonField =
-            AccessTools.Field(typeof(SandboxMenu), "_buttonNew");
-        private static readonly FieldInfo BrowseTabButtonField =
-            AccessTools.Field(typeof(SandboxMenu), "_buttonBrowse");
-        private static readonly FieldInfo BrowseCloudTabButtonField =
-            AccessTools.Field(typeof(SandboxMenu), "_buttonBrowseCloud");
-        private static readonly FieldInfo StartButtonField =
-            AccessTools.Field(typeof(SandboxMenu), "_buttonStart");
-        private static readonly FieldInfo SettingsField =
-            AccessTools.Field(typeof(SandboxMenu), "_settings");
+        private static readonly FieldInfo OpeningScreenAppField =
+            AccessTools.Field(typeof(OpeningScreen), "_app");
+        private static readonly FieldInfo OpeningScreenOperationField =
+            AccessTools.Field(typeof(OpeningScreen), "_currentOperationCoroutine");
         private static readonly FieldInfo QuitButtonField =
             AccessTools.Field(typeof(EditHospitalMenu), "_quitButton");
         private static readonly FieldInfo ShouldAutoSaveField =
             AccessTools.Field(typeof(Level), "_shouldAutoSaveThisFrame");
-        private static readonly MethodInfo OpenNewSandboxTabMethod =
-            AccessTools.Method(typeof(SandboxMenu), "OnNewGameTab");
-        private static readonly MethodInfo StartSandboxLevelMethod =
-            AccessTools.Method(typeof(SandboxMenu), "StartLevel");
+        private static readonly MethodInfo StartGameMethod =
+            AccessTools.Method(typeof(OpeningScreen), "StartGame");
 
         private static FlowState _state;
+        private static OpeningScreen _openingScreen;
+        private static GameObject _selectorRoot;
+        private static LevelConfig _selectedLevel;
         private static Level _level;
 
         internal static bool IsRunning => _state != FlowState.None;
@@ -56,7 +55,7 @@ namespace UnderPressure.Editor
             if (sandboxButton == null || sourceLayout == null || layoutParent == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "No se encontró la estructura nativa del botón Sandbox.");
+                    "No se encontró la estructura nativa de los botones del menú principal.");
                 return;
             }
 
@@ -74,16 +73,12 @@ namespace UnderPressure.Editor
             {
                 UnityEngine.Object.Destroy(layout);
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "La copia del botón Sandbox no contiene un DynamicButton.");
+                    "La copia visual del botón principal no contiene un DynamicButton.");
                 return;
             }
 
-            DisableNativeLocalizers(layout);
-            button.name = "ScenarioEditorButton";
-            button.onPrimaryDown.RemoveAllListeners();
-            button.onPrimaryDown.AddListener(() => BeginSelection(menu));
-            button.interactable = true;
-            button.SetTMPText(EditorLocalization.Get("scenario_editor.menu"));
+            ConfigureButton(button, EditorLocalization.Get("scenario_editor.menu"),
+                () => BeginSelection(menu, sourceLayout.gameObject));
 
             var tooltip = button.GetComponentInChildren<TooltipSpawner>(true);
             if (tooltip != null)
@@ -94,55 +89,28 @@ namespace UnderPressure.Editor
                 LayoutRebuilder.ForceRebuildLayoutImmediate(rectTransform);
         }
 
-        internal static void PrepareBaseSelector(SandboxMenu menu)
+        internal static void QueueSelectedLevel(MetagameStateBase state)
         {
-            if (_state != FlowState.SelectingBase || menu == null) return;
-            try
-            {
-                OpenNewSandboxTabMethod.Invoke(menu, null);
+            if (_state != FlowState.Loading || _selectedLevel == null || state?.Owner == null)
+                return;
 
-                var newTab = NewTabButtonField?.GetValue(menu) as ButtonAnimator;
-                var browseTab = BrowseTabButtonField?.GetValue(menu) as ButtonAnimator;
-                var browseCloudTab = BrowseCloudTabButtonField?.GetValue(menu) as ButtonAnimator;
-                var startButton = StartButtonField?.GetValue(menu) as ButtonAnimator;
-
-                SetButtonText(newTab?.Button, "scenario_editor.base_scenario");
-                SetButtonText(startButton?.Button, "scenario_editor.edit");
-                if (browseTab != null) browseTab.gameObject.SetActive(false);
-                if (browseCloudTab != null) browseCloudTab.gameObject.SetActive(false);
-            }
-            catch (Exception exception)
+            var data = state.Owner.GetStateMachineData<MetagameStateData>();
+            if (data == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "No se pudo preparar el selector de escenarios base: " + exception);
-            }
-        }
-
-        internal static bool StartSelectedBase(SandboxMenu menu)
-        {
-            if (_state != FlowState.SelectingBase) return false;
-            var settings = SettingsField?.GetValue(menu) as SandboxSettings;
-            if (settings?.LevelConfig == null)
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "El selector no contiene un escenario base válido.");
-                return true;
+                    "No se encontró el estado de carga de la metapartida aislada.");
+                return;
             }
 
-            try
-            {
-                _state = FlowState.Loading;
-                // Los dos valores evitan guardar un nivel previo y fuerzan una sesión nueva.
-                StartSandboxLevelMethod.Invoke(menu, new object[] { false, true });
-            }
-            catch (Exception exception)
-            {
-                _state = FlowState.SelectingBase;
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "No se pudo cargar el escenario base en el editor: " + exception);
-            }
-
-            return true;
+            data.LoadLevel = _selectedLevel;
+            data.OnLoadRestartLevel = false;
+            data.OnLoadSaveOldLevel = false;
+            data.CheckForCutscenes = false;
+            data.CheckForPostCutscene = false;
+            data.CheckForSuperBugMessages = false;
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Nivel original enviado directamente al cargador: " +
+                _selectedLevel.GetLocalisedDisplayName() + ".");
         }
 
         internal static void OpenNativeEditor(Level level)
@@ -180,13 +148,16 @@ namespace UnderPressure.Editor
             DisableNativeLocalizers(quitButton.gameObject);
             quitButton.onClick.RemoveAllListeners();
             quitButton.onClick.AddListener(ExitToMainMenu);
-            var label = quitButton.GetComponentInChildren<TMPro.TMP_Text>(true);
+            var label = quitButton.GetComponentInChildren<TMP_Text>(true);
             if (label != null)
                 label.text = EditorLocalization.Get("scenario_editor.return_to_menu");
         }
 
         internal static void ResetAtOpeningScreen()
         {
+            DestroySelector();
+            _openingScreen = null;
+            _selectedLevel = null;
             _level = null;
             _state = FlowState.None;
         }
@@ -197,11 +168,188 @@ namespace UnderPressure.Editor
             ShouldAutoSaveField?.SetValue(level, false);
         }
 
-        private static void BeginSelection(OpeningScreenMenu menu)
+        private static void BeginSelection(OpeningScreenMenu menu, GameObject rowTemplate)
         {
-            if (_state != FlowState.None || menu == null) return;
+            if (_state != FlowState.None || menu == null || rowTemplate == null) return;
+            _openingScreen = UnityEngine.Object.FindObjectOfType<OpeningScreen>();
+            var app = OpeningScreenAppField?.GetValue(_openingScreen) as App;
+            var options = app?.SandboxSettingsConfig?.LevelOptions;
+            if (_openingScreen == null || app == null || options == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se encontró la tabla original de hospitales disponibles.");
+                return;
+            }
+
+            var levels = new List<LevelConfig>();
+            foreach (var option in options)
+            {
+                var level = option?.Level?.Instance;
+                if (level == null || !DLCUtils.IsDLCInstalled(level.GetRequiredDlcPack()))
+                    continue;
+                if (!levels.Contains(level)) levels.Add(level);
+            }
+
+            if (levels.Count == 0)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "La tabla original no contiene hospitales instalados.");
+                return;
+            }
+
             _state = FlowState.SelectingBase;
-            menu.OnSandbox?.Invoke();
+            CreateSelector(menu, rowTemplate, levels);
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Selector propio creado con " + levels.Count + " hospitales originales.");
+        }
+
+        private static void CreateSelector(
+            OpeningScreenMenu menu, GameObject rowTemplate, IReadOnlyList<LevelConfig> levels)
+        {
+            DestroySelector();
+            var canvas = menu.GetComponentInParent<Canvas>();
+            if (canvas == null)
+                throw new InvalidOperationException("No se encontró el Canvas del menú principal.");
+
+            _selectorRoot = CreateUiObject(SelectorRootName, canvas.transform);
+            var rootRect = _selectorRoot.GetComponent<RectTransform>();
+            Stretch(rootRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var blocker = _selectorRoot.AddComponent<Image>();
+            blocker.color = new Color(0f, 0f, 0f, 0.72f);
+            blocker.raycastTarget = true;
+
+            var panel = CreateUiObject("Panel", _selectorRoot.transform);
+            var panelRect = panel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.sizeDelta = new Vector2(760f, 820f);
+            var panelImage = panel.AddComponent<Image>();
+            panelImage.color = new Color(0.18f, 0.20f, 0.21f, 0.98f);
+
+            var titleTemplate = rowTemplate.GetComponentInChildren<TMP_Text>(true);
+            if (titleTemplate != null)
+            {
+                var title = UnityEngine.Object.Instantiate(titleTemplate, panel.transform, false);
+                title.name = "Title";
+                DisableNativeLocalizers(title.gameObject);
+                title.text = EditorLocalization.Get("scenario_editor.base_scenario");
+                title.alignment = TextAlignmentOptions.Center;
+                var titleRect = title.rectTransform;
+                Stretch(titleRect, new Vector2(0.08f, 0.90f), new Vector2(0.92f, 0.98f),
+                    Vector2.zero, Vector2.zero);
+            }
+
+            var scrollObject = CreateUiObject("Hospital List", panel.transform);
+            var scrollRectTransform = scrollObject.GetComponent<RectTransform>();
+            Stretch(scrollRectTransform, new Vector2(0.06f, 0.14f), new Vector2(0.94f, 0.89f),
+                Vector2.zero, Vector2.zero);
+            var scrollRect = scrollObject.AddComponent<ScrollRect>();
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.scrollSensitivity = 45f;
+
+            var viewport = CreateUiObject("Viewport", scrollObject.transform);
+            var viewportRect = viewport.GetComponent<RectTransform>();
+            Stretch(viewportRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var viewportImage = viewport.AddComponent<Image>();
+            viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
+            viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+            var content = CreateUiObject("Content", viewport.transform);
+            var contentRect = content.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0f, 1f);
+            contentRect.anchorMax = new Vector2(1f, 1f);
+            contentRect.pivot = new Vector2(0.5f, 1f);
+            contentRect.anchoredPosition = Vector2.zero;
+            contentRect.sizeDelta = Vector2.zero;
+            var listLayout = content.AddComponent<VerticalLayoutGroup>();
+            listLayout.padding = new RectOffset(8, 8, 8, 8);
+            listLayout.spacing = 8f;
+            listLayout.childControlWidth = true;
+            listLayout.childControlHeight = true;
+            listLayout.childForceExpandWidth = true;
+            listLayout.childForceExpandHeight = false;
+            var fitter = content.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            scrollRect.viewport = viewportRect;
+            scrollRect.content = contentRect;
+
+            foreach (var level in levels)
+            {
+                var selected = level;
+                var row = UnityEngine.Object.Instantiate(rowTemplate, content.transform, false);
+                row.name = "Hospital - " + selected.UniqueId;
+                var element = row.GetComponent<LayoutElement>() ?? row.AddComponent<LayoutElement>();
+                element.preferredHeight = 68f;
+                element.minHeight = 58f;
+                element.flexibleWidth = 1f;
+                var button = row.GetComponentInChildren<DynamicButton>(true);
+                if (button == null)
+                {
+                    UnityEngine.Object.Destroy(row);
+                    continue;
+                }
+
+                ConfigureButton(button, selected.GetLocalisedDisplayName(),
+                    () => StartSelectedLevel(selected));
+            }
+
+            var backRow = UnityEngine.Object.Instantiate(rowTemplate, panel.transform, false);
+            backRow.name = "Return to Main Menu";
+            var backRect = backRow.GetComponent<RectTransform>();
+            Stretch(backRect, new Vector2(0.06f, 0.025f), new Vector2(0.94f, 0.12f),
+                Vector2.zero, Vector2.zero);
+            var backButton = backRow.GetComponentInChildren<DynamicButton>(true);
+            if (backButton != null)
+                ConfigureButton(backButton,
+                    EditorLocalization.Get("scenario_editor.return_to_menu"), CancelSelection);
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+        }
+
+        private static void StartSelectedLevel(LevelConfig level)
+        {
+            if (_state != FlowState.SelectingBase || level == null || _openingScreen == null)
+                return;
+
+            try
+            {
+                _selectedLevel = level;
+                _state = FlowState.Loading;
+                DestroySelector();
+
+                // Se crea una metapartida nueva solo en memoria; los parches de guardado
+                // impiden que este proceso borre o escriba las partidas del jugador.
+                var routine = StartGameMethod?.Invoke(
+                    _openingScreen, new object[] { true, 0, true }) as IEnumerator;
+                if (routine == null)
+                    throw new InvalidOperationException(
+                        "El juego no devolvió su rutina normal de carga.");
+
+                var operation = _openingScreen.StartCoroutine(routine);
+                OpeningScreenOperationField?.SetValue(_openingScreen, operation);
+            }
+            catch (Exception exception)
+            {
+                _selectedLevel = null;
+                _state = FlowState.None;
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudo cargar el hospital original en el editor: " + exception);
+            }
+        }
+
+        private static void CancelSelection()
+        {
+            if (_state != FlowState.SelectingBase) return;
+            DestroySelector();
+            _openingScreen = null;
+            _selectedLevel = null;
+            _state = FlowState.None;
         }
 
         private static void ExitToMainMenu()
@@ -222,11 +370,38 @@ namespace UnderPressure.Editor
             level.App.QuitToMenuDontSave();
         }
 
-        private static void SetButtonText(DynamicButton button, string key)
+        private static void ConfigureButton(DynamicButton button, string text, Action action)
         {
             if (button == null) return;
             DisableNativeLocalizers(button.gameObject);
-            button.SetTMPText(EditorLocalization.Get(key));
+            button.onPrimaryDown.RemoveAllListeners();
+            button.onPrimaryDown.AddListener(() => action?.Invoke());
+            button.interactable = true;
+            button.SetTMPText(text);
+        }
+
+        private static GameObject CreateUiObject(string name, Transform parent)
+        {
+            var value = new GameObject(name, typeof(RectTransform));
+            value.transform.SetParent(parent, false);
+            return value;
+        }
+
+        private static void Stretch(
+            RectTransform rect, Vector2 anchorMin, Vector2 anchorMax,
+            Vector2 offsetMin, Vector2 offsetMax)
+        {
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.offsetMin = offsetMin;
+            rect.offsetMax = offsetMax;
+        }
+
+        private static void DestroySelector()
+        {
+            if (_selectorRoot == null) return;
+            UnityEngine.Object.Destroy(_selectorRoot);
+            _selectorRoot = null;
         }
 
         private static void DisableNativeLocalizers(GameObject root)
@@ -251,21 +426,14 @@ namespace UnderPressure.Editor
         private static void Prefix() => ScenarioEditorFlow.ResetAtOpeningScreen();
     }
 
-    [HarmonyPatch(typeof(SandboxMenu), "Setup")]
-    internal static class ScenarioEditorBaseSelectorPatch
+    [HarmonyPatch(typeof(MetagameStateBase), "Enter")]
+    internal static class ScenarioEditorLevelQueuePatch
     {
-        private static void Postfix(SandboxMenu __instance) =>
-            ScenarioEditorFlow.PrepareBaseSelector(__instance);
+        private static void Postfix(MetagameStateBase __instance) =>
+            ScenarioEditorFlow.QueueSelectedLevel(__instance);
     }
 
-    [HarmonyPatch(typeof(SandboxMenu), "OnStartGame")]
-    internal static class ScenarioEditorStartBasePatch
-    {
-        private static bool Prefix(SandboxMenu __instance) =>
-            !ScenarioEditorFlow.StartSelectedBase(__instance);
-    }
-
-    [HarmonyPatch(typeof(SandboxStateInHospital), "OnLevelLoaded")]
+    [HarmonyPatch(typeof(Metagame), "OnLevelLoaded")]
     internal static class ScenarioEditorLevelLoadedPatch
     {
         private static void Postfix(Level __0) => ScenarioEditorFlow.OpenNativeEditor(__0);
@@ -278,7 +446,7 @@ namespace UnderPressure.Editor
             ScenarioEditorFlow.ReplaceNativeExit(__instance, __0);
     }
 
-    [HarmonyPatch(typeof(GameModeSandbox), "AllowGameToBeSaved")]
+    [HarmonyPatch(typeof(GameMode), "AllowGameToBeSaved")]
     internal static class ScenarioEditorSavePermissionPatch
     {
         private static void Postfix(ref bool __result)
@@ -286,6 +454,12 @@ namespace UnderPressure.Editor
             if (ScenarioEditorFlow.IsRunning)
                 __result = false;
         }
+    }
+
+    [HarmonyPatch(typeof(SaveSystem), "DeleteAllLevelSaves", new[] { typeof(int) })]
+    internal static class ScenarioEditorDeleteSavesPatch
+    {
+        private static bool Prefix() => !ScenarioEditorFlow.IsRunning;
     }
 
     [HarmonyPatch(typeof(Level), "HandleAutosave")]
