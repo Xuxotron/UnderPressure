@@ -470,15 +470,18 @@ namespace UnderPressure.PowerGrid
 
         private void LoadExtraState()
         {
+            var permanentWearLoadPending = false;
             try
             {
                 EnergyCampaignSystem.ResetLevel(_level?.UniqueID);
                 global::UnderPressure.PermanentMachineWearSystem.BeginLoad(_level);
+                permanentWearLoadPending = true;
                 var path = GetExtraDataPath();
                 var saveExists = File.Exists(path);
                 global::UnderPressure.UnderPressureAssetBundle.ReportExtraSaveLoad(path, saveExists);
                 if (!saveExists)
                 {
+                    permanentWearLoadPending = false;
                     global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
                     return;
                 }
@@ -681,6 +684,7 @@ namespace UnderPressure.PowerGrid
                     ConsumeTaskEnergyImmediately(pendingTaskEnergy);
                 }
                 RestoreStaffJobAssignments(staffJobRecords);
+                permanentWearLoadPending = false;
                 global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
                 PowerGridPlugin.Log.LogInfo($"Guardado complementario cargado: {_cells.Count} Alto V., " +
                                             $"{_lowVoltageCells.Count} Bajo V., " +
@@ -689,6 +693,21 @@ namespace UnderPressure.PowerGrid
             catch (Exception exception)
             {
                 PowerGridPlugin.Log.LogError("No se pudo cargar el fichero extra de la red electrica: " + exception);
+            }
+            finally
+            {
+                if (permanentWearLoadPending)
+                {
+                    try
+                    {
+                        global::UnderPressure.PermanentMachineWearSystem.CompleteLoad(_level);
+                    }
+                    catch (Exception exception)
+                    {
+                        PowerGridPlugin.Log.LogError(
+                            "No se pudo finalizar la restauracion del desgaste permanente: " + exception);
+                    }
+                }
             }
         }
 
