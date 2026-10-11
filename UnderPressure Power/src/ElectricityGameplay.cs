@@ -7,6 +7,7 @@ using FullInspector.Generated.SharedInstance;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace UnderPressure.PowerGrid
 {
@@ -20,6 +21,40 @@ namespace UnderPressure.PowerGrid
     {
         Bajo,
         Alto
+    }
+
+    // Purpose: Defines the editable catalogue of electrical objects, billing modes, voltages, and connector heights.
+    internal static class ElectricObjectCatalog
+    {
+        // PREFAB | TIPO DE COBRO | TIPO DE RED | ALTURA DEL NÚMERO
+        internal static readonly (string Prefab, Cost Cobro, Power Red, float Altura)[] Objects =
+        {
+            (ReceptionNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (WardNurseStationNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (OfficeDeskNativeParameters.Prefab, Cost.Mensual, Power.Bajo, -0.4f),
+            (VendingMachineDrinksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineEnergyDrinksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineLuxuryDrinksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineGambleDrinksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineLaxativeDrinksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineSnacksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineSaltySnacksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineLuxurySnacksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineSpongeSnacksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineToySnacksNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineCaviarSnackNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineLemonNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineTomatoesNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineCarrotNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineWaterNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (VendingMachineRetroKebabNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
+            (ToiletHandDryerNativeParameters.Prefab, Cost.Tarea, Power.Alto, 0f),
+            (ToiletHandDryerGoldNativeParameters.Prefab, Cost.Tarea, Power.Alto, 0f),
+            (DiagnosisMachineNativeParameters.Prefab, Cost.Tarea, Power.Alto, -3f),
+            (LightHeadedMachineNativeParameters.Prefab, Cost.Tarea, Power.Alto, -2f),
+            (DrugDispenserNativeParameters.Prefab, Cost.Tarea, Power.Alto, -2f),
+            (MachineControlConsoleNativeParameters.Prefab, Cost.Tarea, Power.Alto, -0.1f)
+        };
     }
 
     internal static class ElectricityGameplay
@@ -438,4 +473,82 @@ namespace UnderPressure.PowerGrid
         }
     }
 
+    // Purpose: Adds electrical-consumption icons to supported room-item catalogue entries.
+    internal sealed class ElectricityCatalogIcon : MonoBehaviour
+    {
+        private const string SpriteName = "T_UI_InGame_EnergyManagement_iconEnergy";
+        private const float Scale = 0.6f;
+        private static Sprite _sprite;
+        private static bool _missingLogged;
+        private Image _image;
+
+        internal void Configure(bool visible)
+        {
+            if (!visible)
+            {
+                if (_image != null) _image.gameObject.SetActive(false);
+                return;
+            }
+
+            var sprite = FindSprite();
+            if (sprite == null)
+            {
+                if (!_missingLogged)
+                {
+                    _missingLogged = true;
+                    PowerGridPlugin.Log.LogWarning("No se encontro el icono electrico " + SpriteName + ".");
+                }
+                return;
+            }
+
+            if (_image == null) CreateImage(sprite);
+            _image.overrideSprite = sprite;
+            _image.gameObject.SetActive(true);
+            _image.transform.SetAsLastSibling();
+        }
+
+        private void CreateImage(Sprite sprite)
+        {
+            var iconObject = new GameObject("UnderPressure Electricity Icon", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            var rect = (RectTransform)iconObject.transform;
+            var background = GetComponent<RibbonItemRow>()?.BackgroundImage;
+            rect.SetParent(background != null ? background.rectTransform : transform, false);
+            rect.anchorMin = Vector2.one;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = Vector2.one;
+            rect.anchoredPosition = new Vector2(-5f, -5f);
+            rect.sizeDelta = sprite.rect.size;
+            rect.localScale = Vector3.one * Scale;
+
+            _image = iconObject.GetComponent<Image>();
+            _image.preserveAspect = true;
+            _image.raycastTarget = false;
+        }
+
+        private static Sprite FindSprite()
+        {
+            if (_sprite != null) return _sprite;
+            foreach (var sprite in Resources.FindObjectsOfTypeAll<Sprite>())
+            {
+                if (sprite == null || !string.Equals(sprite.name, SpriteName,
+                        StringComparison.Ordinal)) continue;
+                _sprite = sprite;
+                break;
+            }
+            return _sprite;
+        }
+    }
+
+    [HarmonyPatch(typeof(RibbonItemRow), nameof(RibbonItemRow.Setup))]
+    internal static class ElectricityCatalogIconPatch
+    {
+        private static void Postfix(RibbonItemRow __instance, IRoomItemDefinition __0)
+        {
+            if (__instance == null) return;
+            var icon = __instance.GetComponent<ElectricityCatalogIcon>() ??
+                       __instance.gameObject.AddComponent<ElectricityCatalogIcon>();
+            icon.Configure(ElectricityGameplay.ShowsElectricityIcon(__0));
+        }
+    }
 }
