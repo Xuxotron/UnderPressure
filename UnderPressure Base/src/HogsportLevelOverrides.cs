@@ -8,16 +8,7 @@ using UnityEngine;
 
 namespace UnderPressure
 {
-    /// <summary>
-    /// Configuración editable de Hogsport (nivel interno 901).
-    /// Cada inicializador muestra el valor original verificado del juego.
-    /// Cambiarlo modifica solamente la copia usada al construir Hogsport; no
-    /// altera los assets ni la configuración de los demás hospitales.
-    ///
-    /// Fuente: TPH_Data/sharedassets3.assets. Assets principales:
-    /// R1_TutorialHospital (156482), CharacterManager (156472), Finance
-    /// (156473) y ChallengeManager (156471).
-    /// </summary>
+    // Configuración editable de Hogsport. Los cambios solo se aplican a este hospital.
     [HarmonyPatch]
     internal static class HogsportLevelOverrides
     {
@@ -25,61 +16,38 @@ namespace UnderPressure
 
         // =========================== ECONOMÍA ================================
 
-        /// <summary>
-        /// FinanceManagerConfig.InitialBalance. Dinero de una partida nueva.
+        /// Dinero disponible al comenzar una partida nueva.
         /// Original: 200.000.
-        /// </summary>
         internal static int InitialMoney = 200000;
 
         // ===================== PACIENTES Y LLEGADAS ==========================
 
-        /// <summary>
-        /// CharacterManagerConfig._maxPatients. Máximo de pacientes que puede
-        /// mantener el gestor; no determina por sí solo su frecuencia.
+        /// Máximo de pacientes que puede mantener el gestor; no determina por sí solo su frecuencia.
         /// Original: 250.
-        /// </summary>
         internal static int MaximumPatients = 250;
 
-        /// <summary>
-        /// CharacterManagerConfig._patientSpawnRate. Valor base usado para
-        /// programar llegadas; después intervienen reputación, nivel y azar.
+        /// Valor base usado para programar llegadas; después intervienen reputación, nivel y azar.
         /// Original: 48.
-        /// </summary>
         internal static float PatientSpawnRate = 48f;
 
-        /// <summary>
-        /// CharacterManagerConfig._reputationArrivalRateMultiplierMin.
-        /// Extremo inferior del multiplicador de llegadas por reputación.
+        /// Multiplicador mínimo aplicado a las llegadas según la reputación.
         /// Original: 0,8.
-        /// </summary>
         internal static float ReputationArrivalMinimum = 0.8f;
 
-        /// <summary>
-        /// CharacterManagerConfig._reputationArrivalRateMultiplierMax.
-        /// Extremo superior del multiplicador de llegadas por reputación.
+        /// Multiplicador máximo aplicado a las llegadas según la reputación.
         /// Original: 1,2.
-        /// </summary>
         internal static float ReputationArrivalMaximum = 1.2f;
 
-        /// <summary>
-        /// CharacterManagerConfig._arrivalRandomFactor. Variación aleatoria del
-        /// planificador de llegadas; el asset no declara su unidad.
+        /// Variación aleatoria aplicada al ritmo de llegada de pacientes.
         /// Original: 10.
-        /// </summary>
         internal static float ArrivalRandomFactor = 10f;
 
-        /// <summary>
-        /// CharacterManagerConfig._patientSelectionRandomJitter. Ruido al
-        /// escoger el siguiente tipo de paciente.
+        /// Variación aleatoria al escoger el siguiente tipo de paciente.
         /// Original: 0,35.
-        /// </summary>
         internal static float PatientSelectionRandomJitter = 0.35f;
 
-        /// <summary>
-        /// CharacterManagerConfig.RandomArrivalMethods[*].Weight. Orden:
-        /// coche, autobús y ambulancia. Originales: 100, 25 y 25; antes de
-        /// considerar capacidad equivalen a 66,67 %, 16,67 % y 16,67 %.
-        /// </summary>
+        /// Peso de cada medio de llegada, en orden: coche, autobús y ambulancia.
+        /// Original: 100, 25 y 25.
         internal static readonly int[] ArrivalWeights = { 100, 25, 25 };
 
         // =========================== ENFERMEDADES ============================
@@ -89,88 +57,61 @@ namespace UnderPressure
         // 5 Light Headed. Una misma posición siempre representa la misma
         // enfermedad; no se buscan enfermedades por nombre durante la carga.
 
-        /// <summary>
-        /// WeightedIllness.MinWeight. Peso mínimo de selección.
-        /// Originales: 100, 100, 100, 100, 400 y 200.
-        /// </summary>
+        /// Peso mínimo de selección de cada enfermedad.
+        /// Original: 100, 100, 100, 100, 400 y 200.
         internal static readonly int[] IllnessMinimumWeights = { 100, 100, 100, 100, 400, 200 };
 
-        /// <summary>
-        /// WeightedIllness.MaxWeight. Peso máximo de selección.
-        /// Originales: 200, 200, 200, 200, 800 y 400.
-        /// </summary>
+        /// Peso máximo de selección de cada enfermedad.
+        /// Original: 200, 200, 200, 200, 800 y 400.
         internal static readonly int[] IllnessMaximumWeights = { 200, 200, 200, 200, 800, 400 };
 
-        /// <summary>
-        /// WeightedIllness.MinStarRating. Estrellas mínimas para ser elegible.
-        /// Originales: 0, 0, 0, 1, 0 y 0.
-        /// </summary>
+        /// Estrellas mínimas necesarias para que pueda aparecer cada enfermedad.
+        /// Original: 0, 0, 0, 1, 0 y 0.
         internal static readonly int[] IllnessMinimumStars = { 0, 0, 0, 1, 0, 0 };
 
-        /// <summary>
-        /// WeightedIllness.MinPatientsSpawned. Pacientes generados antes de
-        /// poder escoger cada enfermedad. Originales: 0, 5, 10, 0, 10 y 0.
-        /// </summary>
+        /// Pacientes que deben haberse generado antes de poder escoger cada enfermedad.
+        /// Original: 0, 5, 10, 0, 10 y 0.
         internal static readonly int[] IllnessMinimumPatients = { 0, 5, 10, 0, 10, 0 };
 
-        /// <summary>
-        /// WeightedIllness.Unlocked. Desbloqueo inicial; los false pueden ser
-        /// habilitados después por el LevelScript.
-        /// Originales: true, true, false, false, false y false.
-        /// </summary>
+        /// Indica qué enfermedades están desbloqueadas inicialmente.
+        /// Original: true, true, false, false, false y false.
         internal static readonly bool[] IllnessInitiallyUnlocked =
             { true, true, false, false, false, false };
 
         // =========================== EMERGENCIAS =============================
 
-        /// <summary>
-        /// Schedules["Challenges"].MinCooldownInDays. Espera mínima entre
-        /// intentos de generar emergencias. Original: 90 días.
-        /// </summary>
+        /// Espera mínima entre intentos de generar emergencias.
+        /// Original: 90 días.
         internal static int EmergencyCooldownMinimumDays = 90;
 
-        /// <summary>
-        /// Schedules["Challenges"].MaxCooldownInDays. Espera máxima entre
-        /// intentos de generar emergencias. Original: 120 días.
-        /// </summary>
+        /// Espera máxima entre intentos de generar emergencias.
+        /// Original: 120 días.
         internal static int EmergencyCooldownMaximumDays = 120;
 
-        /// <summary>
-        /// Schedules["Challenges"].IsEnabledOnStart. El original es false;
-        /// posteriormente el LevelScript activa el calendario.
-        /// </summary>
+        /// Indica si las emergencias están activadas desde el inicio de la partida.
+        /// Original: false; el nivel las activa posteriormente.
         internal static bool EmergencyEventsEnabledOnStart = false;
 
-        /// <summary>
-        /// ChallengeConfig.PatientCount. Orden: Light Headed, Bogwarts y
-        /// Bed Face. Originales: 7, 5 y 5 pacientes.
-        /// </summary>
+        /// Pacientes de cada emergencia, en orden: Light Headed, Bogwarts y Bed Face.
+        /// Original: 7, 5 y 5 pacientes.
         internal static readonly int[] EmergencyPatientCounts = { 7, 5, 5 };
 
-        /// <summary>
-        /// ChallengeConfig.TimeLength, en el mismo orden anterior.
-        /// Originales: 90, 90 y 90 días de juego.
-        /// </summary>
+        /// Tiempo disponible para cada emergencia, en el mismo orden anterior.
+        /// Original: 90, 90 y 90 días de juego.
         internal static readonly int[] EmergencyTimeLimits = { 90, 90, 90 };
 
         // =========================== VISITAS VIP =============================
 
-        /// <summary>
-        /// Schedules["VIPs"].MinCooldownInDays. Espera mínima entre intentos
-        /// de programar una visita VIP. Original: 180 días.
-        /// </summary>
+        /// Espera mínima entre intentos de programar una visita VIP.
+        /// Original: 180 días.
         internal static int VipCooldownMinimumDays = 180;
 
-        /// <summary>
-        /// Schedules["VIPs"].MaxCooldownInDays. Espera máxima entre intentos
-        /// de programar una visita VIP. Original: 365 días.
-        /// </summary>
+        /// Espera máxima entre intentos de programar una visita VIP.
+        /// Original: 365 días.
         internal static int VipCooldownMaximumDays = 365;
 
-        /// <summary>
-        /// Schedules["VIPs"].IsEnabledOnStart. El original es false;
-        /// posteriormente el LevelScript activa el calendario.
-        /// </summary>
+        /// Indica si las visitas VIP están activadas desde el inicio de la partida.
+        /// Original: false; el nivel las activa posteriormente.
         internal static bool VipEventsEnabledOnStart = false;
 
         // ====================== APLICACIÓN DE VALORES ========================
