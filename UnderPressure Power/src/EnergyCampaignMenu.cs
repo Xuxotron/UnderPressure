@@ -277,10 +277,10 @@ namespace UnderPressure.PowerGrid
                 _contractSlider.minValue = 0f;
                 _contractSlider.maxValue = 10f;
                 _contractSlider.wholeNumbers = true;
-                _contractSlider.value = PowerGridPrototype.GetSelectedContractedEnergy(_room.Level) / 1000f;
+                _contractSlider.value = PowerGridSystem.GetSelectedContractedEnergy(_room.Level) / 1000f;
                 _contractSlider.onValueChanged.AddListener(value =>
                 {
-                    PowerGridPrototype.RequestContractedEnergy(_room.Level, Mathf.RoundToInt(value) * 1000);
+                    PowerGridSystem.RequestContractedEnergy(_room.Level, Mathf.RoundToInt(value) * 1000);
                     RefreshContract();
                 });
                 ConfigureSliderPoints(_contractSlider, 11);
@@ -431,9 +431,9 @@ namespace UnderPressure.PowerGrid
         {
             if (_room?.Level == null) return;
             var power = _contractSlider == null
-                ? PowerGridPrototype.GetSelectedContractedEnergy(_room.Level)
+                ? PowerGridSystem.GetSelectedContractedEnergy(_room.Level)
                 : Mathf.RoundToInt(_contractSlider.value) * 1000;
-            var cost = PowerGridPrototype.GetMonthlyCostForContractedEnergy(power);
+            var cost = PowerGridSystem.GetMonthlyCostForContractedEnergy(power);
             if (_contractPower != null)
                 _contractPower.text = ContractedPowerText.Translation + ": " +
                                       FormatInteger(power);

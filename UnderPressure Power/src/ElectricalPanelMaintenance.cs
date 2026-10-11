@@ -20,7 +20,7 @@ namespace UnderPressure.PowerGrid
                 !string.Equals(__0, ObjectAttributes.Type.Maintenance.ToString(),
                     StringComparison.OrdinalIgnoreCase)) return;
 
-            var connectedTiles = PowerGridPrototype.ConnectedLowVoltageTiles(__instance);
+            var connectedTiles = PowerGridSystem.ConnectedLowVoltageTiles(__instance);
             __result = connectedTiles * ElectricalPanelSpecialParameters.WearPerConnectedTile;
         }
     }
@@ -35,7 +35,7 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(RoomItem __instance)
         {
             if (EnergyRoomItems.IsPanel(__instance))
-                PowerGridPrototype.NotifyPanelMaintenanceChanged(__instance);
+                PowerGridSystem.NotifyPanelMaintenanceChanged(__instance);
         }
     }
 

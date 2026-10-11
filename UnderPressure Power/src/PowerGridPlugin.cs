@@ -210,7 +210,7 @@ namespace UnderPressure.PowerGrid
 
         private static void ReloadExtraState()
         {
-            PowerGridPrototype.ReloadActiveExtraState();
+            PowerGridSystem.ReloadActiveExtraState();
         }
 
         private void CaptureUiSpriteReferences()

@@ -129,7 +129,7 @@ namespace UnderPressure.PowerGrid
             foreach (var item in items)
             {
                 if (item?.Definition == null || !room.Definition.RequiresWorkingItem(item.Definition)) continue;
-                if (RequiresPower(item) && !PowerGridPrototype.IsPowered(item)) return false;
+                if (RequiresPower(item) && !PowerGridSystem.IsPowered(item)) return false;
             }
 
             // Igual que una avería nativa, cualquier máquina obligatoria sin suministro
@@ -358,7 +358,7 @@ namespace UnderPressure.PowerGrid
             if (!__result) return;
             var item = __instance?.ParentRoomItem;
             if (ElectricityGameplay.RequiresPower(item) &&
-                (!PowerGridPrototype.IsPowered(item) || !ElectricityGameplay.CanOperateRoom(item.OwningRoom)))
+                (!PowerGridSystem.IsPowered(item) || !ElectricityGameplay.CanOperateRoom(item.OwningRoom)))
                 __result = false;
         }
     }
@@ -369,7 +369,7 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(RoomItem __instance, ref bool __result)
         {
             if (__result && ElectricityGameplay.RequiresPower(__instance) &&
-                (!PowerGridPrototype.IsPowered(__instance) ||
+                (!PowerGridSystem.IsPowered(__instance) ||
                  !ElectricityGameplay.CanOperateRoom(__instance.OwningRoom))) __result = false;
         }
     }
@@ -404,9 +404,9 @@ namespace UnderPressure.PowerGrid
             if (!UnderPressurePlugin.ElectricityGameplayEnabled) return;
             var level = LevelField?.GetValue(__instance) as Level;
             var installed = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
-            var usesDailyAccumulator = PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var monthly);
+            var usesDailyAccumulator = PowerGridSystem.TryGetAccruedDailyEnergyBill(__instance, out var monthly);
             if (!usesDailyAccumulator) monthly = installed;
-            monthly = SafeAdd(monthly, PowerGridPrototype.GetContractedEnergyMonthlyCost(level));
+            monthly = SafeAdd(monthly, PowerGridSystem.GetContractedEnergyMonthlyCost(level));
             var perUse = PerUseEnergyField == null ? 0 : (int)PerUseEnergyField.GetValue(__instance);
             __state = new BillState
             {
@@ -432,7 +432,7 @@ namespace UnderPressure.PowerGrid
             // añadir o retirar objetos continúe funcionando normalmente.
             MonthlyEnergyField?.SetValue(__instance, __state.OriginalInstalled);
             if (__exception == null && __state.UsesDailyAccumulator)
-                PowerGridPrototype.ClearAccruedDailyEnergyBill(__instance);
+                PowerGridSystem.ClearAccruedDailyEnergyBill(__instance);
             return __exception;
         }
     }
@@ -447,10 +447,10 @@ namespace UnderPressure.PowerGrid
         private static void Prefix(FinanceManager __instance, out int __state)
         {
             __state = MonthlyEnergyField == null ? 0 : (int)MonthlyEnergyField.GetValue(__instance);
-            if (PowerGridPrototype.TryGetAccruedDailyEnergyBill(__instance, out var accrued))
+            if (PowerGridSystem.TryGetAccruedDailyEnergyBill(__instance, out var accrued))
             {
                 var level = LevelField?.GetValue(__instance) as Level;
-                var contract = PowerGridPrototype.GetContractedEnergyMonthlyCost(level);
+                var contract = PowerGridSystem.GetContractedEnergyMonthlyCost(level);
                 MonthlyEnergyField?.SetValue(__instance,
                     accrued > int.MaxValue - contract ? int.MaxValue : accrued + contract);
             }
@@ -469,7 +469,7 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(FinanceManager __instance, FinanceModifier __2)
         {
             if (__2 == null || __2.EnergyCost <= 0) return;
-            PowerGridPrototype.RecordTaskEnergy(__instance, __2.EnergyCost);
+            PowerGridSystem.RecordTaskEnergy(__instance, __2.EnergyCost);
         }
     }
 

@@ -304,7 +304,7 @@ namespace UnderPressure.PowerGrid
 
         private static void RefreshPlacedPanelPrefabInstances()
         {
-            RecreatePlacedPanels(PowerGridPrototype.ActiveLevel);
+            RecreatePlacedPanels(PowerGridSystem.ActiveLevel);
         }
 
         internal static void RecreatePlacedPanels(Level level)
@@ -822,7 +822,7 @@ namespace UnderPressure.PowerGrid
         {
             if (!EnergyRoomItems.IsCell(__instance)) return;
             __result = EnergyCellPricing.CostForIndex(
-                EnergyCellPricing.Count(PowerGridPrototype.CurrentBuildingFloorPlan));
+                EnergyCellPricing.Count(PowerGridSystem.CurrentBuildingFloorPlan));
         }
     }
 
@@ -850,8 +850,8 @@ namespace UnderPressure.PowerGrid
             var isPanel = EnergyRoomItems.IsPanel(item);
             if (!isCell && !isPanel) return;
             var validConnection = isCell
-                ? PowerGridPrototype.IsCellPlacementValid(item)
-                : PowerGridPrototype.IsPanelPlacementValid(item);
+                ? PowerGridSystem.IsCellPlacementValid(item)
+                : PowerGridSystem.IsPanelPlacementValid(item);
             if (!validConnection)
             {
                 item.SetValid(false, isCell
@@ -879,7 +879,7 @@ namespace UnderPressure.PowerGrid
         private static void Postfix(Level __instance)
         {
             if (__instance?.WorldState == null) return;
-            PowerGridPrototype.ConsumeDailyMonthlyEnergy(__instance);
+            PowerGridSystem.ConsumeDailyMonthlyEnergy(__instance);
         }
     }
 

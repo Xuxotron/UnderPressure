@@ -31,7 +31,7 @@ namespace UnderPressure.PowerGrid
 
         internal void RefreshDisplay()
         {
-            if (!PowerGridPrototype.TryGetBatteryCharge(_item, out var progress, out var roundedMaximum))
+            if (!PowerGridSystem.TryGetBatteryCharge(_item, out var progress, out var roundedMaximum))
             {
                 if (_capacityLabel != null) _capacityLabel.gameObject.SetActive(false);
                 return;
