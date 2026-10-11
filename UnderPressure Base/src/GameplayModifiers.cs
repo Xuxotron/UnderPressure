@@ -36,6 +36,21 @@ namespace UnderPressure
             AccessTools.Field(typeof(CharacterManager.Config), "_reputationArrivalRateMultiplierMin");
         private static readonly FieldInfo ReputationMaximumField =
             AccessTools.Field(typeof(CharacterManager.Config), "_reputationArrivalRateMultiplierMax");
+        private static readonly FieldInfo TimeToSpawnPatientField =
+            AccessTools.Field(typeof(CharacterManager), "_timeToSpawnPatient");
+        private static readonly MethodInfo CalculateSpawnTimeMethod =
+            AccessTools.Method(typeof(CharacterManager), "CalculateSpawnTime");
+
+        internal static void RefreshActiveTimer()
+        {
+            var manager = AdaptiveDifficulty.ActiveLevel?.CharacterManager;
+            if (manager == null || TimeToSpawnPatientField == null ||
+                CalculateSpawnTimeMethod == null) return;
+
+            // Sustituye la cuenta atrás ya calculada para que el cambio sea inmediato.
+            var interval = (float)CalculateSpawnTimeMethod.Invoke(manager, null);
+            TimeToSpawnPatientField.SetValue(manager, interval);
+        }
 
         private static void Postfix(CharacterManager __instance, ref float __result)
         {

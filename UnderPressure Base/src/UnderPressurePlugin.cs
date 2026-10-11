@@ -160,6 +160,8 @@ namespace UnderPressure
                 "Reserva la dificultad de expansión para su ajuste automático.");
             GlobalDifficultySetting = BindPercentage("GlobalDifficulty", "Control conjunto de todos los modificadores de dificultad.");
             PatientArrivalSetting = BindPercentage("PatientVisitFrequency", "Frecuencia de visitas de pacientes.");
+            PatientArrivalSetting.SettingChanged += (sender, args) =>
+                PatientArrivalPatch.RefreshActiveTimer();
             HealthDecaySetting = BindPercentage("PatientHealthDeterioration", "Velocidad de deterioro de la salud de los pacientes.");
             DiagnosisChanceSetting = BindPercentage("DiagnosisEffectiveness", "Dificultad global del diagnóstico. Los valores positivos reducen su efectividad.");
             TreatmentChanceSetting = BindPercentage("TreatmentSuccessChance", "Riesgo global de fallo del tratamiento. Los valores positivos reducen su probabilidad de éxito.");

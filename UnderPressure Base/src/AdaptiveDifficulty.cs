@@ -46,6 +46,7 @@ namespace UnderPressure
         private static readonly Dictionary<Level, Subscription> Active =
             new Dictionary<Level, Subscription>();
         private static Level CurrentLevel;
+        internal static Level ActiveLevel => CurrentLevel;
         private static int CurrentEconomyValue;
         private static int CurrentReputationValue;
         private static int CurrentExpansionValue;
