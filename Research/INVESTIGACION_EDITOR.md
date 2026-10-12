@@ -4,7 +4,7 @@
 
 Este documento recoge el estado técnico comprobado del módulo independiente `UnderPressure Editor`, la investigación de la reconstrucción de paredes al pintar y la investigación del filtrado de objetos exteriores pertenecientes a DLC deshabilitados.
 
-No constituye una implementación de las correcciones propuestas. En particular, no se ha sustituido la reconstrucción nativa de parcelas ni se ha creado todavía el mapa definitivo de procedencia de objetos DLC.
+Las dos primeras correcciones derivadas de esta investigación se implementaron el 12 de octubre de 2026. La pintura usa ahora el refresco nativo que conserva la habitación y el catálogo exterior infiere la procedencia desde los niveles y parcelas reales. Las optimizaciones parciales por rectángulo y una procedencia basada directamente en assets siguen pendientes.
 
 Estado funcional confirmado:
 
@@ -194,20 +194,19 @@ Además, esta ruta no reproduce por sí sola todo el orden de `Build(false)`: no
 
 `CorridorWallsVisual.CreateWallObjects` sí admite límites de suciedad y puede reutilizar parcialmente objetos de pared. En cambio, `RoomFloorPlanVisual.UpdateFromRoom` no ofrece una API equivalente por rectángulo y reconstruye sus elementos.
 
-### 5.2 Corrección recomendada
+### 5.2 Corrección implementada
 
 La corrección debe limitarse a la llamada originada por la pintura del editor. `HospitalMap.Build(false)` también se usa en la carga inicial y en movimientos de parcela, donde la reconstrucción completa sigue siendo apropiada.
 
-Propuesta:
+Implementación aplicada:
 
-1. Detectar exclusivamente la confirmación de pintura de `CursorEditHospitalBuild`.
-2. Conservar el `HospitalMap`, `Room`, `FloorPlan` y las capas de paisaje existentes.
-3. Volver a leer el estado interior después de modificar `FloorImage`.
-4. Actualizar entradas, puertas, ventanas, paredes adyacentes y pilares en el mismo orden que la construcción original.
-5. Actualizar visuales de suelo, paredes, pasillos y perímetro.
-6. Actualizar conectividad y navegación una sola vez.
-7. Calcular la iluminación una sola vez.
-8. Ejecutar la captura y restauración visual únicamente cuando la operación haya modificado tiles.
+1. Un transpiler limitado a `CursorEditHospitalBuild.CursorUpdate` sustituye únicamente su llamada a `Build(false)`.
+2. `HospitalMap.RebuildWalls()` conserva `HospitalMap`, `Room`, `FloorPlan` y las capas de paisaje existentes.
+3. Antes del refresco se reconstruye la lista de entradas desde `FloorImage`.
+4. Antes de `RoomFloorPlanVisual.UpdateFromRoom` se aplican los tipos de pared correspondientes a pilares.
+5. Se conserva el estado abierto y visible de la misma habitación si el refresco visual lo altera.
+6. Se omite el segundo cálculo de iluminación que ejecutaba el cursor inmediatamente después.
+7. Si cambian las firmas privadas o el refresco falla, se registra el error y se recupera la ruta nativa `Build(false)`.
 
 Como segunda fase, el rectángulo pintado puede utilizarse para restringir la reconstrucción de `CorridorWallsVisual`. Una actualización realmente parcial de `RoomFloorPlanVisual` exigiría código específico y debe validarse con más cuidado.
 
@@ -280,28 +279,30 @@ Los recursos extraídos contienen grupos con nombres temáticos, por ejemplo:
 
 Los nombres sugieren procedencias distintas, pero no constituyen una fuente autorizada para asignar DLC. No debe construirse una lista manual por prefijos ni afirmarse que todos esos recursos aparecen en el menú sin instrumentar cada entrada real.
 
-## 7. Propuesta de filtrado DLC
+## 7. Filtrado DLC implementado
 
-La solución necesita un mapa autorizado `GUID de RoomItemDefinition -> DLC de procedencia` independiente de `DlcPackRequired`.
+El editor construye un mapa `GUID de RoomItemDefinition -> DLC de procedencia` independiente de `DlcPackRequired`.
 
-Primera fuente propuesta:
+Fuente utilizada:
 
 1. Recorrer los `LevelConfig` reales.
 2. Obtener sus requisitos mediante `LevelConfig.GetRequiredDlcPack`.
 3. Recorrer las `HospitalPlotDefinition` utilizadas por cada nivel.
 4. Examinar `Items`, `BuiltItems` y `UnbuiltItems`.
 5. Asociar cada GUID exterior a los niveles base o DLC en los que aparece.
-6. Mantener los objetos usados por contenido base.
-7. Excluir un objeto solo cuando su procedencia comprobada sea exclusivamente un DLC deshabilitado.
+6. Mantener siempre los objetos usados por contenido base.
+7. Mantener los objetos compartidos si al menos uno de sus DLC sigue disponible.
+8. Excluir un objeto solo cuando su procedencia comprobada sea exclusivamente uno o varios DLC no disponibles.
 
-Esta estrategia evita una lista manual, pero no garantiza por sí sola clasificar definiciones exteriores que no aparezcan en ninguna parcela de nivel. Para la cobertura completa habrá que investigar la procedencia serializada en assets, escenas o dependencias de AssetBundle, o añadir instrumentación temporal que enumere las entradas reales y su origen durante la carga.
+Esta estrategia evita una lista manual. Las definiciones que no aparecen en ninguna parcela permanecen visibles para evitar falsos positivos. Para clasificarlas también hará falta investigar la procedencia serializada en assets, escenas o dependencias de AssetBundle.
 
-Una vez disponible el mapa:
+Comportamiento actual:
 
-- el filtrado debe ejecutarse antes del primer `LandscapeObjectsMenu.Setup`;
-- si el usuario cambia el estado de un DLC con el menú ya creado, deben invalidarse y reconstruirse sus cuatro listas internas;
-- la consulta reflejada a Base debe resolverse de forma perezosa y reintentable;
-- los assets originales no deben modificarse ni desinstalarse.
+- la procedencia se prepara en el selector antes de cargar el nivel;
+- el filtrado se ejecuta antes de que `LandscapeObjectsMenu.Setup` ordene y almacene el catálogo;
+- la consulta reflejada a Base se resuelve de forma perezosa y reintentable;
+- al iniciar una nueva selección se reconstruye la procedencia con el estado actual de los DLC;
+- los assets originales no se modifican ni desinstalan.
 
 ## 8. Riesgos y pruebas necesarias
 
@@ -336,8 +337,8 @@ Los principales avances del editor están registrados en:
 
 ## 10. Conclusión
 
-El problema de rendimiento de la pintura está causado por el uso de `HospitalMap.Build(false)` para cualquier modificación, incluida una sola celda. La geometría y el estado visual pueden variar porque esa ruta destruye y recrea la habitación completa. El parche de preservación actual no evita esa reconstrucción y trabaja más veces de las necesarias.
+El problema de rendimiento de la pintura estaba causado por el uso de `HospitalMap.Build(false)` para cualquier modificación, incluida una sola celda. La ruta aplicada conserva ahora la habitación y reconstruye sus paredes sin demoler toda la parcela.
 
-El filtro de DLC sí se ejecuta, pero el catálogo exterior se alimenta directamente de `LandscapeItemDatabase` y sus definiciones no declaran `DlcPackRequired`. La corrección requiere determinar la procedencia real de cada GUID y reconstruir la caché del menú cuando cambien las preferencias.
+El catálogo exterior sigue alimentándose directamente de `LandscapeItemDatabase`, pero el filtro ya puede clasificar los GUID presentes en las parcelas de niveles Base y DLC. Los objetos no clasificables se conservan hasta disponer de procedencia directa desde assets.
 
 Ambas correcciones deben desarrollarse por separado y validarse contra los flujos ya funcionales, especialmente la protección de datos originales, el formato `.upmap` y la ocultación de decoración fija duplicada.

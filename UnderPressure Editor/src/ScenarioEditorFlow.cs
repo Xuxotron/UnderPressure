@@ -189,6 +189,10 @@ namespace UnderPressure.Editor
                 return;
             }
 
+            // Se recorren tambien los niveles de DLC deshabilitados para conocer
+            // la procedencia de sus objetos antes de construir el catalogo.
+            ScenarioEditorObjects.BuildDlcProvenance(options);
+
             var levels = new List<LevelConfig>();
             foreach (var option in options)
             {

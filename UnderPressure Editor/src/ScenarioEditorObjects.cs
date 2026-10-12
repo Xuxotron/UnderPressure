@@ -4,6 +4,7 @@
 // Destino: UnderPressure Editor/src/ScenarioEditorObjects.cs
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -21,11 +22,20 @@ namespace UnderPressure.Editor
             if (color.a > 0f) color.a = 0.5f;
         }
 
+        private sealed class DlcProvenance
+        {
+            internal bool UsedByBase;
+            internal readonly Dictionary<uint, DLCItemDefinition> Packs =
+                new Dictionary<uint, DLCItemDefinition>();
+        }
+
+        private static readonly Dictionary<Guid, DlcProvenance> Provenance =
+            new Dictionary<Guid, DlcProvenance>();
+
         // Bajo Presion Base es otra DLL. No referenciarla directamente permite
-        // que el Editor funcione de manera independiente. Como seguridad extra
-        // consultamos su estado de DLC por reflexion si esta presente.
-        private static readonly System.Reflection.MethodInfo BaseDlcDisabled =
-            FindBaseDlcDisabled();
+        // que el Editor funcione de manera independiente. La busqueda es perezosa
+        // y se repite si Base aun no estaba cargado en el primer intento.
+        private static MethodInfo _baseDlcDisabled;
 
         private static System.Reflection.MethodInfo FindBaseDlcDisabled()
         {
@@ -45,8 +55,10 @@ namespace UnderPressure.Editor
 
         private static bool DisabledFromBase(uint appId)
         {
-            if (BaseDlcDisabled == null || appId == 0) return false;
-            try { return (bool)BaseDlcDisabled.Invoke(null, new object[] { appId }); }
+            if (appId == 0) return false;
+            if (_baseDlcDisabled == null) _baseDlcDisabled = FindBaseDlcDisabled();
+            if (_baseDlcDisabled == null) return false;
+            try { return (bool)_baseDlcDisabled.Invoke(null, new object[] { appId }); }
             catch (Exception exception)
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
@@ -55,12 +67,96 @@ namespace UnderPressure.Editor
             }
         }
 
+        internal static void BuildDlcProvenance(IEnumerable<SandboxLevelOption> options)
+        {
+            Provenance.Clear();
+            if (options == null) return;
+
+            var levels = new HashSet<LevelConfig>();
+            var plots = 0;
+            var references = 0;
+            foreach (var option in options)
+            {
+                var level = option?.Level?.Instance;
+                if (level == null || !levels.Add(level)) continue;
+                var pack = level.GetRequiredDlcPack();
+                var config = level.GetWorldStateConfig();
+                if (config?.HospitalPlots == null) continue;
+
+                foreach (var plotWrapper in config.HospitalPlots)
+                {
+                    var plot = plotWrapper?.Instance;
+                    if (plot == null) continue;
+                    ++plots;
+                    foreach (HospitalPlotLayer layer in Enum.GetValues(typeof(HospitalPlotLayer)))
+                    {
+                        var items = plot.GetItems(layer);
+                        if (items == null) continue;
+                        foreach (var item in items)
+                        {
+                            var definition = item?.Definition?.Instance;
+                            if (definition == null) continue;
+                            RegisterProvenance(definition, pack);
+                            ++references;
+                        }
+                    }
+                }
+            }
+
+            var baseItems = 0;
+            var dlcOnlyItems = 0;
+            foreach (var value in Provenance.Values)
+            {
+                if (value.UsedByBase) ++baseItems;
+                else if (value.Packs.Count > 0) ++dlcOnlyItems;
+            }
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Procedencia del catalogo exterior: " + levels.Count + " niveles, " +
+                plots + " parcelas y " + references + " referencias; " +
+                baseItems + " objetos usados por Base y " + dlcOnlyItems +
+                " usados exclusivamente por niveles DLC.");
+        }
+
+        private static void RegisterProvenance(
+            RoomItemDefinition definition, DLCItemDefinition levelPack)
+        {
+            if (!Provenance.TryGetValue(definition.GUID, out var provenance))
+            {
+                provenance = new DlcProvenance();
+                Provenance.Add(definition.GUID, provenance);
+            }
+
+            if (levelPack == null)
+            {
+                provenance.UsedByBase = true;
+                return;
+            }
+            if (levelPack.AppID != 0)
+                provenance.Packs[levelPack.AppID] = levelPack;
+        }
+
+        private static bool IsPackAvailable(DLCItemDefinition pack)
+        {
+            return pack != null && DLCUtils.IsDLCInstalled(pack) &&
+                   !DisabledFromBase(pack.AppID);
+        }
+
         private static bool IsUnavailable(RoomItemDefinition definition)
         {
             var required = definition?.DlcPackRequired;
             var dlc = required?.Instance;
-            if (dlc == null) return false;
-            return !DLCUtils.IsDLCInstalled(dlc) || DisabledFromBase(dlc.AppID);
+            if (dlc != null) return !IsPackAvailable(dlc);
+
+            if (definition == null ||
+                !Provenance.TryGetValue(definition.GUID, out var provenance) ||
+                provenance.UsedByBase || provenance.Packs.Count == 0)
+                return false;
+
+            // Un objeto compartido por varios DLC se conserva si al menos uno
+            // de esos paquetes sigue disponible.
+            foreach (var pack in provenance.Packs.Values)
+                if (IsPackAvailable(pack)) return false;
+            return true;
         }
 
         internal static void FilterUnavailableDlc(ref List<RoomItemDefinition> items)
@@ -68,7 +164,15 @@ namespace UnderPressure.Editor
             if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning || items == null)
                 return;
 
+            if (Provenance.Count == 0)
+            {
+                var options = ScenarioEditorSession.Level?.App?
+                    .SandboxSettingsConfig?.LevelOptions;
+                BuildDlcProvenance(options);
+            }
+
             var removed = 0;
+            var inferred = 0;
             var untagged = 0;
             var tagged = 0;
             for (var i = items.Count - 1; i >= 0; --i)
@@ -84,16 +188,18 @@ namespace UnderPressure.Editor
                 if (definition.DlcPackRequired?.Instance == null) ++untagged;
                 else ++tagged;
                 if (!IsUnavailable(definition)) continue;
+                if (definition.DlcPackRequired?.Instance == null) ++inferred;
                 items.RemoveAt(i);
                 ++removed;
             }
 
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Catalogo exterior: " + items.Count + " disponibles; " + removed +
-                " excluidos por DLC; " + tagged + " con DLC declarado, " +
+                " excluidos por DLC (" + inferred + " por procedencia de nivel); " +
+                tagged + " con DLC declarado, " +
                 untagged + " sin DLC declarado. " +
                 "Comprobacion independiente de Base: " +
-                (BaseDlcDisabled != null ? "activa" : "no encontrada") + ".");
+                (_baseDlcDisabled != null ? "activa" : "no encontrada") + ".");
         }
     }
 

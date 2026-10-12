@@ -3,6 +3,9 @@
 // Destino: UnderPressure Editor/src/ScenarioEditorSession.cs
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -244,60 +247,164 @@ namespace UnderPressure.Editor
             ScenarioEditorSession.ShiftLandscape(plot, current.X - start.X, current.Y - start.Y);
         }
     }
-    // Al pintar, el metodo nativo vuelve a crear Room/FloorPlanVisual. Su Room
-    // comienza abierta y su visual visible por defecto, independientemente del
-    // estado anterior. Restablecer ese estado evita cambios de visibilidad
-    // inesperados; NO impide recalcular las paredes donde cambie el plano.
-    [HarmonyPatch(typeof(CursorEditHospitalBuild), nameof(CursorEditHospitalBuild.CursorUpdate))]
-    internal static class ScenarioEditorPaintPreserveRoomStatePatch
+
+    // La pintura nativa llama a Build(false), que demuele y vuelve a crear toda
+    // la parcela aunque solo cambie una celda. RebuildWalls conserva HospitalMap,
+    // FloorPlan, Room y las tres capas de paisaje. El editor repone los dos pasos
+    // que ese metodo omite: entradas y tipos de pared asociados a pilares.
+    internal static class ScenarioEditorPaintRefresh
     {
-        private struct PaintRoomState
-        {
-            internal HospitalPlot Plot;
-            internal Room PreviousRoom;
-            internal bool WasOpen;
-            internal bool WasVisible;
-            internal int PreviousWallCount;
-        }
+        private static readonly MethodInfo AddEntrancesMethod =
+            AccessTools.Method(typeof(HospitalMap), "AddHospitalEntrancesFromImage",
+                new[] { typeof(Texture2D) });
+        private static readonly MethodInfo AddPillarsMethod =
+            AccessTools.Method(typeof(HospitalMap), "AddPillars",
+                new[] { typeof(Texture2D) });
+        private static readonly PropertyInfo FloorImageProperty =
+            AccessTools.Property(typeof(HospitalMap), "FloorImage");
 
-        private static void Prefix(CursorEditHospitalBuild __instance, out PaintRoomState __state)
-        {
-            __state = default(PaintRoomState);
-            if (!ScenarioEditorSession.Active || __instance == null) return;
-            var plot = AccessTools.Field(typeof(CursorEditHospitalBuild), "_hospitalPlot")?
-                .GetValue(__instance) as HospitalPlot;
-            var room = plot?.HospitalMap?.Room;
-            if (room == null) return;
-            __state.Plot = plot;
-            __state.PreviousRoom = room;
-            __state.WasOpen = room.IsOpen;
-            __state.WasVisible = room.IsVisible();
-            __state.PreviousWallCount = plot.HospitalMap.ExternalWalls?.Count ?? 0;
-        }
+        private static HospitalMap _mapBeingRefreshed;
+        private static bool _skipNextLighting;
 
-        private static void Postfix(PaintRoomState __state)
+        internal static void Refresh(HospitalMap map, bool playBuildAnimation)
         {
-            if (!ScenarioEditorSession.Active || __state.Plot == null ||
-                __state.PreviousRoom == null) return;
-            var newMap = __state.Plot.HospitalMap;
-            var newRoom = newMap?.Room;
-            if (newRoom == null || ReferenceEquals(newRoom, __state.PreviousRoom)) return;
-
-            if (newRoom.IsOpen != __state.WasOpen)
+            _skipNextLighting = false;
+            if (!ScenarioEditorSession.Active || map == null ||
+                AddEntrancesMethod == null || AddPillarsMethod == null ||
+                FloorImageProperty == null)
             {
-                if (__state.WasOpen) newRoom.Open();
-                else newRoom.Close();
+                map?.Build(playBuildAnimation);
+                return;
             }
-            if (newRoom.IsVisible() != __state.WasVisible)
-                newRoom.SetVisible(__state.WasVisible);
 
-            var newWallCount = newMap.ExternalWalls?.Count ?? 0;
-            if (newWallCount != __state.PreviousWallCount)
+            var room = map.Room;
+            var wasOpen = room?.IsOpen ?? false;
+            var wasVisible = room?.IsVisible() ?? false;
+            var previousWalls = map.ExternalWalls?.Count ?? 0;
+            var timer = Stopwatch.StartNew();
+
+            try
+            {
+                var floorImage = GetFloorImage(map);
+                AddEntrancesMethod.Invoke(map, new object[] { floorImage });
+                _mapBeingRefreshed = map;
+                map.RebuildWalls();
+
+                // RebuildWalls conserva la instancia, pero UpdateFromRoom puede
+                // alterar su presentacion. Solo se corrige si realmente cambia.
+                if (room != null && ReferenceEquals(room, map.Room))
+                {
+                    if (room.IsOpen != wasOpen)
+                    {
+                        if (wasOpen) room.Open();
+                        else room.Close();
+                    }
+                    if (room.IsVisible() != wasVisible)
+                        room.SetVisible(wasVisible);
+                }
+
+                _skipNextLighting = true;
+                timer.Stop();
                 UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Pintura del editor: paredes recalculadas " +
-                    __state.PreviousWallCount + " -> " + newWallCount +
-                    ". Si cambia la forma del edificio, es una regeneracion nativa.");
+                    "Pintura del editor actualizada sin demoler la parcela: paredes " +
+                    previousWalls + " -> " + (map.ExternalWalls?.Count ?? 0) +
+                    ", " + timer.ElapsedMilliseconds + " ms.");
+            }
+            catch (Exception exception)
+            {
+                // Si una version del juego cambia esta ruta privada, se conserva
+                // el comportamiento nativo antes que dejar una parcela parcial.
+                _mapBeingRefreshed = null;
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Fallo en el refresco ligero de pintura; se usara Build(false): " +
+                    exception);
+                map.Build(playBuildAnimation);
+                _skipNextLighting = true;
+            }
+            finally
+            {
+                _mapBeingRefreshed = null;
+            }
+        }
+
+        internal static void AddPillarsBeforeVisualUpdate()
+        {
+            var map = _mapBeingRefreshed;
+            if (map == null || AddPillarsMethod == null) return;
+            AddPillarsMethod.Invoke(map, new object[] { GetFloorImage(map) });
+        }
+
+        private static Texture2D GetFloorImage(HospitalMap map) =>
+            FloorImageProperty?.GetValue(map, null) as Texture2D;
+
+        internal static void CalculateLighting(WorldState worldState)
+        {
+            if (_skipNextLighting)
+            {
+                _skipNextLighting = false;
+                return;
+            }
+            worldState?.CalculateLighting();
         }
     }
 
+    // Se cambia exclusivamente la reconstruccion iniciada por la herramienta de
+    // pintura. Las cargas, aperturas de .upmap y movimientos conservan Build.
+    [HarmonyPatch(typeof(CursorEditHospitalBuild), nameof(CursorEditHospitalBuild.CursorUpdate))]
+    internal static class ScenarioEditorPaintRefreshPatch
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var codes = new List<CodeInstruction>(instructions);
+            var build = AccessTools.Method(typeof(HospitalMap), nameof(HospitalMap.Build));
+            var lighting = AccessTools.Method(
+                typeof(WorldState), nameof(WorldState.CalculateLighting));
+            var refresh = AccessTools.Method(
+                typeof(ScenarioEditorPaintRefresh), nameof(ScenarioEditorPaintRefresh.Refresh));
+            var calculateLighting = AccessTools.Method(typeof(ScenarioEditorPaintRefresh),
+                nameof(ScenarioEditorPaintRefresh.CalculateLighting));
+            var replacedBuild = 0;
+            var replacedLighting = 0;
+
+            foreach (var code in codes)
+            {
+                if (Equals(code.operand, build)) ++replacedBuild;
+                else if (Equals(code.operand, lighting)) ++replacedLighting;
+            }
+
+            if (replacedBuild != 1 || replacedLighting != 1)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudo aislar la reconstruccion de pintura: Build=" +
+                    replacedBuild + ", Lighting=" + replacedLighting +
+                    ". Se conserva CursorUpdate sin modificar.");
+                return codes;
+            }
+
+            foreach (var code in codes)
+            {
+                if (Equals(code.operand, build))
+                {
+                    code.opcode = OpCodes.Call;
+                    code.operand = refresh;
+                }
+                else if (Equals(code.operand, lighting))
+                {
+                    code.opcode = OpCodes.Call;
+                    code.operand = calculateLighting;
+                }
+            }
+            return codes;
+        }
+    }
+
+    // RebuildWalls actualiza los visuales despues de calcular las paredes. Este
+    // punto permite aplicar los tipos de pilar en el mismo orden que Build.
+    [HarmonyPatch(typeof(RoomFloorPlanVisual), nameof(RoomFloorPlanVisual.UpdateFromRoom))]
+    internal static class ScenarioEditorPaintPillarsPatch
+    {
+        private static void Prefix() =>
+            ScenarioEditorPaintRefresh.AddPillarsBeforeVisualUpdate();
+    }
 }
