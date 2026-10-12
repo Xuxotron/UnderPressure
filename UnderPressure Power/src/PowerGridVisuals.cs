@@ -1,3 +1,4 @@
+// Updated: 2026-10-12
 // Purpose: Implements electrical wiring tools, HUD controls, indicators, colours, and network visualisation.
 using System;
 using System.Collections;
@@ -5,7 +6,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using BepInEx;
+using UnderPressure.LoaderRuntime;
 using FullInspector.Generated.SharedInstance;
 using HarmonyLib;
 using I2.Loc;

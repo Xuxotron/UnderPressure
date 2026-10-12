@@ -4,6 +4,7 @@
 // Destino: UnderPressure Editor/src/ScenarioEditorObjects.cs
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
@@ -49,6 +50,15 @@ namespace UnderPressure.Editor
         private static readonly Dictionary<RoomItemDefinition, DlcProvenance> Provenance =
             new Dictionary<RoomItemDefinition, DlcProvenance>(
                 DefinitionReferenceComparer.Instance);
+        private static readonly HashSet<RoomItemDefinition> SceneProvenanceChecked =
+            new HashSet<RoomItemDefinition>(DefinitionReferenceComparer.Instance);
+        private static readonly Dictionary<string, DLCItemDefinition> PacksByScene =
+            new Dictionary<string, DLCItemDefinition>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> BaseScenes =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly FieldInfo PrefabField =
+            AccessTools.Field(typeof(RoomItemDefinition), "_prefab");
+        private static Dictionary<string, HashSet<string>> _scenesByPrefab;
 
         // Bajo Presion Base es otra DLL. No referenciarla directamente permite
         // que el Editor funcione de manera independiente. La busqueda es perezosa
@@ -88,6 +98,9 @@ namespace UnderPressure.Editor
         internal static void BuildDlcProvenance(IEnumerable<SandboxLevelOption> options)
         {
             Provenance.Clear();
+            SceneProvenanceChecked.Clear();
+            PacksByScene.Clear();
+            BaseScenes.Clear();
             if (options == null) return;
 
             var levels = new HashSet<LevelConfig>();
@@ -98,6 +111,12 @@ namespace UnderPressure.Editor
                 var level = option?.Level?.Instance;
                 if (level == null || !levels.Add(level)) continue;
                 var pack = level.GetRequiredDlcPack();
+                var sceneName = NormalizeSceneName(level.SceneName);
+                if (!string.IsNullOrEmpty(sceneName))
+                {
+                    if (pack == null) BaseScenes.Add(sceneName);
+                    else PacksByScene[sceneName] = pack;
+                }
                 var config = level.GetWorldStateConfig();
                 if (config?.HospitalPlots == null) continue;
 
@@ -133,6 +152,82 @@ namespace UnderPressure.Editor
                 plots + " parcelas y " + references + " referencias; " +
                 baseItems + " objetos usados por Base y " + dlcOnlyItems +
                 " usados exclusivamente por niveles DLC.");
+        }
+
+        private static string NormalizeSceneName(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return string.Empty;
+            sceneName = sceneName.Replace('\\', '/');
+            var slash = sceneName.LastIndexOf('/');
+            if (slash >= 0) sceneName = sceneName.Substring(slash + 1);
+            if (sceneName.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+                sceneName = sceneName.Substring(0, sceneName.Length - 6);
+            return sceneName;
+        }
+
+        private static Dictionary<string, HashSet<string>> LoadSceneProvenance()
+        {
+            if (_scenesByPrefab != null) return _scenesByPrefab;
+            _scenesByPrefab = new Dictionary<string, HashSet<string>>(
+                StringComparer.Ordinal);
+            const string resourceName =
+                "UnderPressure.Editor.Data.LandscapeSceneProvenance.tsv";
+            try
+            {
+                using (var stream = Assembly.GetExecutingAssembly()
+                    .GetManifestResourceStream(resourceName))
+                {
+                    if (stream == null)
+                        throw new InvalidOperationException(
+                            "No se encontro el indice " + resourceName + ".");
+                    using (var reader = new StreamReader(stream))
+                    {
+                        string line;
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (line.Length == 0 || line[0] == '#') continue;
+                            var separator = line.IndexOf('\t');
+                            if (separator <= 0 || separator >= line.Length - 1) continue;
+                            var prefabName = line.Substring(0, separator);
+                            var sceneName = NormalizeSceneName(
+                                line.Substring(separator + 1));
+                            if (!_scenesByPrefab.TryGetValue(prefabName, out var scenes))
+                            {
+                                scenes = new HashSet<string>(
+                                    StringComparer.OrdinalIgnoreCase);
+                                _scenesByPrefab.Add(prefabName, scenes);
+                            }
+                            scenes.Add(sceneName);
+                        }
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudo cargar la procedencia de objetos exteriores: " +
+                    exception);
+            }
+            return _scenesByPrefab;
+        }
+
+        private static bool RegisterSceneProvenance(RoomItemDefinition definition)
+        {
+            if (definition == null || !SceneProvenanceChecked.Add(definition))
+                return Provenance.ContainsKey(definition);
+            var prefab = PrefabField?.GetValue(definition) as GameObject;
+            if (prefab == null ||
+                !LoadSceneProvenance().TryGetValue(prefab.name, out var scenes))
+                return false;
+
+            foreach (var scene in scenes)
+            {
+                if (BaseScenes.Contains(scene))
+                    RegisterProvenance(definition, null);
+                else if (PacksByScene.TryGetValue(scene, out var pack))
+                    RegisterProvenance(definition, pack);
+            }
+            return Provenance.ContainsKey(definition);
         }
 
         private static void RegisterProvenance(
@@ -205,6 +300,7 @@ namespace UnderPressure.Editor
                     continue;
                 }
 
+                RegisterSceneProvenance(definition);
                 if (definition.DlcPackRequired?.Instance == null) ++untagged;
                 else ++tagged;
                 if (Provenance.ContainsKey(definition)) ++matched;

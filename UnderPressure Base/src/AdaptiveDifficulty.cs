@@ -1,3 +1,4 @@
+// Updated: 2026-10-12
 // Purpose: Calculates adaptive difficulty values from the active hospital's performance.
 using System;
 using System.Collections.Generic;
@@ -99,7 +100,7 @@ namespace UnderPressure
             }
         }
 
-        internal static int GetValue(BepInEx.Configuration.ConfigEntry<int> setting,
+        internal static int GetValue(UnderPressure.LoaderRuntime.Configuration.ConfigEntry<int> setting,
             Level level = null)
         {
             if (setting == null)
@@ -169,19 +170,19 @@ namespace UnderPressure
         private static int ExpansionValue(Level level) =>
             Mathf.Clamp(level.PrestigeTracker.Level * 5, 0, 100);
 
-        private static bool IsEconomySetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
+        private static bool IsEconomySetting(UnderPressure.LoaderRuntime.Configuration.ConfigEntry<int> setting) =>
             ReferenceEquals(setting, UnderPressurePlugin.StaffSalariesSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.PatientIncomeSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.ApplicantWaitSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.ElectricityBillSetting);
 
-        private static bool IsReputationSetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
+        private static bool IsReputationSetting(UnderPressure.LoaderRuntime.Configuration.ConfigEntry<int> setting) =>
             ReferenceEquals(setting, UnderPressurePlugin.HungerThirstSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.BoredomSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.HappinessSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.HygieneSetting);
 
-        private static bool IsExpansionSetting(BepInEx.Configuration.ConfigEntry<int> setting) =>
+        private static bool IsExpansionSetting(UnderPressure.LoaderRuntime.Configuration.ConfigEntry<int> setting) =>
             ReferenceEquals(setting, UnderPressurePlugin.DiagnosisChanceSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.TreatmentChanceSetting) ||
             ReferenceEquals(setting, UnderPressurePlugin.HealthDecaySetting) ||
@@ -361,7 +362,7 @@ namespace UnderPressure
         }
 
         private void AddStandard(StringBuilder labels, StringBuilder adjustments, string key,
-            BepInEx.Configuration.ConfigEntry<int> setting)
+            UnderPressure.LoaderRuntime.Configuration.ConfigEntry<int> setting)
         {
             var value = AdaptiveDifficulty.GetValue(setting, _level);
             Add(labels, adjustments, key, value);

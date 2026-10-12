@@ -1,4 +1,4 @@
-// Updated: 2026-10-07
+// Updated: 2026-10-08
 // Purpose: Catalogo y mecanica comun de todas las salas personalizadas de UnderPressure.
 // Aqui viven los parametros compartidos de RoomDefinition: identidad, precio, tamano,
 // objetos disponibles/obligatorios, personal, geometria, materiales, iluminacion y registro.
@@ -593,13 +593,8 @@ namespace UnderPressure
             if (visuals.WallThickness.HasValue)
                 SetField(definition, "WallThickness", visuals.WallThickness.Value);
 
-            // Todas las salas personalizadas usan por defecto la iluminacion global del hospital.
-            SetField(definition, "_roomLightMaterial", null);
-            SetField(definition, "_roomReflectionCubemap", null);
-            SetField(definition, "_roomClosedLightMaterial", null);
-            SetField(definition, "_roomClosedReflectionCubemap", null);
-            SetField(definition, "_roomOperationalLightMaterial", null);
-            SetField(definition, "_roomOperationalReflectionCubemap", null);
+            // Todas las salas personalizadas copian por defecto la iluminacion de la Consulta.
+            ApplyNativeRoomLighting(definition);
         }
 
         private static BuiltGeometry BuildGeometry(RoomEntry entry)
@@ -627,6 +622,8 @@ namespace UnderPressure
 
         private static void ResolveNativeWallDefaults(SharedInstance<RoomDefinition>[] rooms)
         {
+            NativeRoomLightingSource = null;
+
             foreach (var style in WallStyles)
                 if (style != null)
                     style.ResolvedDefinition = null;
@@ -639,6 +636,7 @@ namespace UnderPressure
 
                 if (definition._type == RoomDefinition.Type.GPOffice)
                 {
+                    NativeRoomLightingSource = definition;
                     NativeInteriorWalls = definition._wallsInterior;
                     NativeExteriorWalls = definition._wallsExterior;
                     NativeBlueprintWalls = BlueprintWallDefinitionField?.GetValue(definition)
@@ -665,6 +663,19 @@ namespace UnderPressure
                     UnityEngine.Debug.LogError(
                         "[UnderPressure] No se encontro la sala nativa del estilo de pared " +
                         style.Number + ": " + style.SourceRoomType);
+        }
+
+        private static void ApplyNativeRoomLighting(RoomDefinition definition)
+        {
+            if (definition == null || NativeRoomLightingSource == null)
+                return;
+
+            CopyRoomDefinitionField(NativeRoomLightingSource, definition, "_roomLightMaterial");
+            CopyRoomDefinitionField(NativeRoomLightingSource, definition, "_roomReflectionCubemap");
+            CopyRoomDefinitionField(NativeRoomLightingSource, definition, "_roomClosedLightMaterial");
+            CopyRoomDefinitionField(NativeRoomLightingSource, definition, "_roomClosedReflectionCubemap");
+            CopyRoomDefinitionField(NativeRoomLightingSource, definition, "_roomOperationalLightMaterial");
+            CopyRoomDefinitionField(NativeRoomLightingSource, definition, "_roomOperationalReflectionCubemap");
         }
 
         public static WallStyleDefinition FindWallStyle(int number)
@@ -1157,6 +1168,21 @@ namespace UnderPressure
             }
         }
 
+        private static void CopyRoomDefinitionField(
+            RoomDefinition source,
+            RoomDefinition target,
+            string fieldName)
+        {
+            var field = AccessTools.Field(typeof(RoomDefinition), fieldName);
+            if (field == null)
+            {
+                UnityEngine.Debug.LogWarning("[UnderPressure] Campo RoomDefinition no encontrado: " + fieldName);
+                return;
+            }
+
+            field.SetValue(target, field.GetValue(source));
+        }
+
         private static void SetField(RoomDefinition definition, string fieldName, object value)
         {
             var field = AccessTools.Field(typeof(RoomDefinition), fieldName);
@@ -1169,6 +1195,7 @@ namespace UnderPressure
             field.SetValue(definition, value);
         }
 
+        private static RoomDefinition NativeRoomLightingSource;
         private static RoomWallDefinition NativeInteriorWalls;
         private static RoomWallDefinition NativeExteriorWalls;
         private static SharedInstance<RoomWallDefinition> NativeBlueprintWalls;

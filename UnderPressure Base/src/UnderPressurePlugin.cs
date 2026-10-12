@@ -1,9 +1,10 @@
+// Updated: 2026-10-12
 // Purpose: Bootstraps the core Under Pressure plugin, settings, patches, localization, and shared assets.
 using System.IO;
 using System.Reflection;
-using BepInEx;
-using BepInEx.Configuration;
-using BepInEx.Logging;
+using UnderPressure.LoaderRuntime;
+using UnderPressure.LoaderRuntime.Configuration;
+using UnderPressure.LoaderRuntime.Logging;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
@@ -14,8 +15,8 @@ using UnityEngine.Audio;
 
 namespace UnderPressure
 {
-    [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
-    public sealed class UnderPressurePlugin : BaseUnityPlugin
+    [ModPlugin(PluginGuid, PluginName, PluginVersion)]
+    public sealed class UnderPressurePlugin : BaseModComponent
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure";
         public const string PluginName = "Bajo Presión";
@@ -90,7 +91,7 @@ namespace UnderPressure
             IsModEnabled && DismissalSeveranceSetting != null && DismissalSeveranceSetting.Value;
         internal static bool ShouldUsePatientTreatment =>
             IsModEnabled && PatientTreatmentSetting != null && PatientTreatmentSetting.Value;
-        internal static ManualLogSource Log { get; private set; }
+        internal static ModLogSource Log { get; private set; }
 
         private void Awake()
         {

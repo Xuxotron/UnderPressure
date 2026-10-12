@@ -1,8 +1,8 @@
-// Updated: 2026-10-08
+// Updated: 2026-10-12
 // Purpose: Loads, globally converts shaders in, and hot-reloads the shared Under Pressure AssetBundle for all mod assemblies.
 using System;
 using System.IO;
-using BepInEx.Logging;
+using UnderPressure.LoaderRuntime.Logging;
 using UnityEngine;
 using UnderPressure.PowerGrid;
 using System.Collections.Generic;
@@ -13,7 +13,7 @@ namespace UnderPressure
     {
         public const string FileName = "underpressure";
 
-        private static ManualLogSource _log;
+        private static ModLogSource _log;
         private static string _bundlePath;
         private static AssetBundle _bundle;
         private static UnityEngine.Object[] _allAssets = Array.Empty<UnityEngine.Object>();
@@ -30,7 +30,7 @@ namespace UnderPressure
         public static string BundlePath => _bundlePath;
         public static UnityEngine.Object[] AllAssets => _allAssets;
 
-        internal static void Initialise(ManualLogSource log, string pluginDirectory)
+        internal static void Initialise(ModLogSource log, string pluginDirectory)
         {
             _log = log;
             _bundlePath = Path.Combine(pluginDirectory ?? string.Empty, "Assets", FileName);

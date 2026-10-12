@@ -1,8 +1,9 @@
+// Updated: 2026-10-12
 // Purpose: Provides a configurable preventive-maintenance threshold and its policy interface.
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using BepInEx.Configuration;
+using UnderPressure.LoaderRuntime.Configuration;
 using HarmonyLib;
 using TMPro;
 using TH20;

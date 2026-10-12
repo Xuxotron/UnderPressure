@@ -1,3 +1,4 @@
+<!-- Updated: 2026-10-12 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net471</TargetFramework>
@@ -8,7 +9,7 @@
     <FileVersion>0.1.1.0</FileVersion>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
-    <GameOutputPath>D:\Games\Two Point Hospital\BepInEx\plugins\UnderPressure\</GameOutputPath>
+    <GameOutputPath>D:\Steam\steamapps\common\TPH\Mods\</GameOutputPath>
     <OutputPath Condition="'$(SkipDeploy)' != 'true'">$(GameOutputPath)</OutputPath>
     <AppendTargetFrameworkToOutputPath Condition="'$(SkipDeploy)' != 'true'">false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
@@ -24,10 +25,6 @@
     </Reference>
     <Reference Include="0Harmony">
       <HintPath>..\Libs\0Harmony.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="BepInEx">
-      <HintPath>..\Libs\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine">

@@ -48,12 +48,12 @@ namespace UnderPressure.PowerGrid
             (VendingMachineCarrotNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
             (VendingMachineWaterNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
             (VendingMachineRetroKebabNativeParameters.Prefab, Cost.Mensual, Power.Bajo, 0f),
-            (ToiletHandDryerNativeParameters.Prefab, Cost.Tarea, Power.Alto, 0f),
-            (ToiletHandDryerGoldNativeParameters.Prefab, Cost.Tarea, Power.Alto, 0f),
+            (ToiletHandDryerNativeParameters.Prefab, Cost.Tarea, Power.Bajo, 0f),
+            (ToiletHandDryerGoldNativeParameters.Prefab, Cost.Tarea, Power.Bajo, 0f),
             (DiagnosisMachineNativeParameters.Prefab, Cost.Tarea, Power.Alto, -3f),
             (LightHeadedMachineNativeParameters.Prefab, Cost.Tarea, Power.Alto, -2f),
             (DrugDispenserNativeParameters.Prefab, Cost.Tarea, Power.Alto, -2f),
-            (MachineControlConsoleNativeParameters.Prefab, Cost.Tarea, Power.Alto, -0.1f)
+            (MachineControlConsoleNativeParameters.Prefab, Cost.Tarea, Power.Bajo, -0.1f)
         };
     }
 

@@ -1,6 +1,11 @@
 key,ru,pl,ko,zh-hans,zh-hant
+hud.variables.title,Активные параметры,Aktywne parametry,활성 변수,当前生效的参数,目前生效的參數
+hud.variables.adjustment,Настройка,Ustawienie,설정,设置,設定
+hud.variables.economy,Экономика (баланс),Ekonomia (saldo),경제 (잔액),经济（余额）,經濟（餘額）
+hud.variables.reputation,Репутация,Reputacja,평판,声誉,聲譽
+hud.variables.expansion,Расширение (уровень),Rozwój (poziom),확장 (레벨),扩建（等级）,擴建（等級）
+item.permanent_wear,Постоянный износ: {0}%,Trwałe zużycie: {0}%,영구 마모: {0}%,永久磨损：{0}%,永久磨損：{0}%
 policy.preventive_maintenance,Минимальное состояние для профилактического ремонта,Minimalny stan naprawy zapobiegawczej,예방 수리를 위한 최소 상태,预防性维修的最低状态,預防性維修的最低狀態
-item.permanent_wear,,,,,
 mod.tab,Под давлением,Pod presją,압박 모드,压力模式,壓力模式
 mod.skip_intro,Пропускать начальные экраны,Pomiń ekrany początkowe,시작 화면 건너뛰기,跳过启动画面,略過啟動畫面
 mod.auto_load_last_save,Загружать последний уровень,Wczytaj ostatni poziom,마지막 레벨 불러오기,加载上次关卡,載入上次關卡
@@ -8,28 +13,31 @@ mod.disable_tutorial,Отключить обучение,Wyłącz samouczek,튜�
 mod.show_room_effectiveness,Показывать эффективность кабинета,Pokaż skuteczność pomieszczeń,진료실 효율 표시,显示房间效率,顯示房間效率
 mod.imperfect_staff,Неидеальные сотрудники,Niedoskonali pracownicy,불완전한 직원,不完美员工,不完美員工
 mod.show_electricity,Включить потребление электричества,Włącz zużycie energii,전력 소비 활성화,启用电力消耗,啟用電力消耗
+mod.separate_reputation_prestige,Репутация VS престиж,Reputacja VS prestiż,평판 VS 명성,声誉 VS 威望,聲譽 VS 威望
 mod.permanent_machine_wear,Постоянный износ машин,Trwałe zużycie maszyn,기계 영구 마모,机器永久损耗,機器永久損耗
 mod.visual_lighting,Освещение больницы (TEST),Oświetlenie szpitala (TEST),병원 조명 (TEST),医院照明 (TEST),醫院照明 (TEST)
-mod.disable_diagnosis_charges,,,,,
-mod.disable_awards,,,,,
-mod.resale_penalties,,,,,
-mod.dismissal_severance,,,,,
-staff.dismissal_penalty,,,,,
-mod.patient_treatment,,,,,
+mod.unlock_lamps,Разблокировать лампы,Odblokuj lampy,조명 잠금 해제,解锁灯具,解鎖燈具
+mod.disable_diagnosis_charges,Бесплатная диагностика,Darmowa diagnostyka,무료 진단,免费诊断,免費診斷
+mod.disable_awards,Отключить награды,Wyłącz nagrody,시상식 비활성화,关闭颁奖,關閉頒獎
+mod.resale_penalties,Штраф при перепродаже,Kara za odsprzedaż,재판매 손실,转售损失,轉售損失
+mod.dismissal_severance,Выходное пособие,Odprawa przy zwolnieniu,해고 수당,解雇补偿金,解僱補償金
+staff.dismissal_penalty,Выплата при увольнении: {0},Koszt zwolnienia: {0},해고 비용: {0},解雇费用：{0},解僱費用：{0}
+mod.patient_treatment,Требовательные пациенты,Wymagający pacjenci,까다로운 환자,挑剔的病人,挑剔的病患
 mod.section.gameplay,Сложность и экономика,Trudność i ekonomia,난이도 및 경제,难度与经济,難度與經濟
 mod.section.economy,Экономическая сложность,Trudność ekonomiczna,경제 난이도,经济难度,經濟難度
 mod.section.reputation,Сложность репутации,Trudność reputacji,평판 난이도,声誉难度,聲譽難度
 mod.section.expansion,Сложность развития,Trudność rozwoju,확장 난이도,扩张难度,擴張難度
 mod.adaptive,Адаптивно,Adaptacyjna,적응형,自适应,自適應
 mod.global_difficulty,Общая сложность,Ogólna trudność,전체 난이도,全局难度,全域難度
+mod.treatment_volume,Громкость звуков лечения,Głośność leczenia,치료 효과음 음량,治疗音量,治療音量
 mod.patient_arrival,Частота прибытия пациентов,Częstotliwość przybywania pacjentów,환자 방문 빈도,患者到访频率,病患到訪頻率
 mod.health_decay,Ухудшение здоровья пациентов,Pogorszenie zdrowia pacjentów,환자 건강 악화,患者健康恶化,病患健康惡化
 mod.diagnosis_chance,Сложность диагностики,Trudność diagnozy,진단 난이도,诊断难度,診斷難度
 mod.treatment_chance,Риск неудачи лечения,Ryzyko niepowodzenia leczenia,치료 실패 위험,治疗失败风险,治療失敗風險
 mod.machine_wear,Износ оборудования,Zużycie maszyn,기계 마모,机器损耗,機器損耗
-mod.boredom,,,,,
 mod.staff_salaries,Повышение зарплат,Podwyżka wynagrodzeń,급여 인상,工资上涨,薪資調升
 mod.hunger_thirst,Усиление голода и жажды,Szybszy wzrost głodu i pragnienia,배고픔과 목마름 증가,饥饿与口渴加剧,飢餓與口渴加劇
+mod.boredom,Ускоренный рост скуки,Szybsze narastanie nudy,지루함 증가,无聊感增加,無聊感增加
 mod.happiness,Быстрое падение счастья,Szybszy spadek zadowolenia,행복도 감소 가속,幸福度下降加快,幸福度下降加快
 mod.hygiene,Повышенные требования к гигиене,Bardziej wymagająca higiena,위생 요구 증가,卫生要求提高,衛生要求提高
 mod.patient_income,Сложность дохода с пациента,Trudność przychodów od pacjentów,환자 수입 난이도,患者收入难度,病患收入難度
@@ -45,7 +53,6 @@ view.treatment,Вероятность излечения,Szansa wyleczenia,치�
 view.electricity,Электрические объекты,Urządzenia elektryczne,전기 사용 물품,用电物品,用電物品
 room.diagnosis_power,Диагностика,Diagnoza,진단,诊断,診斷
 room.treatment_power,Лечение,Leczenie,치료,治疗,治療
-
 tooltip.mod_enabled,Включает или отключает все функции мода.,Włącza lub wyłącza wszystkie funkcje moda.,모드의 모든 기능을 켜거나 끕니다.,启用或关闭本模组的所有功能。,啟用或關閉本模組的所有功能。
 tooltip.skip_intro,Пропускает логотипы и юридическое уведомление при запуске.,Pomija logotypy i informacje prawne przy uruchamianiu.,시작할 때 로고와 법적 고지를 건너뜁니다.,启动时跳过徽标和法律声明。,啟動時略過標誌和法律聲明。
 tooltip.auto_load_last_save,Автоматически загружает последний сохранённый госпиталь при запуске.,Automatycznie wczytuje ostatnio zapisany szpital przy uruchomieniu.,시작할 때 가장 최근에 저장한 병원을 자동으로 불러옵니다.,启动时自动加载最近保存的医院。,啟動時自動載入最近儲存的醫院。
@@ -53,19 +60,23 @@ tooltip.disable_tutorial,Пропускает обучение и его нач�
 tooltip.show_room_effectiveness,Показывает эффективность диагностики и лечения в кабинетах.,Pokazuje skuteczność diagnozy i leczenia w pomieszczeniach.,진료실에 진단 및 치료 효율을 표시합니다.,在房间面板中显示诊断与治疗效率。,在房間面板中顯示診斷與治療效率。
 tooltip.imperfect_staff,У новых кандидатов всегда две хорошие черты и одна плохая.,Nowi kandydaci mają zawsze dwie dobre cechy i jedną złą.,새 지원자는 항상 긍정 특성 2개와 부정 특성 1개를 가집니다.,新应聘者固定拥有两个正面特质和一个负面特质。,新應徵者固定擁有兩個正面特質和一個負面特質。
 tooltip.show_electricity,Включает электросеть и обязательное подключение кабелей. Также показывает расходы у объектов и на графике финансов.,Włącza sieć elektryczną i wymagane okablowanie. Pokazuje też koszty na obiektach i wykresie finansowym.,전력망과 케이블 연결 요구를 활성화합니다. 물품과 재정 그래프에 전기 비용도 표시합니다.,启用电网及接线要求，并在物品信息和财务图表中显示电力成本。,啟用電網及接線要求，並在物品資訊和財務圖表中顯示電力成本。
+tooltip.separate_reputation_prestige,"Только репутация увеличивает поток пациентов, причём её обычный бонус удваивается. Престиж больницы увеличивает лишь число доступных мест для кандидатов на работу.","Tylko reputacja zwiększa napływ pacjentów, a jej zwykła premia jest podwojona. Prestiż szpitala zwiększa wyłącznie liczbę dostępnych miejsc dla kandydatów do pracy.","환자 방문 수는 평판에 의해서만 증가하며, 기존 보너스가 두 배로 적용됩니다. 병원 명성은 채용 후보자 자리 수만 늘립니다.",只有声誉会增加病人到访量，且加成为通常的两倍；医院威望仅增加可用的求职者名额。,只有聲譽會增加病患到訪量，且加成為平常的兩倍；醫院威望僅增加可用的求職者名額。
 tooltip.permanent_machine_wear,Каждые 100 восстановленных процентных пунктов навсегда снижают максимальное состояние этой машины на 1%.,Każde naprawione 100 punktów procentowych trwale zmniejsza maksymalny stan tej maszyny o 1%.,수리된 백분율 포인트 100마다 해당 기계의 최대 상태가 영구적으로 1% 감소합니다.,每累计修复100个百分点，该机器的最大状态永久降低1%。,每累計修復100個百分點，該機器的最大狀態永久降低1%。
 tooltip.visual_lighting,Затемняет помещения и добавляет визуальный свет от окон и поддерживаемых ламп.,Przyciemnia wnętrza i dodaje światło z okien oraz obsługiwanych lamp.,실내를 어둡게 하고 창문과 지원되는 램프의 시각적 조명을 추가합니다.,使室内变暗并添加来自窗户和受支持灯具的视觉光照。,使室內變暗並加入來自窗戶和支援燈具的視覺光照。
-tooltip.disable_diagnosis_charges,,,,,
-tooltip.disable_awards,,,,,
-tooltip.resale_penalties,,,,,
-tooltip.dismissal_severance,,,,,
-tooltip.patient_treatment,,,,,
+tooltip.unlock_lamps,"Разблокирует лампы кабинета терапевта, психиатрии, комнаты персонала и маркетинга и позволяет размещать их в любом помещении.","Odblokowuje lampy z gabinetu lekarza rodzinnego, psychiatrii, pokoju personelu i marketingu oraz pozwala stawiać je w każdym pomieszczeniu.","일반 진료실, 정신과, 직원 휴게실, 마케팅실의 조명을 잠금 해제하고 모든 방에 설치할 수 있습니다.",解锁全科诊室、精神科、员工休息室和营销室的灯具，并允许放置在任何房间。,解鎖全科診間、精神科、員工休息室和行銷室的燈具，並允許放置在任何房間。
+tooltip.disable_diagnosis_charges,Пациенты не платят за приём у терапевта и в других диагностических кабинетах. Плата за лечение не меняется.,Pacjenci nie płacą za wizyty u lekarza rodzinnego ani w innych pomieszczeniach diagnostycznych. Opłaty za leczenie pozostają bez zmian.,환자는 일반 진료실 및 다른 진단실에서 비용을 지불하지 않습니다. 치료비는 그대로 유지됩니다.,病人在全科诊室及其他诊断室不再付费。治疗费用保持不变。,病患在全科診間及其他診斷室不再付費。治療費用維持不變。
+tooltip.disable_awards,"Отключает ежегодную церемонию награждения, включая призы, награды и премии персоналу.","Wyłącza coroczną ceremonię rozdania nagród oraz przyznawanie nagród, premii i bonusów dla personelu.",연례 시상식을 비활성화하고 보상과 직원 보너스도 지급되지 않게 합니다.,取消年度颁奖典礼，不再发放奖项、奖励或员工奖金。,取消年度頒獎典禮，不再發放獎項、獎勵或員工獎金。
+tooltip.resale_penalties,При продаже предметов возвращается 80% их стоимости. При сносе комнаты возвращается 50% стоимости её строительства.,Sprzedaż przedmiotów zwraca 80% ich wartości. Zburzenie pomieszczenia zwraca 50% kosztów jego budowy.,물품 판매 시 가치의 80%를 돌려받습니다. 방 철거 시 건설 비용의 50%를 돌려받습니다.,出售物品可返还其价值的80%。拆除房间可返还建造费用的50%。,出售物品可退還其價值的80%。拆除房間可退還建造費用的50%。
+tooltip.dismissal_severance,"При увольнении сотрудника выплачивается 2% его текущей зарплаты за каждый полный отработанный месяц, но не более чем за 48 месяцев (96%).","Zwolnienie pracownika kosztuje 2% jego obecnej pensji za każdy pełny przepracowany miesiąc, maksymalnie za 48 miesięcy (96%).","직원을 해고하면 근무한 만 1개월마다 현재 급여의 2%를 지급하며, 최대 48개월(96%)까지 적용됩니다.",解雇员工时，每完整工作一个月需支付当前工资的2%，最多计算48个月（96%）。,解僱員工時，每完整工作一個月需支付目前薪資的2%，最多計算48個月（96%）。
+tooltip.patient_treatment,Повышает сложность: неудачи с пациентами сильнее снижают репутацию — неэффективное лечение -1; смерть -3; уход в гневе -2; отправка домой -1. Успешное лечение по-прежнему даёт +1.,Zwiększa trudność: negatywne wyniki mocniej obniżają reputację — nieskuteczne leczenie -1; śmierć -3; odejście w gniewie -2; odesłanie do domu -1. Wyleczenie nadal daje +1.,"난이도가 높아집니다. 환자의 부정적인 결과가 평판에 더 큰 영향을 줍니다: 치료 실패 -1, 사망 -3, 분노로 퇴원 -2, 귀가 조치 -1. 치료 성공은 계속 +1입니다.",提高难度，病人的负面结果会造成更大的声誉损失：治疗无效 -1；死亡 -3；愤怒离开 -2；送回家 -1。治愈仍为 +1。,提高難度，病患的負面結果會造成更大的聲譽損失：治療無效 -1；死亡 -3；憤怒離開 -2；送回家 -1。治癒仍為 +1。
 tooltip.global_difficulty,Устанавливает одинаковое значение всех модификаторов сложности.,Ustawia tę samą wartość wszystkich modyfikatorów trudności.,모든 난이도 조정값을 같은 값으로 설정합니다.,将所有难度调整项设为相同数值。,將所有難度調整項設為相同數值。
+tooltip.treatment_volume,"Регулирует громкость звуков выздоровления, неудачного лечения и смерти.","Reguluje głośność dźwięków wyleczenia, nieudanego leczenia i śmierci.","치료 성공, 실패 및 사망 효과음의 음량을 조절합니다.",调整治愈、治疗失败和死亡的音效音量。,調整治癒、治療失敗和死亡的音效音量。
 tooltip.staff_salaries,Одинаково повышает зарплаты и ожидания сотрудников.,Zwiększa jednakowo płace i oczekiwania płacowe.,직원 급여와 기대 급여를 같은 비율로 높입니다.,同比提高员工薪资和薪资期望。,同比提高員工薪資和薪資期望。
 tooltip.patient_income,Одинаково снижает платежи пациентов и терпимость к ценам.,Zmniejsza jednakowo opłaty pacjentów i tolerancję cenową.,환자 지불액과 가격 허용치를 같은 비율로 낮춥니다.,同比降低患者付款和价格容忍度。,同比降低病患付款和價格容忍度。
 tooltip.applicant_wait,Увеличивает интервал между появлением новых кандидатов.,Wydłuża czas między pojawianiem się nowych kandydatów.,새 지원자가 나타나는 간격을 늘립니다.,延长新应聘者出现的间隔。,延長新應徵者出現的間隔。
 tooltip.electricity_bill,Увеличивает ежемесячный счёт за электричество.,Zwiększa miesięczny rachunek za energię.,월 전기 요금을 높입니다.,提高每月电费。,提高每月電費。
 tooltip.hunger_thirst,Ускоряет рост голода и жажды пациентов.,Przyspiesza narastanie głodu i pragnienia pacjentów.,환자의 배고픔과 목마름이 더 빨리 증가합니다.,使患者的饥饿与口渴上升得更快。,使病患的飢餓與口渴上升得更快。
+tooltip.boredom,Пациенты начинают скучать быстрее.,"Sprawia, że pacjenci szybciej się nudzą.",환자가 더 빨리 지루해집니다.,让病人更快感到无聊。,讓病患更快感到無聊。
 tooltip.happiness,Ускоряет снижение счастья пациентов.,Przyspiesza spadek zadowolenia pacjentów.,환자의 행복도가 더 빨리 감소합니다.,使患者的幸福度下降得更快。,使病患的幸福度下降得更快。
 tooltip.hygiene,Ускоряет ухудшение гигиены.,Przyspiesza pogarszanie higieny.,위생 수치가 더 빨리 감소합니다.,使卫生状况恶化得更快。,使衛生狀況惡化得更快。
 tooltip.health_decay,Ускоряет ухудшение здоровья пациентов.,Przyspiesza pogarszanie zdrowia pacjentów.,환자의 건강이 더 빨리 악화됩니다.,使患者的健康恶化得更快。,使病患的健康惡化得更快。
@@ -73,47 +84,46 @@ tooltip.diagnosis_chance,Снижает эффективность диагно�
 tooltip.treatment_chance,Снижает вероятность успешного лечения.,Zmniejsza szansę powodzenia leczenia.,치료 성공 확률을 낮춥니다.,降低治疗成功概率。,降低治療成功機率。
 tooltip.patient_arrival,Увеличивает частоту прибытия пациентов.,Zwiększa częstotliwość przybywania pacjentów.,환자 방문 빈도를 높입니다.,提高患者到访频率。,提高病患到訪頻率。
 tooltip.machine_wear,Ускоряет износ оборудования.,Przyspiesza zużycie maszyn.,기계가 더 빨리 마모됩니다.,使机器损耗得更快。,使機器損耗得更快。
-tooltip.boredom,,,,,
 tooltip.adaptive.economy,Настраивает шкалы по доступным деньгам. +1% за каждые 10000 $ до +100%.,Ustawia suwaki według dostępnej gotówki. +1% za każde 10000 $ do +100%.,보유 자금에 따라 조정합니다. 10000 $마다 +1%이며 최대 +100%입니다.,按可用现金调整。每 10000 $ 增加 1%且最高为 +100%。,按可用現金調整。每 10000 $ 增加 1%且最高為 +100%。
 tooltip.adaptive.reputation,Настраивает шкалы по репутации. +1% за очко до +100%.,Ustawia suwaki według reputacji. +1% za punkt do +100%.,평판에 따라 조정합니다. 1점마다 +1%이며 최대 +100%입니다.,按声誉调整。每点增加 1%且最高为 +100%。,按聲譽調整。每點增加 1%且最高為 +100%。
 tooltip.adaptive.expansion,Настраивает шкалы по уровню больницы. +5% за уровень до +100%.,Ustawia suwaki według poziomu szpitala. +5% za poziom do +100%.,병원 레벨에 따라 조정합니다. 레벨당 +5%이며 최대 +100%입니다.,按医院等级调整。每级增加 5%且最高为 +100%。,按醫院等級調整。每級增加 5%且最高為 +100%。
-energy.battery.name,,,,,
-energy.battery.description,,,,,
-energy.battery.maximum_capacity,,,,,
-energy.high_voltage,,,,,
-energy.low_voltage,,,,,
-energy.label,,,,,
-energy.daily,,,,,
-energy.tasks,,,,,
-energy.delete,,,,,
-energy.panel.name,,,,,
-energy.panel.description,,,,,
-energy.cell.name,,,,,
-energy.cell.description,,,,,
-energy.cell.limit,,,,,
-energy.cell.invalid_connection,,,,,
-energy.panel.invalid_connection,,,,,
-energy.transformer.name,,,,,
-energy.transformer.description,,,,,
-energy.room.name,,,,,
-energy.room.description,,,,,
-energy.campaign.hack.name,,,,,
-energy.campaign.hack.description,,,,,
-energy.campaign.debug.name,,,,,
-energy.campaign.debug.description,,,,,
-energy.campaign.climate.name,,,,,
-energy.campaign.climate.description,,,,,
-energy.campaign.duration,,,,,
-energy.campaign.months,,,,,
-energy.contract.power,,,,,
-energy.contract.monthly_cost,,,,,
-energy.campaign.capacity,,,,,
-energy.campaign.start,,,,,
-energy.campaign.active,,,,,
-energy.campaign.active_button,,,,,
-energy.campaign.header,,,,,
-energy.campaign.tooltip,,,,,
-energy.campaign.start_action,,,,,
+energy.battery.name,Батарея,Bateria,배터리,电池,電池
+energy.battery.description,Батарея для энергетической комнаты. Хранит до 200 единиц энергии и заряжается каждый день.,Bateria do sali energetycznej. Magazynuje do 200 jednostek energii i ładuje się codziennie.,전력실에 설치하는 배터리입니다. 최대 200의 에너지를 저장하며 매일 충전됩니다.,供电室使用的电池。最多储存200单位能量，每天充电。,供電室使用的電池。最多儲存200單位能量，每天充電。
+energy.battery.maximum_capacity,Максимальная ёмкость,Maksymalna pojemność,최대 용량,最大容量,最大容量
+energy.high_voltage,Выс. напр.,Wys. nap.,고압,高压,高壓
+energy.low_voltage,Низ. напр.,Nisk. nap.,저압,低压,低壓
+energy.label,Энергия,Energia,에너지,能源,能源
+energy.daily,В день,Dziennie,일일,每日,每日
+energy.tasks,Задачи,Zadania,작업,任务,任務
+energy.delete,Удалить,Usuń,삭제,删除,刪除
+energy.panel.name,Электрощит,Rozdzielnica elektryczna,배전반,配电柜,配電櫃
+energy.panel.description,Преобразует высокое напряжение в низкое.,Przekształca zasilanie wysokiego napięcia na wyjście niskiego napięcia.,고압 전력을 저압 전력으로 변환합니다.,将高压电转换为低压输出。,將高壓電轉換為低壓輸出。
+energy.cell.name,Электрическая ячейка,Cela elektryczna,고압 전력 셀,高压开关柜,高壓開關櫃
+energy.cell.description,Создаёт отдельную высоковольтную сеть с максимальной подключённой нагрузкой 800.,Tworzy niezależną sieć wysokiego napięcia o maksymalnym obciążeniu 800.,최대 연결 부하 800의 독립된 고압 전력망을 생성합니다.,建立一条独立的高压电网，最大连接负载为800。,建立一條獨立的高壓電網，最大連接負載為800。
+energy.cell.limit,В каждой энергетической комнате можно разместить не более пяти электрических ячеек.,Każda sala energetyczna może zawierać najwyżej pięć cel elektrycznych.,전력실 하나에 고압 전력 셀을 최대 5개까지 설치할 수 있습니다.,每间供电室最多可放置五个高压开关柜。,每間供電室最多可放置五個高壓開關櫃。
+energy.cell.invalid_connection,"У электрической ячейки может быть не более одного соседнего высоковольтного кабеля, и она должна находиться на конце сети.",Cela elektryczna może mieć najwyżej jeden sąsiadujący przewód wysokiego napięcia i musi znajdować się na końcu sieci.,"고압 전력 셀에는 인접한 고압 케이블이 최대 1개만 연결될 수 있으며, 반드시 전력망 끝에 있어야 합니다.",每个高压开关柜最多只能连接一根相邻的高压电缆，且必须位于电网末端。,每個高壓開關櫃最多只能連接一條相鄰的高壓電纜，且必須位於電網末端。
+energy.panel.invalid_connection,"К электрощиту можно подключить до трёх соседних низковольтных кабелей, каждый из которых должен быть концом сети.",Do rozdzielnicy można podłączyć do trzech sąsiadujących przewodów niskiego napięcia; każdy musi być końcem sieci.,"배전반에는 인접한 저압 케이블을 최대 3개까지 연결할 수 있으며, 각 케이블은 전력망의 끝이어야 합니다.",每个配电柜最多可连接三根相邻的低压电缆，每根都必须位于电网末端。,每個配電櫃最多可連接三條相鄰的低壓電纜，每條都必須位於電網末端。
+energy.transformer.name,Трансформатор,Transformator,변압기,变压器,變壓器
+energy.transformer.description,Трансформатор энергетической комнаты для управления энергетическими кампаниями.,Transformator sali energetycznej służący do zarządzania kampaniami energetycznymi.,전력실에서 에너지 캠페인을 관리하는 변압기입니다.,供电室的变压器，用于管理能源活动。,供電室的變壓器，用於管理能源活動。
+energy.room.name,Энергетическая комната,Sala energetyczna,전력실,供电室,供電室
+energy.room.description,Содержит оборудование для создания электросети больницы.,Mieści urządzenia tworzące szpitalną sieć elektryczną.,병원 전력망을 구성하는 장비를 설치하는 방입니다.,用来放置组成医院电网的设备。,用來放置組成醫院電網的設備。
+energy.campaign.hack.name,Взломать энергокомпанию,Zhakuj dostawcę prądu,전력 회사 해킹,黑入电力公司,駭入電力公司
+energy.campaign.hack.description,Снижает счёт за электричество в соответствии с достигнутым процентом.,Zmniejsza rachunek za prąd zgodnie z osiągniętym procentem.,달성한 비율만큼 전기 요금을 줄입니다.,根据达成的百分比降低电费。,根據達成的百分比降低電費。
+energy.campaign.debug.name,Исправить код с помощью ИИ,Debuguj kod za pomocą AI,AI로 코드 디버깅,用AI调试代码,使用AI偵錯程式碼
+energy.campaign.debug.description,Снижает износ трансформатора в соответствии с достигнутым процентом.,Zmniejsza zużycie transformatora zgodnie z osiągniętym procentem.,달성한 비율만큼 변압기 노후화를 줄입니다.,根据达成的百分比降低变压器损耗。,根據達成的百分比降低變壓器損耗。
+energy.campaign.climate.name,Отрицать изменение климата,Zaprzecz zmianom klimatu,기후 변화 부정,否认气候变化,否認氣候變遷
+energy.campaign.climate.description,Увеличивает выработку энергии в соответствии с достигнутым процентом.,Zwiększa produkcję energii zgodnie z osiągniętym procentem.,달성한 비율만큼 에너지 생산량이 증가합니다.,根据达成的百分比提高能源产量。,根據達成的百分比提高能源產量。
+energy.campaign.duration,Длительность,Czas trwania,기간,持续时间,持續時間
+energy.campaign.months,месяцев,miesięcy,개월,个月,個月
+energy.campaign.capacity,Максимальное улучшение,Maksymalna poprawa,최대 개선 효과,最大提升,最大提升
+energy.campaign.start,Начать кампанию,Rozpocznij kampanię,캠페인 시작,开始活动,開始活動
+energy.contract.power,Договорная мощность,Moc umowna,계약 전력,合同功率,契約功率
+energy.contract.monthly_cost,Стоимость в месяц,Koszt miesięczny,월간 비용,每月费用,每月費用
+energy.campaign.active,Энергетическая кампания,Kampania energetyczna,에너지 캠페인,能源活动,能源活動
+energy.campaign.active_button,Кампания активна,Aktywna kampania,캠페인 진행 중,活动进行中,活動進行中
+energy.campaign.header,Энергетические кампании,Kampanie energetyczne,에너지 캠페인,能源活动,能源活動
+energy.campaign.tooltip,Управление кампаниями энергетической комнаты,Zarządzaj kampaniami sali energetycznej,전력실의 에너지 캠페인을 관리합니다.,管理供电室的能源活动,管理供電室的能源活動
+energy.campaign.start_action,Начать энергетическую кампанию,Rozpocznij kampanię energetyczną,에너지 캠페인 시작,发起能源活动,發起能源活動
 scenario_editor.menu,,,,,
 scenario_editor.tooltip,,,,,
 scenario_editor.base_scenario,,,,,

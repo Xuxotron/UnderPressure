@@ -1,8 +1,9 @@
+// Updated: 2026-10-12
 // Purpose: Builds and synchronizes the Under Pressure settings interface and difficulty controls.
 using System;
 using System.Reflection;
 using System.Collections.Generic;
-using BepInEx.Configuration;
+using UnderPressure.LoaderRuntime.Configuration;
 using HarmonyLib;
 using TMPro;
 using TH20;

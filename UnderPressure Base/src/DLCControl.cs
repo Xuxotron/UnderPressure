@@ -1,10 +1,10 @@
-// Updated: 2026-10-11
+// Updated: 2026-10-12
 // Purpose: Enable/disable installed DLC from the original main-menu icons without uninstalling it.
 // Changes apply to newly loaded content; existing save objects are never deleted.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using BepInEx.Configuration;
+using UnderPressure.LoaderRuntime.Configuration;
 using FullInspector;
 using HarmonyLib;
 using TH20;

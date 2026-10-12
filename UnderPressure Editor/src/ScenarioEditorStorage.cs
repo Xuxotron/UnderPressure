@@ -1,4 +1,4 @@
-// Updated: 2026-10-11
+// Updated: 2026-10-12
 // Mapas .upmap independientes; carga limpia sin superponer vistas ni objetos anteriores.
 // La interfaz utiliza Unity UI; no necesita UnityEngine.IMGUIModule (GUI/GUILayout).
 using System;
@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using BepInEx;
+using UnderPressure.LoaderRuntime;
 using FullInspector;
 using HarmonyLib;
 using TMPro;
@@ -70,7 +70,7 @@ namespace UnderPressure.Editor
         {
             var result = new List<MapInfo>();
             if (!Directory.Exists(Folder)) return result;
-            foreach (var path in Directory.GetFiles(Folder, "*.upmap", SearchOption.TopDirectoryOnly))
+            foreach (var path in Directory.GetFiles(Folder, "*.upmap", SearchOption.AllDirectories))
             {
                 var info = ReadInfo(path);
                 result.Add(info);
@@ -157,9 +157,14 @@ namespace UnderPressure.Editor
             }
             lines.Add("END");
 
-            Directory.CreateDirectory(Folder);
-            var filename = SafeName(baseId) + "__" + SafeName(name) + ".upmap";
-            var fullPath = Path.Combine(Folder, filename);
+            // Estructura: maps/<hospital>/<mapa>/<mapa>.upmap.
+            // Los mapas antiguos en la raiz se siguen leyendo.
+            var folder = Path.Combine(Folder, SafeName(baseId), SafeName(name));
+            Directory.CreateDirectory(folder);
+            var fullPath = Path.Combine(folder, SafeName(name) + ".upmap");
+            var description = Path.Combine(folder, "description.txt");
+            if (!File.Exists(description))
+                File.WriteAllText(description, name, new UTF8Encoding(false));
             var temporary = fullPath + ".tmp";
             try
             {
@@ -491,6 +496,12 @@ namespace UnderPressure.Editor
         private Text _statusText;
         private Font _font;
 
+        private static string T(string key, string fallback)
+        {
+            var value = EditorLocalization.Get(key);
+            return string.IsNullOrEmpty(value) || value == key ? fallback : value;
+        }
+
         internal static bool IsDialogOpen => _active != null && _active._dialog != null;
 
         internal void Initialise(EditHospitalMenu menu, Level level)
@@ -506,8 +517,8 @@ namespace UnderPressure.Editor
                 return;
             }
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            AddToolbarButton("Guardar mapa", 0, ShowSave);
-            AddToolbarButton("Abrir mapa", 1, ShowLoad);
+            AddToolbarButton(T("editor.map.save", "Guardar mapa"), 0, ShowSave);
+            AddToolbarButton(T("editor.map.open", "Abrir mapa"), 1, ShowLoad);
         }
 
         private void AddToolbarButton(string name, int row, Action action)
@@ -518,7 +529,7 @@ namespace UnderPressure.Editor
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
                 rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-18f, -18f - row * 41f);
+                rect.anchoredPosition = new Vector2(-18f - row * 174f, -18f);
                 rect.sizeDelta = new Vector2(168f, 34f);
             }
             _buttons.Add(button.gameObject);
@@ -526,9 +537,9 @@ namespace UnderPressure.Editor
 
         private void ShowSave()
         {
-            BuildDialog("Guardar mapa");
+            BuildDialog(T("editor.map.save", "Guardar mapa"));
             if (_dialog == null) return;
-            AddText(_dialogPanel, "Nombre del mapa", 16, 62, 500, 28, 20, TextAnchor.MiddleLeft);
+            AddText(_dialogPanel, T("editor.map.name", "Nombre del mapa"), 16, 62, 500, 28, 20, TextAnchor.MiddleLeft);
             var inputRoot = AddUi("Nombre editable", _dialogPanel);
             SetRect(inputRoot.GetComponent<RectTransform>(), new Vector2(0f, 1f), new Vector2(0f, 1f),
                 new Vector2(0f, 1f), new Vector2(16f, -94f), new Vector2(500f, 37f));
@@ -564,12 +575,12 @@ namespace UnderPressure.Editor
 
         private void ShowLoad()
         {
-            BuildDialog("Abrir mapa .upmap");
+            BuildDialog(T("editor.map.open", "Abrir mapa") + " .upmap");
             if (_dialog == null) return;
             var list = ScenarioEditorStorage.ListSaved();
             if (list.Count == 0)
             {
-                AddText(_dialogPanel, "Ningun mapa guardado en la carpeta maps.",
+                AddText(_dialogPanel, T("editor.map.none", "Ningún mapa guardado en la carpeta maps."),
                     20, 100, 480, 40, 18, TextAnchor.MiddleCenter);
                 return;
             }
@@ -666,7 +677,7 @@ namespace UnderPressure.Editor
             AddText(_dialogPanel, title, 14, 12, 500, 42, 26, TextAnchor.MiddleCenter);
             _statusText = AddText(_dialogPanel, "", 17, 302, 493, 27, 16, TextAnchor.MiddleLeft);
             _statusText.color = Color.white;
-            AddDialogButton("Cerrar", new Vector2(85f, -289f), CloseDialog);
+            AddDialogButton(T("editor.map.close", "Cerrar"), new Vector2(85f, -289f), CloseDialog);
         }
 
         private Transform _dialogPanel;

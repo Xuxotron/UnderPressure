@@ -1,10 +1,10 @@
-// Updated: 2026-10-07
+// Updated: 2026-10-12
 // Purpose: Bootstraps the electrical plugin, shared assets, Harmony patches, and extra-save reloads.
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using BepInEx;
-using BepInEx.Logging;
+using UnderPressure.LoaderRuntime;
+using UnderPressure.LoaderRuntime.Logging;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -13,15 +13,15 @@ using UnderPressure;
 
 namespace UnderPressure.PowerGrid
 {
-    [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
-    [BepInDependency("artef.twopointhospital.underpressure", BepInDependency.DependencyFlags.HardDependency)]
-    public sealed class PowerGridPlugin : BaseUnityPlugin
+    [ModPlugin(PluginGuid, PluginName, PluginVersion)]
+    [ModDependency("artef.twopointhospital.underpressure", ModDependencyAttribute.DependencyFlags.HardDependency)]
+    public sealed class PowerGridPlugin : BaseModComponent
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure.powergrid.experimental";
         public const string PluginName = "Bajo Presion - Red electrica experimental";
         public const string PluginVersion = "0.1.1";
 
-        internal static ManualLogSource Log { get; private set; }
+        internal static ModLogSource Log { get; private set; }
         internal static Sprite BatterySprite { get; private set; }
         internal static Sprite PowerPanelSprite { get; private set; }
         internal static GameObject PowerPanelPrefab { get; private set; }
@@ -75,17 +75,13 @@ namespace UnderPressure.PowerGrid
 
         private void LoadUiAssets()
         {
+            // Shader conversion is now global and happens inside UnderPressureAssetBundle
+            // before Reloaded is fired. Every material in the bundle is already converted here.
             var energyRoomMaterials =
                 RoomCatalog.LoadSurfaceMaterials(RoomCatalog.Energy);
 
             if (energyRoomMaterials != null)
             {
-                ShaderConversion.ConvertKnownShaders(
-                    energyRoomMaterials.Floor,
-                    energyRoomMaterials.Interior,
-                    energyRoomMaterials.Exterior,
-                    energyRoomMaterials.Door);
-
                 RoomCatalog.SetSurfaceMaterials(
                     RoomCatalog.Energy,
                     energyRoomMaterials);

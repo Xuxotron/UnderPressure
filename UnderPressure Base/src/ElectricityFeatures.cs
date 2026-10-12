@@ -1,9 +1,10 @@
+// Updated: 2026-10-12
 // Purpose: Integrates electricity costs with billing, item tooltips, and finance graphs.
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
-using BepInEx;
+using UnderPressure.LoaderRuntime;
 using HarmonyLib;
 using TH20;
 using TH20.UI;
