@@ -281,7 +281,7 @@ Los nombres sugieren procedencias distintas, pero no constituyen una fuente auto
 
 ## 7. Filtrado DLC implementado
 
-El editor construye un mapa `GUID de RoomItemDefinition -> DLC de procedencia` independiente de `DlcPackRequired`.
+El editor construye un mapa `instancia de RoomItemDefinition -> DLC de procedencia` independiente de `DlcPackRequired`. No usa el GUID como identidad porque las definiciones exteriores pueden compartir `Guid.Empty`.
 
 Fuente utilizada:
 
@@ -339,6 +339,6 @@ Los principales avances del editor están registrados en:
 
 El problema de rendimiento de la pintura estaba causado por el uso de `HospitalMap.Build(false)` para cualquier modificación, incluida una sola celda. La ruta aplicada conserva ahora la habitación y reconstruye sus paredes sin demoler toda la parcela.
 
-El catálogo exterior sigue alimentándose directamente de `LandscapeItemDatabase`, pero el filtro ya puede clasificar los GUID presentes en las parcelas de niveles Base y DLC. Los objetos no clasificables se conservan hasta disponer de procedencia directa desde assets.
+El catálogo exterior sigue alimentándose directamente de `LandscapeItemDatabase`, pero el filtro ya puede clasificar las mismas instancias de definición presentes en las parcelas de niveles Base y DLC. Los objetos no clasificables se conservan hasta disponer de procedencia directa desde assets.
 
 Ambas correcciones deben desarrollarse por separado y validarse contra los flujos ya funcionales, especialmente la protección de datos originales, el formato `.upmap` y la ocultación de decoración fija duplicada.

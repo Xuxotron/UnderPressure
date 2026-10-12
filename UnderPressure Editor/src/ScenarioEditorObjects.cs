@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -29,8 +30,25 @@ namespace UnderPressure.Editor
                 new Dictionary<uint, DLCItemDefinition>();
         }
 
-        private static readonly Dictionary<Guid, DlcProvenance> Provenance =
-            new Dictionary<Guid, DlcProvenance>();
+        private sealed class DefinitionReferenceComparer :
+            IEqualityComparer<RoomItemDefinition>
+        {
+            internal static readonly DefinitionReferenceComparer Instance =
+                new DefinitionReferenceComparer();
+
+            public bool Equals(RoomItemDefinition left, RoomItemDefinition right) =>
+                ReferenceEquals(left, right);
+
+            public int GetHashCode(RoomItemDefinition value) =>
+                value == null ? 0 : RuntimeHelpers.GetHashCode(value);
+        }
+
+        // Las definiciones exteriores no garantizan un GUID exclusivo: varias
+        // pueden compartir Guid.Empty. La instancia cargada por SharedInstance
+        // es la identidad real que tambien entrega LandscapeItemDatabase.
+        private static readonly Dictionary<RoomItemDefinition, DlcProvenance> Provenance =
+            new Dictionary<RoomItemDefinition, DlcProvenance>(
+                DefinitionReferenceComparer.Instance);
 
         // Bajo Presion Base es otra DLL. No referenciarla directamente permite
         // que el Editor funcione de manera independiente. La busqueda es perezosa
@@ -120,10 +138,10 @@ namespace UnderPressure.Editor
         private static void RegisterProvenance(
             RoomItemDefinition definition, DLCItemDefinition levelPack)
         {
-            if (!Provenance.TryGetValue(definition.GUID, out var provenance))
+            if (!Provenance.TryGetValue(definition, out var provenance))
             {
                 provenance = new DlcProvenance();
-                Provenance.Add(definition.GUID, provenance);
+                Provenance.Add(definition, provenance);
             }
 
             if (levelPack == null)
@@ -148,7 +166,7 @@ namespace UnderPressure.Editor
             if (dlc != null) return !IsPackAvailable(dlc);
 
             if (definition == null ||
-                !Provenance.TryGetValue(definition.GUID, out var provenance) ||
+                !Provenance.TryGetValue(definition, out var provenance) ||
                 provenance.UsedByBase || provenance.Packs.Count == 0)
                 return false;
 
@@ -170,9 +188,11 @@ namespace UnderPressure.Editor
                     .SandboxSettingsConfig?.LevelOptions;
                 BuildDlcProvenance(options);
             }
+            if (_baseDlcDisabled == null) _baseDlcDisabled = FindBaseDlcDisabled();
 
             var removed = 0;
             var inferred = 0;
+            var matched = 0;
             var untagged = 0;
             var tagged = 0;
             for (var i = items.Count - 1; i >= 0; --i)
@@ -187,6 +207,7 @@ namespace UnderPressure.Editor
 
                 if (definition.DlcPackRequired?.Instance == null) ++untagged;
                 else ++tagged;
+                if (Provenance.ContainsKey(definition)) ++matched;
                 if (!IsUnavailable(definition)) continue;
                 if (definition.DlcPackRequired?.Instance == null) ++inferred;
                 items.RemoveAt(i);
@@ -196,6 +217,7 @@ namespace UnderPressure.Editor
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Catalogo exterior: " + items.Count + " disponibles; " + removed +
                 " excluidos por DLC (" + inferred + " por procedencia de nivel); " +
+                matched + " vinculados a parcelas; " +
                 tagged + " con DLC declarado, " +
                 untagged + " sin DLC declarado. " +
                 "Comprobacion independiente de Base: " +

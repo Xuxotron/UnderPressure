@@ -262,6 +262,8 @@ namespace UnderPressure.Editor
                 new[] { typeof(Texture2D) });
         private static readonly PropertyInfo FloorImageProperty =
             AccessTools.Property(typeof(HospitalMap), "FloorImage");
+        private static readonly FieldInfo FloorImageField =
+            AccessTools.Field(typeof(HospitalMap), "_floorImage");
 
         private static HospitalMap _mapBeingRefreshed;
         private static bool _skipNextLighting;
@@ -271,7 +273,7 @@ namespace UnderPressure.Editor
             _skipNextLighting = false;
             if (!ScenarioEditorSession.Active || map == null ||
                 AddEntrancesMethod == null || AddPillarsMethod == null ||
-                FloorImageProperty == null)
+                FloorImageProperty == null || FloorImageField == null)
             {
                 map?.Build(playBuildAnimation);
                 return;
@@ -282,10 +284,16 @@ namespace UnderPressure.Editor
             var wasVisible = room?.IsVisible() ?? false;
             var previousWalls = map.ExternalWalls?.Count ?? 0;
             var timer = Stopwatch.StartNew();
+            var previousFloorImage = FloorImageField.GetValue(map) as Texture2D;
 
             try
             {
                 var floorImage = GetFloorImage(map);
+                // RebuildWalls fue escrito para parcelas fusionadas y usa el
+                // campo _floorImage directamente. En una parcela normal es null,
+                // aunque la propiedad devuelve correctamente la textura de la
+                // definicion. Se completa solo durante este refresco.
+                FloorImageField.SetValue(map, floorImage);
                 AddEntrancesMethod.Invoke(map, new object[] { floorImage });
                 _mapBeingRefreshed = map;
                 map.RebuildWalls();
@@ -324,6 +332,7 @@ namespace UnderPressure.Editor
             finally
             {
                 _mapBeingRefreshed = null;
+                FloorImageField.SetValue(map, previousFloorImage);
             }
         }
 
