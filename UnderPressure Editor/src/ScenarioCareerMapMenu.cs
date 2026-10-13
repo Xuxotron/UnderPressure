@@ -493,19 +493,14 @@ namespace UnderPressure.Editor
             if (_native == null || _selected == null) return;
             if (_nativeName != null) _nativeName.text = _selected.Name;
             if (_nativeDescription != null) _nativeDescription.text = _selected.Description;
-            var map = MapField?.GetValue(_native) as MetagameMap;
-            SaveFileHeader customSave;
-            var hasCustomSave = ScenarioCareerMapLoader.TryGetSaveForMap(
-                map?.SaveSystem, _hospital?.UniqueId, _selected.Path, out customSave);
             var descPanel = DescPanelField?.GetValue(_native) as GameObject;
             if (descPanel != null && !descPanel.activeSelf) descPanel.SetActive(true);
             var savePanel = SavePanelField?.GetValue(_native) as GameObject;
             if (savePanel != null && savePanel.activeSelf) savePanel.SetActive(false);
             var restartPanel = RestartPanelField?.GetValue(_native) as GameObject;
             if (restartPanel != null && restartPanel.activeSelf) restartPanel.SetActive(false);
-            var term = hasCustomSave ? "Misc/Continue_CS" : "Misc/Start_CS";
-            if (_nativeMainText != null && _nativeMainText.Term != term)
-                _nativeMainText.SetTerm(term);
+            if (_nativeMainText != null && _nativeMainText.Term != "Misc/Start_CS")
+                _nativeMainText.SetTerm("Misc/Start_CS");
         }
 
         private void LateUpdate()

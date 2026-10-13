@@ -1,13 +1,11 @@
-// Updated: 2026-10-13 - Guardado nativo independiente y recarga de mapas personalizados.
-// Carga .upmap + .json/.png tanto al crear como al restaurar una partida.
-// Cada .sav personalizado conserva el vinculo con su mapa sin sustituir la partida del hospital base.
+// Updated: 2026-10-13 - Importacion segura de terrain_mesh.bin en el nivel jugable.
+// Carga .upmap + .json/.png al crear una partida nueva. No toca las definiciones originales.
+// Las partidas del juego base permanecen intactas; el guardado de carrera personalizado sigue bloqueado.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using FullInspector;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -16,21 +14,8 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioCareerMapLoader
     {
-        private const string SaveLinkSignature = "UNDERPRESSURE_CUSTOM_MAP_SAVE_1";
-        private const string SaveLinkExtension = ".upmapref";
-        // Rango reservado para las parcelas de un unico mapa activo. Cada parcela
-        // usa un ID para la definicion y el siguiente para su SharedInstance.
-        private const int PlotSaveIdBase = 9113000;
         private static readonly MethodInfo CloneMethod = typeof(object).GetMethod("MemberwiseClone",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        private static readonly FieldInfo AssetIdsField =
-            AccessTools.Field(typeof(SaveSystem), "_assetIDs");
-        private static readonly MethodInfo SaveLocationForSlotMethod =
-            AccessTools.Method(typeof(SaveSystem), "SaveLocationForSlot");
-        private static readonly MethodInfo SanitiseSaveNameMethod =
-            AccessTools.Method(typeof(SaveSystem), "SanitiseFileNameCharacters");
-        private static readonly string[] SerializerFields =
-            { "_serializerLevel", "_serializerMetagame", "_serializerRoomTemplates" };
         private static readonly List<Texture2D> TemporaryTextures = new List<Texture2D>();
         private static readonly List<Material> TemporaryMaterials = new List<Material>();
         private static readonly Dictionary<Renderer, Material[]> OriginalRendererMaterials =
@@ -45,10 +30,6 @@ namespace UnderPressure.Editor
         private static bool _active;
         private static ScenarioMapFormat.LoadedMap _map;
         private static ScenarioPlotRuntime.Collection _plotAssets;
-        private static SaveSystem _registeredSaveSystem;
-        private static readonly Dictionary<int, object> RegisteredSaveAssets =
-            new Dictionary<int, object>();
-        private static bool _worldConfigApplied;
         internal static bool IsCustomSession => _active || _path != null;
 
         internal static void Prepare(LevelConfig level, string path)
@@ -82,282 +63,42 @@ namespace UnderPressure.Editor
             foreach (var texture in TemporaryTextures)
                 if (texture != null) UnityEngine.Object.Destroy(texture);
             TemporaryTextures.Clear();
-            UnregisterSaveAssets();
             _plotAssets?.DestroyAssets();
             _plotAssets = null;
             _base = null;
             _path = null;
             _map = null;
             _active = false;
-            _worldConfigApplied = false;
         }
 
         internal static bool MatchesConfig(LevelConfig config) =>
             config != null && _base != null &&
             string.Equals(config.UniqueId, _base.UniqueId, StringComparison.Ordinal);
 
-        internal static bool MatchesLevelId(string levelId) =>
-            _base != null && string.Equals(levelId, _base.UniqueId, StringComparison.Ordinal);
-
         internal static bool Match(Level level) =>
             level != null && level.Config != null && MatchesConfig(level.Config);
-
-        internal static bool TryGetSaveForMap(
-            SaveSystem saveSystem, string levelId, string mapPath, out SaveFileHeader result)
-        {
-            result = null;
-            if (saveSystem == null || string.IsNullOrEmpty(levelId) || string.IsNullOrEmpty(mapPath))
-                return false;
-            var fullMapPath = Path.GetFullPath(mapPath);
-            var saves = saveSystem.SaveFiles;
-            if (saves == null) return false;
-            foreach (var header in saves)
-            {
-                if (header == null || header.IsBroken ||
-                    !string.Equals(header.LevelID, levelId, StringComparison.Ordinal) ||
-                    !TryReadSaveLink(header.FilePath, out var linkedPath) ||
-                    !string.Equals(linkedPath, fullMapPath, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (result == null || header.Date > result.Date) result = header;
-            }
-            return result != null;
-        }
-
-        internal static bool TryGetCurrentMapSave(
-            SaveSystem saveSystem, string levelId, out SaveFileHeader result) =>
-            TryGetSaveForMap(saveSystem, levelId, _path, out result);
-
-        internal static void StartPreparingForLoad(Metagame metagame)
-        {
-            EnsureRuntimeAssets(metagame);
-            _active = true;
-        }
-
-        internal static bool TryGetVanillaSave(
-            SaveSystem saveSystem, string levelId, bool includeBroken, out SaveFileHeader result)
-        {
-            result = null;
-            if (saveSystem == null || string.IsNullOrEmpty(levelId)) return false;
-            var saves = saveSystem.SaveFiles;
-            if (saves == null) return false;
-            foreach (var header in saves)
-            {
-                if (header == null || (!includeBroken && header.IsBroken) ||
-                    !string.Equals(header.LevelID, levelId, StringComparison.Ordinal) ||
-                    IsCustomSave(header))
-                    continue;
-                if (result == null || header.Date > result.Date) result = header;
-            }
-            return result != null;
-        }
-
-        internal static bool TryPrepareLinkedSave(LevelConfig level, SaveFileHeader header)
-        {
-            if (level == null || header == null || !TryReadSaveLink(header.FilePath, out var mapPath))
-                return false;
-            Prepare(level, mapPath);
-            return true;
-        }
-
-        private static bool IsCustomSave(SaveFileHeader header) =>
-            header != null && TryReadSaveLink(header.FilePath, out _);
-
-        private static bool TryReadSaveLink(string savePath, out string mapPath)
-        {
-            mapPath = null;
-            if (string.IsNullOrEmpty(savePath)) return false;
-            var linkPath = savePath + SaveLinkExtension;
-            if (!File.Exists(linkPath)) return false;
-            try
-            {
-                var lines = File.ReadAllLines(linkPath, Encoding.UTF8);
-                if (lines.Length != 2 || !string.Equals(lines[0], SaveLinkSignature,
-                        StringComparison.Ordinal) || string.IsNullOrWhiteSpace(lines[1]))
-                    return false;
-                var root = Path.GetFullPath(ScenarioEditorStorage.Folder)
-                    .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-                var candidate = Path.GetFullPath(Path.Combine(root, lines[1]));
-                if (!candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
-                    !candidate.EndsWith(".upmap", StringComparison.OrdinalIgnoreCase) ||
-                    !File.Exists(candidate))
-                    return false;
-                mapPath = candidate;
-                return true;
-            }
-            catch (Exception exception)
-            {
-                UnderPressureEditorPlugin.Log?.LogWarning(
-                    "No se pudo leer el vinculo del guardado personalizado: " + exception.Message);
-                return false;
-            }
-        }
-
-        internal static string GetAutomaticSaveName(SaveData data, string requestedName)
-        {
-            if (!string.IsNullOrEmpty(requestedName) || !IsCustomSession ||
-                data?.Level == null || !Match(data.Level) || string.IsNullOrEmpty(_path))
-                return requestedName;
-            var relative = GetRelativeMapPath(_path);
-            return "UP_" + data.Level.UniqueID + "_" + StablePathHash(relative);
-        }
-
-        internal static void UpdateSaveLink(
-            SaveSystem saveSystem, SaveData data, string saveName, int slot, bool succeeded)
-        {
-            if (!succeeded || saveSystem == null || data?.Level == null) return;
-            try
-            {
-                var actualName = string.IsNullOrEmpty(saveName) ? data.Level.UniqueID : saveName;
-                var sanitised = SanitiseSaveNameMethod?.Invoke(null, new object[] { actualName }) as string;
-                var folder = SaveLocationForSlotMethod?.Invoke(saveSystem, new object[] { slot }) as string;
-                if (string.IsNullOrEmpty(sanitised) || string.IsNullOrEmpty(folder))
-                    throw new InvalidOperationException("No se pudo resolver la ruta nativa del guardado.");
-                var linkPath = Path.Combine(folder, sanitised + ".sav") + SaveLinkExtension;
-                if (!IsCustomSession || !Match(data.Level) || string.IsNullOrEmpty(_path))
-                {
-                    if (File.Exists(linkPath)) File.Delete(linkPath);
-                    return;
-                }
-                var relative = GetRelativeMapPath(_path);
-                var temporary = linkPath + ".tmp";
-                Directory.CreateDirectory(folder);
-                File.WriteAllText(temporary, SaveLinkSignature + Environment.NewLine + relative,
-                    new UTF8Encoding(false));
-                File.Copy(temporary, linkPath, true);
-                File.Delete(temporary);
-                UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Carrera: guardado vinculado al mapa personalizado " + relative + ".");
-            }
-            catch (Exception exception)
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Carrera: no se pudo vincular el guardado con su mapa: " + exception);
-            }
-        }
-
-        private static string GetRelativeMapPath(string path)
-        {
-            var root = Path.GetFullPath(ScenarioEditorStorage.Folder)
-                .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var full = Path.GetFullPath(path);
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("El mapa no esta en la carpeta maps.");
-            return full.Substring(root.Length);
-        }
-
-        private static string StablePathHash(string value)
-        {
-            const ulong offset = 14695981039346656037UL;
-            const ulong prime = 1099511628211UL;
-            var hash = offset;
-            foreach (var character in value.ToUpperInvariant())
-            {
-                hash ^= character;
-                hash *= prime;
-            }
-            return hash.ToString("X16");
-        }
-
-        private static void EnsureRuntimeAssets(Metagame metagame)
-        {
-            if (_plotAssets != null) return;
-            var templates = _base?.GetWorldStateConfig()?.HospitalPlots;
-            if (templates == null || metagame == null || _map == null)
-                throw new InvalidOperationException(
-                    "No estan disponibles las definiciones necesarias para restaurar el mapa.");
-            var prepared = ScenarioPlotRuntime.Build(_map, templates, metagame);
-            _plotAssets = prepared;
-            try
-            {
-                RegisterSaveAssets(metagame.App?.SaveSystem);
-            }
-            catch
-            {
-                UnregisterSaveAssets();
-                prepared.DestroyAssets();
-                _plotAssets = null;
-                throw;
-            }
-        }
-
-        private static void RegisterSaveAssets(SaveSystem saveSystem)
-        {
-            var mapping = AssetIdsField?.GetValue(saveSystem) as BiDictionary<int, object>;
-            if (saveSystem == null || mapping == null || _plotAssets == null)
-                throw new InvalidOperationException("No esta disponible el mapa de IDs del guardado.");
-            for (var index = 0; index < _plotAssets.Wrappers.Count; ++index)
-            {
-                var definitionId = PlotSaveIdBase + index * 2;
-                var wrapperId = definitionId + 1;
-                var wrapper = _plotAssets.Wrappers[index];
-                var definition = _plotAssets.Definitions[index];
-                wrapper.ID = wrapperId;
-                RegisterSaveObject(mapping, definitionId, definition);
-                RegisterSaveObject(mapping, wrapperId, wrapper);
-            }
-            _registeredSaveSystem = saveSystem;
-            RefreshSerializerMappings(saveSystem, mapping);
-        }
-
-        private static void RegisterSaveObject(BiDictionary<int, object> mapping, int id, object value)
-        {
-            if (mapping.TryGetValue(id, out var existing))
-            {
-                if (ReferenceEquals(existing, value)) return;
-                throw new InvalidOperationException("El ID externo de parcela ya esta ocupado: " + id);
-            }
-            mapping.Add(id, value);
-            RegisteredSaveAssets.Add(id, value);
-        }
-
-        private static void UnregisterSaveAssets()
-        {
-            var mapping = AssetIdsField?.GetValue(_registeredSaveSystem) as BiDictionary<int, object>;
-            if (mapping != null)
-            {
-                foreach (var pair in RegisteredSaveAssets)
-                    if (mapping.TryGetValue(pair.Key, out var current) &&
-                        ReferenceEquals(current, pair.Value))
-                        mapping.Remove(pair.Key);
-                RefreshSerializerMappings(_registeredSaveSystem, mapping);
-            }
-            RegisteredSaveAssets.Clear();
-            _registeredSaveSystem = null;
-        }
-
-        private static void RefreshSerializerMappings(
-            SaveSystem saveSystem, BiDictionary<int, object> mapping)
-        {
-            if (saveSystem == null || mapping == null) return;
-            foreach (var fieldName in SerializerFields)
-            {
-                var serializer = AccessTools.Field(typeof(SaveSystem), fieldName)
-                    ?.GetValue(saveSystem) as FullSerializerSave.fsSerializer;
-                serializer?.SetIDObjectMapping(mapping.FirstToSecond, mapping.SecondToFirst);
-            }
-        }
 
         // Prefijo del constructor WorldState: insertar la lista real de parcelas antes del foreach nativo.
         internal static void StartBuilding(ref WorldState.Config config, Level level, Metagame metagame)
         {
             if (!Match(level) || _map == null || config?.HospitalPlots == null) return;
-            if (_worldConfigApplied) return;
-            EnsureRuntimeAssets(metagame);
+            if (_plotAssets != null) return;
+            var prepared = ScenarioPlotRuntime.Build(_map, config.HospitalPlots, metagame);
             try
             {
                 var cloned = (WorldState.Config)CloneMethod.Invoke(config, null);
-                cloned.HospitalPlots = _plotAssets.Wrappers
+                cloned.HospitalPlots = prepared.Wrappers
                     .ConvertAll<FullInspector.SharedInstance<HospitalPlotDefinition>>(item => item);
-                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, _plotAssets.Definitions);
+                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, prepared.Definitions);
                 config = cloned;
+                _plotAssets = prepared;
                 _active = true;
-                _worldConfigApplied = true;
                 UnderPressureEditorPlugin.Log?.LogInfo(
                     "Carrera: WorldState creado con " + cloned.HospitalPlots.Count + " parcelas personalizadas.");
             }
             catch
             {
-                Cancel();
+                prepared.DestroyAssets();
                 throw;
             }
         }
@@ -513,8 +254,7 @@ namespace UnderPressure.Editor
         typeof(LevelConfig), typeof(SaveFileHeader), typeof(bool), typeof(bool) })]
     internal static class ScenarioCareerMapIgnoreSavePatch
     {
-        private static void Prefix(App __instance, LevelConfig __0,
-            ref SaveFileHeader __1, ref bool __2)
+        private static void Prefix(LevelConfig __0, ref SaveFileHeader __1, ref bool __2)
         {
             if (!ScenarioCareerMapLoader.IsCustomSession || ScenarioEditorFlow.IsRunning) return;
             if (!ScenarioCareerMapLoader.MatchesConfig(__0))
@@ -522,19 +262,8 @@ namespace UnderPressure.Editor
                 ScenarioCareerMapLoader.Cancel();
                 return;
             }
-            ScenarioCareerMapLoader.StartPreparingForLoad(__instance?.Metagame);
-            SaveFileHeader matching;
-            if (ScenarioCareerMapLoader.TryGetCurrentMapSave(
-                    __instance?.SaveSystem, __0.UniqueId, out matching))
-            {
-                __1 = matching;
-                __2 = false;
-            }
-            else
-            {
-                __1 = null;
-                __2 = true;
-            }
+            __1 = null;
+            __2 = true;
         }
     }
 
@@ -556,75 +285,28 @@ namespace UnderPressure.Editor
         private static void Postfix(Level __0) => ScenarioCareerMapLoader.LoadTerrain(__0);
     }
 
-    [HarmonyPatch(typeof(SaveSystem), "GetSaveForLevel")]
-    internal static class ScenarioCareerMapSaveSelectionPatch
+    [HarmonyPatch(typeof(GameMode), "AllowGameToBeSaved")]
+    internal static class ScenarioCareerMapNoVanillaSavePatch
     {
-        private static bool Prefix(SaveSystem __instance, string __0, bool __1,
-            ref SaveFileHeader __result)
+        private static void Postfix(ref bool __result)
         {
-            if (ScenarioEditorFlow.IsRunning) return true;
-            if (ScenarioCareerMapLoader.IsCustomSession &&
-                ScenarioCareerMapLoader.MatchesLevelId(__0))
-                ScenarioCareerMapLoader.TryGetCurrentMapSave(__instance, __0, out __result);
-            else
-                ScenarioCareerMapLoader.TryGetVanillaSave(__instance, __0, __1, out __result);
-            return false;
+            if (ScenarioCareerMapLoader.IsCustomSession) __result = false;
         }
     }
-
-    [HarmonyPatch(typeof(SaveSystem), "SaveImplementation")]
-    internal static class ScenarioCareerMapSaveNamePatch
+    [HarmonyPatch(typeof(Level), "HandleAutosave")]
+    internal static class ScenarioCareerMapNoAutosavePatch
     {
-        private static void Prefix(SaveData __1, ref string __2) =>
-            __2 = ScenarioCareerMapLoader.GetAutomaticSaveName(__1, __2);
+        private static bool Prefix() => !ScenarioCareerMapLoader.IsCustomSession;
     }
-
-    [HarmonyPatch(typeof(SaveSystem), "SaveLevelImplementationInner")]
-    internal static class ScenarioCareerMapSaveLinkPatch
+    [HarmonyPatch(typeof(App), "AutoSaveDeferred")]
+    internal static class ScenarioCareerMapNoDeferredSavePatch
     {
-        private static void Postfix(SaveSystem __instance, SaveData __0, string __1,
-            int __2, bool __result) =>
-            ScenarioCareerMapLoader.UpdateSaveLink(__instance, __0, __1, __2, __result);
+        private static bool Prefix() => !ScenarioCareerMapLoader.IsCustomSession;
     }
-
-    [HarmonyPatch(typeof(MetagameMap), "Open")]
-    [HarmonyPriority(Priority.First)]
-    [HarmonyBefore("artef.twopointhospital.underpressure")]
-    internal static class ScenarioCareerMapAutoLoadPatch
+    [HarmonyPatch(typeof(App), "QuickSaveInstantly")]
+    internal static class ScenarioCareerMapNoQuickSavePatch
     {
-        private static readonly Type StartupType =
-            AccessTools.TypeByName("UnderPressure.SkipFrontEndForAutoLoadPatch");
-        private static readonly MethodInfo KeepVisibleGetter =
-            StartupType == null ? null :
-            AccessTools.PropertyGetter(StartupType, "KeepLoadingScreenVisible");
-        private static readonly MethodInfo SelectedSaveGetter =
-            StartupType == null ? null :
-            AccessTools.PropertyGetter(StartupType, "SelectedLevelSave");
-
-        private static void Prefix(MetagameMap __instance)
-        {
-            if (ScenarioEditorFlow.IsRunning || ScenarioCareerMapLoader.IsCustomSession ||
-                KeepVisibleGetter == null || SelectedSaveGetter == null ||
-                !(KeepVisibleGetter.Invoke(null, null) is bool active) || !active)
-                return;
-            var header = SelectedSaveGetter.Invoke(null, null) as SaveFileHeader;
-            var level = header == null || __instance?.Metagame?.LevelList == null
-                ? null
-                : __instance.Metagame.LevelList.GetLevelConfigByID(header.LevelID);
-            if (level == null) return;
-            try
-            {
-                if (ScenarioCareerMapLoader.TryPrepareLinkedSave(level, header))
-                    UnderPressureEditorPlugin.Log?.LogInfo(
-                        "Carrera: autocarga preparada para una partida de mapa personalizado.");
-            }
-            catch (Exception exception)
-            {
-                ScenarioCareerMapLoader.Cancel();
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Carrera: no se pudo preparar el mapa de la partida mas reciente: " + exception);
-            }
-        }
+        private static bool Prefix() => !ScenarioCareerMapLoader.IsCustomSession;
     }
     [HarmonyPatch(typeof(OpeningScreen), "Show")]
     internal static class ScenarioCareerMapResetPatch
