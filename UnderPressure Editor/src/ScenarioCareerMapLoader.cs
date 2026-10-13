@@ -1,11 +1,11 @@
-// Updated: 2026-10-13 - Importacion segura de terrain_mesh.bin en el nivel jugable.
-// Carga .upmap + .json/.png al crear una partida nueva. No toca las definiciones originales.
-// Las partidas del juego base permanecen intactas; el guardado de carrera personalizado sigue bloqueado.
+// Updated: 2026-10-13 - El juego conserva por completo su flujo nativo de guardado.
+// El mod solo prepara los datos del mapa y registra sus parcelas para el serializador nativo.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using FullInspector;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -14,8 +14,15 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioCareerMapLoader
     {
+        // Rango reservado para las parcelas de un unico mapa activo. Cada parcela
+        // usa un ID para la definicion y el siguiente para su SharedInstance.
+        private const int PlotSaveIdBase = 9113000;
         private static readonly MethodInfo CloneMethod = typeof(object).GetMethod("MemberwiseClone",
             BindingFlags.NonPublic | BindingFlags.Instance);
+        private static FieldInfo AssetIdsField =>
+            AccessTools.Field(typeof(SaveSystem), "_assetIDs");
+        private static readonly string[] SerializerFields =
+            { "_serializerLevel", "_serializerMetagame", "_serializerRoomTemplates" };
         private static readonly List<Texture2D> TemporaryTextures = new List<Texture2D>();
         private static readonly List<Material> TemporaryMaterials = new List<Material>();
         private static readonly Dictionary<Renderer, Material[]> OriginalRendererMaterials =
@@ -30,6 +37,10 @@ namespace UnderPressure.Editor
         private static bool _active;
         private static ScenarioMapFormat.LoadedMap _map;
         private static ScenarioPlotRuntime.Collection _plotAssets;
+        private static SaveSystem _registeredSaveSystem;
+        private static readonly Dictionary<int, object> RegisteredSaveAssets =
+            new Dictionary<int, object>();
+        private static bool _worldConfigApplied;
         internal static bool IsCustomSession => _active || _path != null;
 
         internal static void Prepare(LevelConfig level, string path)
@@ -63,12 +74,14 @@ namespace UnderPressure.Editor
             foreach (var texture in TemporaryTextures)
                 if (texture != null) UnityEngine.Object.Destroy(texture);
             TemporaryTextures.Clear();
+            UnregisterSaveAssets();
             _plotAssets?.DestroyAssets();
             _plotAssets = null;
             _base = null;
             _path = null;
             _map = null;
             _active = false;
+            _worldConfigApplied = false;
         }
 
         internal static bool MatchesConfig(LevelConfig config) =>
@@ -78,27 +91,130 @@ namespace UnderPressure.Editor
         internal static bool Match(Level level) =>
             level != null && level.Config != null && MatchesConfig(level.Config);
 
+        internal static bool TryGetNativeSave(
+            SaveSystem saveSystem, string levelId, out SaveFileHeader result)
+        {
+            result = null;
+            if (saveSystem == null || string.IsNullOrEmpty(levelId)) return false;
+            result = saveSystem.GetSaveForLevel(levelId, false);
+            return result != null;
+        }
+
+        internal static bool TryGetCurrentMapSave(
+            SaveSystem saveSystem, string levelId, out SaveFileHeader result) =>
+            TryGetNativeSave(saveSystem, levelId, out result);
+
+        internal static void StartPreparingForLoad(Metagame metagame)
+        {
+            EnsureRuntimeAssets(metagame);
+            _active = true;
+        }
+
+        private static void EnsureRuntimeAssets(Metagame metagame)
+        {
+            if (_plotAssets != null) return;
+            var templates = _base?.GetWorldStateConfig()?.HospitalPlots;
+            if (templates == null || metagame == null || _map == null)
+                throw new InvalidOperationException(
+                    "No estan disponibles las definiciones necesarias para restaurar el mapa.");
+            var prepared = ScenarioPlotRuntime.Build(_map, templates, metagame);
+            _plotAssets = prepared;
+            try
+            {
+                RegisterSaveAssets(metagame.App?.SaveSystem);
+            }
+            catch
+            {
+                UnregisterSaveAssets();
+                prepared.DestroyAssets();
+                _plotAssets = null;
+                throw;
+            }
+        }
+
+        private static void RegisterSaveAssets(SaveSystem saveSystem)
+        {
+            if (saveSystem == null || _plotAssets == null)
+                throw new InvalidOperationException("No esta disponible el mapa de IDs del guardado.");
+            var mapping = AssetIdsField?.GetValue(saveSystem) as BiDictionary<int, object>;
+            if (mapping == null)
+                throw new InvalidOperationException("No esta disponible el mapa de IDs del guardado.");
+            _registeredSaveSystem = saveSystem;
+            for (var index = 0; index < _plotAssets.Wrappers.Count; ++index)
+            {
+                var definitionId = PlotSaveIdBase + index * 2;
+                var wrapperId = definitionId + 1;
+                var wrapper = _plotAssets.Wrappers[index];
+                var definition = _plotAssets.Definitions[index];
+                wrapper.ID = wrapperId;
+                RegisterSaveObject(mapping, definitionId, definition);
+                RegisterSaveObject(mapping, wrapperId, wrapper);
+            }
+            RefreshSerializerMappings(saveSystem, mapping);
+        }
+
+        private static void RegisterSaveObject(BiDictionary<int, object> mapping, int id, object value)
+        {
+            if (mapping.TryGetValue(id, out var existing))
+            {
+                if (ReferenceEquals(existing, value)) return;
+                throw new InvalidOperationException("El ID externo de parcela ya esta ocupado: " + id);
+            }
+            mapping.Add(id, value);
+            RegisteredSaveAssets.Add(id, value);
+        }
+
+        private static void UnregisterSaveAssets()
+        {
+            var saveSystem = _registeredSaveSystem;
+            var mapping = saveSystem == null
+                ? null
+                : AssetIdsField?.GetValue(saveSystem) as BiDictionary<int, object>;
+            if (mapping != null)
+            {
+                foreach (var pair in RegisteredSaveAssets)
+                    if (mapping.TryGetValue(pair.Key, out var current) &&
+                        ReferenceEquals(current, pair.Value))
+                        mapping.Remove(pair.Key);
+                RefreshSerializerMappings(saveSystem, mapping);
+            }
+            RegisteredSaveAssets.Clear();
+            _registeredSaveSystem = null;
+        }
+
+        private static void RefreshSerializerMappings(
+            SaveSystem saveSystem, BiDictionary<int, object> mapping)
+        {
+            if (saveSystem == null || mapping == null) return;
+            foreach (var fieldName in SerializerFields)
+            {
+                var serializer = AccessTools.Field(typeof(SaveSystem), fieldName)
+                    ?.GetValue(saveSystem) as FullSerializerSave.fsSerializer;
+                serializer?.SetIDObjectMapping(mapping.FirstToSecond, mapping.SecondToFirst);
+            }
+        }
+
         // Prefijo del constructor WorldState: insertar la lista real de parcelas antes del foreach nativo.
         internal static void StartBuilding(ref WorldState.Config config, Level level, Metagame metagame)
         {
             if (!Match(level) || _map == null || config?.HospitalPlots == null) return;
-            if (_plotAssets != null) return;
-            var prepared = ScenarioPlotRuntime.Build(_map, config.HospitalPlots, metagame);
+            if (_worldConfigApplied) return;
+            EnsureRuntimeAssets(metagame);
             try
             {
                 var cloned = (WorldState.Config)CloneMethod.Invoke(config, null);
-                cloned.HospitalPlots = prepared.Wrappers
+                cloned.HospitalPlots = _plotAssets.Wrappers
                     .ConvertAll<FullInspector.SharedInstance<HospitalPlotDefinition>>(item => item);
-                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, prepared.Definitions);
+                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, _plotAssets.Definitions);
                 config = cloned;
-                _plotAssets = prepared;
                 _active = true;
+                _worldConfigApplied = true;
                 UnderPressureEditorPlugin.Log?.LogInfo(
                     "Carrera: WorldState creado con " + cloned.HospitalPlots.Count + " parcelas personalizadas.");
             }
             catch
             {
-                prepared.DestroyAssets();
+                Cancel();
                 throw;
             }
         }
@@ -254,7 +370,8 @@ namespace UnderPressure.Editor
         typeof(LevelConfig), typeof(SaveFileHeader), typeof(bool), typeof(bool) })]
     internal static class ScenarioCareerMapIgnoreSavePatch
     {
-        private static void Prefix(LevelConfig __0, ref SaveFileHeader __1, ref bool __2)
+        private static void Prefix(App __instance, LevelConfig __0,
+            ref SaveFileHeader __1, ref bool __2)
         {
             if (!ScenarioCareerMapLoader.IsCustomSession || ScenarioEditorFlow.IsRunning) return;
             if (!ScenarioCareerMapLoader.MatchesConfig(__0))
@@ -262,8 +379,19 @@ namespace UnderPressure.Editor
                 ScenarioCareerMapLoader.Cancel();
                 return;
             }
-            __1 = null;
-            __2 = true;
+            ScenarioCareerMapLoader.StartPreparingForLoad(__instance?.Metagame);
+            SaveFileHeader matching;
+            if (ScenarioCareerMapLoader.TryGetCurrentMapSave(
+                    __instance?.SaveSystem, __0.UniqueId, out matching))
+            {
+                __1 = matching;
+                __2 = false;
+            }
+            else
+            {
+                __1 = null;
+                __2 = true;
+            }
         }
     }
 
@@ -285,29 +413,6 @@ namespace UnderPressure.Editor
         private static void Postfix(Level __0) => ScenarioCareerMapLoader.LoadTerrain(__0);
     }
 
-    [HarmonyPatch(typeof(GameMode), "AllowGameToBeSaved")]
-    internal static class ScenarioCareerMapNoVanillaSavePatch
-    {
-        private static void Postfix(ref bool __result)
-        {
-            if (ScenarioCareerMapLoader.IsCustomSession) __result = false;
-        }
-    }
-    [HarmonyPatch(typeof(Level), "HandleAutosave")]
-    internal static class ScenarioCareerMapNoAutosavePatch
-    {
-        private static bool Prefix() => !ScenarioCareerMapLoader.IsCustomSession;
-    }
-    [HarmonyPatch(typeof(App), "AutoSaveDeferred")]
-    internal static class ScenarioCareerMapNoDeferredSavePatch
-    {
-        private static bool Prefix() => !ScenarioCareerMapLoader.IsCustomSession;
-    }
-    [HarmonyPatch(typeof(App), "QuickSaveInstantly")]
-    internal static class ScenarioCareerMapNoQuickSavePatch
-    {
-        private static bool Prefix() => !ScenarioCareerMapLoader.IsCustomSession;
-    }
     [HarmonyPatch(typeof(OpeningScreen), "Show")]
     internal static class ScenarioCareerMapResetPatch
     {
