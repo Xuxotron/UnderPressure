@@ -282,12 +282,9 @@ namespace UnderPressure.Editor
 
         private static void RegisterSaveAssets(SaveSystem saveSystem)
         {
-            if (saveSystem == null || _plotAssets == null)
-                throw new InvalidOperationException("No esta disponible el mapa de IDs del guardado.");
             var mapping = AssetIdsField?.GetValue(saveSystem) as BiDictionary<int, object>;
-            if (mapping == null)
+            if (saveSystem == null || mapping == null || _plotAssets == null)
                 throw new InvalidOperationException("No esta disponible el mapa de IDs del guardado.");
-            _registeredSaveSystem = saveSystem;
             for (var index = 0; index < _plotAssets.Wrappers.Count; ++index)
             {
                 var definitionId = PlotSaveIdBase + index * 2;
@@ -298,6 +295,7 @@ namespace UnderPressure.Editor
                 RegisterSaveObject(mapping, definitionId, definition);
                 RegisterSaveObject(mapping, wrapperId, wrapper);
             }
+            _registeredSaveSystem = saveSystem;
             RefreshSerializerMappings(saveSystem, mapping);
         }
 
@@ -314,17 +312,14 @@ namespace UnderPressure.Editor
 
         private static void UnregisterSaveAssets()
         {
-            var saveSystem = _registeredSaveSystem;
-            var mapping = saveSystem == null
-                ? null
-                : AssetIdsField?.GetValue(saveSystem) as BiDictionary<int, object>;
+            var mapping = AssetIdsField?.GetValue(_registeredSaveSystem) as BiDictionary<int, object>;
             if (mapping != null)
             {
                 foreach (var pair in RegisteredSaveAssets)
                     if (mapping.TryGetValue(pair.Key, out var current) &&
                         ReferenceEquals(current, pair.Value))
                         mapping.Remove(pair.Key);
-                RefreshSerializerMappings(saveSystem, mapping);
+                RefreshSerializerMappings(_registeredSaveSystem, mapping);
             }
             RegisteredSaveAssets.Clear();
             _registeredSaveSystem = null;
