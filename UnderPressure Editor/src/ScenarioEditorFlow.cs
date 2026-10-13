@@ -1,3 +1,4 @@
+// Updated: 2026-10-13
 // Abre el editor nativo sobre un nivel original sin crear ni cargar partidas Sandbox.
 using System;
 using System.Collections;
@@ -223,105 +224,11 @@ namespace UnderPressure.Editor
             if (canvas == null)
                 throw new InvalidOperationException("No se encontró el Canvas del menú principal.");
 
-            _selectorRoot = CreateUiObject(SelectorRootName, canvas.transform);
-            var rootRect = _selectorRoot.GetComponent<RectTransform>();
-            Stretch(rootRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            var blocker = _selectorRoot.AddComponent<Image>();
-            blocker.color = new Color(0f, 0f, 0f, 0.72f);
-            blocker.raycastTarget = true;
-
-            var panel = CreateUiObject("Panel", _selectorRoot.transform);
-            var panelRect = panel.GetComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
-            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-            panelRect.pivot = new Vector2(0.5f, 0.5f);
-            panelRect.sizeDelta = new Vector2(760f, 820f);
-            var panelImage = panel.AddComponent<Image>();
-            panelImage.color = new Color(0.18f, 0.20f, 0.21f, 0.98f);
-
-            var titleTemplate = rowTemplate.GetComponentInChildren<TMP_Text>(true);
-            if (titleTemplate != null)
-            {
-                var title = UnityEngine.Object.Instantiate(titleTemplate, panel.transform, false);
-                title.name = "Title";
-                DisableNativeLocalizers(title.gameObject);
-                title.text = EditorLocalization.Get("scenario_editor.base_scenario");
-                title.alignment = TextAlignmentOptions.Center;
-                var titleRect = title.rectTransform;
-                Stretch(titleRect, new Vector2(0.08f, 0.90f), new Vector2(0.92f, 0.98f),
-                    Vector2.zero, Vector2.zero);
-            }
-
-            var scrollObject = CreateUiObject("Hospital List", panel.transform);
-            var scrollRectTransform = scrollObject.GetComponent<RectTransform>();
-            Stretch(scrollRectTransform, new Vector2(0.06f, 0.14f), new Vector2(0.94f, 0.89f),
-                Vector2.zero, Vector2.zero);
-            var scrollRect = scrollObject.AddComponent<ScrollRect>();
-            scrollRect.horizontal = false;
-            scrollRect.vertical = true;
-            scrollRect.movementType = ScrollRect.MovementType.Clamped;
-            scrollRect.scrollSensitivity = 45f;
-
-            var viewport = CreateUiObject("Viewport", scrollObject.transform);
-            var viewportRect = viewport.GetComponent<RectTransform>();
-            Stretch(viewportRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            var viewportImage = viewport.AddComponent<Image>();
-            viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
-            viewport.AddComponent<Mask>().showMaskGraphic = false;
-
-            var content = CreateUiObject("Content", viewport.transform);
-            var contentRect = content.GetComponent<RectTransform>();
-            contentRect.anchorMin = new Vector2(0f, 1f);
-            contentRect.anchorMax = new Vector2(1f, 1f);
-            contentRect.pivot = new Vector2(0.5f, 1f);
-            contentRect.anchoredPosition = Vector2.zero;
-            contentRect.sizeDelta = Vector2.zero;
-            var listLayout = content.AddComponent<VerticalLayoutGroup>();
-            listLayout.padding = new RectOffset(8, 8, 8, 8);
-            listLayout.spacing = 8f;
-            listLayout.childControlWidth = true;
-            listLayout.childControlHeight = true;
-            listLayout.childForceExpandWidth = true;
-            listLayout.childForceExpandHeight = false;
-            var fitter = content.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            scrollRect.viewport = viewportRect;
-            scrollRect.content = contentRect;
-
-            foreach (var level in levels)
-            {
-                var selected = level;
-                var row = UnityEngine.Object.Instantiate(rowTemplate, content.transform, false);
-                row.name = "Hospital - " + selected.UniqueId;
-                var element = row.GetComponent<LayoutElement>() ?? row.AddComponent<LayoutElement>();
-                element.preferredHeight = 68f;
-                element.minHeight = 58f;
-                element.flexibleWidth = 1f;
-                var button = row.GetComponentInChildren<DynamicButton>(true);
-                if (button == null)
-                {
-                    UnityEngine.Object.Destroy(row);
-                    continue;
-                }
-
-                ConfigureButton(button, selected.GetLocalisedDisplayName(),
-                    () => StartSelectedLevel(selected));
-            }
-
-            var backRow = UnityEngine.Object.Instantiate(rowTemplate, panel.transform, false);
-            backRow.name = "Return to Main Menu";
-            var backRect = backRow.GetComponent<RectTransform>();
-            Stretch(backRect, new Vector2(0.06f, 0.025f), new Vector2(0.94f, 0.12f),
-                Vector2.zero, Vector2.zero);
-            var backButton = backRow.GetComponentInChildren<DynamicButton>(true);
-            if (backButton != null)
-                ConfigureButton(backButton,
-                    EditorLocalization.Get("scenario_editor.return_to_menu"), CancelSelection);
-
-            Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+            // Un único selector de hospitales y mapas, sin un segundo popup superpuesto.
+            _selectorRoot = ScenarioEditorMapPicker.CreateSelector(
+                canvas.transform, rowTemplate, levels,
+                (level, mapPath) => StartSelectedLevel(level),
+                CancelSelection);
         }
 
         private static void StartSelectedLevel(LevelConfig level)
@@ -344,6 +251,7 @@ namespace UnderPressure.Editor
             {
                 _selectedLevel = null;
                 _state = FlowState.None;
+                ScenarioEditorMapPicker.ClearPendingMap();
                 UnderPressureEditorPlugin.Log?.LogError(
                     "No se pudo cargar el hospital original en el editor: " + exception);
             }
@@ -384,6 +292,7 @@ namespace UnderPressure.Editor
             _openingScreen = null;
             _selectedLevel = null;
             _state = FlowState.None;
+            ScenarioEditorMapPicker.ClearPendingMap();
         }
 
         private static void ExitToMainMenu()

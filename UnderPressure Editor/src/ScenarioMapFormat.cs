@@ -1,0 +1,417 @@
+// Updated: 2026-10-13
+// Fix: identidad adicional de prefab para carga exacta (compatible con mapas sin el campo).
+// Preservar siempre Base/Built/Unbuilt en JSON, incluidas las capas vacias.
+// Formato nativo de UnderPressure: un indice .upmap JSON y un .json/.png por parcela.
+// No implementa compatibilidad con el antiguo formato de pruebas.
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using UnityEngine;
+
+namespace UnderPressure.Editor
+{
+    internal static class ScenarioMapFormat
+    {
+        internal const int Version = 2;
+        private const int MaxHeaderBytes = 1024 * 1024;
+        private const int MaxPlotBytes = 32 * 1024 * 1024;
+        private const int MaxPngBytes = 32 * 1024 * 1024;
+        private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
+
+        [Serializable]
+        internal sealed class Map
+        {
+            public int version = Version;
+            public string name = "";
+            public string baseHospitalId = "";
+            public string baseHospitalName = "";
+            public string description = "";
+            public string terrainManifest = "";
+            public PlotReference[] plots = new PlotReference[0];
+        }
+
+        [Serializable]
+        internal sealed class PlotReference
+        {
+            public int index;
+            public string name = "";
+            public string dataFile = "";
+            public string imageFile = "";
+        }
+
+        [Serializable]
+        internal sealed class Plot
+        {
+            public int index;
+            public string name = "";
+            public string nameTerm = "";
+            public int cost;
+            public Color color = Color.white;
+            public bool initiallyOpen;
+            public bool built;
+            public bool instaBuild;
+            public bool hideUntilAvailable;
+            public bool notHiddenInSandbox;
+            public bool includePerimiterInNavMesh = true;
+            public bool useEnergyUI;
+            public int energyUnitsGenerated;
+            public float timeToBuild = 60f;
+            public float footprintYOffset;
+            public bool buildObjectiveAutoStart;
+            public bool buildObjectiveStartOnPrereqsMet;
+            public int mergeInto = -1;
+            public int ambulanceBayEntranceSide = (int)TH20.GridDirection.Max;
+            public PlotPrerequisite[] prerequisites = new PlotPrerequisite[0];
+            public Item[] baseItems = new Item[0];
+            public Item[] builtItems = new Item[0];
+            public Item[] unbuiltItems = new Item[0];
+        }
+
+        [Serializable]
+        internal sealed class PlotPrerequisite
+        {
+            // Un requisito puede cumplirse comprando cualquiera de estas parcelas.
+            public int[] anyBought = new int[0];
+        }
+
+        [Serializable]
+        internal sealed class Item
+        {
+            public string guid = "";
+            public string tag = "";
+            // Nombre del prefab nativo: distingue definiciones con igual GUID y DebugTag.
+            // Los JSON existentes no lo incluyen; su lectura sigue siendo valida.
+            public string prefab = "";
+            public float x;
+            public float y;
+            public float z;
+            public float rotation;
+        }
+
+        internal sealed class LoadedPlot
+        {
+            internal PlotReference Reference;
+            internal Plot Data;
+            internal byte[] ImagePng;
+        }
+
+        internal sealed class LoadedMap
+        {
+            internal Map Header;
+            internal readonly List<LoadedPlot> Plots = new List<LoadedPlot>();
+        }
+
+        internal static Map ReadHeader(string file)
+        {
+            var json = ReadText(file, MaxHeaderBytes);
+            var header = JsonUtility.FromJson<Map>(json);
+            if (header != null) header.plots = ParseObjects<PlotReference>(json, "plots");
+            if (header == null || header.version != Version ||
+                string.IsNullOrWhiteSpace(header.name) ||
+                string.IsNullOrWhiteSpace(header.baseHospitalId) ||
+                header.plots == null || header.plots.Length == 0 || header.plots.Length > 128)
+                throw new InvalidDataException("Cabecera .upmap incorrecta o version incompatible.");
+            return header;
+        }
+
+        internal static LoadedMap Read(string file)
+        {
+            var header = ReadHeader(file);
+            var result = new LoadedMap { Header = header };
+            var folder = Path.GetDirectoryName(Path.GetFullPath(file));
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < header.plots.Length; ++i)
+            {
+                var reference = header.plots[i];
+                if (reference == null || reference.index != i)
+                    throw new InvalidDataException("Las parcelas deben estar ordenadas por indice consecutivo.");
+                var dataPath = Resolve(folder, reference.dataFile, ".json");
+                var imagePath = Resolve(folder, reference.imageFile, ".png");
+                if (!names.Add(reference.dataFile) || !names.Add(reference.imageFile))
+                    throw new InvalidDataException("Archivos de parcelas duplicados.");
+                var plot = ReadPlot(dataPath);
+                if (plot.index != reference.index)
+                    throw new InvalidDataException("Indice de parcela incompatible: " + reference.dataFile);
+                var pngInfo = new FileInfo(imagePath);
+                if (!pngInfo.Exists || pngInfo.Length < 24 || pngInfo.Length > MaxPngBytes)
+                    throw new InvalidDataException("PNG de parcela vacio o excesivo: " + reference.imageFile);
+                var imageBytes = File.ReadAllBytes(imagePath);
+                if (imageBytes.Length < 24 || imageBytes.Length > MaxPngBytes)
+                    throw new InvalidDataException("PNG de parcela vacio o excesivo: " + reference.imageFile);
+                result.Plots.Add(new LoadedPlot { Reference = reference, Data = plot, ImagePng = imageBytes });
+            }
+            return result;
+        }
+
+        internal static string Resolve(string folder, string file, string extension)
+        {
+            if (string.IsNullOrEmpty(file) || !string.Equals(Path.GetFileName(file), file, StringComparison.Ordinal) ||
+                !file.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ||
+                file.IndexOf('/') >= 0 || file.IndexOf('\\') >= 0 || file.IndexOf(':') >= 0 ||
+                file == "." || file == ".." || file.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                throw new InvalidDataException("Nombre de archivo no permitido: " + file);
+            return Path.Combine(folder, file);
+        }
+
+        private static string ReadText(string path, int maximum)
+        {
+            var file = new FileInfo(path);
+            if (!file.Exists || file.Length > maximum)
+                throw new InvalidDataException("Archivo inexistente o demasiado grande: " + path);
+            return File.ReadAllText(path, Encoding.UTF8);
+        }
+
+        // JsonUtility guarda bien los campos escalares, pero el juego puede
+        // omitir arrays de clases anidadas (plots, Items...). Por eso las listas
+        // del formato se serializan y leen explicita e independientemente.
+        internal static Plot ReadPlot(string path)
+        {
+            var json = ReadText(path, MaxPlotBytes);
+            var plot = JsonUtility.FromJson<Plot>(json);
+            if (plot == null)
+                throw new InvalidDataException("Parcela JSON ilegible: " + Path.GetFileName(path));
+            plot.baseItems = ParseObjects<Item>(json, "baseItems");
+            plot.builtItems = ParseObjects<Item>(json, "builtItems");
+            plot.unbuiltItems = ParseObjects<Item>(json, "unbuiltItems");
+            var rawPrerequisites = ArrayElements(json, "prerequisites");
+            var requirements = new List<PlotPrerequisite>();
+            foreach (var raw in rawPrerequisites)
+            {
+                var requirement = JsonUtility.FromJson<PlotPrerequisite>(raw);
+                if (requirement == null)
+                    throw new InvalidDataException("Requisito de parcela ilegible.");
+                var indices = ArrayElements(raw, "anyBought");
+                requirement.anyBought = new int[indices.Count];
+                for (var i = 0; i < indices.Count; i++)
+                {
+                    int parsed;
+                    if (!int.TryParse(indices[i], System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out parsed))
+                        throw new InvalidDataException("Indice de requisito de parcela incorrecto.");
+                    requirement.anyBought[i] = parsed;
+                }
+                requirements.Add(requirement);
+            }
+            plot.prerequisites = requirements.ToArray();
+            return plot;
+        }
+
+        private static T[] ParseObjects<T>(string json, string key) where T : class
+        {
+            var entries = ArrayElements(json, key);
+            var result = new T[entries.Count];
+            for (var i = 0; i < entries.Count; i++)
+            {
+                result[i] = JsonUtility.FromJson<T>(entries[i]);
+                if (result[i] == null)
+                    throw new InvalidDataException("Elemento JSON ilegible en " + key);
+            }
+            return result;
+        }
+
+        // Extrae arrays del JSON sin depender de la deserializacion de arrays
+        // anidados de Unity. Respeta cadenas, escapes y estructuras anidadas.
+        private static List<string> ArrayElements(string json, string key)
+        {
+            var label = "\"" + key + "\"";
+            var at = json.IndexOf(label, StringComparison.Ordinal);
+            if (at < 0)
+                throw new InvalidDataException("Falta el array JSON: " + key);
+            at += label.Length;
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at++] != ':')
+                throw new InvalidDataException("Array JSON incorrecto: " + key);
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at++] != '[')
+                throw new InvalidDataException("Array JSON incorrecto: " + key);
+
+            var results = new List<string>();
+            var elementStart = at;
+            var depth = 0;
+            var quoted = false;
+            var escaped = false;
+            for (; at < json.Length; ++at)
+            {
+                var c = json[at];
+                if (quoted)
+                {
+                    if (escaped) escaped = false;
+                    else if (c == '\\') escaped = true;
+                    else if (c == '"') quoted = false;
+                    continue;
+                }
+                if (c == '"') { quoted = true; continue; }
+                if (c == '{' || c == '[') { depth++; continue; }
+                if (c == '}' || c == ']')
+                {
+                    if (depth > 0) { depth--; continue; }
+                    if (c != ']') throw new InvalidDataException("Array JSON sin cerrar: " + key);
+                    var final = json.Substring(elementStart, at - elementStart).Trim();
+                    if (final.Length > 0) results.Add(final);
+                    return results;
+                }
+                if (c == ',' && depth == 0)
+                {
+                    var element = json.Substring(elementStart, at - elementStart).Trim();
+                    if (element.Length == 0)
+                        throw new InvalidDataException("Elemento vacio en array JSON: " + key);
+                    results.Add(element);
+                    elementStart = at + 1;
+                }
+            }
+            throw new InvalidDataException("Array JSON sin cerrar: " + key);
+        }
+
+        private static string SerializeObjects<T>(T[] objects) where T : class
+        {
+            var text = new StringBuilder("[");
+            if (objects != null)
+                for (var i = 0; i < objects.Length; i++)
+                {
+                    if (objects[i] == null)
+                        throw new InvalidDataException("El array JSON contiene una referencia vacia.");
+                    if (i > 0) text.Append(',');
+                    var serialized = JsonUtility.ToJson(objects[i], false);
+                    // No permitir que una revision distinta del serializer
+                    // escriba objetos vacios perdiendo su identidad/posicion.
+                    if (objects[i] is Item &&
+                        (!serialized.Contains("\"guid\"") ||
+                         !serialized.Contains("\"x\"") ||
+                         !serialized.Contains("\"rotation\"")))
+                        throw new InvalidDataException("Unity no serializo correctamente un objeto de parcela.");
+                    if (objects[i] is PlotReference &&
+                        (!serialized.Contains("\"dataFile\"") ||
+                         !serialized.Contains("\"imageFile\"")))
+                        throw new InvalidDataException("Unity no serializo una referencia de parcela.");
+                    text.Append(serialized);
+                }
+            text.Append(']');
+            return text.ToString();
+        }
+
+        private static string SerializePlot(Plot plot)
+        {
+            var json = JsonUtility.ToJson(plot, true);
+            json = ReplaceArray(json, "baseItems", SerializeObjects(plot.baseItems));
+            json = ReplaceArray(json, "builtItems", SerializeObjects(plot.builtItems));
+            json = ReplaceArray(json, "unbuiltItems", SerializeObjects(plot.unbuiltItems));
+            var requirements = new StringBuilder("[");
+            if (plot.prerequisites != null)
+                for (var i = 0; i < plot.prerequisites.Length; i++)
+                {
+                    var item = plot.prerequisites[i];
+                    if (item == null) throw new InvalidDataException("Requisito de parcela vacio.");
+                    if (i > 0) requirements.Append(',');
+                    var itemJson = JsonUtility.ToJson(item, false);
+                    var ints = item.anyBought ?? new int[0];
+                    var values = new string[ints.Length];
+                    for (var j = 0; j < ints.Length; j++)
+                        values[j] = ints[j].ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    requirements.Append(ReplaceArray(itemJson, "anyBought", "[" + string.Join(",", values) + "]"));
+                }
+            requirements.Append(']');
+            return ReplaceArray(json, "prerequisites", requirements.ToString());
+        }
+
+        private static string SerializeMap(Map map)
+        {
+            return ReplaceArray(JsonUtility.ToJson(map, true), "plots", SerializeObjects(map.plots));
+        }
+
+        // Inserta o sustituye un campo array; no cambia los escalares que Unity
+        // ya serializa correctamente. Valida que las comillas no oculten corchetes.
+        private static string ReplaceArray(string json, string key, string array)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                throw new InvalidDataException("No se pudo serializar el JSON: " + key);
+            var label = "\"" + key + "\"";
+            var at = json.IndexOf(label, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                var close = json.LastIndexOf('}');
+                if (close < 0) throw new InvalidDataException("JSON incompleto: " + key);
+                var before = json.Substring(0, close).TrimEnd();
+                var separator = before.EndsWith("{", StringComparison.Ordinal) ? "" : ",";
+                return before + separator + "\n    " + label + ": " + array +
+                       "\n}" + json.Substring(close + 1);
+            }
+            at += label.Length;
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at++] != ':')
+                throw new InvalidDataException("Campo JSON incorrecto: " + key);
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at] != '[')
+                throw new InvalidDataException("El campo JSON no es un array: " + key);
+            var open = at;
+            var depth = 0;
+            var quoted = false;
+            var escaped = false;
+            for (; at < json.Length; at++)
+            {
+                var c = json[at];
+                if (quoted)
+                {
+                    if (escaped) escaped = false;
+                    else if (c == '\\') escaped = true;
+                    else if (c == '"') quoted = false;
+                    continue;
+                }
+                if (c == '"') { quoted = true; continue; }
+                if (c == '[') depth++;
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return json.Substring(0, open) + array + json.Substring(at + 1);
+                }
+            }
+            throw new InvalidDataException("Array JSON sin cerrar: " + key);
+        }
+
+        internal static void WriteJson(string path, object value)
+        {
+            var plot = value as Plot;
+            var map = value as Map;
+            var text = plot != null ? SerializePlot(plot) :
+                       map != null ? SerializeMap(map) : JsonUtility.ToJson(value, true);
+            if (string.IsNullOrWhiteSpace(text))
+                throw new InvalidDataException("No se pudo serializar el JSON: " + path);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, text, Utf8);
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+        }
+
+        internal static void WriteBytes(string path, byte[] content)
+        {
+            var tmp = path + ".tmp";
+            File.WriteAllBytes(tmp, content);
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+        }
+
+        internal static Texture2D DecodeTexture(byte[] png, string name)
+        {
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            try
+            {
+                if (!ImageConversion.LoadImage(texture, png, false))
+                    throw new InvalidDataException("No se pudo interpretar el PNG: " + name);
+                if (texture.width < 4 || texture.height < 4 ||
+                    (long)texture.width * texture.height > 16000000L)
+                    throw new InvalidDataException("Dimensiones invalidas: " + name);
+                texture.name = name;
+                texture.hideFlags = HideFlags.DontSave;
+                texture.filterMode = FilterMode.Point;
+                texture.wrapMode = TextureWrapMode.Clamp;
+                return texture;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(texture);
+                throw;
+            }
+        }
+    }
+}

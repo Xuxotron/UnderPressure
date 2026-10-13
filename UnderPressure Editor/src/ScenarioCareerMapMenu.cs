@@ -1,4 +1,4 @@
-// Updated: 2026-10-12
+// Updated: 2026-10-13
 // Selector de mapas CARRERA: marco y botonera copiados de la UI nativa de TPH.
 // Nombre, descripcion, informacion y Comenzar siguen dentro de SelectedHospitalMenu (UI nativa).
 // No reutiliza la interfaz del editor ni modifica el cargador .upmap.
@@ -119,23 +119,14 @@ namespace UnderPressure.Editor
             {
                 try
                 {
-                    using (var reader = new StreamReader(path, Encoding.UTF8))
-                    {
-                        if (reader.ReadLine() != "UNDERPRESSURE_MAP_1") continue;
-                        var header = (reader.ReadLine() ?? "").Split('|');
-                        if (header.Length != 4 || header[0] != "M") continue;
-                        var idBytes = Convert.FromBase64String(header[1]);
-                        if (idBytes.Length > 4096 || Encoding.UTF8.GetString(idBytes) != _hospital.UniqueId)
-                            continue;
-                        var name = Encoding.UTF8.GetString(Convert.FromBase64String(header[3]));
-                        if (string.IsNullOrWhiteSpace(name)) continue;
-                        var descPath = Path.Combine(Path.GetDirectoryName(path), "description.txt");
-                        var description = File.Exists(descPath)
-                            ? File.ReadAllText(descPath, Encoding.UTF8)
-                            : T("career.maps.custom.description", "Escenario personalizado de Under Pressure.");
-                        if (description.Length > 1400) description = description.Substring(0, 1400);
-                        _choices.Add(new Choice { Name = name, Description = description, Path = path });
-                    }
+                    var header = ScenarioMapFormat.ReadHeader(path);
+                    if (!string.Equals(header.baseHospitalId, _hospital.UniqueId, StringComparison.Ordinal))
+                        continue;
+                    var description = string.IsNullOrEmpty(header.description)
+                        ? T("career.maps.custom.description", "Escenario personalizado de Under Pressure.")
+                        : header.description;
+                    if (description.Length > 1400) description = description.Substring(0, 1400);
+                    _choices.Add(new Choice { Name = header.name, Description = description, Path = path });
                 }
                 catch (Exception ex)
                 {
@@ -144,7 +135,6 @@ namespace UnderPressure.Editor
             }
             _choices.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
         }
-
 
         private void Build()
         {

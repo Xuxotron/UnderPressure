@@ -1,4 +1,4 @@
-// Updated: 2026-10-12
+// Updated: 2026-10-13 - Escultura sincronizada por X/Z; la capa superior guia a las inferiores.
 // Pincel de terreno: UV reales, proyeccion de emergencia y mezcla normalizada entre pasadas.
 // Destino: UnderPressure Editor/src/ScenarioEditorTerrainPainter.cs
 using System;
@@ -27,6 +27,9 @@ namespace UnderPressure.Editor
         private static bool _reportedMissingMeshUv;
         private static bool _reportedFallback;
         private static bool _reportedNoPick;
+        private static bool _reportedLargeTexture;
+        private static bool _loggedFirstPaint;
+        private static readonly RaycastHit[] GroundRayHits = new RaycastHit[128];
         private static GameObject _terrainRoot;
         private static Bounds _paintBounds;
         private static bool _initialized;
@@ -42,13 +45,156 @@ namespace UnderPressure.Editor
         private static bool _customCursorActive;
         private static float _nextCursorRefresh;
 
+        internal enum SculptMode { Off, Raise, Lower, Flatten }
+        private static SculptMode _sculptMode = SculptMode.Off;
+        private static bool _sculptMeshUnavailable;
+        private static bool _sculptClearedByUser;
+        internal static bool SculptMeshUnavailable => _sculptMeshUnavailable;
+        private static readonly Dictionary<MeshFilter, SculptMesh> SculptMeshes =
+            new Dictionary<MeshFilter, SculptMesh>();
+        private sealed class SculptMesh
+        {
+            internal MeshFilter Filter;
+            internal Mesh Original;
+            internal Mesh Cloned;
+            internal MeshCollider Collider;
+            internal Mesh ColliderOriginal;
+            internal Vector3[] Vertices;
+        }
+        private static bool _wireframeEnabled;
+        private static readonly List<TerrainWireOverlay> WireOverlays =
+            new List<TerrainWireOverlay>();
+        private static Material _wireMaterial;
+        private sealed class TerrainWireOverlay
+        {
+            internal MeshFilter Source;
+            internal GameObject Object;
+            internal Mesh Lines;
+        }
+        internal static bool WireframeEnabled => _wireframeEnabled;
+        internal static void ToggleWireframe()
+        {
+            _wireframeEnabled = !_wireframeEnabled;
+            if (_wireframeEnabled) BuildTerrainWireframe();
+            else ClearTerrainWireframe();
+            _behaviour?.RefreshTexts();
+        }
+        private static void BuildTerrainWireframe()
+        {
+            ClearTerrainWireframe();
+            var shader = Shader.Find("Hidden/Internal-Colored") ?? Shader.Find("Sprites/Default") ??
+                Shader.Find("Unlit/Color");
+            if (shader == null) return;
+            _wireMaterial = new Material(shader) { hideFlags = HideFlags.DontSave };
+            if (_wireMaterial.HasProperty("_Color"))
+                _wireMaterial.SetColor("_Color", new Color(.95f, 1f, 1f, .57f));
+            if (_wireMaterial.HasProperty("_SrcBlend"))
+            {
+                _wireMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                _wireMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                _wireMaterial.SetInt("_ZWrite", 0);
+            }
+            var visited = new HashSet<MeshFilter>();
+            int count = 0;
+            foreach (var pass in Passes)
+            {
+                var filter = pass.Renderer != null ? pass.Renderer.GetComponent<MeshFilter>() : null;
+                if (filter == null || !visited.Add(filter)) continue;
+                var source = filter.sharedMesh;
+                if (source == null || !source.isReadable) continue;
+                try
+                {
+                    var vertices = source.vertices;
+                    var indices = source.triangles;
+                    var edges = new List<int>(24000);
+                    var unique = new HashSet<ulong>();
+                    int triangleCount = indices.Length / 3;
+                    int step = Mathf.Max(1, triangleCount / 7000);
+                    for (int tri = 0; tri < triangleCount && edges.Count < 24000; tri += step)
+                    {
+                        var a = indices[tri*3]; var b = indices[tri*3+1]; var c = indices[tri*3+2];
+                        AddEdge(a,b,unique,edges);
+                        AddEdge(b,c,unique,edges);
+                        AddEdge(c,a,unique,edges);
+                    }
+                    if (edges.Count == 0) continue;
+                    var copy = new Vector3[vertices.Length];
+                    for (int i = 0; i < vertices.Length; i++)
+                    {
+                        var world = filter.transform.TransformPoint(vertices[i]) + Vector3.up * .08f;
+                        copy[i] = filter.transform.InverseTransformPoint(world);
+                    }
+                    var mesh = new Mesh { name = "UP_TerrainWireframe", hideFlags = HideFlags.DontSave };
+                    mesh.indexFormat = vertices.Length > 65535 ?
+                        UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+                    mesh.vertices = copy;
+                    mesh.SetIndices(edges.ToArray(), MeshTopology.Lines, 0);
+                    var go = new GameObject("UP_TerrainWireframe", typeof(MeshFilter), typeof(MeshRenderer));
+                    go.transform.SetParent(filter.transform, false);
+                    go.GetComponent<MeshFilter>().sharedMesh = mesh;
+                    var render = go.GetComponent<MeshRenderer>();
+                    render.sharedMaterial = _wireMaterial;
+                    render.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    render.receiveShadows = false;
+                    WireOverlays.Add(new TerrainWireOverlay { Source = filter, Object = go, Lines = mesh });
+                    count++;
+                }
+                catch (Exception error)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning("Wireframe del terreno: " + error.Message);
+                }
+            }
+            UnderPressureEditorPlugin.Log?.LogInfo("Wireframe del terreno: " + count + " mallas.");
+        }
+        private static void AddEdge(int a, int b, HashSet<ulong> unique, List<int> list)
+        {
+            if (a == b) return;
+            uint lo = (uint)Mathf.Min(a,b); uint hi = (uint)Mathf.Max(a,b);
+            var id = ((ulong)lo << 32) | hi;
+            if (unique.Add(id)) { list.Add(a); list.Add(b); }
+        }
+        private static void RefreshTerrainWireframe(MeshFilter changed)
+        {
+            if (!_wireframeEnabled) return;
+            foreach (var overlay in WireOverlays)
+            {
+                if (overlay.Source != changed || overlay.Lines == null) continue;
+                var source = changed.sharedMesh;
+                if (source == null || !source.isReadable) return;
+                var points = source.vertices;
+                if (points.Length != overlay.Lines.vertexCount) return;
+                for (int i = 0; i < points.Length; ++i)
+                {
+                    var world = changed.transform.TransformPoint(points[i]) + Vector3.up * .08f;
+                    points[i] = changed.transform.InverseTransformPoint(world);
+                }
+                overlay.Lines.vertices = points;
+                overlay.Lines.RecalculateBounds();
+            }
+        }
+        private static void ClearTerrainWireframe()
+        {
+            foreach (var overlay in WireOverlays)
+            {
+                if (overlay.Object != null) UnityEngine.Object.Destroy(overlay.Object);
+                if (overlay.Lines != null) UnityEngine.Object.Destroy(overlay.Lines);
+            }
+            WireOverlays.Clear();
+            if (_wireMaterial != null) UnityEngine.Object.Destroy(_wireMaterial);
+            _wireMaterial = null;
+        }
+        internal static SculptMode CurrentSculptMode => _sculptMode;
+
         internal static bool Ready => _initialized && Passes.Count > 0;
         internal static bool BrushEnabled => _brushEnabled;
         internal static float BrushSize => _brushSize;
+        // El rango visual 1..20 representa 0.85..15 unidades del mundo.
+        internal static float WorldBrushRadius => 0.85f +
+            (Mathf.Clamp(_brushSize, 1f, 20f) - 1f) * (14.15f / 19f);
         internal static float BrushOpacity => _brushOpacity;
         internal static TerrainLayerSlot SelectedSlot => _selectedSlot;
         internal static IReadOnlyList<TerrainLayerSlot> LayerSlots => Slots;
-        internal static string TerrainFolderRoot => Path.Combine(Paths.ConfigPath, "UnderPressure", "maps");
+        internal static string TerrainFolderRoot => ScenarioEditorStorage.Folder;
 
         internal static void Initialize(Level level)
         {
@@ -168,6 +314,8 @@ namespace UnderPressure.Editor
 
         internal static void Cleanup()
         {
+            _wireframeEnabled = false;
+            ClearTerrainWireframe();
             ReleaseCursor();
             if (_crosshairCursor != null) UnityEngine.Object.Destroy(_crosshairCursor);
             _crosshairCursor = null;
@@ -177,6 +325,11 @@ namespace UnderPressure.Editor
             _behaviour = null;
             _canvas = null;
             _brushEnabled = false;
+            _sculptMode = SculptMode.Off;
+            _sculptMeshUnavailable = false;
+            _sculptClearedByUser = false;
+            _reportedSculptCorrespondence = false;
+            RestoreSculptMeshes();
             _selectedSlot = null;
             _nextBrushTime = 0f;
 
@@ -202,12 +355,15 @@ namespace UnderPressure.Editor
             _reportedMissingMeshUv = false;
             _reportedFallback = false;
             _reportedNoPick = false;
+            _reportedLargeTexture = false;
+            _loggedFirstPaint = false;
             _terrainRoot = null;
             _initialized = false;
         }
 
         internal static void ToggleBrush()
         {
+            _sculptMode = SculptMode.Off;
             _brushEnabled = !_brushEnabled;
             RefreshCursor();
             _behaviour?.RefreshTexts();
@@ -276,12 +432,16 @@ namespace UnderPressure.Editor
         {
             if (slot == null) return;
             _selectedSlot = slot;
+            // Volver al modo pintura cuando se elige una textura,
+            // sin seguir deformando la geometria por accidente.
+            _sculptMode = SculptMode.Off;
             _behaviour?.RefreshSelection();
+            _behaviour?.RefreshTexts();
         }
 
         internal static void SetBrushSize(float value)
         {
-            _brushSize = Mathf.Clamp(Mathf.Round(value), 0f, 20f);
+            _brushSize = Mathf.Clamp(Mathf.Round(value), 1f, 20f);
             _behaviour?.RefreshTexts();
         }
 
@@ -293,7 +453,7 @@ namespace UnderPressure.Editor
 
         internal static void AdjustSize(float delta)
         {
-            _brushSize = Mathf.Clamp(Mathf.Round(_brushSize + delta), 0f, 20f);
+            _brushSize = Mathf.Clamp(Mathf.Round(_brushSize + delta), 1f, 20f);
             _behaviour?.RefreshTexts();
         }
 
@@ -303,6 +463,327 @@ namespace UnderPressure.Editor
             _behaviour?.RefreshTexts();
         }
 
+        // La herramienta nativa de RoomItemModifyTerrainComponent solo edita
+        // TerrainData. Aqui, el suelo es una malla. Nunca tocar meshes compartidos
+        // del juego: se instancian y se restablecen al salir del Editor.
+        internal static void SelectSculptMode(SculptMode mode)
+        {
+            if (mode != SculptMode.Off && !HasReadableTerrainMeshes())
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Esculpir suelo: la geometria Terrain_* no contiene Mesh legible. " +
+                    "No se ha modificado ninguna malla.");
+                _sculptMode = SculptMode.Off;
+                _brushEnabled = false;
+                _sculptMeshUnavailable = true;
+            }
+            else
+            {
+                _sculptMeshUnavailable = false;
+                _sculptMode = _sculptMode == mode ? SculptMode.Off : mode;
+                _brushEnabled = _sculptMode != SculptMode.Off;
+            }
+            RefreshCursor();
+            _behaviour?.RefreshTexts();
+        }
+
+        private static bool HasReadableTerrainMeshes()
+        {
+            foreach (var pass in Passes)
+            {
+                var filter = pass.Renderer == null ? null : pass.Renderer.GetComponent<MeshFilter>();
+                if (filter != null && filter.sharedMesh != null && filter.sharedMesh.isReadable)
+                    return true;
+            }
+            return false;
+        }
+
+        private static SculptMesh PrepareSculptMesh(MeshFilter filter)
+        {
+            if (filter == null || filter.sharedMesh == null) return null;
+            if (SculptMeshes.TryGetValue(filter, out var existing)) return existing;
+            var original = filter.sharedMesh;
+            if (!original.isReadable) return null;
+            var mesh = UnityEngine.Object.Instantiate(original);
+            mesh.name = original.name + "_UP_SCULPT";
+            var collider = filter.GetComponent<MeshCollider>();
+            var entry = new SculptMesh
+            {
+                Filter = filter, Original = original, Cloned = mesh,
+                Collider = collider,
+                ColliderOriginal = collider != null ? collider.sharedMesh : null,
+                Vertices = mesh.vertices
+            };
+            SculptMeshes.Add(filter, entry);
+            filter.sharedMesh = mesh;
+            if (collider != null && collider.sharedMesh == original)
+            {
+                collider.sharedMesh = null;
+                collider.sharedMesh = mesh;
+            }
+            return entry;
+        }
+
+        private static void RestoreSculptMeshes()
+        {
+            foreach (var entry in SculptMeshes.Values)
+            {
+                if (entry.Filter != null) entry.Filter.sharedMesh = entry.Original;
+                if (entry.Collider != null) entry.Collider.sharedMesh = entry.ColliderOriginal;
+                if (entry.Cloned != null) UnityEngine.Object.Destroy(entry.Cloned);
+            }
+            SculptMeshes.Clear();
+        }
+
+        // Agrupar por coordenadas horizontales (centimetros). Los 3 pases de
+        // terreno suelen compartir X/Z, pero no se presupone cantidad ni nombre.
+        // Cada grupo conserva la distancia original entre sus superficies.
+        private sealed class SculptVertexGroup
+        {
+            internal float X;
+            internal float Z;
+            internal float HighestWorldY = float.NegativeInfinity;
+            internal readonly List<SculptVertexRef> Members = new List<SculptVertexRef>();
+        }
+
+        private struct SculptVertexRef
+        {
+            internal SculptMesh Mesh;
+            internal int Index;
+            internal Vector3 World;
+        }
+
+        private static bool _reportedSculptCorrespondence;
+
+        private static void SculptAtCursor()
+        {
+            if (!Input.GetMouseButton(0) || Time.unscaledTime < _nextBrushTime ||
+                IsPointerOverInteractiveUi() || _brushSize < 1f) return;
+            var cam = Camera.main;
+            if (cam == null || _terrainRoot == null) return;
+            Vector3 target;
+            var pass = _selectedSlot?.Pass ?? Passes.FirstOrDefault();
+            if (!TryLocateGroundPoint(cam.ScreenPointToRay(Input.mousePosition), pass,
+                    out target)) return;
+            _nextBrushTime = Time.unscaledTime + .03f;
+
+            // Primero leer TODOS los vertices de los pases sin cambiar ninguno.
+            // El movimiento se decide UNA sola vez por X/Z, usando la altura
+            // superior; las demas superficies reciben exactamente el mismo delta.
+            var groups = new Dictionary<long, SculptVertexGroup>();
+            var visited = new HashSet<MeshFilter>();
+            foreach (var terrainPass in Passes)
+            {
+                var filter = terrainPass.Renderer == null ? null :
+                    terrainPass.Renderer.GetComponent<MeshFilter>();
+                if (filter == null || !visited.Add(filter)) continue;
+                var terrain = PrepareSculptMesh(filter);
+                if (terrain == null) continue;
+                var vertices = terrain.Vertices;
+                var tr = filter.transform;
+                for (int i = 0; i < vertices.Length; ++i)
+                {
+                    var world = tr.TransformPoint(vertices[i]);
+                    var dx = world.x - target.x;
+                    var dz = world.z - target.z;
+                    if (dx * dx + dz * dz > WorldBrushRadius * WorldBrushRadius) continue;
+                    int ix = Mathf.RoundToInt(world.x * 100f);
+                    int iz = Mathf.RoundToInt(world.z * 100f);
+                    long key = ((long)ix << 32) | (uint)iz;
+                    SculptVertexGroup group;
+                    if (!groups.TryGetValue(key, out group))
+                    {
+                        group = new SculptVertexGroup { X = world.x, Z = world.z };
+                        groups.Add(key, group);
+                    }
+                    group.HighestWorldY = Mathf.Max(group.HighestWorldY, world.y);
+                    group.Members.Add(new SculptVertexRef
+                    {
+                        Mesh = terrain, Index = i, World = world
+                    });
+                }
+            }
+            if (groups.Count == 0) return;
+
+            var changed = new HashSet<SculptMesh>();
+            int shared = 0;
+            foreach (var group in groups.Values)
+            {
+                if (group.Members.Count > 1) ++shared;
+                var dx = group.X - target.x;
+                var dz = group.Z - target.z;
+                var radius = WorldBrushRadius;
+                var factor = 1f - Mathf.Sqrt(dx * dx + dz * dz) / radius;
+                var strength = Mathf.Clamp01(factor * factor * _brushOpacity);
+                float delta;
+                if (_sculptMode == SculptMode.Raise) delta = 0.3f * strength;
+                else if (_sculptMode == SculptMode.Lower) delta = -0.3f * strength;
+                else if (_sculptMode == SculptMode.Flatten)
+                    delta = -group.HighestWorldY * strength; // superior -> Y=0
+                else return;
+                if (Mathf.Abs(delta) < 0.000001f) continue;
+                foreach (var member in group.Members)
+                {
+                    var world = member.World;
+                    world.y += delta; // identico delta: preserva distancia vertical
+                    member.Mesh.Vertices[member.Index] =
+                        member.Mesh.Filter.transform.InverseTransformPoint(world);
+                    changed.Add(member.Mesh);
+                }
+            }
+            if (!_reportedSculptCorrespondence)
+            {
+                _reportedSculptCorrespondence = true;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Esculpir terreno: " + groups.Count + " grupos X/Z, " +
+                    shared + " con vertices superpuestos entre pases.");
+                if (Passes.Count > 1 && shared == 0)
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Los pases no comparten vertices X/Z en la zona; " +
+                        "comprobar la correspondencia de sus triangulaciones.");
+            }
+            if (changed.Count == 0) return;
+            _sculptClearedByUser = false;
+            foreach (var terrain in changed)
+            {
+                terrain.Cloned.vertices = terrain.Vertices;
+                terrain.Cloned.RecalculateBounds();
+                terrain.Cloned.RecalculateNormals();
+                RefreshTerrainWireframe(terrain.Filter);
+                if (terrain.Collider != null && terrain.ColliderOriginal == terrain.Original)
+                {
+                    terrain.Collider.sharedMesh = null;
+                    terrain.Collider.sharedMesh = terrain.Cloned;
+                }
+            }
+        }
+
+        private static void ExportSculptMeshes(string folder)
+        {
+            var path = Path.Combine(folder, "terrain_mesh.bin");
+            if (SculptMeshes.Count == 0)
+            {
+                // No borrar datos de un mapa anterior si las mallas no pudieron
+                // leerse en esta sesion. Solo eliminar tras Limpiar mapa explicito.
+                if (_sculptClearedByUser && File.Exists(path)) File.Delete(path);
+                return;
+            }
+            using (var stream = File.Create(path))
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(0x55504D31); // UPM1
+                var entries = new List<Tuple<int, SculptMesh>>();
+                for (var i = 0; i < Passes.Count; i++)
+                {
+                    var filter = Passes[i].Renderer == null ? null :
+                        Passes[i].Renderer.GetComponent<MeshFilter>();
+                    if (filter != null && SculptMeshes.TryGetValue(filter, out var mesh))
+                        entries.Add(Tuple.Create(i, mesh));
+                }
+                writer.Write(entries.Count);
+                foreach (var entry in entries)
+                {
+                    writer.Write(entry.Item1);
+                    var heights = entry.Item2.Vertices;
+                    writer.Write(heights.Length);
+                    for (var i = 0; i < heights.Length; i++) writer.Write(heights[i].y);
+                }
+            }
+        }
+
+        private static void ImportSculptMeshes(string folder)
+        {
+            RestoreSculptMeshes();
+            _sculptClearedByUser = false;
+            var path = Path.Combine(folder, "terrain_mesh.bin");
+            if (!File.Exists(path)) return;
+            using (var stream = File.OpenRead(path))
+            using (var reader = new BinaryReader(stream))
+            {
+                if (reader.ReadInt32() != 0x55504D31)
+                    throw new InvalidDataException("Cabecera de terrain_mesh.bin invalida.");
+                var total = reader.ReadInt32();
+                if (total < 0 || total > Passes.Count)
+                    throw new InvalidDataException("Numero invalido de mallas guardadas.");
+                for (var i = 0; i < total; i++)
+                {
+                    var passIndex = reader.ReadInt32();
+                    var vertexCount = reader.ReadInt32();
+                    if (passIndex < 0 || passIndex >= Passes.Count || vertexCount < 0 ||
+                        vertexCount > 2000000)
+                        throw new InvalidDataException("Entrada invalida en terrain_mesh.bin.");
+                    var filter = Passes[passIndex].Renderer == null ? null :
+                        Passes[passIndex].Renderer.GetComponent<MeshFilter>();
+                    var entry = PrepareSculptMesh(filter);
+                    if (entry == null || entry.Vertices.Length != vertexCount)
+                        throw new InvalidDataException("Malla de terreno incompatible con mapa guardado.");
+                    for (var v = 0; v < vertexCount; v++)
+                    {
+                        var position = entry.Vertices[v];
+                        position.y = reader.ReadSingle();
+                        entry.Vertices[v] = position;
+                    }
+                    entry.Cloned.vertices = entry.Vertices;
+                    entry.Cloned.RecalculateBounds();
+                    entry.Cloned.RecalculateNormals();
+                    if (entry.Collider != null && entry.ColliderOriginal == entry.Original)
+                    {
+                        entry.Collider.sharedMesh = null;
+                        entry.Collider.sharedMesh = entry.Cloned;
+                    }
+                }
+            }
+        }
+
+        // Proyeccion del radio en unidades del terreno a pixeles de pantalla.
+        // La geometria se toma del terreno cuando hay collider; si no, usa
+        // plano Y=0 sin interferir con el pincel de texturas existente.
+        internal static bool TryGetBrushWorldPoint(out Vector3 center, out Vector3 normal)
+        {
+            center = Vector3.zero;
+            normal = Vector3.up;
+            if (!_initialized || !_brushEnabled || _selectedSlot?.Pass == null ||
+                _brushSize <= 0f || IsPointerOverInteractiveUi()) return false;
+            var camera = Camera.main;
+            if (camera == null) return false;
+            var ray = camera.ScreenPointToRay(Input.mousePosition);
+            if (!TryLocateGroundPoint(ray, _selectedSlot.Pass, out center)) return false;
+            // Normal real cuando la colisión corresponde a un terreno, para orientar
+            // el anillo perpendicularmente a la superficie.
+            RaycastHit hit;
+            if (Physics.Raycast(ray, out hit, 10000f, Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore) && hit.collider != null && _terrainRoot != null &&
+                (hit.collider.transform == _terrainRoot.transform ||
+                 hit.collider.transform.IsChildOf(_terrainRoot.transform)))
+            {
+                center = hit.point;
+                normal = hit.normal.normalized;
+            }
+            return true;
+        }
+
+        internal static bool TryGetBrushScreenDiameter(out float diameter)
+        {
+            diameter = 0f;
+            if (!_initialized || !_brushEnabled || _selectedSlot?.Pass == null ||
+                _brushSize <= 0f || IsPointerOverInteractiveUi()) return false;
+            var camera = Camera.main;
+            if (camera == null) return false;
+            Vector3 point;
+            if (!TryLocateGroundPoint(camera.ScreenPointToRay(Input.mousePosition),
+                _selectedSlot.Pass, out point)) return false;
+            var center = camera.WorldToScreenPoint(point);
+            if (center.z <= 0f) return false;
+            var right = camera.WorldToScreenPoint(point + Vector3.right * WorldBrushRadius);
+            var forward = camera.WorldToScreenPoint(point + Vector3.forward * WorldBrushRadius);
+            var radius = Mathf.Max(Vector2.Distance(new Vector2(center.x, center.y),
+                    new Vector2(right.x, right.y)),
+                Vector2.Distance(new Vector2(center.x, center.y),
+                    new Vector2(forward.x, forward.y)));
+            diameter = Mathf.Clamp(radius * 2f, 4f, 1000f);
+            return true;
+        }
+
         internal static void Update()
         {
             if (_brushEnabled && _crosshairCursor != null && Time.unscaledTime >= _nextCursorRefresh)
@@ -310,14 +791,20 @@ namespace UnderPressure.Editor
                 _nextCursorRefresh = Time.unscaledTime + 0.25f;
                 RefreshCursor();
             }
-            if (!_initialized || !_brushEnabled || _selectedSlot == null || _brushSize < 1f) return;
+            if (!_initialized || !_brushEnabled) return;
+            if (_sculptMode != SculptMode.Off)
+            {
+                SculptAtCursor();
+                return;
+            }
+            if (_selectedSlot == null || _brushSize < 1f) return;
             // El HUD nativo contiene graficos transparentes a pantalla completa.
             // IsPointerOverGameObject() puede bloquear toda la escena; solo bloqueamos
             // los controles interactivos reales bajo el raton.
             if (IsPointerOverInteractiveUi()) return;
             if (!Input.GetMouseButton(0)) return;
             if (Time.unscaledTime < _nextBrushTime) return;
-            _nextBrushTime = Time.unscaledTime + 0.03f;
+            _nextBrushTime = Time.unscaledTime + 0.09f;
 
             var camera = Camera.main;
             if (camera == null) return;
@@ -343,6 +830,23 @@ namespace UnderPressure.Editor
             uv = Vector2.zero;
             radiusU = radiusV = 0f;
             if (pass?.Renderer == null) return false;
+            // MeshCollider.textureCoord es la ruta más barata cuando existe un collider
+            // sobre Terrain_*. Se verifica que pertenezca a ese terreno.
+            RaycastHit groundHit;
+            if (Physics.Raycast(cameraRay, out groundHit, 10000f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) &&
+                groundHit.collider is MeshCollider && _terrainRoot != null &&
+                (groundHit.collider.transform == _terrainRoot.transform ||
+                 groundHit.collider.transform.IsChildOf(_terrainRoot.transform)) &&
+                IsValidUv(groundHit.textureCoord))
+            {
+                uv = groundHit.textureCoord;
+                var spanX = Mathf.Max(0.001f, _paintBounds.size.x);
+                var spanZ = Mathf.Max(0.001f, _paintBounds.size.z);
+                radiusU = WorldBrushRadius / spanX;
+                radiusV = WorldBrushRadius / spanZ;
+                return true;
+            }
             var filter = pass.Renderer.GetComponent<MeshFilter>();
             var mesh = filter?.sharedMesh;
             if (mesh != null)
@@ -353,6 +857,9 @@ namespace UnderPressure.Editor
                     cache = new CachedTerrainMesh();
                     try
                     {
+                        if (mesh.vertexCount > 80000)
+                            throw new InvalidOperationException(
+                                "Demasiados vertices para interseccion CPU; se usa proyeccion rapida.");
                         cache.Vertices = mesh.vertices;
                         cache.UV = mesh.uv;
                         cache.Triangles = mesh.triangles;
@@ -374,7 +881,9 @@ namespace UnderPressure.Editor
                     }
                     MeshCache.Add(mesh, cache);
                 }
-                if (!cache.Unavailable &&
+                // La prueba manual de cientos de miles de triángulos por arrastre
+                // puede bloquear Unity. Usarla solo con geometría pequeña.
+                if (!cache.Unavailable && cache.Triangles.Length <= 45000 &&
                     TryRaycastTerrainMesh(cameraRay, pass, cache, out uv, out radiusU, out radiusV))
                     return true;
             }
@@ -425,8 +934,8 @@ namespace UnderPressure.Editor
             var determinant = x1 * z2 - x2 * z1;
             if (Mathf.Abs(determinant) < 0.00001f)
             {
-                radiusU = _brushSize / Mathf.Max(0.001f, _paintBounds.size.x);
-                radiusV = _brushSize / Mathf.Max(0.001f, _paintBounds.size.z);
+                radiusU = WorldBrushRadius / Mathf.Max(0.001f, _paintBounds.size.x);
+                radiusV = WorldBrushRadius / Mathf.Max(0.001f, _paintBounds.size.z);
             }
             else
             {
@@ -438,8 +947,8 @@ namespace UnderPressure.Editor
                 var duDz = (x1 * du2 - x2 * du1) / determinant;
                 var dvDx = (dv1 * z2 - dv2 * z1) / determinant;
                 var dvDz = (x1 * dv2 - x2 * dv1) / determinant;
-                radiusU = _brushSize * Mathf.Sqrt(duDx * duDx + duDz * duDz);
-                radiusV = _brushSize * Mathf.Sqrt(dvDx * dvDx + dvDz * dvDz);
+                radiusU = WorldBrushRadius * Mathf.Sqrt(duDx * duDx + duDz * duDz);
+                radiusV = WorldBrushRadius * Mathf.Sqrt(dvDx * dvDx + dvDz * dvDz);
             }
             return radiusU > 0f && radiusV > 0f &&
                    !float.IsNaN(radiusU) && !float.IsNaN(radiusV);
@@ -476,8 +985,8 @@ namespace UnderPressure.Editor
             uv = new Vector2((point.x - terrainOrigin.x) / spanX,
                              (point.z - terrainOrigin.z) / spanZ);
             if (!IsValidUv(uv)) return false;
-            radiusU = _brushSize / spanX;
-            radiusV = _brushSize / spanZ;
+            radiusU = WorldBrushRadius / spanX;
+            radiusV = WorldBrushRadius / spanZ;
             if (!_reportedFallback)
             {
                 _reportedFallback = true;
@@ -491,15 +1000,16 @@ namespace UnderPressure.Editor
         private static bool TryLocateGroundPoint(Ray ray, TerrainPassContext pass, out Vector3 point)
         {
             point = Vector3.zero;
-            var hits = Physics.RaycastAll(ray, 10000f, Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+            var hitCount = Physics.RaycastNonAlloc(ray, GroundRayHits, 10000f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             var terrainHit = false;
             var nearestTerrain = float.PositiveInfinity;
             var candidate = false;
             var candidateDistance = float.PositiveInfinity;
             Vector3 nearestPoint = Vector3.zero;
-            foreach (var hit in hits)
+            for (int hitIndex = 0; hitIndex < hitCount; ++hitIndex)
             {
+                var hit = GroundRayHits[hitIndex];
                 if (hit.collider == null) continue;
                 var go = hit.collider.gameObject;
                 var isTerrain = go.transform == _terrainRoot.transform ||
@@ -589,7 +1099,7 @@ namespace UnderPressure.Editor
         // nunca durante la carga de la escena. Los demas Pass permanecen intactos.
         private static bool EnsureWritablePass(TerrainPassContext pass)
         {
-            if (pass == null || pass.Renderer == null || pass.OriginalAlphaTexture == null)
+            if (pass == null || pass.Renderer == null || pass.OriginalAlphaTexture == null || pass.CopyFailed)
                 return false;
             if (pass.AlphaTexture != null) return true;
             Texture2D clone = null;
@@ -618,15 +1128,21 @@ namespace UnderPressure.Editor
                 pass.Material = instance;
                 pass.AlphaTexture = clone;
                 pass.OriginalPixels = clone.GetPixels32();
-                OriginalAlphaPixels[clone] = (Color32[])pass.OriginalPixels.Clone();
+                // GetPixels32 ya devuelve una copia inmutable para la restauración.
+                // Duplicarla otra vez consumía decenas de MB adicionales por pasada.
+                OriginalAlphaPixels[clone] = pass.OriginalPixels;
                 return true;
             }
             catch (Exception exception)
             {
                 if (instance != null) UnityEngine.Object.Destroy(instance);
                 if (clone != null) UnityEngine.Object.Destroy(clone);
+                // No reintentar cada frame una pasada irrecuperable: en el log
+                // anterior se repetia 138 veces mientras el raton seguia pulsado.
+                pass.CopyFailed = true;
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Pincel: no se pudo preparar " + pass.PassName + ": " + exception);
+                    "Pincel: copia del control fallida en " + pass.PassName +
+                    "; se suspende esta pasada hasta reabrir el editor: " + exception);
                 return false;
             }
         }
@@ -642,6 +1158,23 @@ namespace UnderPressure.Editor
 
             // Todas las pasadas se deben preparar juntas para conservar la mezcla.
             var paintPasses = Passes.Where(p => p.OriginalAlphaTexture != null).ToList();
+            // Máximo 16 millones de texeles entre máscaras: superar ese límite
+            // exige demasiadas copias de RAM/VRAM y puede cerrar Unity sin excepción.
+            long texels = 0;
+            foreach (var p in paintPasses)
+                texels += (long)p.OriginalAlphaTexture.width * p.OriginalAlphaTexture.height;
+            if (texels > 16000000L)
+            {
+                if (!_reportedLargeTexture)
+                {
+                    _reportedLargeTexture = true;
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "Pincel: máscaras demasiado grandes (" + texels +
+                        " texeles). Pintura suspendida para evitar falta de memoria. " +
+                        "Enviar mods.log con dimensiones de _Control.");
+                }
+                return;
+            }
             foreach (var pass in paintPasses)
                 if (!EnsureWritablePass(pass)) return;
             if (!paintPasses.Contains(active) || active.AlphaTexture == null) return;
@@ -716,6 +1249,14 @@ namespace UnderPressure.Editor
                 paintPasses[i].AlphaTexture.SetPixels(xmin, ymin, regionWidth, regionHeight, regions[i]);
                 paintPasses[i].AlphaTexture.Apply(false, false);
             }
+            if (!_loggedFirstPaint)
+            {
+                _loggedFirstPaint = true;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Pincel: primera pincelada aplicada. Pass=" + active.PassName +
+                    " UV=" + uv + " region=" + regionWidth + "x" + regionHeight +
+                    " masks=" + paintPasses.Count);
+            }
         }
 
         private static float GetChannel(Color color, int channel)
@@ -736,6 +1277,8 @@ namespace UnderPressure.Editor
             try
             {
                 RestoreOriginalTerrain();
+                RestoreSculptMeshes();
+                _sculptClearedByUser = true;
                 ClearPlacedLandscape(level);
                 foreach (var plot in level.WorldState.HospitalPlots)
                 {
@@ -781,9 +1324,7 @@ namespace UnderPressure.Editor
 
         internal static string GetSidecarFolder(Level level, string mapPath)
         {
-            var baseId = SafeName(level?.Config?.UniqueId ?? "unknown_hospital");
-            var mapName = SafeName(Path.GetFileNameWithoutExtension(mapPath));
-            return Path.Combine(TerrainFolderRoot, baseId, mapName);
+            return Path.GetDirectoryName(Path.GetFullPath(mapPath));
         }
 
         internal static void ExportSidecar(Level level, string mapPath)
@@ -791,7 +1332,6 @@ namespace UnderPressure.Editor
             if (!Ready || level == null || string.IsNullOrEmpty(mapPath)) return;
             var folder = GetSidecarFolder(level, mapPath);
             Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, "terrain_manifest.txt"), BuildManifest(level), new System.Text.UTF8Encoding(false));
             for (var i = 0; i < Passes.Count; ++i)
             {
                 var pass = Passes[i];
@@ -814,6 +1354,7 @@ namespace UnderPressure.Editor
                     if (temporary) UnityEngine.Object.Destroy(toExport);
                 }
             }
+            ExportSculptMeshes(folder);
             UnderPressureEditorPlugin.Log?.LogInfo("Terrain painter: sidecar exportado en " + folder);
         }
 
@@ -824,6 +1365,7 @@ namespace UnderPressure.Editor
             // Al cambiar de mapa, el terreno anterior no debe quedar por debajo.
             // Se restablece el original y solo se sustituyen las pasadas con PNG.
             RestoreOriginalTerrain();
+            RestoreSculptMeshes();
             if (!Directory.Exists(folder))
             {
                 UnderPressureEditorPlugin.Log?.LogInfo("Terrain painter: no existe sidecar en " + folder);
@@ -849,7 +1391,13 @@ namespace UnderPressure.Editor
                 target.Apply(false, false);
                 UnityEngine.Object.Destroy(source);
             }
+            ImportSculptMeshes(folder);
             UnderPressureEditorPlugin.Log?.LogInfo("Terrain painter: sidecar importado desde " + folder);
+        }
+
+        internal static string GetManifest(Level level)
+        {
+            return Ready && level != null ? BuildManifest(level) : string.Empty;
         }
 
         private static string BuildManifest(Level level)
@@ -859,6 +1407,7 @@ namespace UnderPressure.Editor
                 "hospital=" + (level.Config?.UniqueId ?? ""),
                 "display_name=" + (level.Config?.GetLocalisedDisplayName() ?? ""),
                 "passes=" + Passes.Count.ToString(Invariant),
+                "sculpt_file=" + (SculptMeshes.Count > 0 ? "terrain_mesh.bin" : ""),
             };
             for (var i = 0; i < Slots.Count; ++i)
             {
@@ -898,8 +1447,14 @@ namespace UnderPressure.Editor
                 }
                 catch (UnityException)
                 {
-                    // Textura no legible: copiar desde GPU sin tocar el asset original.
+                    // Algunas versiones de Unity lanzan UnityException.
                 }
+                catch (ArgumentException)
+                {
+                    // TPH/Unity 2021 lanza ArgumentException en GetPixels32
+                    // cuando _Control no es legible (confirmado en Player.log).
+                }
+                // Ambos casos continúan por Graphics.Blit + ReadPixels (GPU).
             }
 
             var rt = RenderTexture.GetTemporary(source.width, source.height, 0,
@@ -963,6 +1518,7 @@ namespace UnderPressure.Editor
             internal Texture2D AlphaTexture;
             internal Texture OriginalAlphaTexture;
             internal Color32[] OriginalPixels;
+            internal bool CopyFailed;
             internal readonly List<TerrainLayerSlot> Slots = new List<TerrainLayerSlot>();
         }
 
@@ -985,9 +1541,15 @@ namespace UnderPressure.Editor
         private Slider _opacitySlider;
         private GameObject _dialog;
         private readonly List<Button> _slots = new List<Button>();
+        private readonly List<Texture2D> _previewCopies = new List<Texture2D>();
+        private Text _depthText;
+        private Text _wireText;
         private RectTransform _cursor;
         private RawImage _cursorImage;
         private Texture2D _cursorTexture;
+        private LineRenderer _worldRing;
+        private Material _worldRingMaterial;
+        private const int RingSegments = 64;
         private RectTransform _content;
         private ScrollRect _scroll;
 
@@ -1008,7 +1570,7 @@ namespace UnderPressure.Editor
                 new Vector2(9, -80), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
             _sizeText = CreateText(root, "SizeValue", "5", new Vector2(121, -80),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
-            _sizeSlider = CreateSlider(root, new Vector2(12, -108), new Vector2(156, 17), 0, 20, 5,
+            _sizeSlider = CreateSlider(root, new Vector2(12, -108), new Vector2(156, 17), 1, 20, 5,
                 value => ScenarioEditorTerrainPainter.SetBrushSize(value));
             CreateText(root, "Opacity", T("editor.terrain.opacity", "Opacidad"),
                 new Vector2(9, -133), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
@@ -1018,10 +1580,28 @@ namespace UnderPressure.Editor
                 value => ScenarioEditorTerrainPainter.SetBrushOpacity(value));
             CreateButton(root, new Vector2(9, -191), new Vector2(162, 31),
                 T("editor.terrain.clear", "Limpiar mapa"), ShowClearConfirmation, out _);
+            CreateButton(root, new Vector2(9, -228), new Vector2(51, 28),
+                "Elevar", () => ScenarioEditorTerrainPainter.SelectSculptMode(
+                    ScenarioEditorTerrainPainter.SculptMode.Raise), out _);
+            CreateButton(root, new Vector2(65, -228), new Vector2(51, 28),
+                "Bajar", () => ScenarioEditorTerrainPainter.SelectSculptMode(
+                    ScenarioEditorTerrainPainter.SculptMode.Lower), out _);
+            CreateButton(root, new Vector2(121, -228), new Vector2(51, 28),
+                "Plano", () => ScenarioEditorTerrainPainter.SelectSculptMode(
+                    ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
+            CreateButton(root, new Vector2(9, -263), new Vector2(162, 30),
+                "Profundidad de campo", () =>
+                {
+                    ScenarioEditorDepthOfField.Toggle();
+                    RefreshTexts();
+                }, out _depthText);
+            CreateButton(root, new Vector2(9, -298), new Vector2(162, 30),
+                "Wireframe del terreno", () => ScenarioEditorTerrainPainter.ToggleWireframe(),
+                out _wireText);
             var scrollRoot = NewUi("Textures", root, typeof(Image), typeof(ScrollRect));
             var scrollRect = (RectTransform)scrollRoot.transform;
-            Place(scrollRect, new Vector2(8, -231), new Vector2(164, 331));
+            Place(scrollRect, new Vector2(8, -336), new Vector2(164, 227));
             scrollRoot.GetComponent<Image>().color = new Color(0f,0f,0f,0.18f);
             _scroll = scrollRoot.GetComponent<ScrollRect>();
             _scroll.vertical = true;
@@ -1158,12 +1738,49 @@ namespace UnderPressure.Editor
             rect.offsetMin=new Vector2(5f,5f);
             rect.offsetMax=new Vector2(-5f,-5f);
             var preview=image.GetComponent<RawImage>();
-            preview.texture=slot.Texture;
+            // Las texturas tienen un canal alfa de material: dibujarlas
+            // directamente sobre el boton azul produce miniaturas azuladas.
+            // Copia reducida con alfa 255, sin modificar el recurso original.
+            preview.texture=MakeOpaquePreview(slot.Texture);
             preview.color=Color.white;
             preview.raycastTarget=false;
             var button=item.GetComponent<Button>();
             button.onClick.AddListener(() => ScenarioEditorTerrainPainter.SetSelectedSlot(slot));
             return button;
+        }
+
+        private Texture2D MakeOpaquePreview(Texture2D source)
+        {
+            if (source == null) return null;
+            const int w = 96, h = 76;
+            var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32);
+            var before = RenderTexture.active;
+            Texture2D thumbnail = null;
+            try
+            {
+                Graphics.Blit(source, rt);
+                RenderTexture.active = rt;
+                thumbnail = new Texture2D(w,h,TextureFormat.RGBA32,false);
+                thumbnail.ReadPixels(new Rect(0,0,w,h),0,0,false);
+                var colors = thumbnail.GetPixels32();
+                for (int i=0;i<colors.Length;i++) colors[i].a = 255;
+                thumbnail.SetPixels32(colors);
+                thumbnail.Apply(false,false);
+                thumbnail.filterMode = FilterMode.Bilinear;
+                _previewCopies.Add(thumbnail);
+                return thumbnail;
+            }
+            catch (Exception ex)
+            {
+                if (thumbnail != null) UnityEngine.Object.Destroy(thumbnail);
+                UnderPressureEditorPlugin.Log?.LogWarning("Miniatura de terreno: " + ex.Message);
+                return source;
+            }
+            finally
+            {
+                RenderTexture.active = before;
+                RenderTexture.ReleaseTemporary(rt);
+            }
         }
 
         private void ShowClearConfirmation()
@@ -1257,12 +1874,47 @@ namespace UnderPressure.Editor
                 _cursorImage.texture = fallback;
             }
             go.SetActive(false);
+            // Contorno vectorial situado en el MUNDO, no un círculo 2D en pantalla.
+            var world = new GameObject("UP_WorldBrushRing", typeof(LineRenderer));
+            _worldRing = world.GetComponent<LineRenderer>();
+            _worldRing.useWorldSpace = true;
+            _worldRing.loop = true;
+            _worldRing.positionCount = RingSegments;
+            _worldRing.startWidth = _worldRing.endWidth = 0.06f;
+            _worldRing.numCapVertices = 0;
+            _worldRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _worldRing.receiveShadows = false;
+            var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
+            if (shader != null)
+            {
+                _worldRingMaterial = new Material(shader);
+                _worldRingMaterial.hideFlags = HideFlags.DontSave;
+                _worldRing.material = _worldRingMaterial;
+            }
+            _worldRing.startColor = _worldRing.endColor =
+                new Color(0.94f, 0.99f, 1f, 0.74f);
+            world.SetActive(false);
         }
 
         internal void RefreshTexts()
         {
-            if (_toggleText!=null) _toggleText.text=ScenarioEditorTerrainPainter.BrushEnabled
-                ? T("editor.terrain.brush.on","Pincel: ON") : T("editor.terrain.brush.off","Pincel: OFF");
+            if (_wireText != null) _wireText.text = ScenarioEditorTerrainPainter.WireframeEnabled ?
+                "Wireframe: ON" : "Wireframe: OFF";
+            if (_depthText != null)
+                _depthText.text = ScenarioEditorDepthOfField.Disabled ?
+                    "Profundidad: OFF" : "Profundidad: ON";
+            if (_toggleText != null)
+                _toggleText.text = ScenarioEditorTerrainPainter.SculptMeshUnavailable ?
+                    "Malla no editable" :
+                    ScenarioEditorTerrainPainter.CurrentSculptMode !=
+                    ScenarioEditorTerrainPainter.SculptMode.Off ?
+                    "Modelado: " + (ScenarioEditorTerrainPainter.CurrentSculptMode ==
+                        ScenarioEditorTerrainPainter.SculptMode.Raise ? "Elevar" :
+                        ScenarioEditorTerrainPainter.CurrentSculptMode ==
+                        ScenarioEditorTerrainPainter.SculptMode.Lower ? "Bajar" : "Aplanar") :
+                    ScenarioEditorTerrainPainter.BrushEnabled ?
+                    T("editor.terrain.brush.on", "Pincel: ON") :
+                    T("editor.terrain.brush.off", "Pincel: OFF");
             if (_sizeText!=null) _sizeText.text=ScenarioEditorTerrainPainter.BrushSize.ToString("0",CultureInfo.InvariantCulture);
             if (_opacityText!=null) _opacityText.text=Mathf.RoundToInt(ScenarioEditorTerrainPainter.BrushOpacity*100f)+"%";
             if (_sizeSlider!=null && Mathf.Abs(_sizeSlider.value-ScenarioEditorTerrainPainter.BrushSize)>.1f)
@@ -1285,24 +1937,135 @@ namespace UnderPressure.Editor
         private void Update()
         {
             ScenarioEditorTerrainPainter.Update();
+            var canvas = GetComponentInParent<Canvas>();
+            var root = canvas != null ? canvas.transform as RectTransform : null;
+            var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay
+                ? null : canvas.worldCamera;
+            Vector2 position = Vector2.zero;
+            var positioned = root != null &&
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(root,
+                    Input.mousePosition, camera, out position);
+            if (_worldRing != null)
+            {
+                Vector3 center, normal;
+                bool showRing = ScenarioEditorTerrainPainter.TryGetBrushWorldPoint(
+                    out center, out normal);
+                if (_worldRing.gameObject.activeSelf != showRing)
+                    _worldRing.gameObject.SetActive(showRing);
+                if (showRing)
+                {
+                    // Dos vectores ortogonales en el plano tangente al suelo.
+                    var tangent = Vector3.ProjectOnPlane(Vector3.right, normal).normalized;
+                    if (tangent.sqrMagnitude < 0.01f)
+                        tangent = Vector3.ProjectOnPlane(Vector3.forward, normal).normalized;
+                    var bitangent = Vector3.Cross(normal, tangent).normalized;
+                    var radius = ScenarioEditorTerrainPainter.WorldBrushRadius;
+                    for (int i = 0; i < RingSegments; ++i)
+                    {
+                        var a = i * (Mathf.PI * 2f / RingSegments);
+                        _worldRing.SetPosition(i, center + normal * 0.12f +
+                            radius * (Mathf.Cos(a) * tangent + Mathf.Sin(a) * bitangent));
+                    }
+                }
+            }
             if (_cursor==null || _cursorImage==null) return;
-            bool visible=ScenarioEditorTerrainPainter.BrushEnabled && _cursorTexture!=null;
+            bool visible=positioned && ScenarioEditorTerrainPainter.BrushEnabled && _cursorTexture!=null;
             _cursor.gameObject.SetActive(visible);
             if (!visible) return;
-            var canvas=GetComponentInParent<Canvas>();
-            if (canvas==null) return;
-            Vector2 position;
-            var root=canvas.transform as RectTransform;
-            var camera=canvas.renderMode==RenderMode.ScreenSpaceOverlay?null:canvas.worldCamera;
-            if(RectTransformUtility.ScreenPointToLocalPointInRectangle(root,Input.mousePosition,camera,out position))
-                _cursor.anchoredPosition=position;
+            if (positioned) _cursor.anchoredPosition = position;
         }
 
         private void OnDestroy()
         {
             CloseDialog();
+            ScenarioEditorDepthOfField.Restore();
+            foreach (var preview in _previewCopies)
+                if (preview != null) UnityEngine.Object.Destroy(preview);
+            _previewCopies.Clear();
             if(_cursor!=null) UnityEngine.Object.Destroy(_cursor.gameObject);
             if(_cursorTexture!=null) UnityEngine.Object.Destroy(_cursorTexture);
+            if(_worldRing!=null) UnityEngine.Object.Destroy(_worldRing.gameObject);
+            if(_worldRingMaterial!=null) UnityEngine.Object.Destroy(_worldRingMaterial);
+        }
+    }
+
+    // Sólo la profundidad de campo, no todo el postprocesado de la escena.
+    // Reflección: no obliga a añadir Unity.Postprocessing.Runtime.dll
+    // como nueva referencia del proyecto.
+    // El juego usa DepthOfField.active (no el parámetro enabled.value).
+    // Se obtiene por reflexión para no añadir referencias al proyecto.
+    internal static class ScenarioEditorDepthOfField
+    {
+        private static readonly Dictionary<object, bool> Originals =
+            new Dictionary<object, bool>();
+        internal static bool Disabled { get; private set; }
+        private const BindingFlags Flags = BindingFlags.Instance |
+            BindingFlags.Public | BindingFlags.NonPublic;
+
+        internal static void Toggle()
+        {
+            if (Disabled) { Restore(); return; }
+            var count = Apply(false, true);
+            Disabled = count > 0;
+            if (count == 0) UnderPressureEditorPlugin.Log?.LogWarning(
+                "Profundidad de campo: no se encontraron efectos activos en perfiles de la escena.");
+            else UnderPressureEditorPlugin.Log?.LogInfo("Profundidad de campo desactivada: " + count);
+        }
+
+        private static int Apply(bool enabled, bool capture)
+        {
+            int changed = 0;
+            foreach (var component in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
+            {
+                if (component == null || !component.gameObject.scene.IsValid() ||
+                    component.GetType().FullName !=
+                        "UnityEngine.Rendering.PostProcessing.PostProcessVolume") continue;
+                try
+                {
+                    var profileMember = component.GetType().GetProperty("profile", Flags);
+                    var profile = profileMember?.GetValue(component, null);
+                    if (profile == null) continue;
+                    var listField = profile.GetType().GetField("settings", Flags);
+                    var list = listField?.GetValue(profile) as System.Collections.IEnumerable;
+                    if (list == null) continue;
+                    foreach (var setting in list)
+                    {
+                        if (setting == null || setting.GetType().Name != "DepthOfField") continue;
+                        var field = setting.GetType().GetField("active", Flags);
+                        var prop = setting.GetType().GetProperty("active", Flags);
+                        if (field == null && prop == null) continue;
+                        bool active = Convert.ToBoolean(field != null ? field.GetValue(setting) :
+                            prop.GetValue(setting, null));
+                        if (capture && !Originals.ContainsKey(setting)) Originals[setting] = active;
+                        if (field != null) field.SetValue(setting, enabled);
+                        else prop.SetValue(setting, enabled, null);
+                        changed++;
+                    }
+                }
+                catch (Exception error)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning("Profundidad de campo: " + error.Message);
+                }
+            }
+            return changed;
+        }
+
+        internal static void Restore()
+        {
+            foreach (var entry in Originals)
+            {
+                try
+                {
+                    if (entry.Key == null) continue;
+                    var field = entry.Key.GetType().GetField("active", Flags);
+                    if (field != null) field.SetValue(entry.Key, entry.Value);
+                    else entry.Key.GetType().GetProperty("active", Flags)?
+                        .SetValue(entry.Key, entry.Value, null);
+                }
+                catch { }
+            }
+            Originals.Clear();
+            Disabled = false;
         }
     }
 

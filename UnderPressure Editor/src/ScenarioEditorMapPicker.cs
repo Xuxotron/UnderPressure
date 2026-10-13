@@ -1,588 +1,484 @@
-// Updated: 2026-10-12
-// Selector de mapas del editor con dos columnas y estilo integrado en el menu.
+// Updated: 2026-10-13
+// Selector unico y compacto de hospitales/mapas.
+// Las filas visibles son botones NATIVOS de TH20 situados manualmente; sin Mask,
+// ScrollRect, VerticalLayoutGroup ni ContentSizeFitter que puedan ocultarlas.
+// Cada columna tiene un Scrollbar de Unity y admite rueda del raton.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 using HarmonyLib;
 using TH20;
+using TH20.UI;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace UnderPressure.Editor
 {
     internal static class ScenarioEditorMapPicker
     {
-        private sealed class StoredMap
+        private sealed class MapChoice
         {
-            internal string FilePath;
-            internal string DisplayName;
+            internal string Path;
+            internal string Name;
         }
 
         private sealed class HospitalChoice
         {
             internal LevelConfig Level;
-            internal string DisplayName;
+            internal string Label;
         }
 
-        private sealed class UiStyle
+        private sealed class RowEntry
         {
-            internal Sprite ButtonSprite;
-            internal Material ButtonMaterial;
-            internal Image.Type ButtonType = Image.Type.Sliced;
-            internal float PixelsPerUnitMultiplier = 1f;
-            internal Font LegacyFont;
-            internal TMP_FontAsset TmpFont;
-            internal int FontSize = 18;
-            internal Color TextColor = Color.white;
-            internal Color PanelColor = new Color(0.19f, 0.24f, 0.29f, 0.96f);
-            internal Color OverlayColor = new Color(0f, 0f, 0f, 0.45f);
-            internal Color HeaderColor = Color.white;
-            internal Color NewMapColor = new Color(0.28f, 0.86f, 0.24f, 1f);
-            internal Color SelectedColor = new Color(0.93f, 0.73f, 0.17f, 1f);
+            internal string Label;
+            internal Action OnClick;
+            internal bool Green;
         }
 
-        private static readonly FieldInfo SelectorField =
-            AccessTools.Field(typeof(ScenarioEditorFlow), "_selectorRoot");
-        private static readonly MethodInfo OriginalStart =
-            AccessTools.Method(typeof(ScenarioEditorFlow), "StartSelectedLevel", new[] { typeof(LevelConfig) });
+        private sealed class ScrollColumn
+        {
+            internal RectTransform Viewport;
+            internal Scrollbar Bar;
+            internal float Width;
+            internal readonly List<RowEntry> Entries = new List<RowEntry>();
+            internal readonly List<GameObject> VisibleRows = new List<GameObject>();
+            internal int FirstRow;
+            internal bool ChangingBar;
+        }
 
-        private static bool _bypass;
-        private static string _pendingMap;
-        private static GameObject _overlay;
-        private static RectTransform _overlayRect;
-        private static RectTransform _leftContent;
-        private static RectTransform _rightContent;
-        private static TMP_Text _rightTitleTmp;
-        private static Text _rightTitleLegacy;
-        private static ScrollRect _leftScroll;
-        private static ScrollRect _rightScroll;
+        private const int VisibleRows = 7;
+        private const float RowHeight = 52f;
+        private const float RowSpacing = 5f;
+        private const float ColumnHeight = 422f;
+        private const float RowInset = 6f;
+
+        private static GameObject _root;
+        private static DynamicButton _nativeButtonTemplate;
+        private static TMP_Text _nativeTextTemplate;
+        private static Action<LevelConfig, string> _onOpen;
+        private static Action _onCancel;
         private static LevelConfig _selectedLevel;
-        private static readonly List<HospitalChoice> _hospitals = new List<HospitalChoice>();
-        private static readonly List<Button> _hospitalButtons = new List<Button>();
-        private static readonly List<Button> _mapButtons = new List<Button>();
-        private static UiStyle _style;
-        private static Transform _selectorRoot;
+        private static ScrollColumn _hospitalsColumn;
+        private static ScrollColumn _mapsColumn;
+        private static TMP_Text _selectedHospitalTitle;
+        private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
+        private static string _pendingMap;
 
-        internal static bool InterceptHospitalSelection(LevelConfig level)
+        internal static GameObject CreateSelector(
+            Transform canvas, GameObject rowTemplate, IReadOnlyList<LevelConfig> levels,
+            Action<LevelConfig, string> openMap, Action cancel)
         {
-            if (_bypass || level == null || !ScenarioEditorFlow.IsRunning) return true;
-            try
-            {
-                var selector = SelectorField?.GetValue(null) as GameObject;
-                if (selector == null || OriginalStart == null)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Selector editor: faltan controles nativos; se abre mapa nuevo.");
-                    return true;
-                }
+            if (canvas == null || rowTemplate == null || levels == null || levels.Count == 0)
+                throw new ArgumentException("El selector necesita un Canvas, un boton y hospitales.");
 
-                _selectorRoot = selector.transform;
-                EnsureOverlay(_selectorRoot);
-                CollectHospitals(selector.transform, level);
-                SelectHospital(level);
-                return false;
-            }
-            catch (Exception ex)
+            Reset();
+            _nativeButtonTemplate = rowTemplate.GetComponentInChildren<DynamicButton>(true);
+            if (_nativeButtonTemplate == null)
+                throw new InvalidOperationException("No se encontro el DynamicButton nativo.");
+            _nativeTextTemplate = _nativeButtonTemplate.GetComponentInChildren<TMP_Text>(true);
+            if (_nativeTextTemplate == null)
+                throw new InvalidOperationException("No se encontro el texto nativo del boton.");
+            _onOpen = openMap;
+            _onCancel = cancel;
+
+            _root = Ui("UP_ScenarioEditorSelector", canvas, typeof(Image));
+            Stretch((RectTransform)_root.transform);
+            var overlay = _root.GetComponent<Image>();
+            overlay.color = new Color(0f, 0f, 0f, 0.58f);
+            overlay.raycastTarget = true;
+            _root.transform.SetAsLastSibling();
+
+            var panel = Ui("Panel", _root.transform, typeof(Image));
+            var panelRect = (RectTransform)panel.transform;
+            panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.69f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.anchoredPosition = Vector2.zero;
+            panelRect.sizeDelta = new Vector2(864f, 595f);
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.color = new Color(0.175f, 0.200f, 0.225f, 0.97f);
+            panelImage.raycastTarget = true;
+
+            CreateHeader(panel.transform, "Escenario base",
+                new Vector2(23f, -15f), new Vector2(418f, 44f));
+            _selectedHospitalTitle = CreateHeader(panel.transform, "Hospital",
+                new Vector2(466f, -15f), new Vector2(375f, 44f));
+
+            _hospitalsColumn = CreateColumn(panel.transform, "Hospitales",
+                new Vector2(22f, -68f), new Vector2(421f, ColumnHeight));
+            _mapsColumn = CreateColumn(panel.transform, "Mapas",
+                new Vector2(464f, -68f), new Vector2(379f, ColumnHeight));
+
+            // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
+            CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
+                new Vector2(23f, -511f), new Vector2(418f, 56f), () =>
+                {
+                    ClearPendingMap();
+                    _onCancel?.Invoke();
+                }, false);
+
+            foreach (var level in levels.Where(l => l != null).Distinct()
+                                        .OrderBy(l => l.GetLocalisedDisplayName(),
+                                                 StringComparer.CurrentCultureIgnoreCase))
             {
-                UnderPressureEditorPlugin.Log?.LogError("Selector editor: " + ex);
-                CloseOverlay();
-                return true;
+                var captured = level;
+                var label = captured.GetLocalisedDisplayName();
+                _hospitalChoices.Add(new HospitalChoice { Level = captured, Label = label });
+                _hospitalsColumn.Entries.Add(new RowEntry
+                {
+                    Label = label,
+                    OnClick = () => SelectHospital(captured)
+                });
             }
+
+            RefreshRows(_hospitalsColumn);
+            if (_hospitalChoices.Count > 0)
+                SelectHospital(_hospitalChoices[0].Level);
+            Canvas.ForceUpdateCanvases();
+            return _root;
+        }
+
+        private static void SelectHospital(LevelConfig level)
+        {
+            if (level == null || _root == null) return;
+            _selectedLevel = level;
+            if (_selectedHospitalTitle != null)
+                _selectedHospitalTitle.text = level.GetLocalisedDisplayName();
+
+            // Solo cambia el texto de las filas visibles; no se recrea la columna izquierda.
+            RefreshRows(_hospitalsColumn);
+
+            _mapsColumn.Entries.Clear();
+            _mapsColumn.FirstRow = 0;
+            _mapsColumn.Entries.Add(new RowEntry
+            {
+                Label = "Nuevo mapa",
+                Green = true,
+                OnClick = () => OpenSelected(null)
+            });
+
+            foreach (var map in ReadMaps(level.UniqueId))
+            {
+                var path = map.Path;
+                _mapsColumn.Entries.Add(new RowEntry
+                {
+                    Label = map.Name,
+                    OnClick = () => OpenSelected(path)
+                });
+            }
+            RefreshRows(_mapsColumn);
+        }
+
+        private static void OpenSelected(string mapPath)
+        {
+            if (_selectedLevel == null || _onOpen == null) return;
+            // Comprobar el mapa antes de abandonar la pantalla inicial. No
+            // comenzar a cargar un escenario cuyo JSON/PNG no puede abrirse.
+            if (!string.IsNullOrEmpty(mapPath))
+            {
+                try { ScenarioMapFormat.Read(mapPath); }
+                catch (Exception ex)
+                {
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "No se puede abrir el mapa seleccionado: " + ex);
+                    if (_selectedHospitalTitle != null)
+                        _selectedHospitalTitle.text = "Mapa incorrecto o incompleto";
+                    return;
+                }
+            }
+            _pendingMap = mapPath;
+            _onOpen(_selectedLevel, mapPath);
         }
 
         internal static void OnEditorOpened(Level level)
         {
-            var path = _pendingMap;
-            _pendingMap = null;
-            if (string.IsNullOrEmpty(path) || level == null || !ScenarioEditorSession.Active) return;
-            try
-            {
-                ScenarioEditorStorage.Load(level, path);
-                UnderPressureEditorPlugin.Log?.LogInfo("Editor: mapa seleccionado cargado: " + path);
-            }
-            catch (Exception ex)
+            var mapPath = _pendingMap;
+            if (string.IsNullOrEmpty(mapPath)) return;
+            // No consumir el mapa cuando el evento de apertura aun no termino
+            // de inicializar el editor nativo. Si se pierde este valor se abre
+            // silenciosamente el hospital original en lugar del mapa solicitado.
+            if (level == null || !ScenarioEditorSession.Active)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "No se pudo abrir el mapa elegido (se conserva el hospital original): " + ex);
+                    "Mapa pendiente; el editor aun no esta activo: " + mapPath);
+                return;
+            }
+            _pendingMap = null;
+            try
+            {
+                ScenarioEditorStorage.Load(level, mapPath);
+                UnderPressureEditorPlugin.Log?.LogInfo("Editor: mapa cargado: " + mapPath);
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogError("No se pudo cargar el mapa: " + exception);
             }
         }
 
         internal static void Reset()
         {
-            _pendingMap = null;
+            _root = null;
+            _nativeButtonTemplate = null;
+            _nativeTextTemplate = null;
+            _onOpen = null;
+            _onCancel = null;
             _selectedLevel = null;
-            _bypass = false;
-            _hospitals.Clear();
-            CloseOverlay();
+            _hospitalsColumn = null;
+            _mapsColumn = null;
+            _selectedHospitalTitle = null;
+            // La seleccion puede sobrevivir al cierre/recreacion del Canvas
+            // mientras se carga el nivel. Solo se borra al aplicarla o cancelar.
+            _hospitalChoices.Clear();
         }
 
-        private static void EnsureOverlay(Transform selector)
+        internal static void ClearPendingMap() => _pendingMap = null;
+
+        private static List<MapChoice> ReadMaps(string hospitalId)
         {
-            if (_overlay != null) return;
-            _style = CaptureStyle(selector);
-            BuildOverlay(selector);
-        }
-
-        private static void BuildOverlay(Transform selector)
-        {
-            _overlay = NewUi("UP_EditorMapPicker", selector, typeof(Image));
-            _overlayRect = (RectTransform)_overlay.transform;
-            Stretch(_overlayRect);
-            _overlay.GetComponent<Image>().color = _style.OverlayColor;
-            _overlay.transform.SetAsLastSibling();
-
-            var backgroundCatcher = _overlay.GetComponent<Button>() ?? _overlay.AddComponent<Button>();
-            backgroundCatcher.transition = Selectable.Transition.None;
-            backgroundCatcher.onClick.AddListener(() => CloseOverlay());
-
-            var panel = NewUi("Panel", _overlay.transform, typeof(Image));
-            var panelRect = (RectTransform)panel.transform;
-            panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.72f, 0.56f);
-            panelRect.pivot = new Vector2(0.5f, 0.5f);
-            panelRect.sizeDelta = new Vector2(760f, 470f);
-            var panelImage = panel.GetComponent<Image>();
-            panelImage.color = _style.PanelColor;
-            panelImage.raycastTarget = true;
-
-            var panelButton = panel.AddComponent<Button>();
-            panelButton.transition = Selectable.Transition.None;
-            panelButton.onClick = new Button.ButtonClickedEvent();
-
-            CreateHeader(panel.transform, "Escenario base", new Vector2(15f, -12f), new Vector2(360f, 42f), out _);
-            CreateHeader(panel.transform, "Hospital", new Vector2(390f, -12f), new Vector2(355f, 42f), out _rightTitleTmp, out _rightTitleLegacy);
-
-            _leftScroll = CreateScrollColumn(panel.transform, "BaseLevels", new Vector2(15f, -58f), new Vector2(360f, 330f), out _leftContent);
-            _rightScroll = CreateScrollColumn(panel.transform, "MapLevels", new Vector2(390f, -58f), new Vector2(355f, 330f), out _rightContent);
-
-            CreateMainButton(panel.transform, "Volver al menú principal", new Vector2(15f, -402f), new Vector2(360f, 56f), CloseOverlay, false);
-        }
-
-        private static void CollectHospitals(Transform selector, LevelConfig fallback)
-        {
-            _hospitals.Clear();
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-
-            foreach (var selectable in selector.GetComponentsInChildren<Selectable>(true))
-            {
-                if (selectable == null || selectable.transform.IsChildOf(_overlayRect)) continue;
-                var level = TryExtractLevel(selectable.gameObject);
-                if (level == null || string.IsNullOrEmpty(level.UniqueId) || !seen.Add(level.UniqueId)) continue;
-                _hospitals.Add(new HospitalChoice
-                {
-                    Level = level,
-                    DisplayName = ExtractLabel(selectable.gameObject, level.GetLocalisedDisplayName())
-                });
-            }
-
-            if (fallback != null && !seen.Contains(fallback.UniqueId))
-            {
-                _hospitals.Add(new HospitalChoice
-                {
-                    Level = fallback,
-                    DisplayName = fallback.GetLocalisedDisplayName()
-                });
-            }
-
-            _hospitals.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName, StringComparison.CurrentCultureIgnoreCase));
-            RebuildHospitalButtons();
-        }
-
-        private static LevelConfig TryExtractLevel(GameObject go)
-        {
-            if (go == null) return null;
-            foreach (var component in go.GetComponents<Component>())
-            {
-                if (component == null) continue;
-                var type = component.GetType();
-                try
-                {
-                    foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                    {
-                        if (!typeof(LevelConfig).IsAssignableFrom(field.FieldType)) continue;
-                        var value = field.GetValue(component) as LevelConfig;
-                        if (value != null) return value;
-                    }
-                    foreach (var prop in type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                    {
-                        if (!prop.CanRead || prop.GetIndexParameters().Length != 0) continue;
-                        if (!typeof(LevelConfig).IsAssignableFrom(prop.PropertyType)) continue;
-                        var value = prop.GetValue(component, null) as LevelConfig;
-                        if (value != null) return value;
-                    }
-                }
-                catch { }
-            }
-            return null;
-        }
-
-        private static string ExtractLabel(GameObject go, string fallback)
-        {
-            var tmp = go.GetComponentInChildren<TMP_Text>(true);
-            if (tmp != null && !string.IsNullOrWhiteSpace(tmp.text)) return tmp.text.Trim();
-            var txt = go.GetComponentInChildren<Text>(true);
-            return txt != null && !string.IsNullOrWhiteSpace(txt.text) ? txt.text.Trim() : fallback;
-        }
-
-        private static void RebuildHospitalButtons()
-        {
-            foreach (var button in _hospitalButtons)
-                if (button != null) UnityEngine.Object.Destroy(button.gameObject);
-            _hospitalButtons.Clear();
-
-            foreach (var hospital in _hospitals)
-            {
-                var selected = hospital;
-                var button = CreateMainButton(_leftContent, hospital.DisplayName, Vector2.zero, new Vector2(0f, 0f),
-                    () => SelectHospital(selected.Level), false);
-                AttachLayout(button.gameObject, 54f);
-                _hospitalButtons.Add(button);
-            }
-            if (_leftScroll != null) _leftScroll.verticalNormalizedPosition = 1f;
-            RefreshHospitalHighlight();
-        }
-
-        private static void SelectHospital(LevelConfig level)
-        {
-            if (level == null) return;
-            _selectedLevel = level;
-            if (_rightTitleTmp != null) _rightTitleTmp.text = ExtractHospitalName(level);
-            if (_rightTitleLegacy != null) _rightTitleLegacy.text = ExtractHospitalName(level);
-            RefreshHospitalHighlight();
-            RebuildMapButtons();
-        }
-
-        private static string ExtractHospitalName(LevelConfig level)
-        {
-            if (level == null) return "Hospital";
-            var name = level.GetLocalisedDisplayName();
-            return string.IsNullOrWhiteSpace(name) ? level.UniqueId : name;
-        }
-
-        private static void RefreshHospitalHighlight()
-        {
-            for (var i = 0; i < _hospitalButtons.Count && i < _hospitals.Count; i++)
-            {
-                var image = _hospitalButtons[i] != null ? _hospitalButtons[i].GetComponent<Image>() : null;
-                if (image == null) continue;
-                image.color = _hospitals[i].Level == _selectedLevel ? _style.SelectedColor : Color.white;
-            }
-        }
-
-        private static void RebuildMapButtons()
-        {
-            foreach (var button in _mapButtons)
-                if (button != null) UnityEngine.Object.Destroy(button.gameObject);
-            _mapButtons.Clear();
-            if (_selectedLevel == null) return;
-
-            var newMapButton = CreateMainButton(_rightContent, "New Map", Vector2.zero, new Vector2(0f, 0f),
-                () => StartSelected(null), true);
-            AttachLayout(newMapButton.gameObject, 50f);
-            _mapButtons.Add(newMapButton);
-
-            var maps = ReadMaps(_selectedLevel.UniqueId);
-            foreach (var map in maps)
-            {
-                var selected = map;
-                var button = CreateMainButton(_rightContent, selected.DisplayName, Vector2.zero, new Vector2(0f, 0f),
-                    () => StartSelected(selected.FilePath), false);
-                AttachLayout(button.gameObject, 50f);
-                _mapButtons.Add(button);
-            }
-            if (_rightScroll != null) _rightScroll.verticalNormalizedPosition = 1f;
-        }
-
-        private static Button CreateMainButton(Transform parent, string label, Vector2 position, Vector2 size, Action onClick, bool green)
-        {
-            var go = NewUi("Button_" + label, parent, typeof(Image), typeof(Button));
-            var rect = (RectTransform)go.transform;
-            if (size == Vector2.zero)
-            {
-                rect.anchorMin = new Vector2(0f, 1f);
-                rect.anchorMax = new Vector2(1f, 1f);
-                rect.pivot = new Vector2(0.5f, 1f);
-                rect.sizeDelta = new Vector2(0f, 50f);
-            }
-            else
-            {
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-                rect.pivot = new Vector2(0f, 1f);
-                rect.anchoredPosition = position;
-                rect.sizeDelta = size;
-            }
-
-            var image = go.GetComponent<Image>();
-            image.sprite = _style.ButtonSprite;
-            image.material = _style.ButtonMaterial;
-            image.type = _style.ButtonType;
-            image.pixelsPerUnitMultiplier = _style.PixelsPerUnitMultiplier;
-            image.color = green ? _style.NewMapColor : Color.white;
-
-            var button = go.GetComponent<Button>();
-            button.transition = Selectable.Transition.ColorTint;
-            var colors = button.colors;
-            colors.normalColor = image.color;
-            colors.highlightedColor = green ? new Color(0.38f, 0.96f, 0.34f, 1f) : new Color(0.92f, 0.92f, 0.92f, 1f);
-            colors.pressedColor = green ? new Color(0.22f, 0.72f, 0.18f, 1f) : new Color(0.82f, 0.82f, 0.82f, 1f);
-            colors.selectedColor = colors.highlightedColor;
-            colors.disabledColor = new Color(0.7f, 0.7f, 0.7f, 0.7f);
-            colors.fadeDuration = 0.1f;
-            button.colors = colors;
-            button.onClick.AddListener(() => onClick());
-
-            CreateButtonLabel(go.transform, label);
-            return button;
-        }
-
-        private static void CreateHeader(Transform parent, string label, Vector2 position, Vector2 size, out TMP_Text tmp)
-        {
-            Text legacy;
-            CreateHeader(parent, label, position, size, out tmp, out legacy);
-        }
-
-        private static void CreateHeader(Transform parent, string label, Vector2 position, Vector2 size, out TMP_Text tmp, out Text legacy)
-        {
-            var root = NewUi("Header_" + label, parent);
-            var rect = (RectTransform)root.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = position;
-            rect.sizeDelta = size;
-            tmp = null;
-            legacy = null;
-            if (_style.TmpFont != null)
-            {
-                var go = NewUi("Text", root.transform, typeof(TextMeshProUGUI));
-                Stretch((RectTransform)go.transform);
-                tmp = go.GetComponent<TextMeshProUGUI>();
-                tmp.font = _style.TmpFont;
-                tmp.text = label;
-                tmp.fontSize = 20f;
-                tmp.alignment = TextAlignmentOptions.Center;
-                tmp.color = _style.HeaderColor;
-                tmp.raycastTarget = false;
-            }
-            else
-            {
-                var go = NewUi("Text", root.transform, typeof(Text));
-                Stretch((RectTransform)go.transform);
-                legacy = go.GetComponent<Text>();
-                legacy.font = _style.LegacyFont ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-                legacy.fontSize = 20;
-                legacy.fontStyle = FontStyle.Bold;
-                legacy.alignment = TextAnchor.MiddleCenter;
-                legacy.color = _style.HeaderColor;
-                legacy.text = label;
-                legacy.raycastTarget = false;
-            }
-        }
-
-        private static ScrollRect CreateScrollColumn(Transform parent, string name, Vector2 position, Vector2 size, out RectTransform contentRect)
-        {
-            var host = NewUi(name, parent, typeof(Image), typeof(ScrollRect));
-            var hostRect = (RectTransform)host.transform;
-            hostRect.anchorMin = hostRect.anchorMax = new Vector2(0f, 1f);
-            hostRect.pivot = new Vector2(0f, 1f);
-            hostRect.anchoredPosition = position;
-            hostRect.sizeDelta = size;
-            host.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.06f);
-
-            var scroll = host.GetComponent<ScrollRect>();
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.scrollSensitivity = 34f;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-
-            var viewport = NewUi("Viewport", host.transform, typeof(Image), typeof(Mask));
-            var viewportRect = (RectTransform)viewport.transform;
-            Stretch(viewportRect);
-            viewport.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.001f);
-            viewport.GetComponent<Mask>().showMaskGraphic = false;
-
-            var content = NewUi("Content", viewport.transform, typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-            contentRect = (RectTransform)content.transform;
-            contentRect.anchorMin = new Vector2(0f, 1f);
-            contentRect.anchorMax = new Vector2(1f, 1f);
-            contentRect.pivot = new Vector2(0.5f, 1f);
-            contentRect.anchoredPosition = Vector2.zero;
-            contentRect.sizeDelta = Vector2.zero;
-
-            var layout = content.GetComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(4, 4, 5, 5);
-            layout.spacing = 8f;
-            layout.childControlWidth = true;
-            layout.childControlHeight = true;
-            layout.childForceExpandWidth = true;
-            layout.childForceExpandHeight = false;
-            content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            scroll.viewport = viewportRect;
-            scroll.content = contentRect;
-            return scroll;
-        }
-
-        private static void AttachLayout(GameObject go, float height)
-        {
-            var layout = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
-            layout.minHeight = height;
-            layout.preferredHeight = height;
-            layout.flexibleHeight = 0f;
-        }
-
-        private static void CreateButtonLabel(Transform parent, string label)
-        {
-            if (_style.TmpFont != null)
-            {
-                var go = NewUi("Text", parent, typeof(TextMeshProUGUI));
-                Stretch((RectTransform)go.transform);
-                var text = go.GetComponent<TextMeshProUGUI>();
-                text.font = _style.TmpFont;
-                text.text = label;
-                text.fontSize = _style.FontSize;
-                text.enableAutoSizing = true;
-                text.fontSizeMin = 12f;
-                text.fontSizeMax = _style.FontSize;
-                text.alignment = TextAlignmentOptions.Center;
-                text.color = _style.TextColor;
-                text.margin = new Vector4(10f, 0f, 10f, 0f);
-                text.raycastTarget = false;
-                return;
-            }
-
-            var labelGo = NewUi("Text", parent, typeof(Text));
-            Stretch((RectTransform)labelGo.transform);
-            var legacy = labelGo.GetComponent<Text>();
-            legacy.font = _style.LegacyFont ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-            legacy.fontSize = _style.FontSize;
-            legacy.fontStyle = FontStyle.Bold;
-            legacy.alignment = TextAnchor.MiddleCenter;
-            legacy.color = _style.TextColor;
-            legacy.text = label;
-            legacy.raycastTarget = false;
-        }
-
-        private static UiStyle CaptureStyle(Transform selector)
-        {
-            var style = new UiStyle();
-            var templateSelectable = selector.GetComponentsInChildren<Selectable>(true)
-                .FirstOrDefault(s => s != null && s.GetComponent<Image>() != null);
-            if (templateSelectable != null)
-            {
-                var image = templateSelectable.GetComponent<Image>();
-                style.ButtonSprite = image.sprite;
-                style.ButtonMaterial = image.material;
-                style.ButtonType = image.type;
-                style.PixelsPerUnitMultiplier = image.pixelsPerUnitMultiplier;
-                var tmp = templateSelectable.GetComponentInChildren<TMP_Text>(true);
-                if (tmp != null)
-                {
-                    style.TmpFont = tmp.font;
-                    style.FontSize = Mathf.RoundToInt(tmp.fontSize > 0f ? tmp.fontSize : 18f);
-                    style.TextColor = tmp.color;
-                }
-                else
-                {
-                    var text = templateSelectable.GetComponentInChildren<Text>(true);
-                    if (text != null)
-                    {
-                        style.LegacyFont = text.font;
-                        style.FontSize = text.fontSize > 0 ? text.fontSize : 18;
-                        style.TextColor = text.color;
-                    }
-                }
-            }
-            else
-            {
-                style.LegacyFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            }
-            return style;
-        }
-
-        private static List<StoredMap> ReadMaps(string hospitalId)
-        {
-            var result = new List<StoredMap>();
+            var result = new List<MapChoice>();
             var folder = ScenarioEditorStorage.Folder;
             if (!Directory.Exists(folder)) return result;
-
             foreach (var file in Directory.GetFiles(folder, "*.upmap", SearchOption.AllDirectories))
             {
                 try
                 {
-                    using (var reader = new StreamReader(file, Encoding.UTF8))
+                    var header = ScenarioMapFormat.ReadHeader(file);
+                    if (!string.Equals(header.baseHospitalId, hospitalId, StringComparison.Ordinal)) continue;
+                    result.Add(new MapChoice
                     {
-                        if (reader.ReadLine() != "UNDERPRESSURE_MAP_1") continue;
-                        var header = (reader.ReadLine() ?? string.Empty).Split('|');
-                        if (header.Length != 4 || header[0] != "M") continue;
-                        var id = Encoding.UTF8.GetString(Convert.FromBase64String(header[1]));
-                        if (!string.Equals(id, hospitalId, StringComparison.Ordinal)) continue;
-                        var displayName = Encoding.UTF8.GetString(Convert.FromBase64String(header[3]));
-                        if (string.IsNullOrWhiteSpace(displayName)) continue;
-                        result.Add(new StoredMap { FilePath = file, DisplayName = displayName });
-                    }
+                        Path = file,
+                        Name = string.IsNullOrWhiteSpace(header.name)
+                            ? Path.GetFileNameWithoutExtension(file) : header.name
+                    });
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
                     UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Selector editor: se ignoró archivo ilegible " + file + ": " + ex.Message);
+                        "Mapa omitido: " + file + " - " + exception.Message);
                 }
             }
-            return result.OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
+            return result.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
-        private static void StartSelected(string mapPath)
+        private static ScrollColumn CreateColumn(Transform parent, string name, Vector2 pos, Vector2 size)
         {
-            if (_selectedLevel == null || OriginalStart == null) return;
-            var level = _selectedLevel;
-            _pendingMap = mapPath;
-            CloseOverlay();
-            _bypass = true;
-            try
+            var host = Ui(name, parent, typeof(Image));
+            var hostRect = (RectTransform)host.transform;
+            hostRect.anchorMin = hostRect.anchorMax = new Vector2(0f, 1f);
+            hostRect.pivot = new Vector2(0f, 1f);
+            hostRect.anchoredPosition = pos;
+            hostRect.sizeDelta = size;
+            var background = host.GetComponent<Image>();
+            background.color = new Color(1f, 1f, 1f, 0.06f);
+            background.raycastTarget = true;
+
+            // NUNCA hay elementos fuera de pantalla: se crean solo las 7 filas visibles.
+            // Por eso no necesitamos Mask / RectMask2D ni ContentSizeFitter.
+            var viewport = Ui("VisibleButtons", host.transform, typeof(Image));
+            Stretch((RectTransform)viewport.transform);
+            var viewportImage = viewport.GetComponent<Image>();
+            viewportImage.color = new Color(1f, 1f, 1f, 0f);
+            viewportImage.raycastTarget = true;
+
+            var column = new ScrollColumn
             {
-                OriginalStart.Invoke(null, new object[] { level });
+                Viewport = (RectTransform)viewport.transform,
+                Width = size.x
+            };
+
+            var wheel = host.AddComponent<ScenarioEditorWheelHandler>();
+            wheel.Scroll = delta =>
+            {
+                var maxFirst = Math.Max(0, column.Entries.Count - VisibleRows);
+                if (maxFirst == 0 || Mathf.Approximately(delta, 0f)) return;
+                column.FirstRow = Mathf.Clamp(column.FirstRow + (delta > 0f ? -2 : 2), 0, maxFirst);
+                RefreshRows(column);
+            };
+
+            column.Bar = CreateScrollbar(host.transform);
+            column.Bar.onValueChanged.AddListener(value =>
+            {
+                if (column.ChangingBar) return;
+                var maxFirst = Math.Max(0, column.Entries.Count - VisibleRows);
+                var row = Mathf.Clamp(Mathf.RoundToInt((1f - value) * maxFirst), 0, maxFirst);
+                if (row == column.FirstRow) return;
+                column.FirstRow = row;
+                RefreshRows(column);
+            });
+            return column;
+        }
+
+        private static void RefreshRows(ScrollColumn column)
+        {
+            if (column == null || column.Viewport == null) return;
+            foreach (var existing in column.VisibleRows)
+            {
+                if (existing == null) continue;
+                existing.SetActive(false); // Evita solapamientos durante el Destroy diferido.
+                UnityEngine.Object.Destroy(existing);
             }
-            catch (TargetInvocationException ex)
+            column.VisibleRows.Clear();
+
+            var maxFirst = Math.Max(0, column.Entries.Count - VisibleRows);
+            column.FirstRow = Mathf.Clamp(column.FirstRow, 0, maxFirst);
+            var hasScroll = maxFirst > 0;
+            column.Bar.gameObject.SetActive(hasScroll);
+            column.ChangingBar = true;
+            column.Bar.numberOfSteps = Math.Max(1, maxFirst + 1);
+            column.Bar.size = Mathf.Clamp01((float)VisibleRows / Math.Max(1, column.Entries.Count));
+            column.Bar.value = maxFirst == 0 ? 1f : 1f - (float)column.FirstRow / maxFirst;
+            column.ChangingBar = false;
+
+            var width = column.Width - (hasScroll ? 30f : 13f);
+            for (var row = 0; row < VisibleRows && row + column.FirstRow < column.Entries.Count; ++row)
             {
-                _pendingMap = null;
-                UnderPressureEditorPlugin.Log?.LogError("No se pudo iniciar el editor: " + (ex.InnerException ?? ex));
-            }
-            catch (Exception ex)
-            {
-                _pendingMap = null;
-                UnderPressureEditorPlugin.Log?.LogError("No se pudo iniciar el editor: " + ex);
-            }
-            finally
-            {
-                _bypass = false;
+                var entry = column.Entries[row + column.FirstRow];
+                var label = entry.Label;
+                if (ReferenceEquals(column, _hospitalsColumn))
+                {
+                    var selected = _hospitalChoices.FirstOrDefault(
+                        x => x.Label == entry.Label && x.Level == _selectedLevel);
+                    if (selected != null) label = "› " + label;
+                }
+                var buttonRow = CreateNativeRow(column.Viewport, label,
+                    new Vector2(RowInset, -(RowInset + row * (RowHeight + RowSpacing))),
+                    new Vector2(width, RowHeight), entry.OnClick, entry.Green);
+                column.VisibleRows.Add(buttonRow);
             }
         }
 
-        private static void CloseOverlay()
+        // Todos los botones, tanto el visible inferior como los de las listas,
+        // usan IDENTICA creacion y posicion absoluta (ninguno depende de LayoutGroup).
+        private static GameObject CreateNativeRow(
+            Transform parent, string label, Vector2 position, Vector2 size, Action action, bool green)
         {
-            if (_overlay != null) UnityEngine.Object.Destroy(_overlay);
-            _overlay = null;
-            _overlayRect = null;
-            _leftContent = null;
-            _rightContent = null;
-            _leftScroll = null;
-            _rightScroll = null;
-            _rightTitleTmp = null;
-            _rightTitleLegacy = null;
-            _hospitalButtons.Clear();
-            _mapButtons.Clear();
+            var row = Ui("UP_" + label, parent);
+            var rect = (RectTransform)row.transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+
+            var button = UnityEngine.Object.Instantiate(_nativeButtonTemplate, row.transform, false);
+            button.gameObject.name = "NativeButton";
+            button.gameObject.SetActive(true);
+            button.enabled = true;
+            var buttonRect = button.transform as RectTransform;
+            if (buttonRect != null)
+            {
+                buttonRect.anchorMin = Vector2.zero;
+                buttonRect.anchorMax = Vector2.one;
+                buttonRect.pivot = new Vector2(0.5f, 0.5f);
+                buttonRect.offsetMin = Vector2.zero;
+                buttonRect.offsetMax = Vector2.zero;
+                buttonRect.anchoredPosition = Vector2.zero;
+                buttonRect.localScale = Vector3.one;
+            }
+
+            DisableNativeLocalizers(button.gameObject);
+            button.onPrimaryDown.RemoveAllListeners();
+            button.onPrimaryDown.AddListener(() => action?.Invoke());
+            button.interactable = true;
+            button.SetTMPText(label);
+
+            foreach (var text in button.GetComponentsInChildren<TMP_Text>(true))
+            {
+                text.gameObject.SetActive(true);
+                text.enabled = true;
+                text.enableAutoSizing = true;
+                text.fontSizeMin = 13f;
+                text.fontSizeMax = 23f;
+                text.fontSize = Mathf.Min(text.fontSize, 23f);
+                text.raycastTarget = false;
+            }
+
+            if (green)
+            {
+                var colors = button.colors;
+                colors.normalColor = new Color(0.22f, 0.96f, 0.22f, 1f);
+                colors.highlightedColor = new Color(0.42f, 1f, 0.34f, 1f);
+                colors.pressedColor = new Color(0.13f, 0.75f, 0.16f, 1f);
+                colors.selectedColor = colors.highlightedColor;
+                button.colors = colors;
+                if (button.targetGraphic != null)
+                    button.targetGraphic.color = colors.normalColor;
+            }
+            return row;
         }
 
-        private static GameObject NewUi(string name, Transform parent, params Type[] components)
+        private static TMP_Text CreateHeader(Transform parent, string label, Vector2 pos, Vector2 size)
         {
-            var list = new List<Type> { typeof(RectTransform), typeof(CanvasRenderer) };
-            list.AddRange(components);
-            var go = new GameObject(name, list.ToArray());
-            go.transform.SetParent(parent, false);
-            return go;
+            var header = Ui("Header_" + label, parent);
+            var rect = (RectTransform)header.transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = pos;
+            rect.sizeDelta = size;
+
+            var textObject = UnityEngine.Object.Instantiate(_nativeTextTemplate.gameObject, header.transform, false);
+            textObject.name = "Title";
+            textObject.SetActive(true);
+            DisableNativeLocalizers(textObject);
+            var text = textObject.GetComponent<TMP_Text>();
+            if (text == null) return null;
+            Stretch(text.rectTransform);
+            text.text = label;
+            text.alignment = TextAlignmentOptions.Center;
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 16f;
+            text.fontSizeMax = 28f;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        private static Scrollbar CreateScrollbar(Transform parent)
+        {
+            var track = Ui("Scrollbar", parent, typeof(Image), typeof(Scrollbar));
+            var rect = (RectTransform)track.transform;
+            rect.anchorMin = new Vector2(1f, 0f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.offsetMin = new Vector2(-14f, 4f);
+            rect.offsetMax = new Vector2(-3f, -4f);
+            track.GetComponent<Image>().color = new Color(0.03f, 0.08f, 0.11f, 0.65f);
+
+            var sliding = Ui("Sliding Area", track.transform);
+            Stretch((RectTransform)sliding.transform);
+            var handle = Ui("Handle", sliding.transform, typeof(Image));
+            var handleRect = (RectTransform)handle.transform;
+            Stretch(handleRect);
+            var handleImage = handle.GetComponent<Image>();
+            var sourceImage = _nativeButtonTemplate.GetComponent<Image>();
+            if (sourceImage != null)
+            {
+                handleImage.sprite = sourceImage.sprite;
+                handleImage.type = sourceImage.type;
+            }
+            handleImage.color = new Color(0.08f, 0.77f, 0.93f, 1f);
+            var scrollbar = track.GetComponent<Scrollbar>();
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            scrollbar.handleRect = handleRect;
+            scrollbar.targetGraphic = handleImage;
+            scrollbar.value = 1f;
+            return scrollbar;
+        }
+
+        private static void DisableNativeLocalizers(GameObject root)
+        {
+            foreach (var component in root.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+        }
+
+        private static GameObject Ui(string name, Transform parent, params Type[] components)
+        {
+            var types = new List<Type> { typeof(RectTransform), typeof(CanvasRenderer) };
+            types.AddRange(components);
+            var result = new GameObject(name, types.ToArray());
+            result.transform.SetParent(parent, false);
+            return result;
         }
 
         private static void Stretch(RectTransform rect)
@@ -594,10 +490,15 @@ namespace UnderPressure.Editor
         }
     }
 
-    [HarmonyPatch(typeof(ScenarioEditorFlow), "StartSelectedLevel")]
-    internal static class ScenarioEditorMapPickerSelectPatch
+    // Maneja la rueda del raton sin depender del ScrollRect o de mascaras UI.
+    public sealed class ScenarioEditorWheelHandler : MonoBehaviour, IScrollHandler
     {
-        private static bool Prefix(LevelConfig level) => ScenarioEditorMapPicker.InterceptHospitalSelection(level);
+        internal Action<float> Scroll;
+
+        public void OnScroll(PointerEventData eventData)
+        {
+            if (Scroll != null) Scroll(eventData.scrollDelta.y);
+        }
     }
 
     [HarmonyPatch(typeof(ScenarioEditorFlow), "OpenNativeEditor")]
@@ -610,6 +511,13 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(ScenarioEditorFlow), "ResetAtOpeningScreen")]
     internal static class ScenarioEditorMapPickerResetPatch
     {
-        private static void Prefix() => ScenarioEditorMapPicker.Reset();
+        private static void Prefix()
+        {
+            // Nunca perder la ruta mientras sigue en curso la carga del Editor.
+            // Reset solo limpia el Canvas. La ruta se consume en OnEditorOpened.
+            // El flujo puede transicionar por OpeningScreen antes de abrir Level:
+            // NO borrar aqui _pendingMap, aunque IsRunning pase a false.
+            ScenarioEditorMapPicker.Reset();
+        }
     }
 }

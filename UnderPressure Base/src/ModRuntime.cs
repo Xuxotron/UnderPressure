@@ -1,4 +1,4 @@
-// Updated: 2026-10-12
+﻿// Updated: 2026-10-12 — rutas Maps, Saves y configuración única
 // Configuracion, registro y componentes independientes de BepInEx para Under Pressure.
 // Compilar UNICAMENTE en UnderPressure Base. Editor y Power referencian el ensamblado Base.
 using System;
@@ -50,13 +50,15 @@ namespace UnderPressure.LoaderRuntime
             }
         }
         public static string PluginPath { get { return Path.Combine(GameRoot, "Mods"); } }
-        public static string ConfigPath { get { return Path.Combine(PluginPath, "config"); } }
+        public static string ConfigPath { get { return PluginPath; } }
+        public static string MapsPath { get { return Path.Combine(PluginPath, "Maps"); } }
+        public static string SavesPath { get { return Path.Combine(PluginPath, "Saves"); } }
     }
 
     public abstract class BaseModComponent : MonoBehaviour
     {
         private Logging.ModLogSource _logger;
-        private Configuration.ConfigFile _config;
+        private static readonly Configuration.ConfigFile SharedConfig = new Configuration.ConfigFile("underpressure");
 
         protected Logging.ModLogSource Logger
         {
@@ -73,15 +75,7 @@ namespace UnderPressure.LoaderRuntime
 
         protected Configuration.ConfigFile Config
         {
-            get
-            {
-                if (_config == null)
-                {
-                    var plugin = Attribute.GetCustomAttribute(GetType(), typeof(ModPluginAttribute)) as ModPluginAttribute;
-                    _config = new Configuration.ConfigFile(plugin == null ? GetType().FullName : plugin.Id);
-                }
-                return _config;
-            }
+            get { return SharedConfig; }
         }
     }
 }
@@ -267,11 +261,24 @@ namespace UnderPressure.LoaderRuntime.Configuration
         {
             SaveOnConfigSet = true;
             _path = Path.Combine(UnderPressure.LoaderRuntime.Paths.ConfigPath, pluginId + ".cfg");
-            if (!File.Exists(_path)) return;
+            // Leer la configuración antigua, si existe, sin volver a crearla.
+            var legacyDirectory = Path.Combine(UnderPressure.LoaderRuntime.Paths.PluginPath, "config");
+            if (Directory.Exists(legacyDirectory))
+            {
+                foreach (var legacyFile in Directory.GetFiles(legacyDirectory, "*.cfg"))
+                    ReadValues(legacyFile);
+            }
+            // Los valores del archivo unificado tienen prioridad.
+            ReadValues(_path);
+        }
+
+        private void ReadValues(string filePath)
+        {
+            if (!File.Exists(filePath)) return;
             try
             {
                 string section = "";
-                foreach (var row in File.ReadAllLines(_path, Encoding.UTF8))
+                foreach (var row in File.ReadAllLines(filePath, Encoding.UTF8))
                 {
                     var line = row.Trim();
                     if (line.Length == 0 || line.StartsWith("#") || line.StartsWith(";")) continue;
@@ -282,12 +289,13 @@ namespace UnderPressure.LoaderRuntime.Configuration
                     }
                     int separator = line.IndexOf('=');
                     if (separator <= 0) continue;
-                    _loaded[section + "|" + line.Substring(0, separator).Trim()] = line.Substring(separator + 1).Trim();
+                    _loaded[section + "|" + line.Substring(0, separator).Trim()] =
+                        line.Substring(separator + 1).Trim();
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("Under Pressure: error leyendo configuracion: " + ex.Message);
+                Debug.LogWarning("Under Pressure: error leyendo configuracion " + filePath + ": " + ex.Message);
             }
         }
 
@@ -314,6 +322,8 @@ namespace UnderPressure.LoaderRuntime.Configuration
                 }
             }
             var entry = new ConfigEntry<T>(this, section, key, value, description);
+            _entries.RemoveAll(existing => string.Equals(existing.Section, section, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(existing.Key, key, StringComparison.OrdinalIgnoreCase));
             _entries.Add(new Entry
             {
                 Section = section,

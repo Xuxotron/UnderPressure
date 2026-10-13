@@ -1,4 +1,4 @@
-// Updated: 2026-10-12
+﻿// Updated: 2026-10-12 — partidas en Mods/Saves
 // Purpose: Implements .upsav persistence, backups, electrical-room restoration, and staff job records.
 using System;
 using System.Collections;
@@ -29,7 +29,7 @@ namespace UnderPressure.PowerGrid
                 ? (string.IsNullOrEmpty(_level?.UniqueID) ? "unknown-level" : _level.UniqueID)
                 : levelIdOverride;
             foreach (var invalid in Path.GetInvalidFileNameChars()) levelId = levelId.Replace(invalid, '_');
-            var directory = Path.Combine(Paths.ConfigPath, "UnderPressure", "Saves", "Slot" + (slot + 1));
+            var directory = Path.Combine(Paths.SavesPath, "Slot" + (slot + 1));
             Directory.CreateDirectory(directory);
             return Path.Combine(directory, levelId + ".upsav");
         }
@@ -353,8 +353,7 @@ namespace UnderPressure.PowerGrid
         {
             if (saveSystem == null || string.IsNullOrEmpty(levelId)) return;
             foreach (var invalid in Path.GetInvalidFileNameChars()) levelId = levelId.Replace(invalid, '_');
-            var directory = Path.Combine(Paths.ConfigPath, "UnderPressure", "Saves",
-                "Slot" + (saveSystem.CurrentSaveSlot + 1));
+            var directory = Path.Combine(Paths.SavesPath, "Slot" + (saveSystem.CurrentSaveSlot + 1));
             var path = Path.Combine(directory, levelId + ".upsav");
             var firstBackup = path + ".2.bak";
             if (!File.Exists(firstBackup)) return;

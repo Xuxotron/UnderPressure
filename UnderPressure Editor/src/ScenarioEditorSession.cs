@@ -1,8 +1,9 @@
-// Updated: 2026-10-12
+// Updated: 2026-10-13 - Correccion CS1955 de Count() mediante System.Linq
 // Aisla los recursos originales, fuerza la carga del nivel desde sus definiciones y protege la visibilidad de las parcelas.
 // Destino: UnderPressure Editor/src/ScenarioEditorSession.cs
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -248,6 +249,45 @@ namespace UnderPressure.Editor
         }
     }
 
+    // Move Plot tambien llamaba a Build(false) despues de desplazar la mascara.
+    // Esto destruia la visual y reconstruia paredes con variaciones aleatorias.
+    // Conservar el refresco ligero ya utilizado para la pintura de parcelas.
+    [HarmonyPatch(typeof(CursorEditHospitalMovePlot), "Place")]
+    internal static class ScenarioEditorMovePreserveWallsPatch
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var codes = new List<CodeInstruction>(instructions);
+            var build = AccessTools.Method(typeof(HospitalMap), nameof(HospitalMap.Build));
+            var refresh = AccessTools.Method(typeof(ScenarioEditorPaintRefresh), nameof(ScenarioEditorPaintRefresh.Refresh));
+            var light = AccessTools.Method(typeof(WorldState), nameof(WorldState.CalculateLighting));
+            var safeLight = AccessTools.Method(typeof(ScenarioEditorPaintRefresh), nameof(ScenarioEditorPaintRefresh.CalculateLighting));
+            if (refresh == null || safeLight == null ||
+                codes.Count(c => Equals(c.operand, build)) != 1 ||
+                codes.Count(c => Equals(c.operand, light)) != 1)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "MovePlot: firma no reconocida; se conserva método nativo.");
+                return codes;
+            }
+            foreach (var code in codes)
+            {
+                if (Equals(code.operand, build))
+                {
+                    code.opcode = OpCodes.Call;
+                    code.operand = refresh;
+                }
+                else if (Equals(code.operand, light))
+                {
+                    code.opcode = OpCodes.Call;
+                    code.operand = safeLight;
+                }
+            }
+            return codes;
+        }
+    }
+
     // La pintura nativa llama a Build(false), que demuele y vuelve a crear toda
     // la parcela aunque solo cambie una celda. RebuildWalls conserva HospitalMap,
     // FloorPlan, Room y las tres capas de paisaje. El editor repone los dos pasos
@@ -415,5 +455,146 @@ namespace UnderPressure.Editor
     {
         private static void Prefix() =>
             ScenarioEditorPaintRefresh.AddPillarsBeforeVisualUpdate();
+    }
+
+    // Ctrl mantiene la seleccion multiple nativa.
+    // Solo en la confirmacion de colocacion la tecla de duplicado pasa a Mayus.
+    // El objeto/seleccion permanece en el cursor y puede colocarse repetidamente.
+    [HarmonyPatch(typeof(CursorEditHospitalItem), "OnMoveRoomEnd")]
+    internal static class ScenarioEditorShiftClonePatch
+    {
+        private static readonly MethodInfo NativeGetKey =
+            AccessTools.Method(typeof(InputManager), "GetKey", new[] { typeof(KeyCode) });
+        private static readonly MethodInfo CloneGetKey =
+            AccessTools.Method(typeof(ScenarioEditorShiftClonePatch), nameof(GetCloneModifier));
+
+        private static bool GetCloneModifier(InputManager input, KeyCode unused)
+        {
+            // Solo afecta al Editor de escenarios: fuera de el, Ctrl nativo.
+            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active)
+                return input != null && input.GetKey(KeyCode.LeftControl);
+            return input != null &&
+                (input.GetKey(KeyCode.LeftShift) || input.GetKey(KeyCode.RightShift));
+        }
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            // OnMoveRoomEnd contiene UN acceso a GetKey(LeftControl), usado
+            // unicamente al confirmar si la seleccion se DUPLICA. Si el juego
+            // cambia el metodo, no alterar ninguna otra comprobacion de Ctrl.
+            var codes = new List<CodeInstruction>(instructions);
+            var matches = NativeGetKey == null ? 0 :
+                codes.FindAll(code => code.Calls(NativeGetKey)).Count;
+            if (matches != 1 || CloneGetKey == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se cambio Ctrl por Mayus: el metodo nativo difiere (" + matches + ").");
+                return codes;
+            }
+            foreach (var instruction in codes)
+            {
+                if (instruction.Calls(NativeGetKey))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = CloneGetKey;
+                }
+            }
+            return codes;
+        }
+    }
+}
+
+namespace UnderPressure.Editor
+{
+    // CursorRoomItem gestiona la colocacion de UN objeto. Al mover uno existente,
+    // el cursor nativo finaliza despues de colocarlo; con Mayus abrimos otro
+    // cursor nuevo del mismo modelo para continuar creando copias.
+    internal static class ScenarioEditorContinuousObjectClone
+    {
+        private sealed class Pending
+        {
+            internal Level Level;
+            internal IRoomItemDefinition Definition;
+            internal FloorPlan Floor;
+            internal RoomFloorPlanVisual Visual;
+            internal float Rotation;
+        }
+
+        private static readonly Dictionary<CursorRoomItem, Pending> PendingByCursor =
+            new Dictionary<CursorRoomItem, Pending>();
+        private static readonly FieldInfo LevelField = AccessTools.Field(typeof(CursorRoomItem), "_level");
+        private static readonly FieldInfo VisualField = AccessTools.Field(typeof(CursorRoomItem), "_roomFloorPlanVisual");
+
+        internal static object BeforePlace(CursorRoomItem cursor)
+        {
+            if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning || cursor?.RoomItem == null)
+                return null;
+            var level = LevelField?.GetValue(cursor) as Level;
+            if (level?.InputManager == null ||
+                !(level.InputManager.GetKey(KeyCode.LeftShift) ||
+                  level.InputManager.GetKey(KeyCode.RightShift))) return null;
+            var item = cursor.RoomItem;
+            var floor = item.FloorPlan;
+            var visual = VisualField?.GetValue(cursor) as RoomFloorPlanVisual;
+            if (floor == null || visual == null) return null;
+            return new Pending
+            {
+                Level = level, Definition = item.Definition, Floor = floor,
+                Visual = visual, Rotation = item.Rotation
+            };
+        }
+
+        internal static void AfterPlace(CursorRoomItem cursor, bool ended, object state)
+        {
+            if (cursor == null) return;
+            if (ended && state is Pending pending)
+                PendingByCursor[cursor] = pending;
+            else
+                PendingByCursor.Remove(cursor);
+        }
+
+        internal static void AfterCursorUpdate(CursorRoomItem cursor)
+        {
+            if (cursor == null || !PendingByCursor.TryGetValue(cursor, out var pending)) return;
+            PendingByCursor.Remove(cursor);
+            try
+            {
+                if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning ||
+                    pending.Level == null || !ReferenceEquals(pending.Level, ScenarioEditorSession.Level) ||
+                    pending.Floor == null || pending.Definition == null ||
+                    pending.Level.CursorManager == null)
+                    return;
+                // La siguiente copia utiliza el objeto como NUEVA colocacion.
+                // Ctrl nunca interviene aqui: la pulsacion de Mayus se comprueba
+                // en BeforePlace cuando se confirma la colocacion anterior.
+                var configuration = pending.Level.BuildingLogic.Configuration.RoomItemEditConfig;
+                var next = new CursorRoomItem(pending.Level.CursorManager, pending.Level,
+                    configuration, pending.Definition, pending.Rotation,
+                    pending.Floor, pending.Visual, null, false);
+                pending.Level.CursorManager.PushMode(next);
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudo continuar clonando el objeto con Mayus: " + exception);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(CursorRoomItem), "PlaceItem")]
+    internal static class ScenarioEditorSingleObjectShiftPatch
+    {
+        private static void Prefix(CursorRoomItem __instance, out object __state) =>
+            __state = ScenarioEditorContinuousObjectClone.BeforePlace(__instance);
+
+        private static void Postfix(CursorRoomItem __instance, bool __result, object __state) =>
+            ScenarioEditorContinuousObjectClone.AfterPlace(__instance, __result, __state);
+    }
+
+    [HarmonyPatch(typeof(CursorRoomItem), "CursorUpdate")]
+    internal static class ScenarioEditorContinueAfterSinglePlacementPatch
+    {
+        private static void Postfix(CursorRoomItem __instance) =>
+            ScenarioEditorContinuousObjectClone.AfterCursorUpdate(__instance);
     }
 }
