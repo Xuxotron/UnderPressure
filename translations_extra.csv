@@ -129,3 +129,11 @@ scenario_editor.tooltip,,,,,
 scenario_editor.base_scenario,,,,,
 scenario_editor.edit,,,,,
 scenario_editor.return_to_menu,,,,,
+editor.map.styles,Стили карты,Style mapy,맵 스타일,地图样式,地圖樣式
+editor.map.style.original,Оригинал,Oryginalny,원본,原始,原始
+editor.map.style.none,Без периметра,Bez obwodu,둘레 없음,无外围,無外圍
+editor.map.style.perimeter,Внешний периметр,Zewnętrzny obwód,외곽 경계,外围,外圍
+editor.map.style.built,Построенная больница,Zbudowany szpital,완공된 병원,已建成医院,已建成醫院
+editor.map.style.building,Во время строительства,W budowie,건설 중,建造中,建造中
+editor.map.style.unbuilt,Незастроенный участок,Niezabudowana działka,미개발 부지,未建造地块,未建造地塊
+editor.map.style.help,Стили сохраняются в карте и применяются при повторном открытии.,Style są zapisywane w mapie i stosowane po jej ponownym otwarciu.,스타일은 맵에 저장되며 다시 열 때 적용됩니다.,样式会保存到地图中并在重新打开时应用。,樣式會儲存到地圖中並在重新開啟時套用。

@@ -14,6 +14,9 @@ namespace UnderPressure.Editor
     internal static class ScenarioMapFormat
     {
         internal const int Version = 2;
+        internal const string PerimeterNone = "None";
+        internal const string PerimeterOriginal = "Original";
+        internal const string PerimeterCustom = "Custom";
         private const int MaxHeaderBytes = 1024 * 1024;
         private const int MaxPlotBytes = 32 * 1024 * 1024;
         private const int MaxPngBytes = 32 * 1024 * 1024;
@@ -28,6 +31,14 @@ namespace UnderPressure.Editor
             public string baseHospitalName = "";
             public string description = "";
             public string terrainManifest = "";
+            // None equivale a una lista vacia como Flemington. Original conserva
+            // los prefabs definidos por el hospital base, incluidos los especiales.
+            public string plotPerimeter = PerimeterNone;
+            public string[] perimeterPrefabs = new string[0];
+            // Cadena vacia: conservar la definicion original del hospital base.
+            public string builtRoomStyle = "";
+            public string buildingRoomStyle = "";
+            public string unbuiltRoomStyle = "";
             public PlotReference[] plots = new PlotReference[0];
         }
 
@@ -107,12 +118,37 @@ namespace UnderPressure.Editor
             var json = ReadText(file, MaxHeaderBytes);
             var header = JsonUtility.FromJson<Map>(json);
             if (header != null) header.plots = ParseObjects<PlotReference>(json, "plots");
+            if (header != null) header.plotPerimeter = NormalizePerimeter(header.plotPerimeter);
+            if (header != null && header.perimeterPrefabs == null)
+                header.perimeterPrefabs = new string[0];
             if (header == null || header.version != Version ||
                 string.IsNullOrWhiteSpace(header.name) ||
                 string.IsNullOrWhiteSpace(header.baseHospitalId) ||
-                header.plots == null || header.plots.Length == 0 || header.plots.Length > 128)
+                header.plots == null || header.plots.Length == 0 || header.plots.Length > 128 ||
+                header.perimeterPrefabs.Length > 32 ||
+                HasInvalidStyleId(header.builtRoomStyle) ||
+                HasInvalidStyleId(header.buildingRoomStyle) ||
+                HasInvalidStyleId(header.unbuiltRoomStyle) ||
+                Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
                 throw new InvalidDataException("Cabecera .upmap incorrecta o version incompatible.");
             return header;
+        }
+
+        private static bool HasInvalidStyleId(string value)
+        {
+            return value != null && (value.Length > 160 || value.IndexOfAny(new[] { '\r', '\n' }) >= 0);
+        }
+
+        internal static string NormalizePerimeter(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value, PerimeterNone, StringComparison.OrdinalIgnoreCase))
+                return PerimeterNone;
+            if (string.Equals(value, PerimeterOriginal, StringComparison.OrdinalIgnoreCase))
+                return PerimeterOriginal;
+            if (string.Equals(value, PerimeterCustom, StringComparison.OrdinalIgnoreCase))
+                return PerimeterCustom;
+            throw new InvalidDataException("Modo de perimetro de parcelas desconocido: " + value);
         }
 
         internal static LoadedMap Read(string file)

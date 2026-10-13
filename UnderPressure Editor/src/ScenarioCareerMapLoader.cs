@@ -1,4 +1,4 @@
-// Updated: 2026-10-13
+// Updated: 2026-10-13 - Importacion segura de terrain_mesh.bin en el nivel jugable.
 // Carga .upmap + .json/.png al crear una partida nueva. No toca las definiciones originales.
 // Las partidas del juego base permanecen intactas; el guardado de carrera personalizado sigue bloqueado.
 using System;
@@ -20,6 +20,11 @@ namespace UnderPressure.Editor
         private static readonly List<Material> TemporaryMaterials = new List<Material>();
         private static readonly Dictionary<Renderer, Material[]> OriginalRendererMaterials =
             new Dictionary<Renderer, Material[]>();
+        private static readonly Dictionary<MeshFilter, Mesh> OriginalRendererMeshes =
+            new Dictionary<MeshFilter, Mesh>();
+        private static readonly Dictionary<MeshCollider, Mesh> OriginalColliderMeshes =
+            new Dictionary<MeshCollider, Mesh>();
+        private static readonly List<Mesh> TemporaryMeshes = new List<Mesh>();
         private static LevelConfig _base;
         private static string _path;
         private static bool _active;
@@ -48,6 +53,7 @@ namespace UnderPressure.Editor
 
         internal static void Cancel()
         {
+            RestoreTerrainMeshes();
             foreach (var pair in OriginalRendererMaterials)
                 if (pair.Key != null) pair.Key.sharedMaterials = pair.Value;
             OriginalRendererMaterials.Clear();
@@ -83,6 +89,7 @@ namespace UnderPressure.Editor
                 var cloned = (WorldState.Config)CloneMethod.Invoke(config, null);
                 cloned.HospitalPlots = prepared.Wrappers
                     .ConvertAll<FullInspector.SharedInstance<HospitalPlotDefinition>>(item => item);
+                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, prepared.Definitions);
                 config = cloned;
                 _plotAssets = prepared;
                 _active = true;
@@ -106,8 +113,13 @@ namespace UnderPressure.Editor
                 var root = roots.FirstOrDefault(t => t != null &&
                     t.name.StartsWith("Terrain_", StringComparison.OrdinalIgnoreCase));
                 if (root == null) return;
+                // EXACTAMENTE el mismo filtro y orden que usa el pintor al
+                // asignar indices a los Pass (alpha_N.png y terrain_mesh.bin).
                 var renderers = root.GetComponentsInChildren<Renderer>(true)
-                    .Where(r => r != null && r.gameObject.name.StartsWith("Pass", StringComparison.OrdinalIgnoreCase))
+                    .Where(r => r != null &&
+                        r.gameObject.name.StartsWith("Pass", StringComparison.OrdinalIgnoreCase) &&
+                        r.sharedMaterials != null && r.sharedMaterials.Length != 0 &&
+                        r.sharedMaterials[0] != null)
                     .ToList();
                 for (var i = 0; i < renderers.Count; i++)
                 {
@@ -133,10 +145,107 @@ namespace UnderPressure.Editor
                     assigned[0] = material;
                     renderer.sharedMaterials = assigned;
                 }
+                // Los PNG solo alteran las texturas; la geometria se restaura
+                // por separado desde terrain_mesh.bin tras cargar el nivel.
+                ApplyTerrainMeshes(folder, renderers);
             }
             catch (Exception ex)
             {
                 UnderPressureEditorPlugin.Log?.LogError("No se pudieron aplicar las texturas del mapa: " + ex);
+            }
+        }
+
+        private static void RestoreTerrainMeshes()
+        {
+            // Nunca dejar las mallas clonadas en otros hospitales o sesiones.
+            foreach (var pair in OriginalColliderMeshes)
+                if (pair.Key != null) pair.Key.sharedMesh = pair.Value;
+            OriginalColliderMeshes.Clear();
+            foreach (var pair in OriginalRendererMeshes)
+                if (pair.Key != null) pair.Key.sharedMesh = pair.Value;
+            OriginalRendererMeshes.Clear();
+            foreach (var mesh in TemporaryMeshes)
+                if (mesh != null) UnityEngine.Object.Destroy(mesh);
+            TemporaryMeshes.Clear();
+        }
+
+        private static void ApplyTerrainMeshes(string folder, IList<Renderer> passes)
+        {
+            var path = Path.Combine(folder, "terrain_mesh.bin");
+            if (!File.Exists(path)) return;
+            // No aplicar parcialmente un sidecar danado ni modificar los assets
+            // compartidos del juego. El formato UPM1 guarda Y local por pass.
+            try
+            {
+                using (var stream = File.OpenRead(path))
+                using (var reader = new BinaryReader(stream))
+                {
+                    if (reader.ReadInt32() != 0x55504D31)
+                        throw new InvalidDataException("terrain_mesh.bin: firma UPM1 no valida.");
+                    var total = reader.ReadInt32();
+                    if (total < 0 || total > passes.Count)
+                        throw new InvalidDataException("terrain_mesh.bin: numero de pases invalido.");
+                    var seen = new HashSet<int>();
+                    var applied = 0;
+                    for (var entryIndex = 0; entryIndex < total; ++entryIndex)
+                    {
+                        var passIndex = reader.ReadInt32();
+                        var vertexCount = reader.ReadInt32();
+                        if (passIndex < 0 || passIndex >= passes.Count || !seen.Add(passIndex) ||
+                            vertexCount < 0 || vertexCount > 2000000)
+                            throw new InvalidDataException("terrain_mesh.bin: indice o vertices invalidos.");
+                        var renderer = passes[passIndex];
+                        var filter = renderer.GetComponent<MeshFilter>();
+                        var source = filter == null ? null : filter.sharedMesh;
+                        if (source == null || !source.isReadable || source.vertexCount != vertexCount)
+                            throw new InvalidDataException("terrain_mesh.bin: malla incompatible en pase " + passIndex);
+                        // Leer todas las alturas antes de cambiar el filtro.
+                        var heights = new float[vertexCount];
+                        for (var v = 0; v < vertexCount; ++v)
+                        {
+                            var y = reader.ReadSingle();
+                            if (float.IsNaN(y) || float.IsInfinity(y))
+                                throw new InvalidDataException("terrain_mesh.bin: altura no valida.");
+                            heights[v] = y;
+                        }
+                        if (OriginalRendererMeshes.ContainsKey(filter))
+                            throw new InvalidOperationException("El terreno personalizado ya fue aplicado.");
+                        var cloned = UnityEngine.Object.Instantiate(source);
+                        cloned.name = source.name + "_UP_PLAYABLE_TERRAIN";
+                        var vertices = cloned.vertices;
+                        for (var v = 0; v < vertices.Length; ++v)
+                        {
+                            var position = vertices[v];
+                            position.y = heights[v];
+                            vertices[v] = position;
+                        }
+                        cloned.vertices = vertices;
+                        cloned.RecalculateBounds();
+                        cloned.RecalculateNormals();
+                        OriginalRendererMeshes.Add(filter, source);
+                        TemporaryMeshes.Add(cloned);
+                        filter.sharedMesh = cloned;
+                        var collider = filter.GetComponent<MeshCollider>();
+                        if (collider != null && collider.sharedMesh == source)
+                        {
+                            OriginalColliderMeshes.Add(collider, collider.sharedMesh);
+                            collider.sharedMesh = null;
+                            collider.sharedMesh = cloned;
+                        }
+                        applied++;
+                    }
+                    if (stream.Position != stream.Length)
+                        UnderPressureEditorPlugin.Log?.LogWarning(
+                            "terrain_mesh.bin contiene datos adicionales tras las mallas.");
+                    UnderPressureEditorPlugin.Log?.LogInfo(
+                        "Carrera: terrain_mesh.bin aplicado a " + applied + " mallas del mapa.");
+                }
+            }
+            catch (Exception ex)
+            {
+                RestoreTerrainMeshes();
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Carrera: no se pudo aplicar terrain_mesh.bin; se recuperaron las mallas originales: " + ex);
             }
         }
     }

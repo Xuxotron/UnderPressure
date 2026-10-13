@@ -129,3 +129,11 @@ scenario_editor.tooltip,Open the original scenario editor in an isolated session
 scenario_editor.base_scenario,Base scenario,Escenario base,,,,
 scenario_editor.edit,Edit scenario,Editar escenario,,,,
 scenario_editor.return_to_menu,Return to main menu,Volver al menú principal,,,,
+editor.map.styles,Map styles,Estilos del mapa,Styles de la carte,Kartenstile,Stili della mappa,Estilos do mapa
+editor.map.style.original,Original,Original,Original,Original,Original,Original
+editor.map.style.none,No perimeter,Sin perímetro,Aucun périmètre,Kein Umfang,Nessun perimetro,Sem perímetro
+editor.map.style.perimeter,Outer perimeter,Perímetro exterior,Périmètre extérieur,Äußerer Umfang,Perimetro esterno,Perímetro exterior
+editor.map.style.built,Built hospital,Hospital construido,Hôpital construit,Gebautes Krankenhaus,Ospedale costruito,Hospital construído
+editor.map.style.building,Under construction,Durante construcción,En construction,Im Bau,In costruzione,Em construção
+editor.map.style.unbuilt,Unbuilt plot,Parcela sin construir,Parcelle non construite,Unbebautes Grundstück,Lotto non costruito,Lote não construído
+editor.map.style.help,Styles are saved in the map and applied when it is reopened.,Los estilos se guardan en el mapa y se aplican al volver a abrirlo.,Les styles sont enregistrés dans la carte et appliqués à sa réouverture.,Stile werden in der Karte gespeichert und beim erneuten Öffnen angewendet.,Gli stili vengono salvati nella mappa e applicati alla riapertura.,Os estilos são guardados no mapa e aplicados quando ele é reaberto.

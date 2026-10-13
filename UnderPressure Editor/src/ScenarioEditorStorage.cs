@@ -1,4 +1,4 @@
-// Updated: 2026-10-13 - Transparencia real de parcelas y sincronizacion de Tile View
+// Updated: 2026-10-13 - Crear parcelas nuevas sin prefabs perimetrales
 // Fix: cerrar dialogo siempre y guardar identidad de prefab.
 // Crear parcelas desde subcursores y guardar capas JSON vacias sin perder objetos.
 // Alta de parcelas no destructiva: mantiene originales y registra controles nativos.
@@ -27,6 +27,12 @@ namespace UnderPressure.Editor
         // o de una carga completos, nunca al abrir un cuadro de dialogo.
         private static Level _namedMapLevel;
         private static string _namedMap;
+        private static Level _perimeterModeLevel;
+        private static string _perimeterMode = ScenarioMapFormat.PerimeterNone;
+        private static string[] _perimeterPrefabs = new string[0];
+        private static string _builtRoomStyle = "";
+        private static string _buildingRoomStyle = "";
+        private static string _unbuiltRoomStyle = "";
 
         internal static string CurrentMapName(Level level)
         {
@@ -45,6 +51,51 @@ namespace UnderPressure.Editor
             _namedMapLevel = level;
             _namedMap = name;
         }
+
+        internal static string CurrentPerimeterMode(Level level)
+        {
+            if (!ReferenceEquals(_perimeterModeLevel, level))
+            {
+                _perimeterModeLevel = level;
+                _perimeterMode = ScenarioMapFormat.PerimeterNone;
+                _perimeterPrefabs = new string[0];
+                _builtRoomStyle = "";
+                _buildingRoomStyle = "";
+                _unbuiltRoomStyle = "";
+            }
+            return _perimeterMode;
+        }
+
+        internal static void SetPerimeterMode(Level level, string mode)
+        {
+            _perimeterModeLevel = level;
+            _perimeterMode = ScenarioMapFormat.NormalizePerimeter(mode);
+        }
+
+        internal static ScenarioMapFormat.Map CurrentStyles(Level level)
+        {
+            CurrentPerimeterMode(level);
+            return new ScenarioMapFormat.Map
+            {
+                plotPerimeter = _perimeterMode,
+                perimeterPrefabs = (string[])_perimeterPrefabs.Clone(),
+                builtRoomStyle = _builtRoomStyle,
+                buildingRoomStyle = _buildingRoomStyle,
+                unbuiltRoomStyle = _unbuiltRoomStyle
+            };
+        }
+
+        internal static void SetStyles(Level level, ScenarioMapFormat.Map source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            _perimeterModeLevel = level;
+            _perimeterMode = ScenarioMapFormat.NormalizePerimeter(source.plotPerimeter);
+            _perimeterPrefabs = source.perimeterPrefabs == null
+                ? new string[0] : (string[])source.perimeterPrefabs.Clone();
+            _builtRoomStyle = source.builtRoomStyle ?? "";
+            _buildingRoomStyle = source.buildingRoomStyle ?? "";
+            _unbuiltRoomStyle = source.unbuiltRoomStyle ?? "";
+        }
         private static readonly System.Reflection.MethodInfo CloneMethod = typeof(object).GetMethod(
             "MemberwiseClone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         private static readonly System.Reflection.FieldInfo ItemsField =
@@ -53,6 +104,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(HospitalPlotDefinition), "BuiltItems");
         private static readonly System.Reflection.FieldInfo UnbuiltField =
             AccessTools.Field(typeof(HospitalPlotDefinition), "UnbuiltItems");
+        private static readonly System.Reflection.FieldInfo WorldConfigField =
+            AccessTools.Field(typeof(WorldState), "_config");
 
         internal sealed class MapInfo
         {
@@ -275,6 +328,12 @@ namespace UnderPressure.Editor
                 terrainManifest = ScenarioEditorTerrainPainter.GetManifest(level),
                 plots = refs.ToArray()
             };
+            var styles = CurrentStyles(level);
+            header.plotPerimeter = styles.plotPerimeter;
+            header.perimeterPrefabs = styles.perimeterPrefabs;
+            header.builtRoomStyle = styles.builtRoomStyle;
+            header.buildingRoomStyle = styles.buildingRoomStyle;
+            header.unbuiltRoomStyle = styles.unbuiltRoomStyle;
             // Verificar TODAS las parcelas antes de publicar el indice. Nunca
             // informar de un guardado correcto si ha desaparecido una capa.
             foreach (var entry in saved)
@@ -465,6 +524,7 @@ namespace UnderPressure.Editor
             var world = level.WorldState;
             var templates = level.Config.GetWorldStateConfig()?.HospitalPlots;
             var prepared = ScenarioPlotRuntime.Build(map, templates, level.App.Metagame);
+            var previousStyles = CurrentStyles(level);
             try
             {
                 // Compatibilidad con parcelas antiguas: RGB negro es zona externa,
@@ -481,14 +541,14 @@ namespace UnderPressure.Editor
                 var originalDefinitions = world.HospitalPlots.Select(plot => plot.Definition).ToList();
                 try
                 {
-                    ReplacePlots(level, prepared.Definitions);
+                    ReplacePlots(level, prepared.Definitions, map.Header);
                     RebindNativeEditorPlots(level);
                 }
                 catch
                 {
                     try
                     {
-                        ReplacePlots(level, originalDefinitions);
+                        ReplacePlots(level, originalDefinitions, previousStyles);
                         RebindNativeEditorPlots(level);
                     }
                     catch (Exception ex)
@@ -515,6 +575,7 @@ namespace UnderPressure.Editor
                 world.CalculateLighting();
                 world.UpdateNavigation();
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
+                SetStyles(level, map.Header);
                 MarkCurrentMap(level, map.Header.name);
             }
             catch
@@ -524,9 +585,13 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void ReplacePlots(Level level, IList<HospitalPlotDefinition> definitions)
+        private static void ReplacePlots(Level level, IList<HospitalPlotDefinition> definitions,
+            ScenarioMapFormat.Map styles)
         {
             var world = level.WorldState;
+            var worldConfig = WorldConfigField?.GetValue(world) as WorldState.Config;
+            if (worldConfig == null)
+                throw new InvalidOperationException("No se pudo acceder a la configuracion visual del hospital.");
             var existing = world.HospitalPlots.ToArray();
             foreach (var plot in existing)
             {
@@ -534,11 +599,26 @@ namespace UnderPressure.Editor
                 plot.Destroy();
             }
             world.HospitalPlots.Clear();
-            foreach (var definition in definitions)
+            var previousPrefabs = worldConfig.PerimeterPrefabs;
+            var previousBuilt = worldConfig._roomBuiltDefinition;
+            var previousBuilding = worldConfig._roomBuildingDefinition;
+            var previousUnbuilt = worldConfig._roomUnbuiltDefinition;
+            try
             {
-                var plot = new HospitalPlot(definition, world, level);
-                world.HospitalPlots.Add(plot);
-                level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(plot);
+                ScenarioHospitalStyles.Apply(level, styles, worldConfig, definitions);
+                foreach (var definition in definitions)
+                {
+                    var plot = new HospitalPlot(definition, world, level);
+                    world.HospitalPlots.Add(plot);
+                    level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(plot);
+                }
+            }
+            finally
+            {
+                worldConfig.PerimeterPrefabs = previousPrefabs;
+                worldConfig._roomBuiltDefinition = previousBuilt;
+                worldConfig._roomBuildingDefinition = previousBuilding;
+                worldConfig._roomUnbuiltDefinition = previousUnbuilt;
             }
         }
 
@@ -708,13 +788,32 @@ namespace UnderPressure.Editor
                 BuiltField.SetValue(def, new List<HospitalPlotItem>());
                 UnbuiltField.SetValue(def, new List<HospitalPlotItem>());
 
-                // Constructor nativo: Unbuilt crea temporalmente las vallas del solar.
-                // Al igual que CursorEditHospital, el Editor compra/construye su
-                // representacion para que el usuario edite suelo y objetos sin obras.
-                added = new HospitalPlot(def, world, level);
-                world.HospitalPlots.Add(added);
-                added.BuyAndBuildImmediately();
-                added.Close();
+                var worldConfig = WorldConfigField?.GetValue(world) as WorldState.Config;
+                if (worldConfig == null)
+                    throw new InvalidOperationException("No se pudo acceder a la configuracion del perimetro.");
+                var perimeterPrefabs = worldConfig.PerimeterPrefabs;
+                var builtRoom = worldConfig._roomBuiltDefinition;
+                var buildingRoom = worldConfig._roomBuildingDefinition;
+                var unbuiltRoom = worldConfig._roomUnbuiltDefinition;
+                try
+                {
+                    // HospitalMap captura PerimeterPrefabs en su constructor. Una
+                    // lista vacia crea la parcela sin instanciar barreras y queda
+                    // asociada solo a esta parcela nueva.
+                    ScenarioHospitalStyles.Apply(level, CurrentStyles(level), worldConfig,
+                        new[] { def });
+                    added = new HospitalPlot(def, world, level);
+                    world.HospitalPlots.Add(added);
+                    added.BuyAndBuildImmediately();
+                    added.Close();
+                }
+                finally
+                {
+                    worldConfig.PerimeterPrefabs = perimeterPrefabs;
+                    worldConfig._roomBuiltDefinition = builtRoom;
+                    worldConfig._roomBuildingDefinition = buildingRoom;
+                    worldConfig._roomUnbuiltDefinition = unbuiltRoom;
+                }
 
                 // El cursor nativo conserva un diccionario privado de previews:
                 // registrar SOLO la nueva parcela evita errores al usar Tile View.
@@ -932,6 +1031,12 @@ namespace UnderPressure.Editor
             PlotNames.Clear();
             _namedMapLevel = null;
             _namedMap = null;
+            _perimeterModeLevel = null;
+            _perimeterMode = ScenarioMapFormat.PerimeterNone;
+            _perimeterPrefabs = new string[0];
+            _builtRoomStyle = "";
+            _buildingRoomStyle = "";
+            _unbuiltRoomStyle = "";
         }
 
         private static void RequireEditor(Level level)
@@ -969,6 +1074,7 @@ namespace UnderPressure.Editor
         private Text _mapIdentityLabel;
         private Font _font;
         private HospitalPlot _selectedPlot;
+        private TMP_Dropdown _layerDropdown;
         private RectTransform _plotListViewport;
         private Button _addPlotButton;
         private Button _deletePlotButton;
@@ -987,6 +1093,8 @@ namespace UnderPressure.Editor
             _active = this;
             _menu = menu;
             _level = level;
+            _layerDropdown = AccessTools.Field(typeof(EditHospitalMenu), "_plotLayerDropdown")?
+                .GetValue(menu) as TMP_Dropdown;
             _template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?.GetValue(menu) as Button;
             if (_template == null)
             {
@@ -996,6 +1104,7 @@ namespace UnderPressure.Editor
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             AddToolbarButton(T("editor.map.save", "Guardar mapa"), 0, ShowSave);
             AddToolbarButton(T("editor.map.open", "Abrir mapa"), 1, ShowLoad);
+            AddStylesToolbarButton();
             InitialisePlotActions();
             _selectedPlot = level.WorldState.HospitalPlots.Count > 0
                 ? level.WorldState.HospitalPlots[0] : null;
@@ -1050,6 +1159,21 @@ namespace UnderPressure.Editor
             _buttons.Add(button.gameObject);
         }
 
+        private void AddStylesToolbarButton()
+        {
+            var button = CloneButton(_template, transform,
+                T("editor.map.styles", "Estilos del mapa"), ShowStyles);
+            var rect = button.transform as RectTransform;
+            if (rect != null)
+            {
+                rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+                rect.pivot = new Vector2(1f, 1f);
+                rect.anchoredPosition = new Vector2(-18f, -58f);
+                rect.sizeDelta = new Vector2(168f, 34f);
+            }
+            _buttons.Add(button.gameObject);
+        }
+
         private void OnPlotSelected(HospitalPlot plot)
         {
             _selectedPlot = plot;
@@ -1083,6 +1207,39 @@ namespace UnderPressure.Editor
             _buttons.Add(_addPlotButton.gameObject);
             _buttons.Add(_deletePlotButton.gameObject);
             PositionPlotActions();
+        }
+
+        // Atajos limitados a la sesion del Editor. InputManager.GetKeyDown
+        // ignora las teclas cuando el jugador esta editando un campo de texto.
+        private void Update()
+        {
+            if (_level == null || _menu == null || !ScenarioEditorSession.Active ||
+                !ReferenceEquals(ScenarioEditorSession.Level, _level) || IsDialogOpen)
+                return;
+
+            var input = _level.InputManager;
+            if (input == null) return;
+
+            for (int i = 0; i < ScenarioEditorHotkeyMap.PlotKeys.Length; i++)
+            {
+                if (!input.GetKeyDown(ScenarioEditorHotkeyMap.PlotKeys[i])) continue;
+                var plots = _level.WorldState?.HospitalPlots;
+                if (plots != null && i < plots.Count)
+                    _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plots[i]);
+                return;
+            }
+
+            for (int i = 0; i < ScenarioEditorHotkeyMap.LayerKeys.Length; i++)
+            {
+                if (!input.GetKeyDown(ScenarioEditorHotkeyMap.LayerKeys[i])) continue;
+                // Pasar por el desplegable nativo para mantener sincronizados
+                // el estado del cursor, el color del marco y el texto Base/Built/Unbuilt.
+                if (_layerDropdown != null)
+                    _layerDropdown.value = i;
+                else
+                    _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke((HospitalPlotLayer)i);
+                return;
+            }
         }
 
         private void LateUpdate()
@@ -1215,6 +1372,92 @@ namespace UnderPressure.Editor
                     UnderPressureEditorPlugin.Log?.LogError(exception);
                 }
             });
+        }
+
+        private void ShowStyles()
+        {
+            BuildDialog(T("editor.map.styles", "Estilos del mapa"));
+            if (_dialog == null) return;
+            var catalog = ScenarioHospitalStyles.Build(_level,
+                T("editor.map.style.original", "Original"),
+                T("editor.map.style.none", "Sin perímetro"));
+
+            AddStyleRow(T("editor.map.style.perimeter", "Perímetro exterior"), 66f,
+                catalog.Perimeters, choice =>
+                {
+                    var current = ScenarioEditorStorage.CurrentStyles(_level);
+                    current.plotPerimeter = choice.Mode;
+                    current.perimeterPrefabs = choice.PrefabNames ?? new string[0];
+                    ScenarioEditorStorage.SetStyles(_level, current);
+                }, () =>
+                {
+                    var current = ScenarioEditorStorage.CurrentStyles(_level);
+                    return catalog.Perimeters.FindIndex(choice =>
+                        choice.Mode == current.plotPerimeter &&
+                        (choice.Mode != ScenarioMapFormat.PerimeterCustom ||
+                         choice.PrefabNames.SequenceEqual(current.perimeterPrefabs)));
+                });
+            AddRoomStyleRow(T("editor.map.style.built", "Hospital construido"), 111f,
+                catalog.Built, map => map.builtRoomStyle, (map, value) => map.builtRoomStyle = value);
+            AddRoomStyleRow(T("editor.map.style.building", "Durante construcción"), 156f,
+                catalog.Building, map => map.buildingRoomStyle, (map, value) => map.buildingRoomStyle = value);
+            AddRoomStyleRow(T("editor.map.style.unbuilt", "Parcela sin construir"), 201f,
+                catalog.Unbuilt, map => map.unbuiltRoomStyle, (map, value) => map.unbuiltRoomStyle = value);
+            AddText(_dialogPanel, T("editor.map.style.help",
+                    "Los estilos se guardan en el mapa y se aplican al volver a abrirlo."),
+                20f, 247f, 492f, 38f, 15, TextAnchor.MiddleCenter);
+        }
+
+        private void AddRoomStyleRow(string title, float y,
+            IList<ScenarioHospitalStyles.RoomChoice> choices,
+            Func<ScenarioMapFormat.Map, string> get,
+            Action<ScenarioMapFormat.Map, string> set)
+        {
+            AddText(_dialogPanel, title, 18f, y, 220f, 35f, 17, TextAnchor.MiddleLeft);
+            var current = ScenarioEditorStorage.CurrentStyles(_level);
+            var index = choices.ToList().FindIndex(choice =>
+                string.Equals(choice.Id, get(current), StringComparison.Ordinal));
+            if (index < 0) index = 0;
+            Button button = null;
+            Action refresh = () =>
+            {
+                var label = button?.GetComponentInChildren<TMP_Text>(true);
+                if (label != null) label.text = choices[index].Label;
+            };
+            button = AddDialogButton(choices[index].Label, new Vector2(120f, -y - 17f), () =>
+            {
+                index = (index + 1) % choices.Count;
+                var map = ScenarioEditorStorage.CurrentStyles(_level);
+                set(map, choices[index].Id);
+                ScenarioEditorStorage.SetStyles(_level, map);
+                refresh();
+            });
+            var rect = button.transform as RectTransform;
+            if (rect != null) rect.sizeDelta = new Vector2(250f, 35f);
+        }
+
+        private void AddStyleRow(string title, float y,
+            IList<ScenarioHospitalStyles.PerimeterChoice> choices,
+            Action<ScenarioHospitalStyles.PerimeterChoice> select,
+            Func<int> currentIndex)
+        {
+            AddText(_dialogPanel, title, 18f, y, 220f, 35f, 17, TextAnchor.MiddleLeft);
+            var index = currentIndex();
+            if (index < 0) index = 0;
+            Button button = null;
+            Action refresh = () =>
+            {
+                var label = button?.GetComponentInChildren<TMP_Text>(true);
+                if (label != null) label.text = choices[index].Label;
+            };
+            button = AddDialogButton(choices[index].Label, new Vector2(120f, -y - 17f), () =>
+            {
+                index = (index + 1) % choices.Count;
+                select(choices[index]);
+                refresh();
+            });
+            var rect = button.transform as RectTransform;
+            if (rect != null) rect.sizeDelta = new Vector2(250f, 35f);
         }
 
         private void ShowLoad()
@@ -1524,6 +1767,46 @@ namespace UnderPressure.Editor
             foreach (var button in _buttons)
                 if (button != null) UnityEngine.Object.Destroy(button);
             _buttons.Clear();
+        }
+    }
+
+    // En el Editor se reservan las teclas numericas para seleccionar parcelas
+    // y F1-F3 para seleccionar las capas. Fuera del Editor, controles intactos.
+    internal static class ScenarioEditorHotkeyMap
+    {
+        internal static readonly KeyCode[] PlotKeys =
+        {
+            KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4,
+            KeyCode.Alpha5, KeyCode.Alpha6, KeyCode.Alpha7, KeyCode.Alpha8,
+            KeyCode.Alpha9, KeyCode.Alpha0
+        };
+
+        internal static readonly KeyCode[] LayerKeys =
+        {
+            KeyCode.F1, KeyCode.F2, KeyCode.F3
+        };
+
+        internal static bool HasReservedKeyDown()
+        {
+            foreach (var key in PlotKeys)
+                if (UnityEngine.Input.GetKeyDown(key)) return true;
+            foreach (var key in LayerKeys)
+                if (UnityEngine.Input.GetKeyDown(key)) return true;
+            return false;
+        }
+    }
+
+    // Los atajos de juego son acciones de Rewired: bloquearlas solo en los
+    // fotogramas de nuestros atajos evita abrir menus de hospital en paralelo.
+    [HarmonyPatch(typeof(InputManager), "GetButtonDown")]
+    internal static class ScenarioEditorReserveNativeHotkeysPatch
+    {
+        private static bool Prefix(ref bool __result)
+        {
+            if (!ScenarioEditorSession.Active || !ScenarioEditorHotkeyMap.HasReservedKeyDown())
+                return true;
+            __result = false;
+            return false;
         }
     }
 
