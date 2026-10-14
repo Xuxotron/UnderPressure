@@ -37,6 +37,14 @@ namespace UnderPressure.Editor
         {
             try
             {
+                var preferences = ScenarioEditorSession.Level?.App?.UserPreferences?.Language;
+                if (preferences != null)
+                {
+                    var selected = TH20.Preferences.LanguagePreferences.GetLanguageCode(
+                        preferences.SelectedLanguage);
+                    return NormalizeLanguageCode(selected);
+                }
+
                 var code = CurrentLanguageCodeProperty?.GetValue(null, null) as string;
                 return NormalizeLanguageCode(code);
             }

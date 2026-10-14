@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Capa Escenario independiente y compatibilidad de estilos del mapa
+﻿// Updated: 2026-10-14 - scene.json opcional e ignorado tras retirar Escenario experimental
 // Fix: identidad adicional de prefab para carga exacta (compatible con mapas sin el campo).
 // Preservar siempre Base/Built/Unbuilt en JSON, incluidas las capas vacias.
 // Formato nativo de UnderPressure: un indice .upmap JSON y un .json/.png por parcela.
@@ -103,6 +103,23 @@ namespace UnderPressure.Editor
         internal sealed class Scene
         {
             public Item[] items = new Item[0];
+            // Alteraciones de decoracion fija del nivel original.
+            // No se convierte ningun objeto en parcela ni se modifica el terreno.
+            public OriginalChange[] sourceChanges = new OriginalChange[0];
+        }
+
+        [Serializable]
+        internal sealed class OriginalChange
+        {
+            public string path = "";
+            public bool deleted;
+            public string guid = "";
+            public string tag = "";
+            public string prefab = "";
+            public float x;
+            public float y;
+            public float z;
+            public float rotation;
         }
 
         internal sealed class LoadedPlot
@@ -163,6 +180,10 @@ namespace UnderPressure.Editor
             var json = ReadText(path, MaxPlotBytes);
             var scene = JsonUtility.FromJson<Scene>(json) ?? new Scene();
             scene.items = ParseObjects<Item>(json, "items");
+            // Los mapas anteriores solo tenian items. Mantener compatibilidad.
+            scene.sourceChanges = json.Contains("\"sourceChanges\"")
+                ? ParseObjects<OriginalChange>(json, "sourceChanges")
+                : new OriginalChange[0];
             return scene;
         }
 
@@ -171,8 +192,11 @@ namespace UnderPressure.Editor
             var header = ReadHeader(file);
             var result = new LoadedMap { Header = header };
             var folder = Path.GetDirectoryName(Path.GetFullPath(file));
-            if (!string.IsNullOrWhiteSpace(header.sceneFile))
-                result.SceneData = ReadScene(Resolve(folder, header.sceneFile, ".json"));
+            // Escenario experimental retirado. Los mapas ya creados pueden
+            // seguir apuntando a scene.json: ignorarlo aun si no existe.
+            // Los objetos validos proceden exclusivamente de plot_XX.json.
+            // No se borra ni se reescribe ningun archivo antiguo.
+            result.SceneData = new Scene();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < header.plots.Length; ++i)
             {
@@ -369,8 +393,9 @@ namespace UnderPressure.Editor
 
         private static string SerializeScene(Scene scene)
         {
-            return ReplaceArray(JsonUtility.ToJson(scene, true),
+            var json = ReplaceArray(JsonUtility.ToJson(scene, true),
                 "items", SerializeObjects(scene.items));
+            return ReplaceArray(json, "sourceChanges", SerializeObjects(scene.sourceChanges));
         }
 
         private static string SerializeMap(Map map)

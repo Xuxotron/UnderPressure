@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Evitar cargar un save del hospital base al abrir un mapa .upmap.
+// Updated: 2026-10-14 - Restaurar decoracion nativa ingame; no ocultar LandscapeItems_Base.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -227,20 +227,10 @@ namespace UnderPressure.Editor
         internal static void LoadTerrain(Level level)
         {
             if (!_active || !Match(level) || _path == null) return;
-            // Evitar reconstruir la misma decoracion en cada intento de terreno.
-            if (!_sceneApplied)
-            {
-                try
-                {
-                    ScenarioEditorScene.Load(level, _map?.SceneData, false);
-                    _sceneApplied = true;
-                }
-                catch (Exception ex)
-                {
-                    UnderPressureEditorPlugin.Log?.LogError(
-                        "No se pudo cargar la decoracion global de Escenario: " + ex);
-                }
-            }
+            // No instanciar decoracion global experimental: podria restaurar
+            // objetos eliminados o duplicarlos encima de parcelas editables.
+            // scene.json anterior no se elimina del disco.
+            if (!_sceneApplied) _sceneApplied = true;
             if (_terrainApplied) return;
             try
             {

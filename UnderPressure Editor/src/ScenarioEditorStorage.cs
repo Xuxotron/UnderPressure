@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Restaurada visibilidad nativa: sin recoloracion de mallas ni superficies.
+// Updated: 2026-10-14 - Desactivar Escenario experimental y restaurar edicion nativa de parcelas.
 // Fix: cerrar dialogo siempre y guardar identidad de prefab.
 // Crear parcelas desde subcursores y guardar capas JSON vacias sin perder objetos.
 // Alta de parcelas no destructiva: mantiene originales y registra controles nativos.
@@ -238,6 +238,9 @@ namespace UnderPressure.Editor
             // mientras sigue pegada al cursor. Guardar entonces perderia objetos.
             // Los cursores retiran temporalmente los objetos que se estan moviendo
             // de FloorPlan y de HospitalPlotDefinition. No guardar hasta confirmar.
+            if (ScenarioEditorScene.IsDragging)
+                throw new InvalidOperationException(
+                    "Termina de colocar el objeto de Escenario antes de guardar.");
             if (level.CursorManager != null &&
                 (level.CursorManager.IsModeActive<CursorRoomMove>() ||
                  level.CursorManager.IsModeActive<CursorRoomItem>()))
@@ -319,15 +322,12 @@ namespace UnderPressure.Editor
                 ScenarioMapFormat.WriteJson(Path.Combine(folder, entry.Item1), entry.Item2);
                 ScenarioMapFormat.WriteBytes(Path.Combine(folder, entry.Item3), entry.Item4);
             }
-            var sceneSnapshot = ScenarioEditorScene.Capture();
-            const string sceneFilename = "scene.json";
-            ScenarioMapFormat.WriteJson(Path.Combine(folder, sceneFilename), sceneSnapshot);
-            var checkedScene = ScenarioMapFormat.ReadScene(Path.Combine(folder, sceneFilename));
-            if (checkedScene.items.Length != sceneSnapshot.items.Length)
-                throw new InvalidDataException("No se han guardado todos los objetos de Escenario.");
+            // Escenario experimental desactivado: no se generan objetos globales
+            // ni se vincula scene.json a mapas nuevos. Los archivos previos
+            // permanecen intactos en disco para evitar perdida de datos.
             var header = new ScenarioMapFormat.Map
             {
-                sceneFile = sceneFilename,
+                sceneFile = "",
                 name = name,
                 baseHospitalId = baseId,
                 baseHospitalName = baseName,
@@ -532,7 +532,9 @@ namespace UnderPressure.Editor
             var world = level.WorldState;
             var templates = level.Config.GetWorldStateConfig()?.HospitalPlots;
             var prepared = ScenarioPlotRuntime.Build(map, templates, level.App.Metagame);
-            ScenarioEditorScene.Validate(level, map.SceneData);
+            // No importar decoracion global experimental.
+            // Restaurar cualquier resto de una sesion anterior antes de editar.
+            ScenarioEditorScene.Clear();
             try
             {
                 // Compatibilidad con parcelas antiguas: RGB negro es zona externa,
@@ -586,7 +588,9 @@ namespace UnderPressure.Editor
                 world.UpdateNavigation();
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
-                ScenarioEditorScene.Load(level, map.SceneData, true);
+                // Evitar que decoracion original importada vuelva a mezclarse
+                // con objetos de parcelas. Solo permanecen objetos nativos.
+                ScenarioEditorFixedGeometry.Scan(level, true);
                 ScenarioEditorStorageMenu.NotifyLoadedMap();
                 MarkCurrentMap(level, map.Header.name);
             }
@@ -1093,9 +1097,22 @@ namespace UnderPressure.Editor
         {
             internal GameObject Visual;
             internal RoomItemDefinition Definition;
+            // Vacio = objeto nuevo; con valor = decoracion original convertida
+            // temporalmente en un prefab editable, sin tocar el terreno.
+            internal string SourcePath;
+            internal Vector3 BasePosition;
+            internal float BaseRotation;
         }
 
         private static readonly List<SceneObject> Objects = new List<SceneObject>();
+        private static readonly Dictionary<string, ScenarioMapFormat.OriginalChange> SourceChanges =
+            new Dictionary<string, ScenarioMapFormat.OriginalChange>(StringComparer.Ordinal);
+        private static readonly Dictionary<Renderer, bool> SourceRenderers =
+            new Dictionary<Renderer, bool>();
+        private static readonly Dictionary<Collider, bool> SourceColliders =
+            new Dictionary<Collider, bool>();
+        private static bool _sourcesExamined;
+        private static bool _loggedMissingSource;
         private static readonly Dictionary<HospitalPlot, HashSet<HospitalPlotLayer>> ModifiedLayers =
             new Dictionary<HospitalPlot, HashSet<HospitalPlotLayer>>();
 
@@ -1128,6 +1145,7 @@ namespace UnderPressure.Editor
         private static Vector3 _offset;
 
         internal static bool IsSelected => _selected && _editor && _level != null;
+        internal static bool IsDragging => _dragObject != null;
         internal static bool Visible => _visible;
         internal static SceneObject SelectedObject => _selectedObject;
         internal static IReadOnlyList<SceneObject> SceneObjects => Objects;
@@ -1150,6 +1168,7 @@ namespace UnderPressure.Editor
             _selected = true;
             _selectedObject = null;
             _selectedNativeItem = null;
+            ImportOriginalDecoration();
             UnderPressureEditorPlugin.Log?.LogInfo("Editor: capa Escenario seleccionada (tecla a la izquierda del 1).");
         }
 
@@ -1165,6 +1184,18 @@ namespace UnderPressure.Editor
             foreach (var entry in Objects)
                 if (entry?.Visual != null) UnityEngine.Object.Destroy(entry.Visual);
             Objects.Clear();
+            // Restaurar los estados encontrados al entrar. El codigo protegido
+            // ScenarioEditorFixedGeometry.Restore sigue siendo el responsable
+            // de restaurar los renderizadores estaticos del editor.
+            foreach (var state in SourceRenderers)
+                if (state.Key != null) state.Key.enabled = state.Value;
+            foreach (var state in SourceColliders)
+                if (state.Key != null) state.Key.enabled = state.Value;
+            SourceRenderers.Clear();
+            SourceColliders.Clear();
+            SourceChanges.Clear();
+            _sourcesExamined = false;
+            _loggedMissingSource = false;
             ModifiedLayers.Clear();
             if (_root != null) UnityEngine.Object.Destroy(_root);
             _root = null;
@@ -1189,6 +1220,15 @@ namespace UnderPressure.Editor
             _level = level;
             _editor = editor;
             SetVisible(true);
+            foreach (var change in data?.sourceChanges ?? new ScenarioMapFormat.OriginalChange[0])
+            {
+                if (change == null || string.IsNullOrEmpty(change.path) ||
+                    SourceChanges.ContainsKey(change.path))
+                    throw new InvalidDataException("Escenario: identidad original duplicada o vacia.");
+                SourceChanges.Add(change.path, change);
+            }
+            if (editor) ImportOriginalDecoration();
+            else ApplySourceChangesInGame();
             if (data?.items == null) return;
             foreach (var item in data.items)
             {
@@ -1262,7 +1302,8 @@ namespace UnderPressure.Editor
             var items = new List<ScenarioMapFormat.Item>();
             foreach (var entry in Objects)
             {
-                if (entry?.Visual == null || entry.Definition == null) continue;
+                if (entry?.Visual == null || entry.Definition == null ||
+                    !string.IsNullOrEmpty(entry.SourcePath)) continue;
                 var position = entry.Visual.transform.position;
                 var def = entry.Definition;
                 items.Add(new ScenarioMapFormat.Item
@@ -1274,6 +1315,23 @@ namespace UnderPressure.Editor
                 });
             }
             scene.items = items.ToArray();
+            // Conservar las eliminaciones incluso sin un prefab activo.
+            foreach (var entry in Objects)
+            {
+                if (entry?.Visual == null || string.IsNullOrEmpty(entry.SourcePath)) continue;
+                var pos = entry.Visual.transform.position;
+                var angle = entry.Visual.transform.eulerAngles.y;
+                if ((pos - entry.BasePosition).sqrMagnitude < .00001f &&
+                    Mathf.Abs(Mathf.DeltaAngle(angle, entry.BaseRotation)) < .01f)
+                {
+                    SourceChanges.Remove(entry.SourcePath);
+                    continue;
+                }
+                SourceChanges[entry.SourcePath] = DescribeOriginal(entry.SourcePath,
+                    entry.Definition, pos, angle, false);
+            }
+            scene.sourceChanges = SourceChanges.Values.OrderBy(v => v.path,
+                StringComparer.Ordinal).ToArray();
             return scene;
         }
 
@@ -1512,10 +1570,235 @@ namespace UnderPressure.Editor
             _awaitMouseRelease = false;
         }
 
+        // LOCALIZACION DE DECORACION ORIGINAL.
+        // LandscapeItems_Base existe en la escena Unity y no pertenece a ninguna
+        // parcela; sus renderizadores estaticos son ocultados en el editor por
+        // ScenarioEditorFixedGeometry (mecanismo protegido).
+        private static Transform OriginalRoot()
+        {
+            var found = GameObject.Find("LandscapeItems_Base");
+            return found != null ? found.transform : null;
+        }
+
+        private static string OriginalPath(Transform root, Transform node)
+        {
+            var parts = new List<string>();
+            for (var tr = node; tr != null && !ReferenceEquals(tr, root); tr = tr.parent)
+                parts.Add(tr.GetSiblingIndex().ToString(System.Globalization.CultureInfo.InvariantCulture));
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
+        }
+
+        private static Transform FindOriginal(Transform root, string path)
+        {
+            if (root == null || string.IsNullOrEmpty(path)) return null;
+            var tr = root;
+            foreach (var component in path.Split('/'))
+            {
+                int index;
+                if (!int.TryParse(component, out index) || index < 0 || index >= tr.childCount)
+                    return null;
+                tr = tr.GetChild(index);
+            }
+            return tr;
+        }
+
+        private static void HideSource(Transform source)
+        {
+            if (source == null) return;
+            foreach (var renderer in source.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                if (!SourceRenderers.ContainsKey(renderer))
+                    SourceRenderers.Add(renderer, renderer.enabled);
+                renderer.enabled = false;
+            }
+            foreach (var collider in source.GetComponentsInChildren<Collider>(true))
+            {
+                if (collider == null) continue;
+                if (!SourceColliders.ContainsKey(collider))
+                    SourceColliders.Add(collider, collider.enabled);
+                collider.enabled = false;
+            }
+        }
+
+        private static ScenarioMapFormat.OriginalChange DescribeOriginal(string path,
+            RoomItemDefinition definition, Vector3 position, float rotation, bool deleted)
+        {
+            return new ScenarioMapFormat.OriginalChange
+            {
+                path = path, deleted = deleted,
+                guid = definition?.GUID.ToString("D") ?? "",
+                tag = definition?.DebugTag ?? "",
+                prefab = definition?.GetPrefab(0)?.name ?? "",
+                x = position.x, y = position.y, z = position.z,
+                rotation = rotation
+            };
+        }
+
+        private static string NormalizedSourceName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "";
+            name = name.Trim();
+            if (name.EndsWith("(Clone)", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(0, name.Length - 7).Trim();
+            var paren = name.LastIndexOf('(');
+            if (paren > 0 && name.EndsWith(")", StringComparison.Ordinal))
+            {
+                int suffix;
+                if (int.TryParse(name.Substring(paren + 1, name.Length - paren - 2),
+                    out suffix)) name = name.Substring(0, paren).Trim();
+            }
+            return name;
+        }
+
+        private static bool AlreadyNative(Level level, RoomItemDefinition definition, Vector3 point)
+        {
+            foreach (var plot in level.WorldState.HospitalPlots)
+            {
+                var items = plot?.HospitalMap?.FloorPlan?.LandscapeItems;
+                if (items == null) continue;
+                foreach (var item in items)
+                {
+                    if (item == null || !ReferenceEquals(item.Definition, definition)) continue;
+                    var go = item.Visual?.GameObject;
+                    if (go != null && (go.transform.position - point).sqrMagnitude < .09f)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        private static void ImportOriginalDecoration()
+        {
+            if (_sourcesExamined || !_editor || _level?.WorldState == null) return;
+            var root = OriginalRoot();
+            if (root == null)
+            {
+                if (!_loggedMissingSource)
+                {
+                    _loggedMissingSource = true;
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Escenario: LandscapeItems_Base no disponible; se reintentara al seleccionar la capa.");
+                }
+                return;
+            }
+            var definitions = _level.App?.Metagame?.LandscapeItemDatabase?.Instance?.RoomItems;
+            if (definitions == null) return;
+            var prefabs = new Dictionary<string, RoomItemDefinition>(StringComparer.OrdinalIgnoreCase);
+            foreach (var reference in definitions)
+            {
+                var definition = reference?.Instance as RoomItemDefinition;
+                if (definition == null || definition.ItemType != RoomItemDefinition.Type.Landscape)
+                    continue;
+                try
+                {
+                    var prefab = definition.GetPrefab(0);
+                    if (prefab != null && !prefabs.ContainsKey(prefab.name))
+                        prefabs.Add(prefab.name, definition);
+                    var tag = definition.DebugTag;
+                    if (!string.IsNullOrEmpty(tag) && !prefabs.ContainsKey(tag))
+                        prefabs.Add(tag, definition);
+                }
+                catch { }
+            }
+            if (prefabs.Count == 0)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Escenario: todavia no hay prefabs de decoracion disponibles.");
+                return;
+            }
+            _sourcesExamined = true;
+            var imported = 0;
+            var skippedNative = 0;
+            var visited = new HashSet<Transform>();
+            foreach (var node in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (node == null || ReferenceEquals(node, root)) continue;
+                RoomItemDefinition definition;
+                if (!prefabs.TryGetValue(NormalizedSourceName(node.name), out definition)) continue;
+                // No convertir hijos de un objeto ya importado, aunque esten
+                // varios niveles por debajo de su raiz.
+                bool nested = false;
+                for (var ancestor = node.parent; ancestor != null &&
+                    !ReferenceEquals(ancestor, root); ancestor = ancestor.parent)
+                    if (visited.Contains(ancestor)) { nested = true; break; }
+                if (nested) continue;
+                visited.Add(node);
+                var key = OriginalPath(root, node);
+                var change = SourceChanges.TryGetValue(key, out var found) ? found : null;
+                if (AlreadyNative(_level, definition, node.position))
+                {
+                    ++skippedNative;
+                    continue;
+                }
+                // Se desactiva SOLO la decoracion original representada por este
+                // prefab; el terreno, las parcelas y la geometria no emparejada
+                // permanecen intactos.
+                HideSource(node);
+                if (change != null && change.deleted) continue;
+                var position = change == null ? node.position : new Vector3(change.x,change.y,change.z);
+                var rotation = change == null ? node.eulerAngles.y : change.rotation;
+                var visual = Add(definition, position, rotation);
+                if (visual != null)
+                {
+                    visual.SourcePath = key;
+                    visual.BasePosition = node.position;
+                    visual.BaseRotation = node.eulerAngles.y;
+                    ++imported;
+                }
+            }
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Escenario: " + imported + " adornos originales editables, " + skippedNative +
+                " representados por parcelas. Las mallas sin prefab reconocido no se modifican.");
+        }
+
+        private static void ApplySourceChangesInGame()
+        {
+            if (SourceChanges.Count == 0) return;
+            var root = OriginalRoot();
+            if (root == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Escenario: no se encontraron los objetos originales para aplicar los cambios.");
+                return;
+            }
+            foreach (var change in SourceChanges.Values)
+            {
+                var source = FindOriginal(root, change.path);
+                if (source == null)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Escenario: no se encontro el objeto original " + change.path);
+                    continue;
+                }
+                if (change.deleted)
+                {
+                    HideSource(source);
+                    continue;
+                }
+                var definition = FindDefinition(_level, new ScenarioMapFormat.Item
+                {
+                    guid = change.guid, tag = change.tag, prefab = change.prefab
+                });
+                if (definition == null)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Escenario: definicion no encontrada para " + change.path);
+                    continue;
+                }
+                HideSource(source);
+                Add(definition, new Vector3(change.x,change.y,change.z), change.rotation);
+            }
+        }
+
         private static void Remove(SceneObject entry)
         {
             if (entry == null) return;
             Objects.Remove(entry);
+            if (!string.IsNullOrEmpty(entry.SourcePath))
+                SourceChanges[entry.SourcePath] = DescribeOriginal(entry.SourcePath,
+                    entry.Definition, entry.BasePosition, entry.BaseRotation, true);
             if (entry.Visual != null) UnityEngine.Object.Destroy(entry.Visual);
         }
     }
@@ -1552,8 +1835,6 @@ namespace UnderPressure.Editor
         private RectTransform _plotListViewport;
         private Button _addPlotButton;
         private Button _deletePlotButton;
-        private Image _sceneSelectImage;
-        private Toggle _sceneVisibility;
         private int _initialVisibilityFrames;
         private Button _plotIsolationButton;
         private bool _plotIsolation;
@@ -1569,6 +1850,7 @@ namespace UnderPressure.Editor
         {
             if (_menu != null) return;
             _active = this;
+            ScenarioEditorScene.Clear();
             _menu = menu;
             _level = level;
             _layerDropdown = AccessTools.Field(typeof(EditHospitalMenu), "_plotLayerDropdown")?
@@ -1625,7 +1907,6 @@ namespace UnderPressure.Editor
                 "editor.map.hospital_line", hospital) + "\n" +
                 EditorLocalization.Format("editor.map.map_line",
                     ScenarioEditorStorage.CurrentMapName(_level));
-            RefreshSceneSelection();
         }
 
         private void AddToolbarButton(string name, int row, Action action)
@@ -1750,30 +2031,8 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogWarning("No hay panel nativo de parcelas.");
                 return;
             }
-            // Fila real de seleccion, independiente de HospitalPlots, con un
-            // interruptor de visibilidad. No clonar el boton Salir: conserva
-            // eventos persistentes propios del juego.
-            var row = AddUi("UP Escenario - fila", root);
-            var rowRect = row.GetComponent<RectTransform>();
-            rowRect.sizeDelta = new Vector2(211f, 25f);
-            var element = row.AddComponent<LayoutElement>();
-            element.minHeight = element.preferredHeight = 25f;
-            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
-            rowLayout.spacing = 2f;
-            rowLayout.childControlWidth = true;
-            rowLayout.childForceExpandWidth = false;
-            rowLayout.childControlHeight = true;
-            rowLayout.childForceExpandHeight = false;
-            var sceneSelectButton = MakeSceneSelectButton(row.transform);
-            var selectElement = sceneSelectButton.gameObject.AddComponent<LayoutElement>();
-            selectElement.flexibleWidth = 1f;
-            selectElement.minWidth = 151f;
-            _sceneVisibility = MakeSceneVisibility(row.transform);
-            row.transform.SetAsFirstSibling();
-            _buttons.Add(row);
-            RefreshSceneSelection();
-            // La lista tiene un ScrollRect; los botones van justo debajo de su
-            // viewport, no dentro del contenido que se desplaza.
+            // Conservar el panel y todas las filas de PlotSelectionItem nativas.
+            // Escenario experimental retirado: no se tocan padding ni LayoutGroup.
             var scroll = root.GetComponentInParent<ScrollRect>();
             _plotListViewport = scroll != null
                 ? scroll.GetComponent<RectTransform>()
@@ -1809,14 +2068,8 @@ namespace UnderPressure.Editor
                 SetPlotIsolation(!_plotIsolation);
                 return;
             }
-            if (ScenarioEditorHotkeyMap.SceneKeyPressed())
-            {
-                ScenarioEditorScene.Select(_level);
-                RefreshMapIdentity();
-                return;
-            }
-            ScenarioEditorScene.UpdateEditor(_level);
-            RefreshSceneSelection();
+            // Capa Escenario suspendida hasta que se identifiquen objetos
+            // originales editables sin duplicar las parcelas.
 
             for (int i = 0; i < ScenarioEditorHotkeyMap.PlotKeys.Length; i++)
             {
@@ -1899,66 +2152,6 @@ namespace UnderPressure.Editor
                         visual.SetActive(true);
                 }
             }
-        }
-
-        private Button MakeSceneSelectButton(Transform parent)
-        {
-            var obj = AddUi("UP Escenario - seleccionar", parent);
-            _sceneSelectImage = obj.AddComponent<Image>();
-            _sceneSelectImage.color = new Color(.35f, .39f, .43f, 1f);
-            var button = obj.AddComponent<Button>();
-            button.targetGraphic = _sceneSelectImage;
-            button.onClick.AddListener(() =>
-            {
-                ScenarioEditorScene.Select(_level);
-                RefreshMapIdentity();
-            });
-            var label = AddUi("Texto Escenario", obj.transform);
-            Stretch(label.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
-            var text = label.AddComponent<Text>();
-            text.font = _font;
-            text.fontSize = 12;
-            text.alignment = TextAnchor.MiddleCenter;
-            text.fontStyle = FontStyle.Bold;
-            text.color = Color.white;
-            text.text = T("editor.scene.layer");
-            text.raycastTarget = false;
-            return button;
-        }
-
-        private Toggle MakeSceneVisibility(Transform parent)
-        {
-            var root = AddUi("UP Escenario - visible", parent);
-            var width = root.AddComponent<LayoutElement>();
-            width.preferredWidth = width.minWidth = 26f;
-            var image = root.AddComponent<Image>();
-            image.color = new Color(.29f, .39f, .43f, 1f);
-            var toggle = root.AddComponent<Toggle>();
-            toggle.targetGraphic = image;
-            var check = AddUi("Marca de visibilidad", root.transform);
-            Stretch(check.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
-            var mark = check.AddComponent<Text>();
-            mark.font = _font;
-            mark.fontStyle = FontStyle.Bold;
-            mark.fontSize = 16;
-            mark.alignment = TextAnchor.MiddleCenter;
-            mark.text = "✔";
-            mark.color = Color.white;
-            mark.raycastTarget = false;
-            toggle.graphic = mark;
-            toggle.isOn = true;
-            toggle.onValueChanged.AddListener(value => ScenarioEditorScene.SetVisible(value));
-            return toggle;
-        }
-
-        private void RefreshSceneSelection()
-        {
-            if (_sceneSelectImage != null)
-                _sceneSelectImage.color = ScenarioEditorScene.IsSelected
-                    ? new Color(.23f, .53f, .71f, 1f)
-                    : new Color(.35f, .39f, .43f, 1f);
-            if (_sceneVisibility != null && _sceneVisibility.isOn != ScenarioEditorScene.Visible)
-                _sceneVisibility.isOn = ScenarioEditorScene.Visible;
         }
 
         private void PositionPlotActions()
@@ -2516,7 +2709,6 @@ namespace UnderPressure.Editor
         {
             if (ScenarioEditorSession.Active && UnityEngine.Input.GetKeyDown(KeyCode.CapsLock))
                 return true;
-            if (SceneKeyPressed()) return true;
             foreach (var key in PlotKeys)
                 if (UnityEngine.Input.GetKeyDown(key)) return true;
             foreach (var key in LayerKeys)
