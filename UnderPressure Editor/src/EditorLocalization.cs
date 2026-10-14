@@ -30,6 +30,9 @@ namespace UnderPressure.Editor
             return key;
         }
 
+        internal static string Format(string key, params object[] arguments) =>
+            string.Format(Get(key), arguments ?? new object[0]);
+
         private static string CurrentLanguageCode()
         {
             try

@@ -1,4 +1,4 @@
-<!-- Updated: 2026-10-13 -->
+<!-- Updated: 2026-10-13 - Mantener AnimationModule y excluir unicamente ScenarioNativeSaves.cs. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net471</TargetFramework>
@@ -34,6 +34,10 @@
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>..\Libs\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
@@ -72,6 +76,11 @@
       <HintPath>..\Libs\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- Solo se excluye el experimento retirado de guardado nativo. -->
+  <ItemGroup>
+    <Compile Remove="src\ScenarioNativeSaves.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,4 @@
-// Updated: 2026-10-13
+// Updated: 2026-10-14 - Capa Escenario independiente y compatibilidad de estilos del mapa
 // Fix: identidad adicional de prefab para carga exacta (compatible con mapas sin el campo).
 // Preservar siempre Base/Built/Unbuilt en JSON, incluidas las capas vacias.
 // Formato nativo de UnderPressure: un indice .upmap JSON y un .json/.png por parcela.
@@ -31,14 +31,13 @@ namespace UnderPressure.Editor
             public string baseHospitalName = "";
             public string description = "";
             public string terrainManifest = "";
-            // None equivale a una lista vacia como Flemington. Original conserva
-            // los prefabs definidos por el hospital base, incluidos los especiales.
             public string plotPerimeter = PerimeterNone;
             public string[] perimeterPrefabs = new string[0];
-            // Cadena vacia: conservar la definicion original del hospital base.
             public string builtRoomStyle = "";
             public string buildingRoomStyle = "";
             public string unbuiltRoomStyle = "";
+            // Optional, backwards compatible; not a plot and never bought.
+            public string sceneFile = "";
             public PlotReference[] plots = new PlotReference[0];
         }
 
@@ -100,6 +99,12 @@ namespace UnderPressure.Editor
             public float rotation;
         }
 
+        [Serializable]
+        internal sealed class Scene
+        {
+            public Item[] items = new Item[0];
+        }
+
         internal sealed class LoadedPlot
         {
             internal PlotReference Reference;
@@ -110,6 +115,7 @@ namespace UnderPressure.Editor
         internal sealed class LoadedMap
         {
             internal Map Header;
+            internal Scene SceneData = new Scene();
             internal readonly List<LoadedPlot> Plots = new List<LoadedPlot>();
         }
 
@@ -129,6 +135,7 @@ namespace UnderPressure.Editor
                 HasInvalidStyleId(header.builtRoomStyle) ||
                 HasInvalidStyleId(header.buildingRoomStyle) ||
                 HasInvalidStyleId(header.unbuiltRoomStyle) ||
+                HasInvalidStyleId(header.sceneFile) ||
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
                 throw new InvalidDataException("Cabecera .upmap incorrecta o version incompatible.");
             return header;
@@ -151,11 +158,21 @@ namespace UnderPressure.Editor
             throw new InvalidDataException("Modo de perimetro de parcelas desconocido: " + value);
         }
 
+        internal static Scene ReadScene(string path)
+        {
+            var json = ReadText(path, MaxPlotBytes);
+            var scene = JsonUtility.FromJson<Scene>(json) ?? new Scene();
+            scene.items = ParseObjects<Item>(json, "items");
+            return scene;
+        }
+
         internal static LoadedMap Read(string file)
         {
             var header = ReadHeader(file);
             var result = new LoadedMap { Header = header };
             var folder = Path.GetDirectoryName(Path.GetFullPath(file));
+            if (!string.IsNullOrWhiteSpace(header.sceneFile))
+                result.SceneData = ReadScene(Resolve(folder, header.sceneFile, ".json"));
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < header.plots.Length; ++i)
             {
@@ -350,6 +367,12 @@ namespace UnderPressure.Editor
             return ReplaceArray(json, "prerequisites", requirements.ToString());
         }
 
+        private static string SerializeScene(Scene scene)
+        {
+            return ReplaceArray(JsonUtility.ToJson(scene, true),
+                "items", SerializeObjects(scene.items));
+        }
+
         private static string SerializeMap(Map map)
         {
             return ReplaceArray(JsonUtility.ToJson(map, true), "plots", SerializeObjects(map.plots));
@@ -409,8 +432,10 @@ namespace UnderPressure.Editor
         {
             var plot = value as Plot;
             var map = value as Map;
+            var scene = value as Scene;
             var text = plot != null ? SerializePlot(plot) :
-                       map != null ? SerializeMap(map) : JsonUtility.ToJson(value, true);
+                       map != null ? SerializeMap(map) :
+                       scene != null ? SerializeScene(scene) : JsonUtility.ToJson(value, true);
             if (string.IsNullOrWhiteSpace(text))
                 throw new InvalidDataException("No se pudo serializar el JSON: " + path);
             var tmp = path + ".tmp";

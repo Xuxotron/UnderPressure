@@ -1,12 +1,11 @@
-// Updated: 2026-10-13 - El juego conserva por completo su flujo nativo de guardado.
-// El mod solo prepara los datos del mapa y registra sus parcelas para el serializador nativo.
+// Updated: 2026-10-14 - Evitar cargar un save del hospital base al abrir un mapa .upmap.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using FullInspector;
 using HarmonyLib;
+using FullInspector;
 using TH20;
 using UnityEngine;
 
@@ -14,15 +13,13 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioCareerMapLoader
     {
-        // Rango reservado para las parcelas de un unico mapa activo. Cada parcela
-        // usa un ID para la definicion y el siguiente para su SharedInstance.
         private const int PlotSaveIdBase = 9113000;
-        private static readonly MethodInfo CloneMethod = typeof(object).GetMethod("MemberwiseClone",
-            BindingFlags.NonPublic | BindingFlags.Instance);
         private static FieldInfo AssetIdsField =>
             AccessTools.Field(typeof(SaveSystem), "_assetIDs");
         private static readonly string[] SerializerFields =
             { "_serializerLevel", "_serializerMetagame", "_serializerRoomTemplates" };
+        private static readonly MethodInfo CloneMethod = typeof(object).GetMethod("MemberwiseClone",
+            BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly List<Texture2D> TemporaryTextures = new List<Texture2D>();
         private static readonly List<Material> TemporaryMaterials = new List<Material>();
         private static readonly Dictionary<Renderer, Material[]> OriginalRendererMaterials =
@@ -41,6 +38,9 @@ namespace UnderPressure.Editor
         private static readonly Dictionary<int, object> RegisteredSaveAssets =
             new Dictionary<int, object>();
         private static bool _worldConfigApplied;
+        private static bool _sceneApplied;
+        private static bool _terrainApplied;
+        private static ScenarioCareerMapTerrainRetry _retry;
         internal static bool IsCustomSession => _active || _path != null;
 
         internal static void Prepare(LevelConfig level, string path)
@@ -64,6 +64,10 @@ namespace UnderPressure.Editor
 
         internal static void Cancel()
         {
+            if (_retry != null) UnityEngine.Object.Destroy(_retry.gameObject);
+            _retry = null;
+            _sceneApplied = false;
+            _terrainApplied = false;
             RestoreTerrainMeshes();
             foreach (var pair in OriginalRendererMaterials)
                 if (pair.Key != null) pair.Key.sharedMaterials = pair.Value;
@@ -74,6 +78,7 @@ namespace UnderPressure.Editor
             foreach (var texture in TemporaryTextures)
                 if (texture != null) UnityEngine.Object.Destroy(texture);
             TemporaryTextures.Clear();
+            ScenarioEditorScene.Clear();
             UnregisterSaveAssets();
             _plotAssets?.DestroyAssets();
             _plotAssets = null;
@@ -194,7 +199,7 @@ namespace UnderPressure.Editor
             }
         }
 
-        // Prefijo del constructor WorldState: insertar la lista real de parcelas antes del foreach nativo.
+        // Insertar la lista de parcelas externas antes de construir WorldState.
         internal static void StartBuilding(ref WorldState.Config config, Level level, Metagame metagame)
         {
             if (!Match(level) || _map == null || config?.HospitalPlots == null) return;
@@ -222,13 +227,34 @@ namespace UnderPressure.Editor
         internal static void LoadTerrain(Level level)
         {
             if (!_active || !Match(level) || _path == null) return;
+            // Evitar reconstruir la misma decoracion en cada intento de terreno.
+            if (!_sceneApplied)
+            {
+                try
+                {
+                    ScenarioEditorScene.Load(level, _map?.SceneData, false);
+                    _sceneApplied = true;
+                }
+                catch (Exception ex)
+                {
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "No se pudo cargar la decoracion global de Escenario: " + ex);
+                }
+            }
+            if (_terrainApplied) return;
             try
             {
                 var folder = Path.GetDirectoryName(_path);
                 var roots = UnityEngine.Object.FindObjectsOfType<Transform>();
                 var root = roots.FirstOrDefault(t => t != null &&
                     t.name.StartsWith("Terrain_", StringComparison.OrdinalIgnoreCase));
-                if (root == null) return;
+                if (root == null)
+                {
+                    // OnLevelLoaded puede dispararse antes de que Terrain_ exista.
+                    // Reintentar durante la inicializacion, sin duplicar objetos.
+                    EnsureTerrainRetry(level);
+                    return;
+                }
                 // EXACTAMENTE el mismo filtro y orden que usa el pintor al
                 // asignar indices a los Pass (alpha_N.png y terrain_mesh.bin).
                 var renderers = root.GetComponentsInChildren<Renderer>(true)
@@ -237,6 +263,11 @@ namespace UnderPressure.Editor
                         r.sharedMaterials != null && r.sharedMaterials.Length != 0 &&
                         r.sharedMaterials[0] != null)
                     .ToList();
+                if (renderers.Count == 0)
+                {
+                    EnsureTerrainRetry(level);
+                    return;
+                }
                 for (var i = 0; i < renderers.Count; i++)
                 {
                     var path = Path.Combine(folder, "alpha_" + i + ".png");
@@ -264,12 +295,27 @@ namespace UnderPressure.Editor
                 // Los PNG solo alteran las texturas; la geometria se restaura
                 // por separado desde terrain_mesh.bin tras cargar el nivel.
                 ApplyTerrainMeshes(folder, renderers);
+                _terrainApplied = true;
+                if (_retry != null) UnityEngine.Object.Destroy(_retry.gameObject);
+                _retry = null;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Carrera: decoracion y terreno .upmap aplicados: " + _path);
             }
             catch (Exception ex)
             {
                 UnderPressureEditorPlugin.Log?.LogError("No se pudieron aplicar las texturas del mapa: " + ex);
             }
         }
+
+        private static void EnsureTerrainRetry(Level level)
+        {
+            if (_retry != null) return;
+            var gameObject = new GameObject("UP Career Terrain Loader");
+            _retry = gameObject.AddComponent<ScenarioCareerMapTerrainRetry>();
+            _retry.Initialise(level);
+        }
+
+        internal static bool IsTerrainApplied => _terrainApplied;
 
         private static void RestoreTerrainMeshes()
         {
@@ -366,6 +412,33 @@ namespace UnderPressure.Editor
         }
     }
 
+    // Correccion diferida sin archivos ni servicios adicionales.
+    internal sealed class ScenarioCareerMapTerrainRetry : MonoBehaviour
+    {
+        private Level _level;
+        private int _attempts;
+
+        internal void Initialise(Level level) => _level = level;
+
+        private void Update()
+        {
+            if (!ScenarioCareerMapLoader.IsCustomSession ||
+                ScenarioCareerMapLoader.IsTerrainApplied || _level == null)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            if (++_attempts > 300)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Carrera: terreno personalizado no disponible tras 300 fotogramas.");
+                Destroy(gameObject);
+                return;
+            }
+            ScenarioCareerMapLoader.LoadTerrain(_level);
+        }
+    }
+
     [HarmonyPatch(typeof(App), "LoadLevel", new[] {
         typeof(LevelConfig), typeof(SaveFileHeader), typeof(bool), typeof(bool) })]
     internal static class ScenarioCareerMapIgnoreSavePatch
@@ -380,18 +453,14 @@ namespace UnderPressure.Editor
                 return;
             }
             ScenarioCareerMapLoader.StartPreparingForLoad(__instance?.Metagame);
-            SaveFileHeader matching;
-            if (ScenarioCareerMapLoader.TryGetCurrentMapSave(
-                    __instance?.SaveSystem, __0.UniqueId, out matching))
-            {
-                __1 = matching;
-                __2 = false;
-            }
-            else
-            {
-                __1 = null;
-                __2 = true;
-            }
+            // GetSaveForLevel(baseId) devuelve tambien partidas del hospital
+            // ORIGINAL. Esas partidas sustituyen las parcelas del .upmap al
+            // deserializarse. Hasta que haya identificacion propia del mapa
+            // no se admite recuperarlas como si fueran de este escenario.
+            __1 = null;
+            __2 = true;
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Carrera: iniciando el .upmap como escenario nuevo, sin save del hospital base.");
         }
     }
 

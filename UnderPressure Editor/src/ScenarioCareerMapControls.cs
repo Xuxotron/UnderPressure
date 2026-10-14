@@ -1,5 +1,5 @@
-// Updated: 2026-10-13 — mueve SOLO el contenedor nativo, zoom lejano 1.60x y hospitales visibles.
-// Recoloca la botonera nativa sin cambiar el tamaño de sus tres botones.
+// Updated: 2026-10-13 - Ubicacion correcta de botones nativos arriba; extras 5 px sobre el panel.
+// Conserva la jerarquia y los eventos nativos; no mueve el menu animado.
 // Los botones nuevos sólo alteran la cámara y la representación de hospitales;
 // no conceden estrellas, desbloqueos ni licencias DLC.
 using System;
@@ -59,10 +59,11 @@ namespace UnderPressure.Editor
         private bool _allHospitals;
         private float _originalFarClip;
         private bool _initialised;
-        private bool _nativeGroupPositioned;
-        private Vector2 _lastCanvasSize;
-        private RectTransform _nativeMenuRect;
-        private Vector3 _originalMenuPosition;
+        // Distancias fijas: el hover nativo no reordena los botones.
+        private readonly float[] _nativeWidths = new float[3];
+        private readonly float[] _nativeHeights = new float[3];
+        private bool _nativeMeasuresReady;
+        private bool _canvasCallbackRegistered;
 
         internal static bool ShowingAllHospitals => _current != null && _current._allHospitals;
 
@@ -99,11 +100,8 @@ namespace UnderPressure.Editor
                 return;
             }
             _nativeButtons = new[] { options, career, leaderboard };
-            // Los botones originales nunca cambian de padre, posicion relativa,
-            // tamano, estado ni listeners. Mover exclusivamente su menu nativo.
-            _nativeMenuRect = menu.transform as RectTransform;
-            if (_nativeMenuRect != null)
-                _originalMenuPosition = _nativeMenuRect.anchoredPosition3D;
+            // Los tres botones se mantienen dentro del MetagameButtonsMenu original.
+            // No mover su raiz: el Animator del juego restaura su transform.
             _originalFarClip = map.CameraLogic?.CameraComponent != null
                 ? map.CameraLogic.CameraComponent.farClipPlane : 0f;
             _current = this;
@@ -111,10 +109,15 @@ namespace UnderPressure.Editor
             try
             {
                 // El prefab existente sirve como origen visual: no se inventan sprites ni shaders.
-                _zoomButton = CreateNativeButton(options, "UP_MapMoreZoom", "More Zoom", ZoomPressed);
-                _hospitalsButton = CreateNativeButton(options, "UP_MapAllHospitals", "All Hospitals", HospitalsPressed);
+                _zoomButton = CreateNativeButton(options, "UP_MapMoreZoom",
+                    EditorLocalization.Get("career.map.more_zoom"), ZoomPressed);
+                _hospitalsButton = CreateNativeButton(options, "UP_MapAllHospitals",
+                    EditorLocalization.Get("career.map.all_hospitals"), HospitalsPressed);
                 ArrangeExtraButtons();
-                UnderPressureEditorPlugin.Log?.LogInfo("Minimapa: botones nativos recolocados y opciones visibles.");
+                Canvas.willRenderCanvases += PositionNativeButtonsBeforeRender;
+                _canvasCallbackRegistered = true;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Minimapa: posicionamiento visual nativo, sin reparentar ni alterar callbacks.");
             }
             catch (Exception exception)
             {
@@ -161,29 +164,54 @@ namespace UnderPressure.Editor
         private void ArrangeExtraButtons()
         {
             if (_canvasRect == null) return;
-            // Justo encima del panel gris inferior derecho. No ocupa su contenido.
+            // Los botones adicionales van 5 px por encima del panel de fundacion.
+            // Si la raiz del panel nativo incluye margen invisible, se usa una
+            // distancia segura al borde inferior como alternativa.
             const float right = 14f;
-            const float bottom = 145f;
             const float gap = 8f;
+            float bottom = 164f;
+            var foundation = _map?.HUD?.FindMenu<FoundationStatusMenu>(false);
+            var frame = foundation == null ? null : foundation.transform as RectTransform;
+            if (frame != null && frame.gameObject.activeInHierarchy)
+            {
+                var corners = new Vector3[4];
+                frame.GetWorldCorners(corners);
+                float top = float.NegativeInfinity;
+                float minX = float.PositiveInfinity;
+                for (int i = 0; i < 4; i++)
+                {
+                    var point = _canvasRect.InverseTransformPoint(corners[i]);
+                    top = Mathf.Max(top, point.y);
+                    minX = Mathf.Min(minX, point.x);
+                }
+                var bounds = _canvasRect.rect;
+                if (top > bounds.yMin + 60f &&
+                    top < bounds.yMin + bounds.height * 0.48f &&
+                    minX > bounds.xMin + bounds.width * 0.45f)
+                    bottom = top - bounds.yMin + 5f;
+            }
             if (_hospitalsButton != null)
             {
                 var r = _hospitalsButton.transform as RectTransform;
-                r.anchoredPosition = new Vector2(-right, bottom);
+                if (r != null) r.anchoredPosition = new Vector2(-right, bottom);
             }
             if (_zoomButton != null)
             {
                 var r = _zoomButton.transform as RectTransform;
                 var rightButton = _hospitalsButton?.transform as RectTransform;
-                var width = rightButton == null ? r.rect.width : rightButton.rect.width;
-                r.anchoredPosition = new Vector2(-right - width - gap, bottom);
+                if (r != null)
+                {
+                    float width = rightButton == null ? r.rect.width : rightButton.rect.width;
+                    r.anchoredPosition = new Vector2(-right - width - gap, bottom);
+                }
             }
         }
 
         private void LateUpdate()
         {
             if (!_initialised || _canvasRect == null || _nativeMenu == null) return;
-            // Sólo los dos botones añadidos siguen el menú de pausa.
-            // Carrera y Marcadores conservan íntegramente la lógica nativa.
+            // SOLO los dos botones nuevos desaparecen con el menu de pausa.
+            // Los tres nativos conservan el control de visibilidad del juego.
             var hud = _map == null ? null : _map.HUD;
             bool pauseOpen = hud != null && hud.IsOptionsMenuOpen;
             bool visible = !pauseOpen && _nativeMenu.gameObject.activeInHierarchy;
@@ -191,58 +219,61 @@ namespace UnderPressure.Editor
                 _zoomButton.gameObject.SetActive(visible);
             if (_hospitalsButton != null && _hospitalsButton.gameObject.activeSelf != visible)
                 _hospitalsButton.gameObject.SetActive(visible);
-            // No usar SetActive sobre los tres botones originales: de ello se
-            // encarga MetagameButtonsMenu (también cuando abre Carrera/Marcadores).
-            if (!_nativeMenu.gameObject.activeInHierarchy) return;
-            // Los cambios de hover nunca deben mover el grupo: solo se coloca una vez
-            // (o cuando realmente cambia el tamaño de la ventana).
-            if ((_lastCanvasSize - _canvasRect.rect.size).sqrMagnitude > 4f)
-                _nativeGroupPositioned = false;
-            if (!_nativeGroupPositioned) MoveNativeButtonGroup();
         }
 
-        private static bool IsVisible(AnimatedMenuBase menu)
+        private void PositionNativeButtonsBeforeRender()
         {
-            return menu != null && !menu.IsClosed() && !menu.IsClosing();
-        }
+            if (!_initialised || _canvasRect == null || _nativeMenu == null ||
+                !_nativeMenu.gameObject.activeInHierarchy ||
+                _nativeMenu.IsClosed() || _nativeMenu.IsClosing()) return;
 
-        private void MoveNativeButtonGroup()
-        {
-            if (_nativeButtons == null || _nativeMenuRect == null ||
-                _nativeMenuRect.parent == null || _canvasRect == null) return;
-
-            // Tomar las esquinas VISIBLES de los tres botones, no el rect
-            // completo del menu (que puede incluir zonas transparentes).
-            float rightMost = float.NegativeInfinity;
-            float topMost = float.NegativeInfinity;
+            // El menu tiene animacion nativa: mover su RectTransform no funciona
+            // porque el Animator lo devuelve al borde inferior. Se desplazan
+            // exclusivamente los botones, manteniendo cada uno su padre original,
+            // listeners, escala, layout y comportamientos de apertura/cierre.
             var corners = new Vector3[4];
-            foreach (var button in _nativeButtons)
+            if (!_nativeMeasuresReady)
             {
-                if (button == null) continue;
-                var rect = button.transform as RectTransform;
-                if (rect == null) continue;
-                rect.GetWorldCorners(corners);
-                for (int i = 0; i < corners.Length; ++i)
+                for (int i = 0; i < _nativeButtons.Length; i++)
                 {
-                    var p = _canvasRect.InverseTransformPoint(corners[i]);
-                    rightMost = Mathf.Max(rightMost, p.x);
-                    topMost = Mathf.Max(topMost, p.y);
+                    var rect = _nativeButtons[i]?.transform as RectTransform;
+                    if (rect == null) return;
+                    rect.GetWorldCorners(corners);
+                    var a = _canvasRect.InverseTransformPoint(corners[0]);
+                    var b = _canvasRect.InverseTransformPoint(corners[2]);
+                    _nativeWidths[i] = Mathf.Abs(b.x - a.x);
+                    _nativeHeights[i] = Mathf.Abs(b.y - a.y);
+                    if (_nativeWidths[i] < 24f || _nativeHeights[i] < 12f) return;
                 }
+                _nativeMeasuresReady = true;
             }
-            if (float.IsNegativeInfinity(rightMost) ||
-                float.IsNegativeInfinity(topMost)) return;
 
-            // SOLO se traslada MetagameButtonsMenu completo. De esta manera
-            // el juego controla sus 3 botones, el hover, la apertura y cierre.
-            var targetRight = _canvasRect.rect.xMax - 105f;
-            var targetTop = _canvasRect.rect.yMax - 17f;
-            var deltaCanvas = new Vector3(targetRight - rightMost,
-                targetTop - topMost, 0f);
-            var deltaWorld = _canvasRect.TransformVector(deltaCanvas);
-            var deltaParent = _nativeMenuRect.parent.InverseTransformVector(deltaWorld);
-            _nativeMenuRect.anchoredPosition3D += deltaParent;
-            _nativeGroupPositioned = true;
-            _lastCanvasSize = _canvasRect.rect.size;
+            // Orden original visual: Menu, Carrera, Marcadores; el ultimo queda
+            // a la izquierda del boton nativo de incidencias.
+            float right = _canvasRect.rect.xMax - 96f;
+            float top = _canvasRect.rect.yMax - 17f;
+            const float gap = 8f;
+            for (int i = _nativeButtons.Length - 1; i >= 0; i--)
+            {
+                var rect = _nativeButtons[i]?.transform as RectTransform;
+                if (rect == null) continue;
+                float width = _nativeWidths[i];
+                float height = _nativeHeights[i];
+                float centerX = right - width * 0.5f;
+                float centerY = top - height * 0.5f;
+                right -= width + gap;
+                if (!rect.gameObject.activeInHierarchy) continue;
+
+                rect.GetWorldCorners(corners);
+                var a = _canvasRect.InverseTransformPoint(corners[0]);
+                var b = _canvasRect.InverseTransformPoint(corners[2]);
+                var displacement = new Vector3(centerX - (a.x + b.x) * 0.5f,
+                    centerY - (a.y + b.y) * 0.5f, 0f);
+                if (displacement.sqrMagnitude > 0.01f)
+                    rect.position += _canvasRect.TransformVector(displacement);
+            }
+            // No se usa SetParent, SetActive ni se modifica onPrimaryDown de
+            // ninguno de los botones nativos.
         }
 
         private void ZoomPressed()
@@ -283,15 +314,17 @@ namespace UnderPressure.Editor
 
         private void OnDestroy()
         {
+            if (_canvasCallbackRegistered)
+            {
+                Canvas.willRenderCanvases -= PositionNativeButtonsBeforeRender;
+                _canvasCallbackRegistered = false;
+            }
             if (_current != this) return;
             _allHospitals = false;
             _moreZoom = false;
             if (_map?.CameraLogic?.CameraComponent != null && _originalFarClip > 0f)
                 _map.CameraLogic.CameraComponent.farClipPlane = _originalFarClip;
             _current = null;
-            // Restaurar solo la posicion del contenedor original.
-            if (_nativeMenuRect != null)
-                _nativeMenuRect.anchoredPosition3D = _originalMenuPosition;
         }
 
         internal static void RevealHospital(MapPinHospital pin)

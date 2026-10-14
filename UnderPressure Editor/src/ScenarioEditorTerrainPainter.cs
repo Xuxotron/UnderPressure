@@ -1,4 +1,4 @@
-// Updated: 2026-10-13 - Escultura sincronizada por X/Z; la capa superior guia a las inferiores.
+// Updated: 2026-10-14 - Panel de pintura elevado sobre el catalogo de objetos.
 // Pincel de terreno: UV reales, proyeccion de emergencia y mezcla normalizada entre pasadas.
 // Destino: UnderPressure Editor/src/ScenarioEditorTerrainPainter.cs
 using System;
@@ -304,7 +304,7 @@ namespace UnderPressure.Editor
             rect.anchorMin = new Vector2(1f, 0f);
             rect.anchorMax = new Vector2(1f, 0f);
             rect.pivot = new Vector2(1f, 0f);
-            rect.anchoredPosition = new Vector2(-14f, 145f);
+            rect.anchoredPosition = new Vector2(-14f, 285f); // Subir panel completo; no invade objetos.
             rect.sizeDelta = new Vector2(180f, 575f);
             var image = go.GetComponent<Image>();
             image.color = new Color(0f, 0f, 0f, 0.55f);
@@ -1553,51 +1553,48 @@ namespace UnderPressure.Editor
         private RectTransform _content;
         private ScrollRect _scroll;
 
-        private static string T(string key, string fallback)
-        {
-            var value = EditorLocalization.Get(key);
-            return string.IsNullOrEmpty(value) || value == key ? fallback : value;
-        }
+        private static string T(string key) => EditorLocalization.Get(key);
 
         internal void BuildUi()
         {
             var root = (RectTransform)transform;
-            CreateText(root, "Title", T("editor.terrain.title", "Pincel de terreno"),
+            CreateText(root, "Title", T("editor.terrain.title"),
                 new Vector2(9, -9), new Vector2(162, 24), 16, TextAnchor.MiddleCenter);
-            CreateButton(root, new Vector2(9, -39), new Vector2(162, 32), "Pincel", () =>
+            CreateButton(root, new Vector2(9, -39), new Vector2(162, 32),
+                T("editor.terrain.brush"), () =>
                 ScenarioEditorTerrainPainter.ToggleBrush(), out _toggleText);
-            CreateText(root, "Size", T("editor.terrain.size", "Tamaño"),
+            CreateText(root, "Size", T("editor.terrain.size"),
                 new Vector2(9, -80), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
             _sizeText = CreateText(root, "SizeValue", "5", new Vector2(121, -80),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
             _sizeSlider = CreateSlider(root, new Vector2(12, -108), new Vector2(156, 17), 1, 20, 5,
                 value => ScenarioEditorTerrainPainter.SetBrushSize(value));
-            CreateText(root, "Opacity", T("editor.terrain.opacity", "Opacidad"),
+            CreateText(root, "Opacity", T("editor.terrain.opacity"),
                 new Vector2(9, -133), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
             _opacityText = CreateText(root, "OpacityValue", "50%", new Vector2(121, -133),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
             _opacitySlider = CreateSlider(root, new Vector2(12, -162), new Vector2(156, 17), 0, 100, 50,
                 value => ScenarioEditorTerrainPainter.SetBrushOpacity(value));
             CreateButton(root, new Vector2(9, -191), new Vector2(162, 31),
-                T("editor.terrain.clear", "Limpiar mapa"), ShowClearConfirmation, out _);
+                T("editor.terrain.clear"), ShowClearConfirmation, out _);
             CreateButton(root, new Vector2(9, -228), new Vector2(51, 28),
-                "Elevar", () => ScenarioEditorTerrainPainter.SelectSculptMode(
+                T("editor.terrain.raise"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Raise), out _);
             CreateButton(root, new Vector2(65, -228), new Vector2(51, 28),
-                "Bajar", () => ScenarioEditorTerrainPainter.SelectSculptMode(
+                T("editor.terrain.lower"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Lower), out _);
             CreateButton(root, new Vector2(121, -228), new Vector2(51, 28),
-                "Plano", () => ScenarioEditorTerrainPainter.SelectSculptMode(
+                T("editor.terrain.flatten"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
             CreateButton(root, new Vector2(9, -263), new Vector2(162, 30),
-                "Profundidad de campo", () =>
+                T("editor.terrain.depth_of_field"), () =>
                 {
                     ScenarioEditorDepthOfField.Toggle();
                     RefreshTexts();
                 }, out _depthText);
             CreateButton(root, new Vector2(9, -298), new Vector2(162, 30),
-                "Wireframe del terreno", () => ScenarioEditorTerrainPainter.ToggleWireframe(),
+                T("editor.terrain.wireframe"), () => ScenarioEditorTerrainPainter.ToggleWireframe(),
                 out _wireText);
             var scrollRoot = NewUi("Textures", root, typeof(Image), typeof(ScrollRect));
             var scrollRect = (RectTransform)scrollRoot.transform;
@@ -1802,13 +1799,12 @@ namespace UnderPressure.Editor
             pr.pivot=new Vector2(.5f,.5f);
             pr.sizeDelta=new Vector2(480f,214f);
             panel.GetComponent<Image>().color=new Color(.22f,.26f,.29f,.98f);
-            CreateText(panel.transform,"Warning",T("editor.terrain.clear.warning",
-                "¿Limpiar el mapa? Se perderán todos los objetos y las texturas que no hayas guardado."),
+            CreateText(panel.transform,"Warning",T("editor.terrain.clear.warning"),
                 new Vector2(20,-27),new Vector2(440,95),17,TextAnchor.MiddleCenter);
             CreateButton(panel.transform,new Vector2(33,-161),new Vector2(190,39),
-                T("editor.terrain.clear.cancel","Cancelar"),CloseDialog,out _);
+                T("editor.terrain.clear.cancel"),CloseDialog,out _);
             CreateButton(panel.transform,new Vector2(255,-161),new Vector2(190,39),
-                T("editor.terrain.clear.accept","Limpiar"),() =>
+                T("editor.terrain.clear.accept"),() =>
                 {
                     CloseDialog();
                     ScenarioEditorTerrainPainter.ClearMap(ScenarioEditorSession.Level);
@@ -1898,23 +1894,26 @@ namespace UnderPressure.Editor
 
         internal void RefreshTexts()
         {
-            if (_wireText != null) _wireText.text = ScenarioEditorTerrainPainter.WireframeEnabled ?
-                "Wireframe: ON" : "Wireframe: OFF";
+            if (_wireText != null) _wireText.text = T(
+                ScenarioEditorTerrainPainter.WireframeEnabled
+                    ? "editor.terrain.wireframe.on" : "editor.terrain.wireframe.off");
             if (_depthText != null)
-                _depthText.text = ScenarioEditorDepthOfField.Disabled ?
-                    "Profundidad: OFF" : "Profundidad: ON";
+                _depthText.text = T(ScenarioEditorDepthOfField.Disabled
+                    ? "editor.terrain.depth.off" : "editor.terrain.depth.on");
             if (_toggleText != null)
                 _toggleText.text = ScenarioEditorTerrainPainter.SculptMeshUnavailable ?
-                    "Malla no editable" :
+                    T("editor.terrain.mesh_uneditable") :
                     ScenarioEditorTerrainPainter.CurrentSculptMode !=
                     ScenarioEditorTerrainPainter.SculptMode.Off ?
-                    "Modelado: " + (ScenarioEditorTerrainPainter.CurrentSculptMode ==
-                        ScenarioEditorTerrainPainter.SculptMode.Raise ? "Elevar" :
+                    EditorLocalization.Format("editor.terrain.sculpting",
+                        T(ScenarioEditorTerrainPainter.CurrentSculptMode ==
+                        ScenarioEditorTerrainPainter.SculptMode.Raise ? "editor.terrain.raise" :
                         ScenarioEditorTerrainPainter.CurrentSculptMode ==
-                        ScenarioEditorTerrainPainter.SculptMode.Lower ? "Bajar" : "Aplanar") :
+                        ScenarioEditorTerrainPainter.SculptMode.Lower ? "editor.terrain.lower" :
+                        "editor.terrain.flatten")) :
                     ScenarioEditorTerrainPainter.BrushEnabled ?
-                    T("editor.terrain.brush.on", "Pincel: ON") :
-                    T("editor.terrain.brush.off", "Pincel: OFF");
+                    T("editor.terrain.brush.on") :
+                    T("editor.terrain.brush.off");
             if (_sizeText!=null) _sizeText.text=ScenarioEditorTerrainPainter.BrushSize.ToString("0",CultureInfo.InvariantCulture);
             if (_opacityText!=null) _opacityText.text=Mathf.RoundToInt(ScenarioEditorTerrainPainter.BrushOpacity*100f)+"%";
             if (_sizeSlider!=null && Mathf.Abs(_sizeSlider.value-ScenarioEditorTerrainPainter.BrushSize)>.1f)

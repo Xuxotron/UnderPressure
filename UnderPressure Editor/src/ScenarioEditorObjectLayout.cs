@@ -190,8 +190,7 @@ namespace UnderPressure.Editor
                 label.font = input.textComponent.font;
                 label.fontSize = Mathf.Min(input.textComponent.fontSize, 17f);
             }
-            var translated = EditorLocalization.Get("editor.objects.search");
-            label.text = translated == "editor.objects.search" ? "Buscar:" : translated;
+            label.text = EditorLocalization.Get("editor.objects.search");
             label.alignment = TextAlignmentOptions.MidlineLeft;
             label.color = Color.white;
             label.raycastTarget = false;

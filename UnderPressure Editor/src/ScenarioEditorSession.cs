@@ -160,7 +160,7 @@ namespace UnderPressure.Editor
             if (button == null) return;
             button.interactable = true;
             var label = button.GetComponentInChildren<TMP_Text>(true);
-            if (label != null && label.text == "Items Locked") label.text = "Objetos";
+            if (label != null) label.text = EditorLocalization.Get("editor.objects.title");
         }
     }
 

@@ -101,14 +101,17 @@ namespace UnderPressure.Editor
             panelImage.color = new Color(0.175f, 0.200f, 0.225f, 0.97f);
             panelImage.raycastTarget = true;
 
-            CreateHeader(panel.transform, "Escenario base",
+            CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.base_scenario"),
                 new Vector2(23f, -15f), new Vector2(418f, 44f));
-            _selectedHospitalTitle = CreateHeader(panel.transform, "Hospital",
+            _selectedHospitalTitle = CreateHeader(panel.transform,
+                EditorLocalization.Get("scenario_editor.hospital"),
                 new Vector2(466f, -15f), new Vector2(375f, 44f));
 
-            _hospitalsColumn = CreateColumn(panel.transform, "Hospitales",
+            _hospitalsColumn = CreateColumn(panel.transform,
+                EditorLocalization.Get("scenario_editor.hospitals"),
                 new Vector2(22f, -68f), new Vector2(421f, ColumnHeight));
-            _mapsColumn = CreateColumn(panel.transform, "Mapas",
+            _mapsColumn = CreateColumn(panel.transform,
+                EditorLocalization.Get("scenario_editor.maps"),
                 new Vector2(464f, -68f), new Vector2(379f, ColumnHeight));
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
@@ -154,7 +157,7 @@ namespace UnderPressure.Editor
             _mapsColumn.FirstRow = 0;
             _mapsColumn.Entries.Add(new RowEntry
             {
-                Label = "Nuevo mapa",
+                Label = EditorLocalization.Get("scenario_editor.new_map"),
                 Green = true,
                 OnClick = () => OpenSelected(null)
             });
@@ -184,7 +187,8 @@ namespace UnderPressure.Editor
                     UnderPressureEditorPlugin.Log?.LogError(
                         "No se puede abrir el mapa seleccionado: " + ex);
                     if (_selectedHospitalTitle != null)
-                        _selectedHospitalTitle.text = "Mapa incorrecto o incompleto";
+                        _selectedHospitalTitle.text =
+                            EditorLocalization.Get("scenario_editor.invalid_map");
                     return;
                 }
             }

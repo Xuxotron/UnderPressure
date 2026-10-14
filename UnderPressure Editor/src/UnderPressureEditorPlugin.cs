@@ -25,8 +25,10 @@ namespace UnderPressure.Editor
         private void Awake()
         {
             Log = Logger;
-            ShowNewMapsSetting = Config.Bind("Carrera", "Mostrar nuevos mapas", true,
-                "Muestra el selector de escenarios personalizados en el mapa de Carrera.");
+            ShowNewMapsSetting = Config.Bind(
+                EditorLocalization.Get("editor.settings.career"),
+                EditorLocalization.Get("editor.settings.show_new_maps"), true,
+                EditorLocalization.Get("editor.settings.show_new_maps.description"));
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
             Logger.LogInfo($"{PluginName} {PluginVersion} cargado.");

@@ -65,11 +65,7 @@ namespace UnderPressure.Editor
         private float _closingElapsed;
         private bool _closing;
 
-        private static string T(string key, string fallback)
-        {
-            var value = EditorLocalization.Get(key);
-            return string.IsNullOrEmpty(value) || value == key ? fallback : value;
-        }
+        private static string T(string key) => EditorLocalization.Get(key);
 
         internal void Open(SelectedHospitalMenu menu)
         {
@@ -123,7 +119,7 @@ namespace UnderPressure.Editor
                     if (!string.Equals(header.baseHospitalId, _hospital.UniqueId, StringComparison.Ordinal))
                         continue;
                     var description = string.IsNullOrEmpty(header.description)
-                        ? T("career.maps.custom.description", "Escenario personalizado de Under Pressure.")
+                        ? T("career.maps.custom.description")
                         : header.description;
                     if (description.Length > 1400) description = description.Substring(0, 1400);
                     _choices.Add(new Choice { Name = header.name, Description = description, Path = path });
@@ -171,7 +167,7 @@ namespace UnderPressure.Editor
             // belong exclusively to the game's own SelectedHospitalMenu.
             var title = Ui("EditorLevelsTitle", rect);
             Place((RectTransform)title.transform, new Vector2(36f, -16f), new Vector2(221f, 46f));
-            AddLabel(title.transform, "Editor Levels", 22f, Color.white);
+            AddLabel(title.transform, T("career.maps.title"), 22f, Color.white);
 
             var scrollGo = Ui("MapScroll", rect, typeof(ScrollRect));
             var scrollRect = (RectTransform)scrollGo.transform;
@@ -493,19 +489,14 @@ namespace UnderPressure.Editor
             if (_native == null || _selected == null) return;
             if (_nativeName != null) _nativeName.text = _selected.Name;
             if (_nativeDescription != null) _nativeDescription.text = _selected.Description;
-            var map = MapField?.GetValue(_native) as MetagameMap;
-            SaveFileHeader customSave;
-            var hasCustomSave = ScenarioCareerMapLoader.TryGetNativeSave(
-                map?.SaveSystem, _hospital?.UniqueId, out customSave);
             var descPanel = DescPanelField?.GetValue(_native) as GameObject;
             if (descPanel != null && !descPanel.activeSelf) descPanel.SetActive(true);
             var savePanel = SavePanelField?.GetValue(_native) as GameObject;
             if (savePanel != null && savePanel.activeSelf) savePanel.SetActive(false);
             var restartPanel = RestartPanelField?.GetValue(_native) as GameObject;
             if (restartPanel != null && restartPanel.activeSelf) restartPanel.SetActive(false);
-            var term = hasCustomSave ? "Misc/Continue_CS" : "Misc/Start_CS";
-            if (_nativeMainText != null && _nativeMainText.Term != term)
-                _nativeMainText.SetTerm(term);
+            if (_nativeMainText != null && _nativeMainText.Term != "Misc/Start_CS")
+                _nativeMainText.SetTerm("Misc/Start_CS");
         }
 
         private void LateUpdate()
@@ -559,8 +550,7 @@ namespace UnderPressure.Editor
             if (map?.Level?.Config == _hospital)
             {
                 if (_nativeDescription != null)
-                    _nativeDescription.text = T("career.maps.active.error",
-                        "Este hospital ya esta abierto. Vuelve al menu principal antes de iniciar su mapa personalizado.");
+                    _nativeDescription.text = T("career.maps.active.error");
                 return false;
             }
             _preparing = true;
@@ -574,7 +564,7 @@ namespace UnderPressure.Editor
                 ScenarioCareerMapLoader.Cancel();
                 UnderPressureEditorPlugin.Log?.LogError("No se pudo empezar el mapa: " + ex);
                 if (_nativeDescription != null)
-                    _nativeDescription.text = "No se pudo abrir el mapa: " + ex.Message;
+                    _nativeDescription.text = T("career.maps.open.error");
                 return false;
             }
             finally { _preparing = false; }
@@ -730,7 +720,8 @@ namespace UnderPressure.Editor
                         UnityEngine.Object.Destroy(component);
                 }
                 var label = row.GetComponentInChildren<TMP_Text>(true);
-                if (label != null) label.text = "Mostrar nuevos mapas";
+                if (label != null)
+                    label.text = EditorLocalization.Get("editor.settings.show_new_maps");
                 var toggle = row.GetComponentInChildren<Toggle>(true);
                 if (toggle == null) return;
                 toggle.onValueChanged.RemoveAllListeners();
