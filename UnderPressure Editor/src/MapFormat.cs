@@ -1,14 +1,17 @@
-﻿// Updated: 2026-10-14 - scene.json opcional e ignorado tras retirar Escenario experimental
-// Fix: identidad adicional de prefab para carga exacta (compatible con mapas sin el campo).
-// Preservar siempre Base/Built/Unbuilt en JSON, incluidas las capas vacias.
-// Formato nativo de UnderPressure: un indice .upmap JSON y un .json/.png por parcela.
-// No implementa compatibilidad con el antiguo formato de pruebas.
+// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
 
+// ===== BEGIN ORIGINAL: ScenarioMapFormat.cs =====
+// Updated: 2026-10-14 - scene.json opcional e ignorado tras retirar Escenario experimental
+// Fix: identidad adicional de prefab para carga exacta (compatible con mapas sin el campo).
+// Preservar siempre Base/Built/Unbuilt en JSON, incluidas las capas vacias.
+// Formato nativo de UnderPressure: un indice .upmap JSON y un .json/.png por parcela.
+// No implementa compatibilidad con el antiguo formato de pruebas.
 namespace UnderPressure.Editor
 {
     internal static class ScenarioMapFormat
@@ -501,3 +504,4 @@ namespace UnderPressure.Editor
         }
     }
 }
+// ===== END ORIGINAL: ScenarioMapFormat.cs =====

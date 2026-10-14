@@ -1,22 +1,25 @@
+// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
+using System;
+using FullInspector;
+using HarmonyLib;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using TH20;
+using TMPro;
+using UnderPressure.LoaderRuntime;
+using UnityEngine.UI;
+using UnityEngine;
+
+// ===== BEGIN ORIGINAL: ScenarioEditorStorage.cs =====
 // Updated: 2026-10-14 - Desactivar Escenario experimental y restaurar edicion nativa de parcelas.
 // Fix: cerrar dialogo siempre y guardar identidad de prefab.
 // Crear parcelas desde subcursores y guardar capas JSON vacias sin perder objetos.
 // Alta de parcelas no destructiva: mantiene originales y registra controles nativos.
 // Mapas .upmap JSON + archivos plot_XX.json y plot_XX.png por parcela.
 // Sin lectura de los formatos antiguos de prueba.
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using UnderPressure.LoaderRuntime;
-using FullInspector;
-using HarmonyLib;
-using TMPro;
-using TH20;
-using UnityEngine;
-using UnityEngine.UI;
-
 namespace UnderPressure.Editor
 {
     internal static class ScenarioEditorStorage
@@ -2841,3 +2844,4 @@ namespace UnderPressure.Editor
         }
     }
 }
+// ===== END ORIGINAL: ScenarioEditorStorage.cs =====

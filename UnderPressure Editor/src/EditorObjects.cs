@@ -1,18 +1,793 @@
-// Updated: 2026-10-14 - Ctrl: movimiento multiple nativo, cancela y restaura objetos sin modificar parcelas.
+// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
-using HarmonyLib;
 using FullInspector;
-using TMPro;
+using HarmonyLib;
+using System.Collections.Generic;
+using System.Collections;
+using System.IO;
+using System.Linq;
+using System.Reflection.Emit;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using TH20;
-using UnityEngine;
+using TMPro;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine;
 
+// ===== BEGIN ORIGINAL: ScenarioEditorObjects.cs =====
+// Updated: 2026-10-12
+// Editor de escenarios: transparencia del suelo, filtro DLC y ocultacion reversible
+// de la geometria fija combinada de las escenas mientras se editan sus objetos.
+// Destino: UnderPressure Editor/src/ScenarioEditorObjects.cs
+namespace UnderPressure.Editor
+{
+    internal static class ScenarioEditorObjects
+    {
+        // Solo modifica el color con que se PINTA una celda nueva. Su RGB conserva
+        // exactamente el tipo original (Floor/Window/Pillar/etc.). HospitalMap
+        // clasifica las superficies por RGB, no por alfa.
+        internal static void MakePaintTransparent(ref Color color)
+        {
+            if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning) return;
+            if (color.a > 0f) color.a = 0.5f;
+        }
+
+        private sealed class DlcProvenance
+        {
+            internal bool UsedByBase;
+            internal readonly Dictionary<uint, DLCItemDefinition> Packs =
+                new Dictionary<uint, DLCItemDefinition>();
+        }
+
+        private sealed class DefinitionReferenceComparer :
+            IEqualityComparer<RoomItemDefinition>
+        {
+            internal static readonly DefinitionReferenceComparer Instance =
+                new DefinitionReferenceComparer();
+
+            public bool Equals(RoomItemDefinition left, RoomItemDefinition right) =>
+                ReferenceEquals(left, right);
+
+            public int GetHashCode(RoomItemDefinition value) =>
+                value == null ? 0 : RuntimeHelpers.GetHashCode(value);
+        }
+
+        // Las definiciones exteriores no garantizan un GUID exclusivo: varias
+        // pueden compartir Guid.Empty. La instancia cargada por SharedInstance
+        // es la identidad real que tambien entrega LandscapeItemDatabase.
+        private static readonly Dictionary<RoomItemDefinition, DlcProvenance> Provenance =
+            new Dictionary<RoomItemDefinition, DlcProvenance>(
+                DefinitionReferenceComparer.Instance);
+        private static readonly HashSet<RoomItemDefinition> SceneProvenanceChecked =
+            new HashSet<RoomItemDefinition>(DefinitionReferenceComparer.Instance);
+        private static readonly Dictionary<string, DLCItemDefinition> PacksByScene =
+            new Dictionary<string, DLCItemDefinition>(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> BaseScenes =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly FieldInfo PrefabField =
+            AccessTools.Field(typeof(RoomItemDefinition), "_prefab");
+        private static Dictionary<string, HashSet<string>> _scenesByPrefab;
+
+        // Bajo Presion Base es otra DLL. No referenciarla directamente permite
+        // que el Editor funcione de manera independiente. La busqueda es perezosa
+        // y se repite si Base aun no estaba cargado en el primer intento.
+        private static MethodInfo _baseDlcDisabled;
+
+        private static System.Reflection.MethodInfo FindBaseDlcDisabled()
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType("UnderPressure.DLCControl", false);
+                if (type == null) continue;
+                var method = type.GetMethod("IsDisabled",
+                    System.Reflection.BindingFlags.Static |
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic,
+                    null, new[] { typeof(uint) }, null);
+                if (method != null) return method;
+            }
+            return null;
+        }
+
+        private static bool DisabledFromBase(uint appId)
+        {
+            if (appId == 0) return false;
+            if (_baseDlcDisabled == null) _baseDlcDisabled = FindBaseDlcDisabled();
+            if (_baseDlcDisabled == null) return false;
+            try { return (bool)_baseDlcDisabled.Invoke(null, new object[] { appId }); }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Filtro DLC: no pudo consultar Base: " + exception.Message);
+                return false;
+            }
+        }
+
+        internal static void BuildDlcProvenance(IEnumerable<SandboxLevelOption> options)
+        {
+            Provenance.Clear();
+            SceneProvenanceChecked.Clear();
+            PacksByScene.Clear();
+            BaseScenes.Clear();
+            if (options == null) return;
+
+            var levels = new HashSet<LevelConfig>();
+            var plots = 0;
+            var references = 0;
+            foreach (var option in options)
+            {
+                var level = option?.Level?.Instance;
+                if (level == null || !levels.Add(level)) continue;
+                var pack = level.GetRequiredDlcPack();
+                var sceneName = NormalizeSceneName(level.SceneName);
+                if (!string.IsNullOrEmpty(sceneName))
+                {
+                    if (pack == null) BaseScenes.Add(sceneName);
+                    else PacksByScene[sceneName] = pack;
+                }
+                var config = level.GetWorldStateConfig();
+                if (config?.HospitalPlots == null) continue;
+
+                foreach (var plotWrapper in config.HospitalPlots)
+                {
+                    var plot = plotWrapper?.Instance;
+                    if (plot == null) continue;
+                    ++plots;
+                    foreach (HospitalPlotLayer layer in Enum.GetValues(typeof(HospitalPlotLayer)))
+                    {
+                        var items = plot.GetItems(layer);
+                        if (items == null) continue;
+                        foreach (var item in items)
+                        {
+                            var definition = item?.Definition?.Instance;
+                            if (definition == null) continue;
+                            RegisterProvenance(definition, pack);
+                            ++references;
+                        }
+                    }
+                }
+            }
+
+            var baseItems = 0;
+            var dlcOnlyItems = 0;
+            foreach (var value in Provenance.Values)
+            {
+                if (value.UsedByBase) ++baseItems;
+                else if (value.Packs.Count > 0) ++dlcOnlyItems;
+            }
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Procedencia del catalogo exterior: " + levels.Count + " niveles, " +
+                plots + " parcelas y " + references + " referencias; " +
+                baseItems + " objetos usados por Base y " + dlcOnlyItems +
+                " usados exclusivamente por niveles DLC.");
+        }
+
+        private static string NormalizeSceneName(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return string.Empty;
+            sceneName = sceneName.Replace('\\', '/');
+            var slash = sceneName.LastIndexOf('/');
+            if (slash >= 0) sceneName = sceneName.Substring(slash + 1);
+            if (sceneName.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+                sceneName = sceneName.Substring(0, sceneName.Length - 6);
+            return sceneName;
+        }
+
+        private static Dictionary<string, HashSet<string>> LoadSceneProvenance()
+        {
+            if (_scenesByPrefab != null) return _scenesByPrefab;
+            _scenesByPrefab = new Dictionary<string, HashSet<string>>(
+                StringComparer.Ordinal);
+            const string resourceName =
+                "UnderPressure.Editor.Data.LandscapeSceneProvenance.tsv";
+            try
+            {
+                using (var stream = Assembly.GetExecutingAssembly()
+                    .GetManifestResourceStream(resourceName))
+                {
+                    if (stream == null)
+                        throw new InvalidOperationException(
+                            "No se encontro el indice " + resourceName + ".");
+                    using (var reader = new StreamReader(stream))
+                    {
+                        string line;
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (line.Length == 0 || line[0] == '#') continue;
+                            var separator = line.IndexOf('\t');
+                            if (separator <= 0 || separator >= line.Length - 1) continue;
+                            var prefabName = line.Substring(0, separator);
+                            var sceneName = NormalizeSceneName(
+                                line.Substring(separator + 1));
+                            if (!_scenesByPrefab.TryGetValue(prefabName, out var scenes))
+                            {
+                                scenes = new HashSet<string>(
+                                    StringComparer.OrdinalIgnoreCase);
+                                _scenesByPrefab.Add(prefabName, scenes);
+                            }
+                            scenes.Add(sceneName);
+                        }
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudo cargar la procedencia de objetos exteriores: " +
+                    exception);
+            }
+            return _scenesByPrefab;
+        }
+
+        private static bool RegisterSceneProvenance(RoomItemDefinition definition)
+        {
+            if (definition == null || !SceneProvenanceChecked.Add(definition))
+                return Provenance.ContainsKey(definition);
+            var prefab = PrefabField?.GetValue(definition) as GameObject;
+            if (prefab == null ||
+                !LoadSceneProvenance().TryGetValue(prefab.name, out var scenes))
+                return false;
+
+            foreach (var scene in scenes)
+            {
+                if (BaseScenes.Contains(scene))
+                    RegisterProvenance(definition, null);
+                else if (PacksByScene.TryGetValue(scene, out var pack))
+                    RegisterProvenance(definition, pack);
+            }
+            return Provenance.ContainsKey(definition);
+        }
+
+        private static void RegisterProvenance(
+            RoomItemDefinition definition, DLCItemDefinition levelPack)
+        {
+            if (!Provenance.TryGetValue(definition, out var provenance))
+            {
+                provenance = new DlcProvenance();
+                Provenance.Add(definition, provenance);
+            }
+
+            if (levelPack == null)
+            {
+                provenance.UsedByBase = true;
+                return;
+            }
+            if (levelPack.AppID != 0)
+                provenance.Packs[levelPack.AppID] = levelPack;
+        }
+
+        private static bool IsPackAvailable(DLCItemDefinition pack)
+        {
+            return pack != null && DLCUtils.IsDLCInstalled(pack) &&
+                   !DisabledFromBase(pack.AppID);
+        }
+
+        private static bool IsUnavailable(RoomItemDefinition definition)
+        {
+            var required = definition?.DlcPackRequired;
+            var dlc = required?.Instance;
+            if (dlc != null) return !IsPackAvailable(dlc);
+
+            if (definition == null ||
+                !Provenance.TryGetValue(definition, out var provenance) ||
+                provenance.UsedByBase || provenance.Packs.Count == 0)
+                return false;
+
+            // Un objeto compartido por varios DLC se conserva si al menos uno
+            // de esos paquetes sigue disponible.
+            foreach (var pack in provenance.Packs.Values)
+                if (IsPackAvailable(pack)) return false;
+            return true;
+        }
+
+        internal static void FilterUnavailableDlc(ref List<RoomItemDefinition> items)
+        {
+            if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning || items == null)
+                return;
+
+            if (Provenance.Count == 0)
+            {
+                var options = ScenarioEditorSession.Level?.App?
+                    .SandboxSettingsConfig?.LevelOptions;
+                BuildDlcProvenance(options);
+            }
+            if (_baseDlcDisabled == null) _baseDlcDisabled = FindBaseDlcDisabled();
+
+            var removed = 0;
+            var inferred = 0;
+            var matched = 0;
+            var untagged = 0;
+            var tagged = 0;
+            for (var i = items.Count - 1; i >= 0; --i)
+            {
+                var definition = items[i];
+                if (definition == null)
+                {
+                    items.RemoveAt(i);
+                    ++removed;
+                    continue;
+                }
+
+                RegisterSceneProvenance(definition);
+                if (definition.DlcPackRequired?.Instance == null) ++untagged;
+                else ++tagged;
+                if (Provenance.ContainsKey(definition)) ++matched;
+                if (!IsUnavailable(definition)) continue;
+                if (definition.DlcPackRequired?.Instance == null) ++inferred;
+                items.RemoveAt(i);
+                ++removed;
+            }
+
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Catalogo exterior: " + items.Count + " disponibles; " + removed +
+                " excluidos por DLC (" + inferred + " por procedencia de nivel); " +
+                matched + " vinculados a parcelas; " +
+                tagged + " con DLC declarado, " +
+                untagged + " sin DLC declarado. " +
+                "Comprobacion independiente de Base: " +
+                (_baseDlcDisabled != null ? "activa" : "no encontrada") + ".");
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalMapTile), nameof(HospitalMapTile.GetColor))]
+    internal static class ScenarioEditorPaintAlphaPatch
+    {
+        private static void Postfix(ref Color __result) =>
+            ScenarioEditorObjects.MakePaintTransparent(ref __result);
+    }
+
+    [HarmonyPatch(typeof(WorldState), nameof(WorldState.GetLandscapeItems))]
+    internal static class ScenarioEditorLandscapeDlcPatch
+    {
+        // Argumento 0 del metodo original: out List<RoomItemDefinition> items.
+        private static void Postfix(ref List<RoomItemDefinition> __0) =>
+            ScenarioEditorObjects.FilterUnavailableDlc(ref __0);
+    }
+
+    internal static class ScenarioEditorFixedGeometry
+    {
+        // Los meshes "Combined Mesh (root scene) N" son resultados del static batching
+        // de Unity. El .unity original conserva MeshRenderer individuales bajo
+        // LandscapeItems_Base: no hay que modificar ni descombinar esos assets.
+        // En el modo editor el juego crea ademas LandscapeRoomItem editables.
+        // Solo ocultamos los renderizadores ESTATICOS de la escena original.
+        private const string OriginalLandscapeRootName = "LandscapeItems_Base";
+
+        private static readonly Dictionary<Renderer, bool> OriginalRenderers =
+            new Dictionary<Renderer, bool>();
+        private static readonly Dictionary<Collider, bool> OriginalColliders =
+            new Dictionary<Collider, bool>();
+
+        private static Transform _sceneRoot;
+        private static bool _scanned;
+        private static bool _scanning;
+        private static bool _reportedMissing;
+
+        internal static void Scan(Level level, bool force = false)
+        {
+            if (_scanning || !ScenarioEditorSession.Active ||
+                !ReferenceEquals(ScenarioEditorSession.Level, level) ||
+                level?.WorldState?.HospitalPlots == null) return;
+            if (_scanned && !force) return;
+
+            _scanning = true;
+            try
+            {
+                if (_sceneRoot == null)
+                {
+                    var originalRoot = GameObject.Find(OriginalLandscapeRootName);
+                    if (originalRoot == null)
+                    {
+                        if (!_reportedMissing)
+                        {
+                            _reportedMissing = true;
+                            UnderPressureEditorPlugin.Log?.LogWarning(
+                                "Editor: no se encontro la jerarquia ORIGINAL " +
+                                OriginalLandscapeRootName +
+                                ". No se ocultara geometria ajena al escenario.");
+                        }
+                        return;
+                    }
+                    _sceneRoot = originalRoot.transform;
+                }
+
+                // Evita ocultar los clones editables del HospitalMap incluso en el
+                // caso de que el juego los coloque dentro de la misma jerarquia.
+                var editable = new HashSet<Renderer>();
+                foreach (var plot in level.WorldState.HospitalPlots)
+                {
+                    var items = plot?.HospitalMap?.FloorPlan?.LandscapeItems;
+                    if (items == null) continue;
+                    foreach (var item in items)
+                    {
+                        var visual = item?.Visual?.GameObject;
+                        if (visual == null) continue;
+                        foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
+                            if (renderer != null) editable.Add(renderer);
+                    }
+                }
+
+                var hiddenRenderers = 0;
+                var hiddenColliders = 0;
+                var bakedRenderers = 0;
+                var candidates = _sceneRoot.GetComponentsInChildren<MeshRenderer>(true);
+                foreach (var renderer in candidates)
+                {
+                    if (renderer == null || editable.Contains(renderer)) continue;
+                    // Evita scripts, personajes, previews y decoracion instanciada
+                    // durante la sesion: solo los renderizadores estaticos originales.
+                    if (!renderer.gameObject.isStatic && !renderer.isPartOfStaticBatch)
+                        continue;
+
+                    if (renderer.isPartOfStaticBatch) ++bakedRenderers;
+                    if (!OriginalRenderers.ContainsKey(renderer))
+                        OriginalRenderers.Add(renderer, renderer.enabled);
+                    if (renderer.enabled)
+                    {
+                        renderer.enabled = false;
+                        ++hiddenRenderers;
+                    }
+
+                    // Una malla invisible con un collider activo puede seguir
+                    // interceptando el cursor. Solo tocamos los colliders del
+                    // mismo GameObject que el renderer original, no el terreno.
+                    foreach (var collider in renderer.GetComponents<Collider>())
+                    {
+                        if (collider == null) continue;
+                        if (!OriginalColliders.ContainsKey(collider))
+                            OriginalColliders.Add(collider, collider.enabled);
+                        if (!collider.enabled) continue;
+                        collider.enabled = false;
+                        ++hiddenColliders;
+                    }
+                }
+
+                _scanned = true;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Editor: decoracion original ocultada en " + OriginalLandscapeRootName +
+                    ": " + hiddenRenderers + " renderizadores, " + hiddenColliders +
+                    " colliders; " + bakedRenderers + " renderizadores con static batching. " +
+                    "Los LandscapeRoomItem editables siguen visibles. " +
+                    "La malla combinada original NO se ha modificado.");
+
+                if (hiddenRenderers == 0 && OriginalRenderers.Count == 0)
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Editor: se encontro " + OriginalLandscapeRootName +
+                        " pero ningun renderer estatico. Revisar la escena cargada.");
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Error al ocultar la geometria fija del escenario: " + exception);
+            }
+            finally
+            {
+                _scanning = false;
+            }
+        }
+
+        internal static void Restore()
+        {
+            foreach (var state in OriginalRenderers)
+                if (state.Key != null) state.Key.enabled = state.Value;
+            foreach (var state in OriginalColliders)
+                if (state.Key != null) state.Key.enabled = state.Value;
+            OriginalRenderers.Clear();
+            OriginalColliders.Clear();
+            _sceneRoot = null;
+            _scanned = false;
+            _scanning = false;
+            _reportedMissing = false;
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalEditEvents), "StartEdit")]
+    internal static class ScenarioEditorFixedGeometryStartPatch
+    {
+        // El cursor nativo ha creado los LandscapeRoomItem editables.
+        // Ocultamos ahora la decoracion fija de la escena de Unity.
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(HospitalEditEvents __instance)
+        {
+            if (!ScenarioEditorSession.Active) return;
+            ScenarioEditorFixedGeometry.Scan(ScenarioEditorSession.Level, true);
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalMap), nameof(HospitalMap.Build))]
+    internal static class ScenarioEditorFixedGeometryRebuildPatch
+    {
+        // Si la escena original aun no estaba disponible al comenzar,
+        // intentamos localizarla al reconstruir una parcela. No se vuelve
+        // a recorrer la geometria despues de una ocultacion satisfactoria.
+        private static void Postfix()
+        {
+            if (!ScenarioEditorSession.Active) return;
+            ScenarioEditorFixedGeometry.Scan(ScenarioEditorSession.Level);
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalEditEvents), "EndEdit")]
+    internal static class ScenarioEditorFixedGeometryExitPatch
+    {
+        // Antes de que el editor restituya las definiciones originales.
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix() => ScenarioEditorFixedGeometry.Restore();
+    }
+}
+// ===== END ORIGINAL: ScenarioEditorObjects.cs =====
+
+// ===== BEGIN ORIGINAL: ScenarioEditorObjectLayout.cs =====
+// Updated: 2026-10-13 - Iconos sin mover, fondo extendido arriba y scrollbar visible junto al borde de la paleta.
+// Destino: UnderPressure Editor/src/ScenarioEditorObjectLayout.cs
+namespace UnderPressure.Editor
+{
+    [HarmonyPatch(typeof(LandscapeObjectsMenu), "Setup")]
+    internal static class ScenarioEditorLandscapeLayoutPatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(LandscapeObjectsMenu __instance)
+        {
+            if (!ScenarioEditorFlow.IsRunning || __instance == null) return;
+            try
+            {
+                var content = AccessTools.Field(typeof(LandscapeObjectsMenu), "_listContent")
+                    ?.GetValue(__instance) as GameObject;
+                var input = AccessTools.Field(typeof(LandscapeObjectsMenu), "_searchBox")
+                    ?.GetValue(__instance) as TMP_InputField;
+                if (content == null) return;
+                var rect = content.transform as RectTransform;
+                if (rect == null) return;
+
+                var horizontal = content.GetComponent<HorizontalLayoutGroup>();
+                if (horizontal != null) horizontal.enabled = false;
+                var vertical = content.GetComponent<VerticalLayoutGroup>();
+                if (vertical != null) vertical.enabled = false;
+                var grid = content.GetComponent<GridLayoutGroup>() ?? content.AddComponent<GridLayoutGroup>();
+                grid.enabled = true;
+                grid.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+                grid.constraintCount = 2;
+                grid.startAxis = GridLayoutGroup.Axis.Vertical;
+                grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+                grid.childAlignment = TextAnchor.UpperLeft;
+                grid.padding = new RectOffset(8, 8, 8, 8);
+                grid.cellSize = new Vector2(105f, 88f);
+                grid.spacing = new Vector2(7f, 5f);
+                var fitter = content.GetComponent<ContentSizeFitter>() ?? content.AddComponent<ContentSizeFitter>();
+                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+                var scroll = content.GetComponentInParent<ScrollRect>();
+                if (scroll != null)
+                {
+                    GrowBackdropOnly(__instance);
+                    scroll.horizontal = true;
+                    scroll.vertical = false;
+                    scroll.scrollSensitivity = 34f;
+                    scroll.content = rect;
+                    var scrollRect = scroll.transform as RectTransform;
+                    if (scrollRect != null)
+                    {
+                        var size = scrollRect.sizeDelta;
+                        size.y = Mathf.Max(size.y, 190f);
+                        scrollRect.sizeDelta = size;
+                    }
+                    RestoreScrollbar(scroll, __instance);
+                }
+                if (input != null) MoveSearchBelowPlots(input, __instance);
+            }
+            catch (Exception ex)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning("Catalogo exterior: " + ex);
+            }
+        }
+
+        // No redimensionar el LandscapeObjectsMenu: altera tambien la
+        // ubicacion nativa de los iconos. Sólo extender su fondo visual.
+        private static void GrowBackdropOnly(LandscapeObjectsMenu menu)
+        {
+            var root = menu.transform as RectTransform;
+            if (root == null) return;
+            var extra = root.Find("UP_Backdrop_Extension") as RectTransform;
+            if (extra == null)
+            {
+                var background = new GameObject("UP_Backdrop_Extension",
+                    typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                background.transform.SetParent(root, false);
+                extra = (RectTransform)background.transform;
+                var source = root.GetComponent<Image>();
+                var target = background.GetComponent<Image>();
+                if (source != null)
+                {
+                    target.sprite = source.sprite;
+                    target.type = source.type;
+                    target.color = source.color;
+                }
+                else target.color = new Color(.93f, .93f, .93f, .75f);
+                target.raycastTarget = false;
+                extra.SetAsFirstSibling();
+            }
+            extra.anchorMin = Vector2.zero;
+            extra.anchorMax = Vector2.one;
+            extra.offsetMin = new Vector2(0f, -24f);
+            extra.offsetMax = new Vector2(0f, 38f);
+        }
+
+        private static void RestoreScrollbar(ScrollRect scroll, LandscapeObjectsMenu menu)
+        {
+            var host = menu.transform as RectTransform;
+            if (host == null) return;
+            // Fuera del ScrollRect, NO dentro del Viewport ni de su Mask.
+            // Cuando el contenido tiene varias páginas, ScrollRect actualiza
+            // el handle automáticamente.
+            var trackTransform = host.Find("UP_Catalog_HorizontalScrollbar") as RectTransform;
+            if (trackTransform == null)
+            {
+                var track = new GameObject("UP_Catalog_HorizontalScrollbar",
+                    typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
+                track.transform.SetParent(host, false);
+                trackTransform = (RectTransform)track.transform;
+                track.GetComponent<Image>().color = new Color(.09f,.15f,.19f,.90f);
+                var area = new GameObject("Sliding Area", typeof(RectTransform));
+                area.transform.SetParent(track.transform, false);
+                var areaRect = (RectTransform)area.transform;
+                areaRect.anchorMin = Vector2.zero;
+                areaRect.anchorMax = Vector2.one;
+                areaRect.offsetMin = new Vector2(3f, 2f);
+                areaRect.offsetMax = new Vector2(-3f,-2f);
+                var handle = new GameObject("Handle",typeof(RectTransform),
+                    typeof(CanvasRenderer),typeof(Image));
+                handle.transform.SetParent(area.transform, false);
+                var handleRect=(RectTransform)handle.transform;
+                handleRect.anchorMin=Vector2.zero;
+                handleRect.anchorMax=Vector2.one;
+                handleRect.offsetMin=Vector2.zero;
+                handleRect.offsetMax=Vector2.zero;
+                var handleImage=handle.GetComponent<Image>();
+                handleImage.color=new Color(.43f,.80f,.95f,1f);
+                var bar=track.GetComponent<Scrollbar>();
+                bar.direction=Scrollbar.Direction.LeftToRight;
+                bar.targetGraphic=handleImage;
+                bar.handleRect=handleRect;
+            }
+            // La ubicación NO depende del origen del LandscapeObjectsMenu:
+            // se sigue la parte inferior REAL del viewport cada fotograma.
+            trackTransform.anchorMin = trackTransform.anchorMax = new Vector2(.5f,.5f);
+            trackTransform.pivot = new Vector2(.5f,.5f);
+            trackTransform.SetAsLastSibling();
+            trackTransform.gameObject.SetActive(true);
+            var follower = trackTransform.GetComponent<ScenarioCatalogScrollbarFollower>() ??
+                trackTransform.gameObject.AddComponent<ScenarioCatalogScrollbarFollower>();
+            follower.Initialize(scroll, host);
+            // Si el prefab ya tenía una barra oculta en su ScrollRect,
+            // no dejarla solapada con la nueva.
+            if (scroll.horizontalScrollbar != null &&
+                scroll.horizontalScrollbar.transform != trackTransform)
+                scroll.horizontalScrollbar.gameObject.SetActive(false);
+            scroll.horizontalScrollbar=trackTransform.GetComponent<Scrollbar>();
+            scroll.horizontalScrollbarVisibility=ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.horizontalScrollbarSpacing=2f;
+            if (scroll.viewport == null)
+                scroll.viewport = scroll.content != null ?
+                    scroll.content.parent as RectTransform : null;
+            follower.Place();
+        }
+
+        private static void MoveSearchBelowPlots(TMP_InputField input, LandscapeObjectsMenu menu)
+        {
+            var inputRect = input.transform as RectTransform;
+            var menuRect = menu.transform as RectTransform;
+            if (inputRect == null || menuRect == null) return;
+            var follower = input.GetComponent<ScenarioEditorSearchBelowPlots>();
+            if (follower != null) return;
+            var editMenu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var plotRoot = AccessTools.Field(typeof(EditHospitalMenu), "_plotSelectionRoot")
+                ?.GetValue(editMenu) as Transform;
+            if (plotRoot == null) return;
+            var plotScroll = plotRoot.GetComponentInParent<ScrollRect>();
+            var viewport = plotScroll != null ? plotScroll.transform as RectTransform : plotRoot as RectTransform;
+            if (viewport == null) return;
+            // Mover el input real, no una copia: el filtro sigue conectado a la lista nativa.
+            // Conservar el input bajo su menu nativo: si se mueve directamente
+            // al Canvas quedaria visible incluso cuando se cerrara la paleta.
+            inputRect.SetParent(menuRect, false);
+            inputRect.anchorMin = inputRect.anchorMax = new Vector2(0f, 1f);
+            inputRect.pivot = new Vector2(0f, 1f);
+            inputRect.sizeDelta = new Vector2(147f, 27f);
+            var labelObject = new GameObject("UP_SearchLabel", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(inputRect.parent, false);
+            var label = labelObject.GetComponent<TextMeshProUGUI>();
+            if (input.textComponent != null)
+            {
+                label.font = input.textComponent.font;
+                label.fontSize = Mathf.Min(input.textComponent.fontSize, 17f);
+            }
+            label.text = EditorLocalization.Get("editor.objects.search");
+            label.alignment = TextAlignmentOptions.MidlineLeft;
+            label.color = Color.white;
+            label.raycastTarget = false;
+            follower = input.gameObject.AddComponent<ScenarioEditorSearchBelowPlots>();
+            follower.Configure(viewport, labelObject.transform as RectTransform);
+            follower.Place();
+        }
+    }
+
+    // La barra acompaña al viewport sin quedar dentro de su máscara.
+    // Unity actualiza el tamaño del handle a través del ScrollRect nativo.
+    internal sealed class ScenarioCatalogScrollbarFollower : MonoBehaviour
+    {
+        private ScrollRect _scroll;
+        private RectTransform _host;
+        private RectTransform _rect;
+        private readonly Vector3[] _corners = new Vector3[4];
+        internal void Initialize(ScrollRect scroll, RectTransform host)
+        {
+            _scroll = scroll;
+            _host = host;
+            _rect = transform as RectTransform;
+        }
+        internal void Place()
+        {
+            if (_scroll == null || _host == null || _rect == null) return;
+            var viewport = _scroll.viewport ?? (_scroll.transform as RectTransform);
+            if (viewport == null) return;
+            viewport.GetWorldCorners(_corners);
+            var left = _host.InverseTransformPoint(_corners[0]);
+            var right = _host.InverseTransformPoint(_corners[3]);
+            var width = Mathf.Max(80f, right.x - left.x - 20f);
+            _rect.sizeDelta = new Vector2(width, 14f);
+            var mid = (left.x + right.x) * .5f;
+            _rect.localPosition = new Vector3(mid, left.y - 12f, 0f);
+            // La visibilidad la controla el padre del catálogo; no se
+            // desactiva este hijo desde su propio LateUpdate.
+        }
+        private void LateUpdate() { Place(); }
+    }
+
+    internal sealed class ScenarioEditorSearchBelowPlots : MonoBehaviour
+    {
+        private RectTransform _plotViewport;
+        private RectTransform _label;
+        private RectTransform _input;
+        private readonly Vector3[] _corners = new Vector3[4];
+
+        internal void Configure(RectTransform plotViewport, RectTransform label)
+        {
+            _plotViewport = plotViewport;
+            _label = label;
+            _input = transform as RectTransform;
+        }
+
+        internal void Place()
+        {
+            if (_plotViewport == null || _input == null || _label == null) return;
+            var parent = _input.parent as RectTransform;
+            if (parent == null) return;
+            _plotViewport.GetWorldCorners(_corners);
+            // La banda de acciones mide 31 px y comienza 4 px bajo la lista.
+            // Situar Buscar 39 px debajo permite que no solape Añadir/Eliminar.
+            var origin = _corners[0] + parent.TransformVector(new Vector3(4f, -39f, 0f));
+            _label.anchorMin = _label.anchorMax = new Vector2(0f, 1f);
+            _label.pivot = new Vector2(0f, 1f);
+            _label.sizeDelta = new Vector2(64f, 28f);
+            _label.position = origin;
+            _input.position = origin + parent.TransformVector(new Vector3(65f, 0f, 0f));
+        }
+
+        private void LateUpdate() { Place(); }
+        private void OnDestroy()
+        {
+            if (_label != null) UnityEngine.Object.Destroy(_label.gameObject);
+        }
+    }
+}
+// ===== END ORIGINAL: ScenarioEditorObjectLayout.cs =====
+
+// ===== BEGIN ORIGINAL: ScenarioEditorObjectInteraction.cs =====
+// Updated: 2026-10-14 - Ctrl: movimiento multiple nativo, cancela y restaura objetos sin modificar parcelas.
 namespace UnderPressure.Editor
 {
     internal sealed class ScenarioEditorObjectInteraction : MonoBehaviour
@@ -1134,3 +1909,4 @@ namespace UnderPressure.Editor
         }
     }
 }
+// ===== END ORIGINAL: ScenarioEditorObjectInteraction.cs =====

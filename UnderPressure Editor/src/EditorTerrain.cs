@@ -1,19 +1,22 @@
-// Updated: 2026-10-14 - Panel de pintura elevado sobre el catalogo de objetos.
-// Pincel de terreno: UV reales, proyeccion de emergencia y mezcla normalizada entre pasadas.
-// Destino: UnderPressure Editor/src/ScenarioEditorTerrainPainter.cs
+// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
+using HarmonyLib;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using UnderPressure.LoaderRuntime;
-using HarmonyLib;
 using TH20;
-using UnityEngine;
+using UnderPressure.LoaderRuntime;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine;
 
+// ===== BEGIN ORIGINAL: ScenarioEditorTerrainPainter.cs =====
+// Updated: 2026-10-14 - Panel de pintura elevado sobre el catalogo de objetos.
+// Pincel de terreno: UV reales, proyeccion de emergencia y mezcla normalizada entre pasadas.
+// Destino: UnderPressure Editor/src/ScenarioEditorTerrainPainter.cs
 namespace UnderPressure.Editor
 {
     internal static class ScenarioEditorTerrainPainter
@@ -2141,3 +2144,4 @@ namespace UnderPressure.Editor
         }
     }
 }
+// ===== END ORIGINAL: ScenarioEditorTerrainPainter.cs =====

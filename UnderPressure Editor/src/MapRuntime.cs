@@ -1,15 +1,18 @@
-// Updated: 2026-10-13
-// Convierte los JSON/PNG en parcelas nativas; resuelve cada objeto por GUID + DebugTag.
-// 2026-10-13: resuelve duplicados sin abortar; prefab opcional mejora precision.
+// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
+using FullInspector;
+using HarmonyLib;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using FullInspector;
-using HarmonyLib;
 using TH20;
 using UnityEngine;
 
+// ===== BEGIN ORIGINAL: ScenarioPlotRuntime.cs =====
+// Updated: 2026-10-13
+// Convierte los JSON/PNG en parcelas nativas; resuelve cada objeto por GUID + DebugTag.
+// 2026-10-13: resuelve duplicados sin abortar; prefab opcional mejora precision.
 namespace UnderPressure.Editor
 {
     internal sealed class UnderPressurePlotInstance : SharedInstance<HospitalPlotDefinition> { }
@@ -373,3 +376,4 @@ namespace UnderPressure.Editor
         }
     }
 }
+// ===== END ORIGINAL: ScenarioPlotRuntime.cs =====

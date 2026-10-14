@@ -1,15 +1,18 @@
+// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
+using System;
+using HarmonyLib;
+using System.Collections.Generic;
+using System.Linq;
+using TH20;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using UnityEngine;
+
+// ===== BEGIN ORIGINAL: ScenarioCharacterViewer.cs =====
 // Updated: 2026-10-14 - Materiales y colores nativos del personaje; sin sustitucion por Unlit.
 // Destino: UnderPressure Editor/src/ScenarioCharacterViewer.cs
 // No genera pacientes reales, no altera el hospital ni el flujo de contratacion.
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using HarmonyLib;
-using TH20;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
-
 namespace UnderPressure.Editor
 {
     // Se acopla al menu NATIVO del editor, no al menu principal ni a la partida.
@@ -1259,3 +1262,4 @@ namespace UnderPressure.Editor
         }
     }
 }
+// ===== END ORIGINAL: ScenarioCharacterViewer.cs =====
