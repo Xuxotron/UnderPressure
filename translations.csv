@@ -233,3 +233,7 @@ editor.character.error.no_clips,The controller contains no replaceable clips.,El
 editor.character.error.clip,Clip not compatible with this controller: {0},Clip no compatible con este controlador: {0},,,,
 editor.map.save.error,Could not save the map.,No se pudo guardar el mapa.,,,,
 editor.map.open.error,Could not open the map.,No se pudo abrir el mapa.,,,,
+world_map.author.title,World map authoring,Edición del mapamundi,,,,
+world_map.author.position,Cursor: X {0} · Y {1} · Z {2},Cursor: X {0} · Y {1} · Z {2},,,,
+world_map.author.no_surface,Cursor: no map surface,Cursor: ninguna superficie del mapa,,,,
+world_map.author.shortcuts,F9 reload · Ctrl+Alt+C copy coordinates,F9 recargar · Ctrl+Alt+C copiar coordenadas,,,,

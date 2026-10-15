@@ -1115,6 +1115,364 @@ namespace UnderPressure.Editor
         }
     }
 
+    // Herramienta privada de autor para añadir elementos al mapamundi sin
+    // modificar ninguno de los objetos serializados por el juego.
+    // Ctrl+Alt+F10 crea/activa el fichero local; F9 lo recarga.
+    internal sealed class ScenarioWorldMapAuthoring : MonoBehaviour
+    {
+        [Serializable]
+        private sealed class Position
+        {
+            public float x;
+            public float y;
+            public float z;
+
+            internal Vector3 ToVector3() => new Vector3(x, y, z);
+        }
+
+        [Serializable]
+        private sealed class MeshPlacement
+        {
+            public string id;
+            public string source;
+            public string asset;
+            public Position position;
+        }
+
+        [Serializable]
+        private sealed class HospitalPlacement
+        {
+            public string id;
+            public string template;
+            public Position position;
+        }
+
+        [Serializable]
+        private sealed class Document
+        {
+            public int version = 1;
+            public MeshPlacement[] meshes = new MeshPlacement[0];
+            public HospitalPlacement[] hospitals = new HospitalPlacement[0];
+        }
+
+        private static readonly FieldInfo PinMeshField =
+            AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
+        private static readonly FieldInfo PinStarsField =
+            AccessTools.Field(typeof(MapPinHospital), "_stars");
+        private static readonly FieldInfo PinSaveField =
+            AccessTools.Field(typeof(MapPinHospital), "_hasSaveIcon");
+        private static readonly FieldInfo PinProgressField =
+            AccessTools.Field(typeof(MapPinHospital), "_inProgressIcon");
+        private static readonly FieldInfo PinRemixField =
+            AccessTools.Field(typeof(MapPinHospital), "_remixBadgeIcon");
+        private static readonly FieldInfo PinNotificationField =
+            AccessTools.Field(typeof(MapPinHospital), "_unseenNotificationsIcon");
+
+        private MetagameMap _map;
+        private Transform _sceneRoot;
+        private Transform _generatedRoot;
+        private bool _debugVisible;
+        private Vector3 _cursorPosition;
+        private bool _hasCursorPosition;
+        private string _filePath;
+        private string _catalogPath;
+
+        internal void Initialise(MetagameMap map)
+        {
+            if (map == null || map.App?.MetagameMapScene?.RootObject == null) return;
+            if (_map != null && _map != map) ClearGenerated();
+            _map = map;
+            _sceneRoot = map.App.MetagameMapScene.RootObject.transform;
+            var folder = Path.Combine(ScenarioEditorStorage.Folder, "_author");
+            _filePath = Path.Combine(folder, "world_map.json");
+            _catalogPath = Path.Combine(folder, "world_map_assets.txt");
+            if (File.Exists(_filePath)) Reload();
+        }
+
+        private void Update()
+        {
+            if (_map == null || !_map.IsVisible) return;
+            var control = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+            var alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+            if (control && alt && Input.GetKeyDown(KeyCode.F10))
+            {
+                EnsureAuthorFiles();
+                _debugVisible = !_debugVisible;
+                if (_debugVisible)
+                {
+                    ExportAssetCatalog();
+                    Reload();
+                }
+            }
+            if (!_debugVisible) return;
+            _hasCursorPosition = TryGetCursorPosition(out _cursorPosition);
+            if (Input.GetKeyDown(KeyCode.F9)) Reload();
+            if (control && alt && Input.GetKeyDown(KeyCode.C) && _hasCursorPosition)
+            {
+                GUIUtility.systemCopyBuffer = string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "{{ \"x\": {0:0.###}, \"y\": {1:0.###}, \"z\": {2:0.###} }}",
+                    _cursorPosition.x, _cursorPosition.y, _cursorPosition.z);
+            }
+        }
+
+        private void OnGUI()
+        {
+            if (!_debugVisible || _map == null || !_map.IsVisible) return;
+            var width = Mathf.Min(670f, Screen.width - 24f);
+            GUI.Box(new Rect(12f, 12f, width, 88f), GUIContent.none);
+            GUI.Label(new Rect(24f, 18f, width - 24f, 24f),
+                EditorLocalization.Get("world_map.author.title"));
+            var position = _hasCursorPosition
+                ? EditorLocalization.Format("world_map.author.position",
+                    _cursorPosition.x.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                    _cursorPosition.y.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+                    _cursorPosition.z.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))
+                : EditorLocalization.Get("world_map.author.no_surface");
+            GUI.Label(new Rect(24f, 42f, width - 24f, 22f), position);
+            GUI.Label(new Rect(24f, 64f, width - 24f, 22f),
+                EditorLocalization.Get("world_map.author.shortcuts"));
+        }
+
+        private void EnsureAuthorFiles()
+        {
+            if (string.IsNullOrEmpty(_filePath)) return;
+            var folder = Path.GetDirectoryName(_filePath);
+            if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
+            if (!File.Exists(_filePath)) ScenarioMapFormat.WriteJson(_filePath, new Document());
+        }
+
+        private void Reload()
+        {
+            ClearGenerated();
+            if (_sceneRoot == null || string.IsNullOrEmpty(_filePath) || !File.Exists(_filePath)) return;
+            try
+            {
+                var document = JsonUtility.FromJson<Document>(File.ReadAllText(_filePath));
+                if (document == null)
+                    throw new InvalidDataException("world_map.json no contiene un documento valido.");
+                EnsureGeneratedRoot();
+                var meshes = document.meshes ?? new MeshPlacement[0];
+                for (var index = 0; index < meshes.Length; ++index)
+                    AddMesh(meshes[index], index);
+                var hospitals = document.hospitals ?? new HospitalPlacement[0];
+                for (var index = 0; index < hospitals.Length; ++index)
+                    AddHospital(hospitals[index], index);
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Mapamundi de autor cargado: " + meshes.Length + " mallas, " +
+                    hospitals.Length + " hospitales.");
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudo cargar el mapamundi de autor: " + exception);
+            }
+        }
+
+        private void AddMesh(MeshPlacement placement, int index)
+        {
+            if (placement == null || placement.position == null ||
+                string.IsNullOrWhiteSpace(placement.asset)) return;
+            GameObject source;
+            if (string.Equals(placement.source, "scene", StringComparison.OrdinalIgnoreCase))
+                source = FindSceneObject(placement.asset);
+            else if (string.Equals(placement.source, "bundle", StringComparison.OrdinalIgnoreCase))
+                source = FindBundlePrefab(placement.asset);
+            else
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Origen desconocido en world_map.json: " + placement.source);
+                return;
+            }
+            if (source == null) return;
+            var clone = Instantiate(source);
+            clone.name = "UP_WorldMesh_" + SafeId(placement.id, index);
+            clone.transform.SetParent(_generatedRoot, true);
+            clone.transform.position = placement.position.ToVector3();
+            clone.SetActive(true);
+        }
+
+        private void AddHospital(HospitalPlacement placement, int index)
+        {
+            if (placement == null || placement.position == null ||
+                string.IsNullOrWhiteSpace(placement.template)) return;
+            var source = FindSceneObject(placement.template);
+            if (source == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Plantilla de hospital no encontrada: " + placement.template);
+                return;
+            }
+            var clone = Instantiate(source);
+            clone.name = "UP_WorldHospital_" + SafeId(placement.id, index);
+            clone.transform.SetParent(_generatedRoot, true);
+            clone.transform.position = placement.position.ToVector3();
+            clone.SetActive(true);
+
+            // Es un marcador de autor: no entra en MapPins, no abre hospitales y
+            // no puede alterar progreso, DLC, cámara ni registros de Carrera.
+            foreach (var pin in clone.GetComponentsInChildren<MapPin>(true))
+                pin.enabled = false;
+            foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
+                collider.enabled = false;
+            foreach (var tooltip in clone.GetComponentsInChildren<TooltipSpawner>(true))
+                tooltip.enabled = false;
+            var hospital = clone.GetComponent<MapPinHospital>();
+            if (hospital != null) PrepareHospitalMarker(hospital);
+        }
+
+        private static void PrepareHospitalMarker(MapPinHospital hospital)
+        {
+            var mesh = PinMeshField?.GetValue(hospital) as MeshRenderer;
+            if (mesh != null) mesh.gameObject.SetActive(true);
+            var stars = PinStarsField?.GetValue(hospital) as GameObject[];
+            if (stars != null)
+                foreach (var star in stars)
+                    if (star != null) star.SetActive(false);
+            HideObject(PinSaveField?.GetValue(hospital));
+            HideObject(PinProgressField?.GetValue(hospital));
+            HideObject(PinRemixField?.GetValue(hospital));
+            HideObject(PinNotificationField?.GetValue(hospital));
+        }
+
+        private static void HideObject(object value)
+        {
+            var gameObject = value as GameObject;
+            if (gameObject == null && value is Component component)
+                gameObject = component.gameObject;
+            if (gameObject != null) gameObject.SetActive(false);
+        }
+
+        private GameObject FindSceneObject(string selector)
+        {
+            if (_sceneRoot == null) return null;
+            GameObject match = null;
+            var transforms = _sceneRoot.GetComponentsInChildren<Transform>(true);
+            foreach (var candidate in transforms)
+            {
+                var matches = selector.IndexOf('/') >= 0
+                    ? string.Equals(ScenePath(candidate), selector, StringComparison.Ordinal)
+                    : string.Equals(candidate.name, selector, StringComparison.Ordinal);
+                if (!matches) continue;
+                if (match != null)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Asset ambiguo; usa su ruta completa de world_map_assets.txt: " + selector);
+                    return null;
+                }
+                match = candidate.gameObject;
+            }
+            if (match == null)
+                UnderPressureEditorPlugin.Log?.LogWarning("Asset del mapamundi no encontrado: " + selector);
+            return match;
+        }
+
+        private static GameObject FindBundlePrefab(string selector)
+        {
+            var direct = global::UnderPressure.UnderPressureAssetBundle.LoadAsset<GameObject>(selector);
+            if (direct != null) return direct;
+            GameObject match = null;
+            foreach (var candidate in global::UnderPressure.UnderPressureAssetBundle.GetAllAssets<GameObject>())
+            {
+                if (candidate == null || !string.Equals(candidate.name, selector, StringComparison.Ordinal))
+                    continue;
+                if (match != null)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Prefab ambiguo en AssetBundle: " + selector);
+                    return null;
+                }
+                match = candidate;
+            }
+            if (match == null)
+                UnderPressureEditorPlugin.Log?.LogWarning("Prefab no encontrado en AssetBundle: " + selector);
+            return match;
+        }
+
+        private void ExportAssetCatalog()
+        {
+            if (_sceneRoot == null || string.IsNullOrEmpty(_catalogPath)) return;
+            try
+            {
+                var lines = new List<string>();
+                foreach (var candidate in _sceneRoot.GetComponentsInChildren<Transform>(true))
+                {
+                    if (candidate.GetComponent<Renderer>() != null)
+                        lines.Add("scene\t" + ScenePath(candidate));
+                }
+                foreach (var prefab in global::UnderPressure.UnderPressureAssetBundle.GetAllAssets<GameObject>())
+                {
+                    if (prefab != null) lines.Add("bundle\t" + prefab.name);
+                }
+                lines.Sort(StringComparer.OrdinalIgnoreCase);
+                File.WriteAllLines(_catalogPath, lines.ToArray(), new UTF8Encoding(false));
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "No se pudo exportar el catalogo del mapamundi: " + exception.Message);
+            }
+        }
+
+        private string ScenePath(Transform target)
+        {
+            var parts = new List<string>();
+            for (var node = target; node != null; node = node.parent)
+            {
+                parts.Add(node.name + "[" + node.GetSiblingIndex() + "]");
+                if (node == _sceneRoot) break;
+            }
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
+        }
+
+        private bool TryGetCursorPosition(out Vector3 position)
+        {
+            position = Vector3.zero;
+            var camera = _map?.CameraLogic?.CameraComponent;
+            if (camera == null || _sceneRoot == null) return false;
+            var ray = camera.ScreenPointToRay(Input.mousePosition);
+            var hits = Physics.RaycastAll(ray, 20000f);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            foreach (var hit in hits)
+            {
+                var target = hit.collider == null ? null : hit.collider.transform;
+                if (target == null || !target.IsChildOf(_sceneRoot) ||
+                    (_generatedRoot != null && target.IsChildOf(_generatedRoot)) ||
+                    target.GetComponentInParent<MapPin>() != null) continue;
+                position = hit.point;
+                return true;
+            }
+            return false;
+        }
+
+        private void EnsureGeneratedRoot()
+        {
+            if (_generatedRoot != null) return;
+            var root = new GameObject("UP_WorldMapAuthoring");
+            root.transform.SetParent(_sceneRoot, true);
+            _generatedRoot = root.transform;
+        }
+
+        private void ClearGenerated()
+        {
+            if (_generatedRoot == null) return;
+            _generatedRoot.gameObject.SetActive(false);
+            Destroy(_generatedRoot.gameObject);
+            _generatedRoot = null;
+        }
+
+        private static string SafeId(string id, int index) =>
+            string.IsNullOrWhiteSpace(id) ? index.ToString() : id.Trim();
+
+        private void OnDestroy()
+        {
+            ClearGenerated();
+            _map = null;
+            _sceneRoot = null;
+        }
+    }
+
     [HarmonyPatch(typeof(MetagameMapCareerUI), "Setup")]
     internal static class ScenarioCareerMapControlsSetupPatch
     {
@@ -1124,6 +1482,9 @@ namespace UnderPressure.Editor
             var controls = __instance.GetComponent<ScenarioCareerMapControls>() ??
                 __instance.gameObject.AddComponent<ScenarioCareerMapControls>();
             controls.Initialise(metagameMap, __instance.ButtonsMenu);
+            var authoring = __instance.GetComponent<ScenarioWorldMapAuthoring>() ??
+                __instance.gameObject.AddComponent<ScenarioWorldMapAuthoring>();
+            authoring.Initialise(metagameMap);
         }
     }
 
