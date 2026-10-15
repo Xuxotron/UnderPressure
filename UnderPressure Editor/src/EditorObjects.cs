@@ -838,6 +838,8 @@ namespace UnderPressure.Editor
             internal Vector3 OriginalWorld;
             internal Vector3 OriginalLocal;
             internal float OriginalRotation;
+            internal HospitalPlotItem SourceRecord;
+            internal int SourceRecordIndex;
         }
 
         private static readonly FieldInfo NativeDragFloor =
@@ -970,48 +972,35 @@ namespace UnderPressure.Editor
                     self.QueueNativeClone(pickedItem, self._selection ?? pickedPlot);
                 return false;
             }
-            if (!shift && !alt) return true;
+            if (!Input.GetMouseButtonDown(0)) return true;
             HospitalPlot owner;
             LandscapeRoomItem item;
             if (!self.TryPickNative(Input.mousePosition, out owner, out item) ||
-                owner == null || CursorPlotField == null) return true;
+                owner == null || CursorPlotField == null) return !alt;
+            if (!alt && !ReferenceEquals(owner, self._selection)) return true;
 
-            if (alt && Input.GetMouseButtonDown(0))
+            var sourceLayer = ReadLayer(item);
+            var records = owner.Definition?.GetItems(sourceLayer);
+            var recordIndex = records == null ? -1 :
+                records.FindIndex(record => record != null && record.Equals(item));
+            if (recordIndex < 0)
             {
-                var destination = self._selection ?? owner;
-                var destinationLayer = CursorLayerField?.GetValue(cursor) is HospitalPlotLayer selectedLayer
-                    ? selectedLayer : CursorEditHospital.HospitalPlotLayer;
-                var sourceLayer = ReadLayer(item);
-                if ((!ReferenceEquals(owner, destination) || sourceLayer != destinationLayer) &&
-                    destination?.HospitalMap?.FloorPlan != null &&
-                    destination.HospitalMap.RoomVisual != null && SetCursorFloorPlan != null &&
-                    LandscapeLayerField != null)
-                {
-                    var records = owner.Definition?.GetItems(sourceLayer);
-                    var recordIndex = records == null ? -1 :
-                        records.FindIndex(record => record != null && record.Equals(item));
-                    if (recordIndex < 0)
-                    {
-                        UnderPressureEditorPlugin.Log?.LogWarning(
-                            "Alt: no se encontro el registro exacto del objeto de origen.");
-                        return false;
-                    }
-                    self._pendingAlt = new NativeAltTransfer
-                    {
-                        Item = item,
-                        Source = owner,
-                        Destination = destination,
-                        SourceLayer = sourceLayer,
-                        DestinationLayer = destinationLayer,
-                        SourceLocalPosition = item.LocalPosition,
-                        SourceRotation = item.Rotation,
-                        SourceRecord = records[recordIndex],
-                        SourceRecordIndex = recordIndex
-                    };
-                }
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Mover: no se encontro el registro exacto del objeto de origen.");
+                return false;
             }
+            self._pendingAlt = new NativeAltTransfer
+            {
+                Item = item,
+                Source = owner,
+                SourceLayer = sourceLayer,
+                SourceLocalPosition = item.LocalPosition,
+                SourceRotation = item.Rotation,
+                SourceRecord = records[recordIndex],
+                SourceRecordIndex = recordIndex
+            };
 
-            if (ReferenceEquals(owner, self._selection)) return true;
+            if (!alt || ReferenceEquals(owner, self._selection)) return true;
             previousPlot = CursorPlotField.GetValue(cursor) as HospitalPlot;
             CursorPlotField.SetValue(cursor, owner);
             return true;
@@ -1029,7 +1018,7 @@ namespace UnderPressure.Editor
         {
             var transfer = _pendingAlt;
             _pendingAlt = null;
-            if (transfer == null || transfer.Item == null || transfer.Destination == null ||
+            if (transfer == null || transfer.Item == null ||
                 _level?.CursorManager == null ||
                 !_level.CursorManager.TryGetActiveMode<CursorRoomItem>(out var roomCursor) ||
                 !ReferenceEquals(roomCursor.RoomItem, transfer.Item)) return;
@@ -1039,21 +1028,45 @@ namespace UnderPressure.Editor
                 if (sourceRecords.Contains(transfer.SourceRecord))
                     sourceRecords.Remove(transfer.SourceRecord);
                 SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(transfer.Source.Definition);
-
-                SetCursorFloorPlan.Invoke(roomCursor, new object[]
-                {
-                    transfer.Destination.HospitalMap.FloorPlan,
-                    transfer.Destination.HospitalMap.RoomVisual
-                });
-                LandscapeLayerField.SetValue(transfer.Item, transfer.DestinationLayer);
                 transfer.Cursor = roomCursor;
                 _activeAlt = transfer;
             }
             catch (Exception ex)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Alt: no se pudo cambiar el FloorPlan de destino: " + ex);
+                    "Mover: no se pudo iniciar el traslado del objeto: " + ex);
                 RestoreAltTransfer(transfer, true);
+            }
+        }
+
+        internal static bool BeforeAltPlace(CursorRoomItem cursor)
+        {
+            var self = _active;
+            var transfer = self?._activeAlt;
+            if (transfer == null || !ReferenceEquals(transfer.Cursor, cursor)) return true;
+            var destination = self._selection;
+            var destinationLayer = CursorEditHospital.HospitalPlotLayer;
+            if (destination?.HospitalMap?.FloorPlan == null ||
+                destination.HospitalMap.RoomVisual == null || SetCursorFloorPlan == null ||
+                LandscapeLayerField == null) return false;
+            try
+            {
+                transfer.Destination = destination;
+                transfer.DestinationLayer = destinationLayer;
+                SetCursorFloorPlan.Invoke(cursor, new object[]
+                {
+                    destination.HospitalMap.FloorPlan,
+                    destination.HospitalMap.RoomVisual
+                });
+                LandscapeLayerField.SetValue(transfer.Item, destinationLayer);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                transfer.Destination = null;
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Mover: no se pudo asignar la parcela activa al soltar: " + ex);
+                return false;
             }
         }
 
@@ -1072,7 +1085,8 @@ namespace UnderPressure.Editor
         {
             var self = _active;
             var transfer = self?._activeAlt;
-            if (transfer == null || !ReferenceEquals(transfer.Cursor, cursor) || !placed) return;
+            if (transfer == null || !ReferenceEquals(transfer.Cursor, cursor) || !placed ||
+                transfer.Destination == null) return;
             self._activeAlt = null;
 
             var item = transfer.Item;
@@ -1152,7 +1166,7 @@ namespace UnderPressure.Editor
             catch (Exception ex)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Alt: no se pudo restaurar el objeto cancelado: " + ex);
+                    "Mover: no se pudo restaurar el objeto cancelado: " + ex);
             }
         }
 
@@ -1223,7 +1237,6 @@ namespace UnderPressure.Editor
             _nativeOwnerCursor = cursor;
             _nativeMoveCancelled = false;
             _nativeMulti.Clear();
-            var owners = new HashSet<HospitalPlot>();
             try
             {
                 foreach (var pair in _ctrlSelected)
@@ -1231,23 +1244,38 @@ namespace UnderPressure.Editor
                     var item = pair.Key;
                     var owner = pair.Value;
                     if (item == null || owner?.HospitalMap?.FloorPlan == null) continue;
+                    var layer = ReadLayer(item);
+                    var records = owner.Definition?.GetItems(layer);
+                    var recordIndex = records == null ? -1 :
+                        records.FindIndex(record => record != null && record.Equals(item));
+                    if (recordIndex < 0) continue;
+                    var world = item.WorldPosition;
                     _nativeMulti.Add(item, new NativeMultiMember
                     {
-                        Owner = owner, Layer = ReadLayer(item),
-                        OriginalWorld = item.WorldPosition,
+                        Owner = owner, Layer = layer,
+                        OriginalWorld = world,
                         OriginalLocal = item.LocalPosition,
-                        OriginalRotation = item.Rotation
+                        OriginalRotation = item.Rotation,
+                        SourceRecord = records[recordIndex],
+                        SourceRecordIndex = recordIndex
                     });
-                    // API NATIVA: destruye su visual anterior y conserva la
-                    // misma instancia mientras la recoge el cursor del juego.
-                    RoomAlgorithms.MoveItemToFloorPlan(item, floor);
+
+                    // El método nativo MoveItemToFloorPlan ejecuta AddToWorld
+                    // sobre un BlueprintFloorPlan sin HospitalMap y falla para
+                    // LandscapeRoomItem. En el plano temporal solo se necesita
+                    // conservar la misma instancia y su posición mundial.
+                    owner.HospitalMap.FloorPlan.RemoveItem(item);
+                    item.FloorPlan = floor;
+                    item.WorldPosition = world;
+                    floor.LandscapeItems.Add(item);
+                    if (item.Visual != null)
+                    {
+                        item.Visual.Destroy();
+                        item.Visual = null;
+                    }
                     nativeItems.Add(item);
-                    owners.Add(owner);
                 }
                 if (_nativeMulti.Count == 0) return false;
-                foreach (var owner in owners)
-                    owner.HospitalMap.RoomVisual.UpdateFromRoom(
-                        owner.HospitalMap.FloorPlan, Vector3.zero, 0f);
                 visual.UpdateFromRoom(floor, Vector3.zero, 0f);
                 visual.SetWallsFloorVisible(false);
                 visual.SetVisible(true);
@@ -1305,9 +1333,10 @@ namespace UnderPressure.Editor
             _nativeMoveCancelled = false;
             cellOffset.y = 0f;
             var affected = new HashSet<HospitalPlot>();
-            var usedRecords = new HashSet<HospitalPlotItem>();
             var nativeItems = cursor == null ? null :
                 NativeMultiItems?.GetValue(cursor) as List<LandscapeRoomItem>;
+            var destinationPlot = (!cancel && !deleted) ? _selection : null;
+            var destinationLayer = CursorEditHospital.HospitalPlotLayer;
             try
             {
                 foreach (var pair in members)
@@ -1316,41 +1345,59 @@ namespace UnderPressure.Editor
                     var member = pair.Value;
                     var owner = member.Owner;
                     if (item == null || owner?.HospitalMap?.FloorPlan == null) continue;
-                    var targetFloor = owner.HospitalMap.FloorPlan;
+                    var targetPlot = destinationPlot ?? owner;
+                    var targetFloor = targetPlot?.HospitalMap?.FloorPlan;
+                    if (targetFloor == null) targetFloor = owner.HospitalMap.FloorPlan;
                     var destination = (cancel || deleted) ? member.OriginalWorld :
                         item.WorldPosition + cellOffset;
-                    // El movimiento y cambio de plano son los del juego.
+                    floor?.LandscapeItems.Remove(item);
+                    if (item.Visual != null)
+                    {
+                        item.Visual.Destroy();
+                        item.Visual = null;
+                    }
+                    item.FloorPlan = targetFloor;
                     item.WorldPosition = destination;
-                    RoomAlgorithms.MoveItemToFloorPlan(item, targetFloor);
+                    LandscapeLayerField.SetValue(item,
+                        (cancel || deleted) ? member.Layer : destinationLayer);
                     if (cancel || deleted)
                         item.Rotation = member.OriginalRotation;
+                    targetFloor.AddItem(item);
                     if (!cancel && !deleted)
                     {
-                        var records = owner.Definition?.GetItems(member.Layer);
-                        if (records != null)
-                            foreach (var record in records)
-                            {
-                                if (record == null || usedRecords.Contains(record) ||
-                                    !ReferenceEquals(record.Definition?.Instance, item.Definition) ||
-                                    (record.Position - member.OriginalLocal).sqrMagnitude > 0.0001f ||
-                                    Mathf.Abs(record.Rotation - member.OriginalRotation) > .01f) continue;
-                                record.Position = item.LocalPosition;
-                                record.Rotation = item.Rotation;
-                                usedRecords.Add(record);
-                                SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(owner.Definition);
-                                break;
-                            }
+                        var sourceRecords = owner.Definition.GetItems(member.Layer);
+                        sourceRecords.Remove(member.SourceRecord);
+                        targetPlot.Definition.AddItem(new HospitalPlotItem
+                        {
+                            Definition = SharedInstanceUtils.GetSharedInstance<RoomItemDefinition>(
+                                item.Definition as RoomItemDefinition),
+                            Position = item.LocalPosition,
+                            Rotation = item.Rotation
+                        }, destinationLayer);
+                        SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(owner.Definition);
+                        if (!ReferenceEquals(owner.Definition, targetPlot.Definition))
+                            SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(
+                                targetPlot.Definition);
                         ScenarioEditorScene.MarkPlotLayerModified(owner, member.Layer);
+                        ScenarioEditorScene.MarkPlotLayerModified(targetPlot, destinationLayer);
                     }
                     affected.Add(owner);
+                    affected.Add(targetPlot);
                 }
                 nativeItems?.Clear();
                 foreach (var owner in affected)
                 {
-                    owner.HospitalMap.RoomVisual.UpdateFromRoom(
-                        owner.HospitalMap.FloorPlan, Vector3.zero, 0f);
-                    _level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(owner);
+                    owner?.HospitalMap?.RoomVisual?.CreateRoomItems(
+                        Vector3.zero, 0f, null);
                 }
+                if (!cancel && !deleted && destinationPlot != null)
+                    foreach (var pair in members)
+                    {
+                        var visualObject = pair.Key?.Visual?.GameObject;
+                        if (visualObject != null)
+                            visualObject.SetActive(destinationPlot.IsVisible() &&
+                                destinationPlot.IsLayerVisible(destinationLayer));
+                    }
                 if (floor != null)
                 {
                     // Vaciar y ocultar siempre el plano temporal: al cancelar
@@ -2015,6 +2062,14 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(CursorRoomItem), "PlaceItem")]
     internal static class ScenarioEditorSingleObjectAltPlacedPatch
     {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(CursorRoomItem __instance, ref bool __result)
+        {
+            if (ScenarioEditorObjectInteraction.BeforeAltPlace(__instance)) return true;
+            __result = false;
+            return false;
+        }
+
         [HarmonyPriority(Priority.Last)]
         private static void Postfix(CursorRoomItem __instance, bool __result) =>
             ScenarioEditorObjectInteraction.AfterAltPlace(__instance, __result);
