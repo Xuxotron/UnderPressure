@@ -1,4 +1,4 @@
-// Updated: 2026-10-15 - Coordenadas XYZ bajo el cursor y checkbox blanco de visibilidad Landscape.
+// Updated: 2026-10-15 - Alt transfiere sin duplicar y sin alterar Ctrl multiple.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -1565,19 +1565,70 @@ namespace UnderPressure.Editor
             _offset = Vector3.zero;
         }
 
+        // Alt retira el original sin lanzar RoomItem.Destroy(): dicho evento
+        // altera los datos de seleccion del cursor nativo, incluido Ctrl.
+        private static bool RemoveNativeOriginalForAlt(HospitalPlot owner, object original)
+        {
+            var item = original as LandscapeRoomItem;
+            var floor = owner?.HospitalMap?.FloorPlan;
+            if (item == null || floor == null || item.FloorPlan != floor ||
+                !floor.LandscapeItems.Contains(item)) return false;
+            var records = owner.Definition?.GetItems(item.Layer);
+            if (records == null) return false;
+
+            // Guardar la referencia al registro real de esta instancia, no
+            // eliminar por tipo: podria haber cientos de objetos identicos.
+            var index = -1;
+            var near = float.MaxValue;
+            var count = 0;
+            for (var i = 0; i < records.Count; i++)
+            {
+                var record = records[i];
+                if (record?.Definition?.Instance == null ||
+                    !ReferenceEquals(record.Definition.Instance, item.Definition)) continue;
+                count++;
+                var distance = (record.Position - item.LocalPosition).sqrMagnitude;
+                if (distance < near) { near = distance; index = i; }
+            }
+            // Si la lista de definicion esta desfasada, no eliminar una
+            // entrada de otro objeto. El FloorPlan visible es el origen real.
+            if (near > 0.04f && count != 1) index = -1;
+
+            try
+            {
+                floor.RemoveItem(item);
+            }
+            catch (Exception ex)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Alt: error al retirar el original del FloorPlan: " + ex);
+                return false;
+            }
+            if (index >= 0) records.RemoveAt(index);
+            try
+            {
+                var visual = item.Visual;
+                if (visual != null) { visual.Destroy(); item.Visual = null; }
+            }
+            catch (Exception ex)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Alt: objeto retirado, fallo la limpieza visual: " + ex.Message);
+            }
+            MarkPlotLayerModified(owner, item.Layer);
+            return true;
+        }
+
         private static void CommitDrag()
         {
             if (_originalPlot != null && _nativeOriginal != null)
             {
-                // Nunca confirmar una copia si no se ha podido retirar el
-                // original; era la causa de duplicados al soltar Alt.
                 if (_dragObject?.Visual == null ||
-                    !ScenarioEditorObjectInteraction.RemoveNativeAfterSceneTransfer(
-                        _originalPlot, _nativeOriginal))
+                    !RemoveNativeOriginalForAlt(_originalPlot, _nativeOriginal))
                 {
                     CancelDrag();
                     UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Escenario: traslado cancelado, no se ha podido retirar el objeto original.");
+                        "Alt: traslado cancelado, original conservado.");
                     return;
                 }
             }
