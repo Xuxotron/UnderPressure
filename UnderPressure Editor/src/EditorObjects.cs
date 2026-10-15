@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Updated: 2026-10-15 - Bloquear cursor de parcelas mientras la seleccion Landscape esta activa.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -912,6 +912,7 @@ namespace UnderPressure.Editor
         {
             previousPlot = null;
             var self = _active;
+            if (ScenarioLandscape.IsActive) return false;
             if (self == null || !self.Ready || cursor == null) return true;
             if (self._nativeMulti.Count > 0) return false;
             if (self._rightClickPending &&
@@ -1416,6 +1417,7 @@ namespace UnderPressure.Editor
                 Configure(ScenarioEditorSession.Level);
             if (!Ready) return;
             RefreshSearch();
+            if (ScenarioLandscape.IsActive) return;
 
             if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
             UpdateCtrlPlotHover();

@@ -1,17 +1,12 @@
-// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
-// Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
+// Updated: 2026-10-15 - Reparado guardado Landscape: arrays objects y added escritos y verificados individualmente.
+// Mantiene el contrato del mapa .upmap, sus PNG y las capas Base/Built/Unbuilt.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
-// ===== BEGIN ORIGINAL: ScenarioMapFormat.cs =====
-// Updated: 2026-10-14 - scene.json opcional e ignorado tras retirar Escenario experimental
-// Fix: identidad adicional de prefab para carga exacta (compatible con mapas sin el campo).
-// Preservar siempre Base/Built/Unbuilt en JSON, incluidas las capas vacias.
-// Formato nativo de UnderPressure: un indice .upmap JSON y un .json/.png por parcela.
-// No implementa compatibilidad con el antiguo formato de pruebas.
 namespace UnderPressure.Editor
 {
     internal static class ScenarioMapFormat
@@ -24,6 +19,11 @@ namespace UnderPressure.Editor
         private const int MaxPlotBytes = 32 * 1024 * 1024;
         private const int MaxPngBytes = 32 * 1024 * 1024;
         private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
+        private static readonly Regex ZeroTransformFields = new Regex(
+            @",\s*""(?:x|y|z|rotation)""\s*:\s*-?0(?:\.0+)?(?:[eE][+-]?\d+)?(?=\s*[,}])",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        private static readonly Regex RotationField = new Regex(
+            @"""rotation""\s*:", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
         [Serializable]
         internal sealed class Map
@@ -39,8 +39,9 @@ namespace UnderPressure.Editor
             public string builtRoomStyle = "";
             public string buildingRoomStyle = "";
             public string unbuiltRoomStyle = "";
-            // Optional, backwards compatible; not a plot and never bought.
             public string sceneFile = "";
+            // Nombre del JSON de paisaje, independiente de las parcelas.
+            public string landscapeFile = "";
             public PlotReference[] plots = new PlotReference[0];
         }
 
@@ -84,17 +85,15 @@ namespace UnderPressure.Editor
         [Serializable]
         internal sealed class PlotPrerequisite
         {
-            // Un requisito puede cumplirse comprando cualquiera de estas parcelas.
             public int[] anyBought = new int[0];
         }
 
+        // Objeto interno: sigue usando rotation para no alterar los sistemas nativos.
         [Serializable]
         internal sealed class Item
         {
             public string guid = "";
             public string tag = "";
-            // Nombre del prefab nativo: distingue definiciones con igual GUID y DebugTag.
-            // Los JSON existentes no lo incluyen; su lectura sigue siendo valida.
             public string prefab = "";
             public float x;
             public float y;
@@ -102,12 +101,24 @@ namespace UnderPressure.Editor
             public float rotation;
         }
 
+        // Representacion de lectura para el formato compacto nuevo.
+        // NO incluye rotation: el lector antiguo lo proporciona de forma aislada.
+        [Serializable]
+        private sealed class CompactItem
+        {
+            public string guid = "";
+            public string tag = "";
+            public string prefab = "";
+            public float x = 0f;
+            public float y = 0f;
+            public float z = 0f;
+            public float r = 0f;
+        }
+
         [Serializable]
         internal sealed class Scene
         {
             public Item[] items = new Item[0];
-            // Alteraciones de decoracion fija del nivel original.
-            // No se convierte ningun objeto en parcela ni se modifica el terreno.
             public OriginalChange[] sourceChanges = new OriginalChange[0];
         }
 
@@ -163,7 +174,7 @@ namespace UnderPressure.Editor
 
         private static bool HasInvalidStyleId(string value)
         {
-            return value != null && (value.Length > 160 || value.IndexOfAny(new[] { '\r', '\n' }) >= 0);
+            return value != null && (value.Length > 160 || value.IndexOfAny(new[] {'\r', '\n'}) >= 0);
         }
 
         internal static string NormalizePerimeter(string value)
@@ -183,7 +194,6 @@ namespace UnderPressure.Editor
             var json = ReadText(path, MaxPlotBytes);
             var scene = JsonUtility.FromJson<Scene>(json) ?? new Scene();
             scene.items = ParseObjects<Item>(json, "items");
-            // Los mapas anteriores solo tenian items. Mantener compatibilidad.
             scene.sourceChanges = json.Contains("\"sourceChanges\"")
                 ? ParseObjects<OriginalChange>(json, "sourceChanges")
                 : new OriginalChange[0];
@@ -195,10 +205,8 @@ namespace UnderPressure.Editor
             var header = ReadHeader(file);
             var result = new LoadedMap { Header = header };
             var folder = Path.GetDirectoryName(Path.GetFullPath(file));
-            // Escenario experimental retirado. Los mapas ya creados pueden
-            // seguir apuntando a scene.json: ignorarlo aun si no existe.
-            // Los objetos validos proceden exclusivamente de plot_XX.json.
-            // No se borra ni se reescribe ningun archivo antiguo.
+            // Los experimentos anteriores con scene.json permanecen ignorados.
+            // No se borra ni sobrescribe ningun archivo original.
             result.SceneData = new Scene();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < header.plots.Length; ++i)
@@ -226,7 +234,8 @@ namespace UnderPressure.Editor
 
         internal static string Resolve(string folder, string file, string extension)
         {
-            if (string.IsNullOrEmpty(file) || !string.Equals(Path.GetFileName(file), file, StringComparison.Ordinal) ||
+            if (string.IsNullOrEmpty(file) ||
+                !string.Equals(Path.GetFileName(file), file, StringComparison.Ordinal) ||
                 !file.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ||
                 file.IndexOf('/') >= 0 || file.IndexOf('\\') >= 0 || file.IndexOf(':') >= 0 ||
                 file == "." || file == ".." || file.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
@@ -242,18 +251,15 @@ namespace UnderPressure.Editor
             return File.ReadAllText(path, Encoding.UTF8);
         }
 
-        // JsonUtility guarda bien los campos escalares, pero el juego puede
-        // omitir arrays de clases anidadas (plots, Items...). Por eso las listas
-        // del formato se serializan y leen explicita e independientemente.
         internal static Plot ReadPlot(string path)
         {
             var json = ReadText(path, MaxPlotBytes);
             var plot = JsonUtility.FromJson<Plot>(json);
             if (plot == null)
                 throw new InvalidDataException("Parcela JSON ilegible: " + Path.GetFileName(path));
-            plot.baseItems = ParseObjects<Item>(json, "baseItems");
-            plot.builtItems = ParseObjects<Item>(json, "builtItems");
-            plot.unbuiltItems = ParseObjects<Item>(json, "unbuiltItems");
+            plot.baseItems = ParseCompactPlotItems(json, "baseItems");
+            plot.builtItems = ParseCompactPlotItems(json, "builtItems");
+            plot.unbuiltItems = ParseCompactPlotItems(json, "unbuiltItems");
             var rawPrerequisites = ArrayElements(json, "prerequisites");
             var requirements = new List<PlotPrerequisite>();
             foreach (var raw in rawPrerequisites)
@@ -277,7 +283,30 @@ namespace UnderPressure.Editor
             return plot;
         }
 
-        private static T[] ParseObjects<T>(string json, string key) where T : class
+        // El formato nuevo lee solo r. El archivo OldLoaderMap.cs, mientras exista,
+        // recupera rotation para los JSON antiguos mediante un parche independiente.
+        private static Item[] ParseCompactPlotItems(string json, string key)
+        {
+            var entries = ArrayElements(json, key);
+            var result = new Item[entries.Count];
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var raw = JsonUtility.FromJson<CompactItem>(entries[i]);
+                if (raw == null)
+                    throw new InvalidDataException("Objeto ilegible en " + key);
+                result[i] = new Item
+                {
+                    guid = raw.guid ?? "",
+                    tag = raw.tag ?? "",
+                    prefab = raw.prefab ?? "",
+                    x = raw.x, y = raw.y, z = raw.z,
+                    rotation = raw.r
+                };
+            }
+            return result;
+        }
+
+        internal static T[] ParseObjects<T>(string json, string key) where T : class
         {
             var entries = ArrayElements(json, key);
             var result = new T[entries.Count];
@@ -290,9 +319,8 @@ namespace UnderPressure.Editor
             return result;
         }
 
-        // Extrae arrays del JSON sin depender de la deserializacion de arrays
-        // anidados de Unity. Respeta cadenas, escapes y estructuras anidadas.
-        private static List<string> ArrayElements(string json, string key)
+        // La compatibilidad temporal accede a estos elementos sin reescribir archivos.
+        internal static List<string> ArrayElements(string json, string key)
         {
             var label = "\"" + key + "\"";
             var at = json.IndexOf(label, StringComparison.Ordinal);
@@ -343,7 +371,21 @@ namespace UnderPressure.Editor
             throw new InvalidDataException("Array JSON sin cerrar: " + key);
         }
 
-        private static string SerializeObjects<T>(T[] objects) where T : class
+        private static string SerializeCompactPlotItem(Item item)
+        {
+            var json = JsonUtility.ToJson(item, false);
+            if (string.IsNullOrEmpty(json) ||
+                !json.Contains("\"guid\"") ||
+                !json.Contains("\"tag\"") ||
+                !json.Contains("\"prefab\"") ||
+                !json.Contains("\"rotation\""))
+                throw new InvalidDataException("Unity no serializo correctamente un objeto de parcela.");
+            // Comparacion exacta con el cero serializado: valores minimos no se redondean.
+            json = ZeroTransformFields.Replace(json, "");
+            return RotationField.Replace(json, "\"r\":");
+        }
+
+        private static string SerializeObjects<T>(T[] objects, bool compactPlotItems = false) where T : class
         {
             var text = new StringBuilder("[");
             if (objects != null)
@@ -352,14 +394,14 @@ namespace UnderPressure.Editor
                     if (objects[i] == null)
                         throw new InvalidDataException("El array JSON contiene una referencia vacia.");
                     if (i > 0) text.Append(',');
-                    var serialized = JsonUtility.ToJson(objects[i], false);
-                    // No permitir que una revision distinta del serializer
-                    // escriba objetos vacios perdiendo su identidad/posicion.
-                    if (objects[i] is Item &&
+                    var serialized = compactPlotItems && objects[i] is Item
+                        ? SerializeCompactPlotItem((Item)(object)objects[i])
+                        : JsonUtility.ToJson(objects[i], false);
+                    if (!compactPlotItems && objects[i] is Item &&
                         (!serialized.Contains("\"guid\"") ||
                          !serialized.Contains("\"x\"") ||
                          !serialized.Contains("\"rotation\"")))
-                        throw new InvalidDataException("Unity no serializo correctamente un objeto de parcela.");
+                        throw new InvalidDataException("Unity no serializo correctamente un objeto de escena.");
                     if (objects[i] is PlotReference &&
                         (!serialized.Contains("\"dataFile\"") ||
                          !serialized.Contains("\"imageFile\"")))
@@ -373,9 +415,9 @@ namespace UnderPressure.Editor
         private static string SerializePlot(Plot plot)
         {
             var json = JsonUtility.ToJson(plot, true);
-            json = ReplaceArray(json, "baseItems", SerializeObjects(plot.baseItems));
-            json = ReplaceArray(json, "builtItems", SerializeObjects(plot.builtItems));
-            json = ReplaceArray(json, "unbuiltItems", SerializeObjects(plot.unbuiltItems));
+            json = ReplaceArray(json, "baseItems", SerializeObjects(plot.baseItems, true));
+            json = ReplaceArray(json, "builtItems", SerializeObjects(plot.builtItems, true));
+            json = ReplaceArray(json, "unbuiltItems", SerializeObjects(plot.unbuiltItems, true));
             var requirements = new StringBuilder("[");
             if (plot.prerequisites != null)
                 for (var i = 0; i < plot.prerequisites.Length; i++)
@@ -406,8 +448,27 @@ namespace UnderPressure.Editor
             return ReplaceArray(JsonUtility.ToJson(map, true), "plots", SerializeObjects(map.plots));
         }
 
-        // Inserta o sustituye un campo array; no cambia los escalares que Unity
-        // ya serializa correctamente. Valida que las comillas no oculten corchetes.
+        // Landscape usa listas de objetos de escena; Unity puede omitir sus
+        // elementos al serializar un contenedor con arrays de clases anidadas.
+        // Escribir SIEMPRE cada elemento independientemente, como con las parcelas.
+        private static string SerializeLandscape(ScenarioLandscape.Data landscape)
+        {
+            if (landscape.objects == null || landscape.added == null)
+                throw new InvalidDataException("Landscape contiene arrays de objetos nulos.");
+
+            for (var i = 0; i < landscape.objects.Length; i++)
+            {
+                var item = landscape.objects[i];
+                if (item == null || string.IsNullOrEmpty(item.id) ||
+                    string.IsNullOrEmpty(item.name))
+                    throw new InvalidDataException("Objeto original de Landscape sin identidad: " + i);
+            }
+
+            var json = JsonUtility.ToJson(landscape, true);
+            json = ReplaceArray(json, "objects", SerializeObjects(landscape.objects));
+            return ReplaceArray(json, "added", SerializeObjects(landscape.added));
+        }
+
         private static string ReplaceArray(string json, string key, string array)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -444,7 +505,6 @@ namespace UnderPressure.Editor
                     else if (c == '"') quoted = false;
                     continue;
                 }
-                if (c == '"') { quoted = true; continue; }
                 if (c == '[') depth++;
                 else if (c == ']')
                 {
@@ -461,9 +521,12 @@ namespace UnderPressure.Editor
             var plot = value as Plot;
             var map = value as Map;
             var scene = value as Scene;
+            var landscape = value as ScenarioLandscape.Data;
             var text = plot != null ? SerializePlot(plot) :
                        map != null ? SerializeMap(map) :
-                       scene != null ? SerializeScene(scene) : JsonUtility.ToJson(value, true);
+                       scene != null ? SerializeScene(scene) :
+                       landscape != null ? SerializeLandscape(landscape) :
+                       JsonUtility.ToJson(value, true);
             if (string.IsNullOrWhiteSpace(text))
                 throw new InvalidDataException("No se pudo serializar el JSON: " + path);
             var tmp = path + ".tmp";
@@ -504,4 +567,3 @@ namespace UnderPressure.Editor
         }
     }
 }
-// ===== END ORIGINAL: ScenarioMapFormat.cs =====

@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Updated: 2026-10-15 - Coordenadas XYZ bajo el cursor y checkbox blanco de visibilidad Landscape.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -325,12 +325,24 @@ namespace UnderPressure.Editor
                 ScenarioMapFormat.WriteJson(Path.Combine(folder, entry.Item1), entry.Item2);
                 ScenarioMapFormat.WriteBytes(Path.Combine(folder, entry.Item3), entry.Item4);
             }
-            // Escenario experimental desactivado: no se generan objetos globales
-            // ni se vincula scene.json a mapas nuevos. Los archivos previos
-            // permanecen intactos en disco para evitar perdida de datos.
+            // Los objetos exteriores se guardan aparte de las parcelas.
+            // Captura de solo lectura: NO altera ni duplica la escena de Unity.
+            // Una revision del mismo mapa conserva las alteraciones ya existentes.
+            var landscapePath = Path.Combine(folder, ScenarioLandscape.FileName);
+            var previousLandscape = File.Exists(landscapePath)
+                ? ScenarioLandscape.Read(landscapePath) : null;
+            var landscape = ScenarioLandscape.Capture(previousLandscape);
+            ScenarioMapFormat.WriteJson(landscapePath, landscape);
+            var verifiedLandscape = ScenarioLandscape.Read(landscapePath);
+            if (verifiedLandscape.objects.Length != landscape.objects.Length ||
+                verifiedLandscape.added.Length != landscape.added.Length)
+                throw new InvalidDataException("El inventario Landscape no coincide con el guardado.");
+
+            // Escenario experimental desactivado: scene.json NO se utiliza.
             var header = new ScenarioMapFormat.Map
             {
                 sceneFile = "",
+                landscapeFile = ScenarioLandscape.FileName,
                 name = name,
                 baseHospitalId = baseId,
                 baseHospitalName = baseName,
@@ -594,6 +606,10 @@ namespace UnderPressure.Editor
                 // Evitar que decoracion original importada vuelva a mezclarse
                 // con objetos de parcelas. Solo permanecen objetos nativos.
                 ScenarioEditorFixedGeometry.Scan(level, true);
+                var landscapeFile = string.IsNullOrEmpty(map.Header.landscapeFile)
+                    ? ScenarioLandscape.FileName : map.Header.landscapeFile;
+                ScenarioLandscape.SetMapFile(Path.Combine(
+                    Path.GetDirectoryName(full), landscapeFile));
                 ScenarioEditorStorageMenu.NotifyLoadedMap();
                 MarkCurrentMap(level, map.Header.name);
             }
@@ -1810,8 +1826,17 @@ namespace UnderPressure.Editor
     internal static class ScenarioEditorScenePlacePatch
     {
         [HarmonyPriority(Priority.First)]
-        private static bool Prefix(CursorRoomItem __instance, ref bool __result) =>
-            ScenarioEditorScene.TryPlaceNativeObject(__instance, ref __result);
+        private static bool Prefix(CursorRoomItem __instance, ref bool __result)
+        {
+            // Parcela 0 no tiene FloorPlan: bloquear la colocacion en la
+            // antigua parcela nativa mientras Landscape sea la seleccion.
+            if (ScenarioLandscape.IsActive)
+            {
+                __result = false;
+                return false;
+            }
+            return ScenarioEditorScene.TryPlaceNativeObject(__instance, ref __result);
+        }
     }
 
     [HarmonyPatch(typeof(OpeningScreen), "Show")]
@@ -1836,6 +1861,12 @@ namespace UnderPressure.Editor
         private HospitalPlot _selectedPlot;
         private TMP_Dropdown _layerDropdown;
         private RectTransform _plotListViewport;
+        private Image _landscapeSelectBackground;
+        private Outline _landscapeBorder;
+        private Button _landscapeButton;
+        private Toggle _landscapeVisibilityToggle;
+        private Text _cursorCoordinates;
+        private float _nextCursorCoordinateRefresh;
         private Button _addPlotButton;
         private Button _deletePlotButton;
         private int _initialVisibilityFrames;
@@ -1874,6 +1905,7 @@ namespace UnderPressure.Editor
                 ? level.WorldState.HospitalPlots[0] : null;
             level.HospitalEditEvents.OnSelectHospitalPlot += OnPlotSelected;
             AddMapIdentity();
+            AddCursorCoordinates();
             RefreshMapIdentity();
             _initialVisibilityFrames = 12;
         }
@@ -1912,6 +1944,68 @@ namespace UnderPressure.Editor
                     ScenarioEditorStorage.CurrentMapName(_level));
         }
 
+        // Coordenadas mundiales del punto bajo el raton. Se muestra junto al
+        // boton Personajes, en la barra superior, sin capturar los clics.
+        private void AddCursorCoordinates()
+        {
+            var canvas = _menu != null ? _menu.GetComponentInParent<Canvas>() : null;
+            if (canvas == null) return;
+            var labelRoot = AddUi("UP Cursor World XYZ", canvas.transform);
+            var rect = labelRoot.GetComponent<RectTransform>();
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(1f, 1f);
+            rect.anchoredPosition = new Vector2(-118f, -12f);
+            rect.sizeDelta = new Vector2(322f, 40f);
+            _cursorCoordinates = labelRoot.AddComponent<Text>();
+            _cursorCoordinates.font = _font;
+            _cursorCoordinates.fontSize = 16;
+            _cursorCoordinates.fontStyle = FontStyle.Bold;
+            _cursorCoordinates.color = Color.white;
+            _cursorCoordinates.alignment = TextAnchor.MiddleRight;
+            _cursorCoordinates.horizontalOverflow = HorizontalWrapMode.Overflow;
+            _cursorCoordinates.raycastTarget = false;
+            _cursorCoordinates.text = "X: --  Y: --  Z: --";
+            var shadow = labelRoot.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, .85f);
+            shadow.effectDistance = new Vector2(1f, -1f);
+            _buttons.Add(labelRoot);
+        }
+
+        private void RefreshCursorCoordinates()
+        {
+            if (_cursorCoordinates == null || Time.unscaledTime < _nextCursorCoordinateRefresh)
+                return;
+            _nextCursorCoordinateRefresh = Time.unscaledTime + 0.07f;
+            var camera = Camera.main;
+            if (camera == null || Input.mousePosition.x < 0f ||
+                Input.mousePosition.y < 0f || Input.mousePosition.x > Screen.width ||
+                Input.mousePosition.y > Screen.height)
+            {
+                _cursorCoordinates.text = "X: --  Y: --  Z: --";
+                return;
+            }
+            var ray = camera.ScreenPointToRay(Input.mousePosition);
+            Vector3 point;
+            RaycastHit hit;
+            if (Physics.Raycast(ray, out hit, camera.farClipPlane))
+                point = hit.point;
+            else
+            {
+                float distance;
+                if (!new Plane(Vector3.up, Vector3.zero).Raycast(ray, out distance) ||
+                    distance < 0f)
+                {
+                    _cursorCoordinates.text = "X: --  Y: --  Z: --";
+                    return;
+                }
+                point = ray.GetPoint(distance);
+            }
+            var invariant = System.Globalization.CultureInfo.InvariantCulture;
+            _cursorCoordinates.text = "X: " + point.x.ToString("0.00", invariant) +
+                "   Y: " + point.y.ToString("0.00", invariant) +
+                "   Z: " + point.z.ToString("0.00", invariant);
+        }
+
         private void AddToolbarButton(string name, int row, Action action)
         {
             var button = CloneButton(_template, transform, name, action);
@@ -1919,7 +2013,7 @@ namespace UnderPressure.Editor
             if (rect != null)
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
-                rect.pivot = new Vector2(1f, 1f);
+rect.pivot = new Vector2(1f, 1f);
                 rect.anchoredPosition = new Vector2(-18f - row * 174f, -18f);
                 rect.sizeDelta = new Vector2(168f, 34f);
             }
@@ -2020,7 +2114,13 @@ namespace UnderPressure.Editor
             // interfaz. No salir de Escenario si NO se ha escogido otra parcela.
             var changed = !ReferenceEquals(_selectedPlot, plot);
             _selectedPlot = plot;
-            if (changed) ScenarioEditorScene.Deselect();
+            if (changed || ScenarioLandscape.IsActive)
+            {
+                ScenarioEditorScene.Deselect();
+                ScenarioLandscape.Deselect();
+                if (_layerDropdown != null) _layerDropdown.gameObject.SetActive(true);
+                RefreshLandscapeButton();
+            }
             if (_plotIsolation) ApplyPlotIsolation();
             RefreshMapIdentity();
         }
@@ -2034,8 +2134,10 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogWarning("No hay panel nativo de parcelas.");
                 return;
             }
-            // Conservar el panel y todas las filas de PlotSelectionItem nativas.
-            // Escenario experimental retirado: no se tocan padding ni LayoutGroup.
+            // Cabecera propia en el LayoutGroup del listado original.
+            // NO clonar PlotSelectionItem: sus eventos y checks son privados
+            // de una parcela y no deben aplicarse a Landscape.
+            AddLandscapeSelector(root);
             var scroll = root.GetComponentInParent<ScrollRect>();
             _plotListViewport = scroll != null
                 ? scroll.GetComponent<RectTransform>()
@@ -2056,6 +2158,125 @@ namespace UnderPressure.Editor
             PositionPlotActions();
         }
 
+        private void AddLandscapeSelector(Transform listRoot)
+        {
+            var row = AddUi("UP Landscape - Row", listRoot);
+            var rect = row.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(211f, 29f);
+            var layout = row.AddComponent<LayoutElement>();
+            layout.minHeight = layout.preferredHeight = 29f;
+            var background = row.AddComponent<Image>();
+            background.color = new Color(0.29f, 0.34f, 0.38f, 0.96f);
+            var button = row.AddComponent<Button>();
+            button.targetGraphic = background;
+            button.onClick.AddListener(() =>
+            {
+                ScenarioEditorScene.Deselect();
+                ScenarioEditorObjectInteraction.ClearCurrentSelection();
+                if (_plotIsolation) SetPlotIsolation(false);
+                // Parcela 0: ninguna parcela aparece seleccionada, sin enviar
+                // null al CursorEditHospital nativo (que no lo admite).
+                _selectedPlot = null;
+                var plotUiMethod = AccessTools.Method(typeof(PlotSelectionItem),
+                    "OnSelectHospitalPlot");
+                if (plotUiMethod != null)
+                    foreach (var plotUi in listRoot.GetComponentsInChildren<PlotSelectionItem>(true))
+                        plotUiMethod.Invoke(plotUi, new object[] { null });
+                if (_layerDropdown != null) _layerDropdown.gameObject.SetActive(false);
+                var plotInfo = AccessTools.Field(typeof(EditHospitalMenu),
+                    "_infoText")?.GetValue(_menu) as TMP_Text;
+                if (plotInfo != null) plotInfo.text = "Landscape";
+                try { ScenarioLandscape.Activate(_level); }
+                catch (Exception ex)
+                {
+                    ScenarioLandscape.Deselect();
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "Landscape: error al iniciar seleccion exterior: " + ex);
+                }
+                RefreshLandscapeButton();
+            });
+            var label = AddUi("UP Landscape - Text", row.transform);
+            Stretch(label.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
+            var text = label.AddComponent<Text>();
+            text.font = _font;
+            text.fontSize = 13;
+            text.fontStyle = FontStyle.Bold;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.color = Color.white;
+            text.text = "   Landscape";
+            text.raycastTarget = false;
+            AddLandscapeVisibilityCheck(row.transform);
+            row.transform.SetAsFirstSibling();
+            var outline = row.AddComponent<Outline>();
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.effectColor = new Color(0.07f, 0.72f, 1f, 1f);
+            outline.enabled = false;
+            _landscapeBorder = outline;
+            _landscapeButton = button;
+            _landscapeSelectBackground = background;
+            _buttons.Add(row);
+            RefreshLandscapeButton();
+        }
+
+        // Casilla blanca independiente de la seleccion. Solo activa/oculta
+        // los objetos originales de Landscape; ninguna parcela cambia.
+        private void AddLandscapeVisibilityCheck(Transform row)
+        {
+            var check = AddUi("UP Landscape - Visibility Check", row);
+            var rect = check.GetComponent<RectTransform>();
+            rect.anchorMin = rect.anchorMax = new Vector2(1f, .5f);
+            rect.pivot = new Vector2(1f, .5f);
+            rect.anchoredPosition = new Vector2(-7f, 0f);
+            rect.sizeDelta = new Vector2(19f, 19f);
+            var background = check.AddComponent<Image>();
+            background.color = Color.white;
+            var interior = AddUi("UP Landscape - Check Interior", check.transform);
+            var interiorRect = interior.GetComponent<RectTransform>();
+            interiorRect.anchorMin = Vector2.zero;
+            interiorRect.anchorMax = Vector2.one;
+            interiorRect.offsetMin = new Vector2(2f, 2f);
+            interiorRect.offsetMax = new Vector2(-2f, -2f);
+            var dark = interior.AddComponent<Image>();
+            dark.color = new Color(.18f, .22f, .26f, 1f);
+            dark.raycastTarget = false;
+            var mark = AddUi("UP Landscape - Check Mark", check.transform);
+            Stretch(mark.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
+            var tick = mark.AddComponent<Text>();
+            tick.font = _font;
+            tick.fontSize = 18;
+            tick.fontStyle = FontStyle.Bold;
+            tick.alignment = TextAnchor.MiddleCenter;
+            tick.color = Color.white;
+            tick.text = "✓";
+            tick.raycastTarget = false;
+            _landscapeVisibilityToggle = check.AddComponent<Toggle>();
+            _landscapeVisibilityToggle.targetGraphic = background;
+            _landscapeVisibilityToggle.graphic = tick;
+            _landscapeVisibilityToggle.isOn = ScenarioLandscape.ObjectsVisible;
+            _landscapeVisibilityToggle.onValueChanged.AddListener(visible =>
+                ScenarioLandscape.SetObjectsVisible(visible));
+        }
+
+        private void RefreshLandscapeButton()
+        {
+            if (_landscapeButton != null)
+            {
+                var colors = _landscapeButton.colors;
+                var active = ScenarioLandscape.IsActive;
+                colors.normalColor = active
+                    ? new Color(0.02f, 0.55f, 0.90f, 1f)
+                    : new Color(0.23f, 0.37f, 0.49f, 0.94f);
+                colors.highlightedColor = active
+                    ? new Color(0.04f, 0.70f, 1f, 1f)
+                    : new Color(0.31f, 0.48f, 0.61f, 1f);
+                colors.pressedColor = new Color(0.02f, 0.42f, 0.72f, 1f);
+                colors.selectedColor = colors.highlightedColor;
+                _landscapeButton.colors = colors;
+            }
+            if (_landscapeBorder != null)
+                _landscapeBorder.enabled = ScenarioLandscape.IsActive;
+        }
+
         // Atajos limitados a la sesion del Editor. InputManager.GetKeyDown
         // ignora las teclas cuando el jugador esta editando un campo de texto.
         private void Update()
@@ -2064,8 +2285,10 @@ namespace UnderPressure.Editor
                 !ReferenceEquals(ScenarioEditorSession.Level, _level) || IsDialogOpen)
                 return;
 
+            RefreshCursorCoordinates();
             var input = _level.InputManager;
             if (input == null) return;
+            ScenarioLandscape.UpdateSelection();
             if (Input.GetKeyDown(KeyCode.CapsLock) && !TextFieldFocused())
             {
                 SetPlotIsolation(!_plotIsolation);
@@ -2083,6 +2306,8 @@ namespace UnderPressure.Editor
                 return;
             }
 
+            // Landscape no tiene Base / Built / Unbuilt.
+            if (ScenarioLandscape.IsActive) return;
             for (int i = 0; i < ScenarioEditorHotkeyMap.LayerKeys.Length; i++)
             {
                 if (!input.GetKeyDown(ScenarioEditorHotkeyMap.LayerKeys[i])) continue;
@@ -2122,7 +2347,11 @@ namespace UnderPressure.Editor
         internal static void NotifyLoadedMap()
         {
             ScenarioEditorObjectInteraction.ClearCurrentSelection();
+            ScenarioLandscape.RefreshAfterMapLoad();
             if (_active == null) return;
+            if (_active._landscapeVisibilityToggle != null)
+                _active._landscapeVisibilityToggle.SetIsOnWithoutNotify(
+                    ScenarioLandscape.ObjectsVisible);
             _active._initialVisibilityFrames = 12;
             // Los antiguos objetos HospitalPlot se destruyeron al cargar.
             // Olvidar esas referencias y aplicar el bloqueo a las parcelas nuevas.
@@ -2667,6 +2896,7 @@ namespace UnderPressure.Editor
 
         private void OnDestroy()
         {
+            ScenarioLandscape.Release();
             if (_plotIsolation) SetPlotIsolation(false);
             if (_level != null)
                 _level.HospitalEditEvents.OnSelectHospitalPlot -= OnPlotSelected;
@@ -2777,7 +3007,7 @@ namespace UnderPressure.Editor
             foreach (var entry in PriorVisibility)
                 if (entry.Key != null && entry.Key.gameObject != null)
                     entry.Key.gameObject.SetActive(entry.Value);
-            PriorVisibility.Clear();
+PriorVisibility.Clear();
         }
     }
 

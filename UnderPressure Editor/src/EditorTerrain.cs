@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Updated: 2026-10-15 - Editor: desactivar profundidad de campo automaticamente y restaurarla al salir.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using HarmonyLib;
@@ -313,6 +313,11 @@ namespace UnderPressure.Editor
             image.color = new Color(0f, 0f, 0f, 0.55f);
             _behaviour = go.GetComponent<ScenarioEditorTerrainPainterBehaviour>();
             _behaviour.BuildUi();
+            // Los perfiles de postprocesado del hospital aplican un DoF
+            // cinematografico muy intenso a los exteriores. No desactivar
+            // ningun otro efecto ni modificar los assets compartidos.
+            ScenarioEditorDepthOfField.EnterEditor();
+            _behaviour.RefreshTexts();
         }
 
         internal static void Cleanup()
@@ -2000,9 +2005,21 @@ namespace UnderPressure.Editor
     {
         private static readonly Dictionary<object, bool> Originals =
             new Dictionary<object, bool>();
+        private static bool _enteredEditor;
         internal static bool Disabled { get; private set; }
         private const BindingFlags Flags = BindingFlags.Instance |
             BindingFlags.Public | BindingFlags.NonPublic;
+
+        internal static void EnterEditor()
+        {
+            if (_enteredEditor) return;
+            _enteredEditor = true;
+            var count = Apply(false, true);
+            Disabled = count > 0;
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Editor: profundidad de campo anulada en " + count +
+                " perfiles de escena. El resto del postprocesado no cambia.");
+        }
 
         internal static void Toggle()
         {
@@ -2068,6 +2085,7 @@ namespace UnderPressure.Editor
             }
             Originals.Clear();
             Disabled = false;
+            _enteredEditor = false;
         }
     }
 
