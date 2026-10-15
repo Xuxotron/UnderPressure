@@ -811,8 +811,6 @@ namespace UnderPressure.Editor
                 new[] { typeof(FloorPlan), typeof(RoomFloorPlanVisual) });
         private static readonly FieldInfo LandscapeLayerField =
             AccessTools.Field(typeof(LandscapeRoomItem), "_layer");
-        private static readonly FieldInfo IgnoreAddRemoveField =
-            AccessTools.Field(typeof(CursorEditHospitalItem), "_ignoreAddRemoveItem");
 
         // Ctrl selecciona por el rectangulo horizontal, sin extraer objetos
         // de sus FloorPlans. La relacion instancia/parcela queda intacta.
@@ -1076,10 +1074,45 @@ namespace UnderPressure.Editor
             var transfer = self?._activeAlt;
             if (transfer == null || !ReferenceEquals(transfer.Cursor, cursor) || !placed) return;
             self._activeAlt = null;
+
+            var item = transfer.Item;
+            var sourceFloor = transfer.Source?.HospitalMap?.FloorPlan;
+            var destinationFloor = transfer.Destination?.HospitalMap?.FloorPlan;
+            if (item != null && destinationFloor != null)
+            {
+                // PlaceItem ya ha añadido la misma instancia al destino. Estas
+                // comprobaciones cierran cualquier incoherencia residual sin
+                // reconstruir ninguna parcela ni recorrer objetos ajenos.
+                item.FloorPlan = destinationFloor;
+                LandscapeLayerField.SetValue(item, transfer.DestinationLayer);
+                if (!destinationFloor.LandscapeItems.Contains(item))
+                    destinationFloor.AddItem(item);
+                if (!ReferenceEquals(sourceFloor, destinationFloor) &&
+                    sourceFloor != null && sourceFloor.LandscapeItems.Contains(item))
+                    sourceFloor.LandscapeItems.Remove(item);
+
+                var sourceRecords = transfer.Source.Definition.GetItems(transfer.SourceLayer);
+                sourceRecords.Remove(transfer.SourceRecord);
+                if (!transfer.Destination.Definition.Contains(item, destinationFloor,
+                    transfer.DestinationLayer, default(Vector3)))
+                {
+                    transfer.Destination.Definition.AddItem(new HospitalPlotItem
+                    {
+                        Definition = SharedInstanceUtils.GetSharedInstance<RoomItemDefinition>(
+                            item.Definition as RoomItemDefinition),
+                        Position = item.LocalPosition,
+                        Rotation = item.Rotation
+                    }, transfer.DestinationLayer);
+                }
+                SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(transfer.Source.Definition);
+                if (!ReferenceEquals(transfer.Source.Definition, transfer.Destination.Definition))
+                    SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(
+                        transfer.Destination.Definition);
+            }
             ScenarioEditorScene.MarkPlotLayerModified(transfer.Source, transfer.SourceLayer);
             ScenarioEditorScene.MarkPlotLayerModified(transfer.Destination,
                 transfer.DestinationLayer);
-            var visual = transfer.Item?.Visual?.GameObject;
+            var visual = item?.Visual?.GameObject;
             if (visual != null)
                 visual.SetActive(transfer.Destination.IsVisible() &&
                     transfer.Destination.IsLayerVisible(transfer.DestinationLayer));
@@ -1813,63 +1846,39 @@ namespace UnderPressure.Editor
 
         internal static bool RemoveNativeAfterSceneTransfer(HospitalPlot owner, object item)
         {
-            var native = item as LandscapeRoomItem;
-            var floor = owner?.HospitalMap?.FloorPlan;
-            if (native == null || floor == null || native.FloorPlan != floor ||
-                !floor.LandscapeItems.Contains(native)) return false;
-            var layer = native.Layer;
+            var objects = Items(owner);
+            if (objects == null || !objects.Contains(item)) return false;
+            var visual = ReadNativeVisual(item);
+            var layer = ReadLayer(item);
+            var position = ReadNativePosition(item);
+            var definition = ReadMember(item, "Definition") as RoomItemDefinition;
+            // La definición y el FloorPlan deben reflejar la misma transferencia.
             var saved = owner.Definition?.GetItems(layer);
-            var recordIndex = saved == null ? -1 :
-                saved.FindIndex(record => record != null && record.Equals(native));
-            if (recordIndex < 0) return false;
-
-            try
+            if (saved != null && definition != null && position.HasValue)
             {
-                floor.RemoveItem(native);
-                saved.RemoveAt(recordIndex);
-                SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(owner.Definition);
-            }
-            catch (Exception ex)
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Alt: error al retirar el objeto del FloorPlan: " + ex);
-                return false;
-            }
-
-            try
-            {
-                if (native.Visual != null)
+                var matches = -1;
+                for (var i = saved.Count - 1; i >= 0; --i)
                 {
-                    native.Visual.Destroy();
-                    native.Visual = null;
+                    var placement = saved[i];
+                    if (placement?.Definition?.Instance == null ||
+                        !ReferenceEquals(placement.Definition.Instance, definition) ||
+                        (placement.Position - position.Value).sqrMagnitude > 0.0001f)
+                        continue;
+                    matches = i;
+                    break;
                 }
-
-                CursorEditHospitalItem editCursor = null;
-                _active?._level?.CursorManager?
-                    .TryGetActiveMode<CursorEditHospitalItem>(out editCursor);
-                var previousIgnore = editCursor != null && IgnoreAddRemoveField != null &&
-                    (bool)IgnoreAddRemoveField.GetValue(editCursor);
-                try
-                {
-                    if (editCursor != null && IgnoreAddRemoveField != null)
-                        IgnoreAddRemoveField.SetValue(editCursor, true);
-                    native.Destroy();
-                }
-                finally
-                {
-                    if (editCursor != null && IgnoreAddRemoveField != null)
-                        IgnoreAddRemoveField.SetValue(editCursor, previousIgnore);
-                }
-                ScenarioEditorScene.MarkPlotLayerModified(owner, layer);
+                // Si la definicion conserva una posicion distinta, detener el
+                // traslado antes de eliminar la instancia visible.
+                if (matches >= 0) saved.RemoveAt(matches);
+                else if (saved.Any(placement => placement?.Definition != null &&
+                            ReferenceEquals(placement.Definition.Instance, definition)))
+                    return false;
             }
-            catch (Exception ex)
-            {
-                // La transferencia de datos ya esta confirmada. Un fallo de
-                // limpieza no debe restaurar la copia visual como si siguiera
-                // perteneciendo a la parcela de origen.
-                UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Alt: el objeto se retiro, pero fallo su limpieza final: " + ex);
-            }
+            objects.Remove(item);
+            ScenarioEditorScene.MarkPlotLayerModified(owner, layer);
+            if (visual != null) UnityEngine.Object.Destroy(visual);
+            var level = _active?._level;
+            level?.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(owner);
             return true;
         }
 

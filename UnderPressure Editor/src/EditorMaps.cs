@@ -1565,9 +1565,58 @@ namespace UnderPressure.Editor
             _offset = Vector3.zero;
         }
 
+        // Alt retira el original sin lanzar RoomItem.Destroy(): dicho evento
+        // altera los datos de seleccion del cursor nativo, incluido Ctrl.
         private static bool RemoveNativeOriginalForAlt(HospitalPlot owner, object original)
         {
-            return ScenarioEditorObjectInteraction.RemoveNativeAfterSceneTransfer(owner, original);
+            var item = original as LandscapeRoomItem;
+            var floor = owner?.HospitalMap?.FloorPlan;
+            if (item == null || floor == null || item.FloorPlan != floor ||
+                !floor.LandscapeItems.Contains(item)) return false;
+            var records = owner.Definition?.GetItems(item.Layer);
+            if (records == null) return false;
+
+            // Guardar la referencia al registro real de esta instancia, no
+            // eliminar por tipo: podria haber cientos de objetos identicos.
+            var index = -1;
+            var near = float.MaxValue;
+            var count = 0;
+            for (var i = 0; i < records.Count; i++)
+            {
+                var record = records[i];
+                if (record?.Definition?.Instance == null ||
+                    !ReferenceEquals(record.Definition.Instance, item.Definition)) continue;
+                count++;
+                var distance = (record.Position - item.LocalPosition).sqrMagnitude;
+                if (distance < near) { near = distance; index = i; }
+            }
+            // Si la lista de definicion esta desfasada, no eliminar una
+            // entrada de otro objeto. El FloorPlan visible es el origen real.
+            if (near > 0.04f && count != 1) index = -1;
+
+            try
+            {
+                floor.RemoveItem(item);
+            }
+            catch (Exception ex)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Alt: error al retirar el original del FloorPlan: " + ex);
+                return false;
+            }
+            if (index >= 0) records.RemoveAt(index);
+            try
+            {
+                var visual = item.Visual;
+                if (visual != null) { visual.Destroy(); item.Visual = null; }
+            }
+            catch (Exception ex)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Alt: objeto retirado, fallo la limpieza visual: " + ex.Message);
+            }
+            MarkPlotLayerModified(owner, item.Layer);
+            return true;
         }
 
         private static void CommitDrag()
