@@ -499,11 +499,21 @@ namespace UnderPressure.Editor
                 topRight.y - parentTopLeft.y);
             _creatorFrame.anchoredPosition = first;
             _creatorFrame.sizeDelta = new Vector2(282f, height);
-            _mapFrame.anchoredPosition = first + new Vector2(282f + gap, 0f);
+            // El marco nativo deja margen transparente lateral; sin añadir un
+            // segundo hueco los bordes visibles conservan la misma distancia.
+            _mapFrame.anchoredPosition = first + new Vector2(282f, 0f);
             _mapFrame.sizeDelta = new Vector2(282f, height);
             var originalIndex = _nativeRect.GetSiblingIndex();
-            _creatorFrame.SetSiblingIndex(originalIndex);
-            _mapFrame.SetSiblingIndex(originalIndex + 1);
+            var creatorIndex = _creatorFrame.GetSiblingIndex();
+            var mapIndex = _mapFrame.GetSiblingIndex();
+            // Solo ordenar cuando sea necesario. Reinsertarlos cada fotograma
+            // alternaba su profundidad y producia el parpadeo sobre la X nativa.
+            if (creatorIndex >= originalIndex || mapIndex >= originalIndex ||
+                creatorIndex > mapIndex)
+            {
+                _creatorFrame.SetSiblingIndex(originalIndex);
+                _mapFrame.SetSiblingIndex(_nativeRect.GetSiblingIndex());
+            }
         }
 
         private void StyleBlue(Image image)

@@ -782,6 +782,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(MetagameButtonsMenu), "_careerGoalsButton");
         private static readonly FieldInfo LeaderboardButtonField =
             AccessTools.Field(typeof(MetagameButtonsMenu), "_leaderboardButton");
+        private static readonly FieldInfo CollaborativeButtonField =
+            AccessTools.Field(typeof(CollaborativeSidebarMenu), "_collaborativePortfolioButton");
         private static readonly MethodInfo UpdateBoundsMethod =
             AccessTools.Method(typeof(MetagameMapUI), "SetCameraBoundsToMapPinBounds");
         private static readonly MethodInfo CloseAllMenusMethod =
@@ -1018,11 +1020,24 @@ namespace UnderPressure.Editor
                 _nativeMeasuresReady = true;
             }
 
-            // Orden original visual: Menu, Carrera, Marcadores; el ultimo queda
-            // a la izquierda del boton nativo de incidencias.
-            float right = _canvasRect.rect.xMax - 96f;
-            float top = _canvasRect.rect.yMax - 17f;
-            const float gap = 8f;
+            // Orden original visual: Menu, Carrera, Marcadores. Se toma como
+            // referencia el boton real de Superbug para compartir altura y
+            // conservar una separacion estable aunque cambie la resolucion.
+            float right = _canvasRect.rect.xMax - 106f;
+            float centerY = _canvasRect.rect.yMax - 42f;
+            const float gap = 14f;
+            var collaborative = _map?.HUD?.FindMenu<CollaborativeSidebarMenu>(false);
+            var collaborativeButton = collaborative == null ? null :
+                CollaborativeButtonField?.GetValue(collaborative) as Component;
+            var collaborativeRect = collaborativeButton?.transform as RectTransform;
+            if (collaborativeRect != null && collaborativeRect.gameObject.activeInHierarchy)
+            {
+                collaborativeRect.GetWorldCorners(corners);
+                var a = _canvasRect.InverseTransformPoint(corners[0]);
+                var b = _canvasRect.InverseTransformPoint(corners[2]);
+                right = Mathf.Min(a.x, b.x) - gap;
+                centerY = (a.y + b.y) * 0.5f;
+            }
             for (int i = _nativeButtons.Length - 1; i >= 0; i--)
             {
                 var rect = _nativeButtons[i]?.transform as RectTransform;
@@ -1030,7 +1045,6 @@ namespace UnderPressure.Editor
                 float width = _nativeWidths[i];
                 float height = _nativeHeights[i];
                 float centerX = right - width * 0.5f;
-                float centerY = top - height * 0.5f;
                 right -= width + gap;
                 if (!rect.gameObject.activeInHierarchy) continue;
 
