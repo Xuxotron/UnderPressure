@@ -138,13 +138,17 @@ namespace UnderPressure.Editor
         private void LoadCreators()
         {
             _creators.Clear();
-            var root = Path.GetFullPath(Path.Combine(ScenarioEditorStorage.Folder, "Conflux"));
+            var root = Path.GetFullPath(ScenarioEditorStorage.Folder);
             if (!Directory.Exists(root)) return;
             foreach (var creatorFolder in Directory.GetDirectories(root, "*", SearchOption.TopDirectoryOnly))
             {
+                var creatorName = Path.GetFileName(creatorFolder);
+                if (string.IsNullOrWhiteSpace(creatorName) ||
+                    creatorName.StartsWith("_", StringComparison.Ordinal))
+                    continue;
                 var creator = new CreatorChoice
                 {
-                    Name = Path.GetFileName(creatorFolder),
+                    Name = creatorName,
                     Folder = creatorFolder
                 };
                 foreach (var path in Directory.GetFiles(creatorFolder, "*.upmap",
@@ -181,7 +185,7 @@ namespace UnderPressure.Editor
                 }
                 creator.Maps.Sort((left, right) =>
                     StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name));
-                _creators.Add(creator);
+                if (creator.Maps.Count > 0) _creators.Add(creator);
             }
             _creators.Sort((left, right) =>
                 StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name));
