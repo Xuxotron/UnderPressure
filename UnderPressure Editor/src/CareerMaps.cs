@@ -1176,10 +1176,27 @@ namespace UnderPressure.Editor
             AccessTools.Method(typeof(MetagameMapUI), "SetCameraBoundsToMapPinBounds");
         private static readonly FieldInfo StarsField =
             AccessTools.Field(typeof(MapPinHospital), "_stars");
+        private static readonly FieldInfo MeshIconField =
+            AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
+        private static readonly FieldInfo ActiveHospitalEffectField =
+            AccessTools.Field(typeof(MapPinHospital), "_activeHospitalEffect");
+        private static readonly FieldInfo[] PinMaterialFields =
+        {
+            AccessTools.Field(typeof(MapPinHospital), "_materialDefault"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialHighlighted"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialLocked"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialLockedHighlighted"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialDefaultRemix"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialHighlightedRemix"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialLockedRemix"),
+            AccessTools.Field(typeof(MapPinHospital), "_materialLockedHighlightedRemix")
+        };
         private static readonly Dictionary<MapPinHospital, string> PinMapPaths =
             new Dictionary<MapPinHospital, string>();
         private static readonly Dictionary<MapPinHospital, WorldMapConflux> ConfluxPins =
             new Dictionary<MapPinHospital, WorldMapConflux>();
+        private static readonly Dictionary<MapPinHospital, Material> ConfluxIconMaterials =
+            new Dictionary<MapPinHospital, Material>();
 
         private MetagameMap _map;
         private Transform _sceneRoot;
@@ -1190,6 +1207,7 @@ namespace UnderPressure.Editor
         private Vector3 _cursorPosition;
         private bool _hasCursorPosition;
         private string _catalogPath;
+        private Texture2D _confluxIconTexture;
 
         internal void Initialise(MetagameMap map)
         {
@@ -1304,6 +1322,7 @@ namespace UnderPressure.Editor
                 particles.gameObject.SetActive(true);
                 var main = particles.main;
                 main.simulationSpeed *= placement.SpeedMultiplier;
+                if (placement.TintMagenta) TintParticleSystem(particles);
                 if (placement.CircularEmissionRadius > 0f)
                 {
                     var shape = particles.shape;
@@ -1396,6 +1415,9 @@ namespace UnderPressure.Editor
             AppendPin(UiPinsField, _map.MapUI, pin);
             _generatedHospitalPins.Add(pin);
             ConfluxPins[pin] = placement;
+            var iconMaterial = CreateConfluxIconMaterial(pin);
+            if (iconMaterial != null) ConfluxIconMaterials[pin] = iconMaterial;
+            RefreshConfluxVisual(pin);
             RefreshCameraBoundsMethod?.Invoke(_map.MapUI, null);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Pin Conflux creado: " + clone.name + " en " + clone.transform.position + ".");
@@ -1429,6 +1451,93 @@ namespace UnderPressure.Editor
         {
             conflux = null;
             return pin != null && ConfluxPins.TryGetValue(pin, out conflux);
+        }
+
+        internal static void RefreshConfluxVisual(MapPinHospital pin)
+        {
+            if (pin == null || !ConfluxPins.ContainsKey(pin)) return;
+            var stars = StarsField?.GetValue(pin) as GameObject[];
+            if (stars != null)
+                foreach (var star in stars)
+                    if (star != null) star.SetActive(false);
+
+            if (ConfluxIconMaterials.TryGetValue(pin, out var material) && material != null)
+            {
+                var mesh = MeshIconField?.GetValue(pin) as MeshRenderer;
+                if (mesh != null) mesh.sharedMaterial = material;
+            }
+
+            var activeEffect = ActiveHospitalEffectField?.GetValue(pin) as GameObject;
+            if (activeEffect == null) return;
+            activeEffect.SetActive(false);
+            Destroy(activeEffect);
+            ActiveHospitalEffectField.SetValue(pin, null);
+        }
+
+        private static void TintParticleSystem(ParticleSystem particles)
+        {
+            var magenta = new Color(1f, 0f, 0.72f, 1f);
+            var main = particles.main;
+            main.startColor = new ParticleSystem.MinMaxGradient(magenta);
+            var renderer = particles.GetComponent<ParticleSystemRenderer>();
+            if (renderer == null) return;
+            foreach (var material in renderer.materials)
+            {
+                if (material == null) continue;
+                SetMaterialMagenta(material, "_Color", magenta);
+                SetMaterialMagenta(material, "_TintColor", magenta);
+                SetMaterialMagenta(material, "_EmissionColor", magenta);
+            }
+        }
+
+        private static void SetMaterialMagenta(Material material, string property, Color magenta)
+        {
+            if (!material.HasProperty(property)) return;
+            var original = material.GetColor(property);
+            var intensity = Mathf.Max(1f, original.r, original.g, original.b);
+            material.SetColor(property, new Color(
+                magenta.r * intensity, magenta.g * intensity, magenta.b * intensity, original.a));
+        }
+
+        private Material CreateConfluxIconMaterial(MapPinHospital pin)
+        {
+            var mesh = MeshIconField?.GetValue(pin) as MeshRenderer;
+            if (mesh == null) return null;
+            var path = Path.Combine(UnderPressure.LoaderRuntime.Paths.PluginPath,
+                "Assets", "icon conflux.png");
+            if (!File.Exists(path))
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Icono de Conflux no encontrado: " + path);
+                return null;
+            }
+            if (_confluxIconTexture == null)
+            {
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, true)
+                {
+                    name = "UP_ConfluxIcon",
+                    wrapMode = TextureWrapMode.Clamp
+                };
+                if (!ImageConversion.LoadImage(texture, File.ReadAllBytes(path), false))
+                {
+                    Destroy(texture);
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "No se pudo decodificar el icono de Conflux: " + path);
+                    return null;
+                }
+                _confluxIconTexture = texture;
+            }
+
+            var shader = Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default");
+            var original = mesh.sharedMaterial;
+            if (shader == null && original == null) return null;
+            var material = shader != null ? new Material(shader) : new Material(original);
+            material.name = "UP_ConfluxIconMaterial";
+            material.mainTexture = _confluxIconTexture;
+            if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
+            foreach (var field in PinMaterialFields)
+                field?.SetValue(pin, material);
+            return material;
         }
 
         private static void AppendPin(FieldInfo field, object owner, MapPin pin)
@@ -1573,6 +1682,11 @@ namespace UnderPressure.Editor
                 RemovePin(UiPinsField, _map?.MapUI, pin);
                 PinMapPaths.Remove(pin);
                 ConfluxPins.Remove(pin);
+                if (ConfluxIconMaterials.TryGetValue(pin, out var iconMaterial))
+                {
+                    ConfluxIconMaterials.Remove(pin);
+                    if (iconMaterial != null) Destroy(iconMaterial);
+                }
                 try { pin.PrepareForDestroy(); }
                 catch (Exception exception)
                 {
@@ -1581,6 +1695,11 @@ namespace UnderPressure.Editor
                 }
             }
             _generatedHospitalPins.Clear();
+            if (_confluxIconTexture != null)
+            {
+                Destroy(_confluxIconTexture);
+                _confluxIconTexture = null;
+            }
             if (_generatedRoot == null) return;
             _generatedRoot.gameObject.SetActive(false);
             Destroy(_generatedRoot.gameObject);
@@ -1642,8 +1761,18 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(MapPinHospital), "Refresh")]
     internal static class ScenarioCareerMapControlsPinPatch
     {
-        private static void Postfix(MapPinHospital __instance) =>
+        private static void Postfix(MapPinHospital __instance)
+        {
             ScenarioCareerMapControls.RevealHospital(__instance);
+            ScenarioWorldMapAuthoring.RefreshConfluxVisual(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(MapPinHospital), "RefreshVisual")]
+    internal static class ScenarioWorldMapConfluxVisualPatch
+    {
+        private static void Postfix(MapPinHospital __instance) =>
+            ScenarioWorldMapAuthoring.RefreshConfluxVisual(__instance);
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "OnCursorOver")]

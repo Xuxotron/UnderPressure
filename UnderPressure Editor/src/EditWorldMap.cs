@@ -17,20 +17,22 @@ namespace UnderPressure.Editor
         internal readonly float CircularEmissionRadius;
         internal readonly float ScaleMultiplier;
         internal readonly float SpeedMultiplier;
+        internal readonly bool TintMagenta;
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position)
-            : this(id, source, asset, position, 0f, 1f, 1f)
+            : this(id, source, asset, position, 0f, 1f, 1f, false)
         {
         }
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position,
             float circularEmissionRadius)
-            : this(id, source, asset, position, circularEmissionRadius, 1f, 1f)
+            : this(id, source, asset, position, circularEmissionRadius, 1f, 1f, false)
         {
         }
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position,
-            float circularEmissionRadius, float scaleMultiplier, float speedMultiplier)
+            float circularEmissionRadius, float scaleMultiplier, float speedMultiplier,
+            bool tintMagenta = false)
         {
             Id = id;
             Source = source;
@@ -39,6 +41,7 @@ namespace UnderPressure.Editor
             CircularEmissionRadius = circularEmissionRadius;
             ScaleMultiplier = scaleMultiplier;
             SpeedMultiplier = speedMultiplier;
+            TintMagenta = tintMagenta;
         }
     }
 
@@ -93,24 +96,25 @@ namespace UnderPressure.Editor
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Swirl [5]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                0f, 0.8f, 0.5f),
+                0f, 0.7f, 0.5f, true),
             new WorldMapMesh(
                 "conflux_halo",
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Halo[3]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                0f, 0.8f, 0.5f),
+                0f, 0.7f, 0.5f, true),
             new WorldMapMesh(
                 "conflux_glow_lines",
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Glow Lines[2]",
-                new Vector3(1.991f, 71.773f, 1026.279f)),
+                new Vector3(1.991f, 71.773f, 1026.279f),
+                0f, 1f, 1f, true),
             new WorldMapMesh(
                 "conflux_time_leak",
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Fissure[0]/[pfx] Time Leak[2]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                34.9f, 1.2f, 1f)
+                34.9f, 2f, 1f, true)
         };
 
         internal static readonly WorldMapHospital[] Hospitals =

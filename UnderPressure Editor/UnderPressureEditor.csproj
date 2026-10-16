@@ -98,5 +98,8 @@
     <None Include="..\translations_extra.csv" Link="translations_extra.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Assets\icon conflux.png" Link="Assets\icon conflux.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
