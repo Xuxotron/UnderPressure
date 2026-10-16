@@ -1157,18 +1157,6 @@ namespace UnderPressure.Editor
 
         private static readonly FieldInfo PinMeshField =
             AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
-        private static readonly FieldInfo PinRootField =
-            AccessTools.Field(typeof(MapPin), "_meshRoot");
-        private static readonly FieldInfo PinStarsField =
-            AccessTools.Field(typeof(MapPinHospital), "_stars");
-        private static readonly FieldInfo PinSaveField =
-            AccessTools.Field(typeof(MapPinHospital), "_hasSaveIcon");
-        private static readonly FieldInfo PinProgressField =
-            AccessTools.Field(typeof(MapPinHospital), "_inProgressIcon");
-        private static readonly FieldInfo PinRemixField =
-            AccessTools.Field(typeof(MapPinHospital), "_remixBadgeIcon");
-        private static readonly FieldInfo PinNotificationField =
-            AccessTools.Field(typeof(MapPinHospital), "_unseenNotificationsIcon");
 
         private MetagameMap _map;
         private Transform _sceneRoot;
@@ -1320,50 +1308,34 @@ namespace UnderPressure.Editor
                     "Plantilla de hospital no encontrada: " + placement.template);
                 return;
             }
-            var clone = Instantiate(source);
+            var hospital = source.GetComponentInChildren<MapPinHospital>(true);
+            var sourceMesh = hospital == null
+                ? null
+                : PinMeshField?.GetValue(hospital) as MeshRenderer;
+            if (sourceMesh == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "La plantilla no contiene una malla de pin: " + placement.template);
+                return;
+            }
+
+            // Se clona sólo la representación visual. Clonar el MapPin completo
+            // conserva su LOD y su lógica nativa, que vuelven a ocultar la copia.
+            var clone = Instantiate(sourceMesh.gameObject);
             clone.name = "UP_WorldHospital_" + SafeId(placement.id, index);
             clone.transform.SetParent(_generatedRoot, true);
             clone.transform.position = placement.position.ToVector3();
             clone.SetActive(true);
-
-            // Es un marcador de autor: no entra en MapPins, no abre hospitales y
-            // no puede alterar progreso, DLC, cámara ni registros de Carrera.
-            foreach (var pin in clone.GetComponentsInChildren<MapPin>(true))
-                pin.enabled = false;
             foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
                 collider.enabled = false;
-            foreach (var tooltip in clone.GetComponentsInChildren<TooltipSpawner>(true))
-                tooltip.enabled = false;
-            var hospital = clone.GetComponentInChildren<MapPinHospital>(true);
-            if (hospital != null) PrepareHospitalMarker(hospital);
-        }
-
-        private static void PrepareHospitalMarker(MapPinHospital hospital)
-        {
-            var visualRoot = PinRootField?.GetValue(hospital) as GameObject;
-            if (visualRoot != null) visualRoot.SetActive(true);
-            var mesh = PinMeshField?.GetValue(hospital) as MeshRenderer;
-            if (mesh != null)
+            foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true))
             {
-                mesh.gameObject.SetActive(true);
-                mesh.enabled = true;
+                renderer.gameObject.SetActive(true);
+                renderer.enabled = true;
             }
-            var stars = PinStarsField?.GetValue(hospital) as GameObject[];
-            if (stars != null)
-                foreach (var star in stars)
-                    if (star != null) star.SetActive(false);
-            HideObject(PinSaveField?.GetValue(hospital));
-            HideObject(PinProgressField?.GetValue(hospital));
-            HideObject(PinRemixField?.GetValue(hospital));
-            HideObject(PinNotificationField?.GetValue(hospital));
-        }
-
-        private static void HideObject(object value)
-        {
-            var gameObject = value as GameObject;
-            if (gameObject == null && value is Component component)
-                gameObject = component.gameObject;
-            if (gameObject != null) gameObject.SetActive(false);
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Pin de autor creado: " + clone.name + " en " + clone.transform.position +
+                ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");
         }
 
         private GameObject FindSceneObject(string selector)
