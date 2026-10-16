@@ -1478,7 +1478,17 @@ namespace UnderPressure.Editor
         {
             var magenta = new Color(1f, 0f, 0.72f, 1f);
             var main = particles.main;
-            main.startColor = new ParticleSystem.MinMaxGradient(magenta);
+            main.startColor = TintGradient(main.startColor, magenta);
+            var lifetime = particles.colorOverLifetime;
+            if (lifetime.enabled) lifetime.color = TintGradient(lifetime.color, magenta);
+            var speed = particles.colorBySpeed;
+            if (speed.enabled) speed.color = TintGradient(speed.color, magenta);
+            var trails = particles.trails;
+            if (trails.enabled)
+            {
+                trails.colorOverLifetime = TintGradient(trails.colorOverLifetime, magenta);
+                trails.colorOverTrail = TintGradient(trails.colorOverTrail, magenta);
+            }
             var renderer = particles.GetComponent<ParticleSystemRenderer>();
             if (renderer == null) return;
             foreach (var material in renderer.materials)
@@ -1487,7 +1497,57 @@ namespace UnderPressure.Editor
                 SetMaterialMagenta(material, "_Color", magenta);
                 SetMaterialMagenta(material, "_TintColor", magenta);
                 SetMaterialMagenta(material, "_EmissionColor", magenta);
+                SetMaterialMagenta(material, "_EmisColor", magenta);
+                SetMaterialMagenta(material, "_BaseColor", magenta);
+                SetMaterialMagenta(material, "_ParticleColor", magenta);
             }
+            var trailMaterial = renderer.trailMaterial;
+            if (trailMaterial == null) return;
+            SetMaterialMagenta(trailMaterial, "_Color", magenta);
+            SetMaterialMagenta(trailMaterial, "_TintColor", magenta);
+            SetMaterialMagenta(trailMaterial, "_EmissionColor", magenta);
+        }
+
+        private static ParticleSystem.MinMaxGradient TintGradient(
+            ParticleSystem.MinMaxGradient source, Color magenta)
+        {
+            switch (source.mode)
+            {
+                case ParticleSystemGradientMode.TwoColors:
+                    return new ParticleSystem.MinMaxGradient(
+                        TintColor(source.colorMin, magenta), TintColor(source.colorMax, magenta));
+                case ParticleSystemGradientMode.Gradient:
+                    return new ParticleSystem.MinMaxGradient(TintUnityGradient(source.gradient, magenta));
+                case ParticleSystemGradientMode.TwoGradients:
+                    return new ParticleSystem.MinMaxGradient(
+                        TintUnityGradient(source.gradientMin, magenta),
+                        TintUnityGradient(source.gradientMax, magenta));
+                case ParticleSystemGradientMode.RandomColor:
+                    var random = new ParticleSystem.MinMaxGradient(
+                        TintUnityGradient(source.gradient, magenta));
+                    random.mode = ParticleSystemGradientMode.RandomColor;
+                    return random;
+                default:
+                    return new ParticleSystem.MinMaxGradient(TintColor(source.color, magenta));
+            }
+        }
+
+        private static Gradient TintUnityGradient(Gradient source, Color magenta)
+        {
+            if (source == null) return new Gradient();
+            var colors = source.colorKeys;
+            for (var index = 0; index < colors.Length; ++index)
+                colors[index].color = TintColor(colors[index].color, magenta);
+            var result = new Gradient { mode = source.mode };
+            result.SetKeys(colors, source.alphaKeys);
+            return result;
+        }
+
+        private static Color TintColor(Color source, Color magenta)
+        {
+            var intensity = Mathf.Max(1f, source.r, source.g, source.b);
+            return new Color(magenta.r * intensity, magenta.g * intensity,
+                magenta.b * intensity, source.a);
         }
 
         private static void SetMaterialMagenta(Material material, string property, Color magenta)

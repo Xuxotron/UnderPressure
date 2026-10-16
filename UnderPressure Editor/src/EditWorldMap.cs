@@ -114,7 +114,7 @@ namespace UnderPressure.Editor
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Fissure[0]/[pfx] Time Leak[2]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                34.9f, 2f, 1f, true)
+                69.8f, 1f, 1f, true)
         };
 
         internal static readonly WorldMapHospital[] Hospitals =
