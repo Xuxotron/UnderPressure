@@ -1669,7 +1669,10 @@ namespace UnderPressure.Editor
             if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
             UpdateCtrlPlotHover();
             if (_ctrlDragging || (CtrlDown && !OverUi())) UpdateCtrlRectangle();
-            if ((Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) &&
+            // Mayus clona y Alt roba, pero ambos deben mostrar siempre el
+            // contorno del objeto alcanzado aunque pertenezca a otra parcela o capa.
+            if ((Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ||
+                 Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) &&
                 !CtrlDown && !OverUi() &&
                 _level.CursorManager.IsModeActive<CursorEditHospitalItem>())
             {
