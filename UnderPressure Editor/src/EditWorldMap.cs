@@ -69,7 +69,12 @@ namespace UnderPressure.Editor
                 "isla",
                 WorldMapSource.Scene,
                 "Transformador",
-                new Vector3(4.336f, 98.794f, 3.267f))
+                new Vector3(4.336f, 98.794f, 3.267f)),
+            new WorldMapMesh(
+                "conflux_vortex",
+                WorldMapSource.Scene,
+                "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Vortex[4]",
+                new Vector3(1.991f, 71.773f, 1026.279f))
         };
 
         internal static readonly WorldMapHospital[] Hospitals =
