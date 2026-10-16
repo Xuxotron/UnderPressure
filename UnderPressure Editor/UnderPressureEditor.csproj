@@ -60,6 +60,10 @@
       <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule">
+      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.DirectorModule">
       <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.DirectorModule.dll</HintPath>
       <Private>false</Private>

@@ -5,7 +5,8 @@ namespace UnderPressure.Editor
     internal enum WorldMapSource
     {
         Scene,
-        Bundle
+        Bundle,
+        LoadedAsset
     }
 
     internal sealed class WorldMapMesh
@@ -14,13 +15,23 @@ namespace UnderPressure.Editor
         internal readonly WorldMapSource Source;
         internal readonly string Asset;
         internal readonly Vector3 Position;
+        internal readonly string Texture;
+        internal readonly string AudioEvent;
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position)
+            : this(id, source, asset, position, null, null)
+        {
+        }
+
+        internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position,
+            string texture, string audioEvent)
         {
             Id = id;
             Source = source;
             Asset = asset;
             Position = position;
+            Texture = texture;
+            AudioEvent = audioEvent;
         }
     }
 
@@ -71,10 +82,19 @@ namespace UnderPressure.Editor
                 "Transformador",
                 new Vector3(4.336f, 98.794f, 3.267f)),
             new WorldMapMesh(
-                "conflux_vortex",
-                WorldMapSource.Scene,
-                "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Vortex[4]",
-                new Vector3(1.991f, 71.773f, 1026.279f))
+                "conflux_gradient",
+                WorldMapSource.LoadedAsset,
+                "LS_TimePortal/PS_Portal_Idle_FX/A_Portal_Gradient",
+                new Vector3(1.991f, 71.773f, 1026.279f),
+                "T_Portal_Whirl_Glow",
+                "SFX_DLCPortalAmbience2"),
+            new WorldMapMesh(
+                "conflux_whirl",
+                WorldMapSource.LoadedAsset,
+                "LS_TimePortal/PS_Portal_Idle_FX/Whirl Mesh flat",
+                new Vector3(1.991f, 71.773f, 1026.279f),
+                "T_Portal_Whirl_Glow",
+                null)
         };
 
         internal static readonly WorldMapHospital[] Hospitals =

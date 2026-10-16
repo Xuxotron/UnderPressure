@@ -1186,6 +1186,8 @@ namespace UnderPressure.Editor
         private Transform _generatedRoot;
         private readonly List<MapPinHospital> _generatedHospitalPins =
             new List<MapPinHospital>();
+        private readonly List<AudioEmitter> _generatedAudioEmitters =
+            new List<AudioEmitter>();
         private bool _debugVisible;
         private Vector3 _cursorPosition;
         private bool _hasCursorPosition;
@@ -1281,6 +1283,8 @@ namespace UnderPressure.Editor
                 source = FindSceneObject(placement.Asset);
             else if (placement.Source == WorldMapSource.Bundle)
                 source = FindBundlePrefab(placement.Asset);
+            else if (placement.Source == WorldMapSource.LoadedAsset)
+                source = FindLoadedAssetObject(placement.Asset);
             else
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
@@ -1298,6 +1302,14 @@ namespace UnderPressure.Editor
                 renderer.gameObject.SetActive(true);
                 renderer.enabled = true;
             }
+            ApplyTextureOverride(clone, placement.Texture);
+            foreach (var particles in clone.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                particles.gameObject.SetActive(true);
+                particles.Clear(true);
+                particles.Play(true);
+            }
+            StartAmbientAudio(clone, placement.AudioEvent);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Malla de autor creada: " + clone.name + " en " + clone.transform.position +
                 ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");
@@ -1478,6 +1490,70 @@ namespace UnderPressure.Editor
             return match;
         }
 
+        private static GameObject FindLoadedAssetObject(string selector)
+        {
+            GameObject match = null;
+            foreach (var candidate in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (candidate == null || !string.Equals(LoadedAssetPath(candidate.transform), selector,
+                        StringComparison.Ordinal)) continue;
+                if (match != null)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Asset cargado ambiguo en EditWorldMap.cs: " + selector);
+                    return null;
+                }
+                match = candidate;
+            }
+            if (match == null)
+                UnderPressureEditorPlugin.Log?.LogWarning("Asset cargado no encontrado: " + selector);
+            return match;
+        }
+
+        private static string LoadedAssetPath(Transform target)
+        {
+            var parts = new List<string>();
+            for (var node = target; node != null; node = node.parent)
+                parts.Add(node.name);
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
+        }
+
+        private static void ApplyTextureOverride(GameObject target, string textureName)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(textureName)) return;
+            var texture = Resources.FindObjectsOfTypeAll<Texture2D>()
+                .FirstOrDefault(candidate => candidate != null &&
+                    string.Equals(candidate.name, textureName, StringComparison.Ordinal));
+            if (texture == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Textura cargada no encontrada: " + textureName);
+                return;
+            }
+            foreach (var renderer in target.GetComponentsInChildren<Renderer>(true))
+            {
+                var materials = renderer.materials;
+                foreach (var material in materials)
+                    if (material != null && material.HasProperty("_MainTex"))
+                        material.mainTexture = texture;
+            }
+        }
+
+        private void StartAmbientAudio(GameObject target, string audioEvent)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(audioEvent)) return;
+            var manager = AudioManager.Instance;
+            if (manager == null || !manager.DoesSoundEventExist(audioEvent))
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Evento de sonido no encontrado: " + audioEvent);
+                return;
+            }
+            var emitter = manager.Play(audioEvent, target);
+            if (emitter != null) _generatedAudioEmitters.Add(emitter);
+        }
+
         private void ExportAssetCatalog()
         {
             if (_sceneRoot == null || string.IsNullOrEmpty(_catalogPath)) return;
@@ -1547,6 +1623,18 @@ namespace UnderPressure.Editor
 
         private void ClearGenerated()
         {
+            var audioManager = AudioManager.Instance;
+            foreach (var emitter in _generatedAudioEmitters)
+            {
+                if (emitter == null || audioManager == null) continue;
+                try { audioManager.Stop(emitter, false); }
+                catch (Exception exception)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "No se pudo detener el ambiente del mapamundi: " + exception.Message);
+                }
+            }
+            _generatedAudioEmitters.Clear();
             foreach (var pin in _generatedHospitalPins)
             {
                 if (pin == null) continue;
