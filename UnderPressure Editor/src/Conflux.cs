@@ -494,11 +494,12 @@ namespace UnderPressure.Editor
             var height = topRight.y - bottomLeft.y;
             if (height <= 0f) return;
             var parentTopLeft = new Vector2(parent.rect.xMin, parent.rect.yMax);
-            var first = new Vector2(topRight.x - 18f - parentTopLeft.x,
+            const float gap = 6f;
+            var first = new Vector2(topRight.x + gap - parentTopLeft.x,
                 topRight.y - parentTopLeft.y);
             _creatorFrame.anchoredPosition = first;
             _creatorFrame.sizeDelta = new Vector2(282f, height);
-            _mapFrame.anchoredPosition = first + new Vector2(264f, 0f);
+            _mapFrame.anchoredPosition = first + new Vector2(282f + gap, 0f);
             _mapFrame.sizeDelta = new Vector2(282f, height);
             var originalIndex = _nativeRect.GetSiblingIndex();
             _creatorFrame.SetSiblingIndex(originalIndex);
@@ -553,6 +554,13 @@ namespace UnderPressure.Editor
             _creators.Clear();
             _selectedCreator = null;
             _selectedMap = null;
+            _native = null;
+            _map = null;
+            _nativeRect = null;
+            _nativeName = null;
+            _nativeDescription = null;
+            _nativeMainText = null;
+            _nativeMainButton = null;
             _open = false;
         }
 

@@ -606,6 +606,10 @@ namespace UnderPressure.Editor
             _selectorFade = null;
             _nativeFade = null;
             _nativeBackgroundGraphic = null;
+            _native = null;
+            _nativeName = null;
+            _nativeDescription = null;
+            _nativeMainText = null;
             _closing = false;
             _closingElapsed = 0f;
         }
@@ -780,6 +784,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(MetagameButtonsMenu), "_leaderboardButton");
         private static readonly MethodInfo UpdateBoundsMethod =
             AccessTools.Method(typeof(MetagameMapUI), "SetCameraBoundsToMapPinBounds");
+        private static readonly MethodInfo CloseAllMenusMethod =
+            AccessTools.Method(typeof(MetagameButtonsMenu), "CloseAllMenus");
         private static readonly FieldInfo MeshField =
             AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
         private static readonly FieldInfo HoverField =
@@ -833,6 +839,12 @@ namespace UnderPressure.Editor
             var max = config == null ? 1f : Mathf.Max(0.001f, config.MaxZoomScalar);
             scalar = Mathf.Clamp01(camera.CurrentZoomScalar / max);
             return true;
+        }
+
+        internal static void ClosePanelsForCollaborativeMenu()
+        {
+            if (_current?._nativeMenu == null) return;
+            CloseAllMenusMethod?.Invoke(_current._nativeMenu, null);
         }
 
         internal void Initialise(MetagameMap map, MetagameButtonsMenu menu)
@@ -970,7 +982,9 @@ namespace UnderPressure.Editor
             // Los tres nativos conservan el control de visibilidad del juego.
             var hud = _map == null ? null : _map.HUD;
             bool pauseOpen = hud != null && hud.IsOptionsMenuOpen;
-            bool visible = !pauseOpen && _nativeMenu.gameObject.activeInHierarchy;
+            bool fullscreenOpen = hud != null && hud.IsFullscreenMenuOpen();
+            bool visible = !pauseOpen && !fullscreenOpen &&
+                _nativeMenu.gameObject.activeInHierarchy;
             if (_zoomButton != null && _zoomButton.gameObject.activeSelf != visible)
                 _zoomButton.gameObject.SetActive(visible);
             if (_hospitalsButton != null && _hospitalsButton.gameObject.activeSelf != visible)
@@ -1549,6 +1563,14 @@ namespace UnderPressure.Editor
             _map = null;
             _sceneRoot = null;
         }
+    }
+
+
+    [HarmonyPatch(typeof(CollaborativeSidebarMenu), "ShowCollaborativeMenu")]
+    internal static class ScenarioCollaborativeMenuClosePanelsPatch
+    {
+        private static void Prefix() =>
+            ScenarioCareerMapControls.ClosePanelsForCollaborativeMenu();
     }
 
     [HarmonyPatch(typeof(MetagameMapCareerUI), "Setup")]
