@@ -1157,6 +1157,8 @@ namespace UnderPressure.Editor
 
         private static readonly FieldInfo PinMeshField =
             AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
+        private static readonly FieldInfo PinRootField =
+            AccessTools.Field(typeof(MapPin), "_meshRoot");
         private static readonly FieldInfo PinStarsField =
             AccessTools.Field(typeof(MapPinHospital), "_stars");
         private static readonly FieldInfo PinSaveField =
@@ -1332,14 +1334,20 @@ namespace UnderPressure.Editor
                 collider.enabled = false;
             foreach (var tooltip in clone.GetComponentsInChildren<TooltipSpawner>(true))
                 tooltip.enabled = false;
-            var hospital = clone.GetComponent<MapPinHospital>();
+            var hospital = clone.GetComponentInChildren<MapPinHospital>(true);
             if (hospital != null) PrepareHospitalMarker(hospital);
         }
 
         private static void PrepareHospitalMarker(MapPinHospital hospital)
         {
+            var visualRoot = PinRootField?.GetValue(hospital) as GameObject;
+            if (visualRoot != null) visualRoot.SetActive(true);
             var mesh = PinMeshField?.GetValue(hospital) as MeshRenderer;
-            if (mesh != null) mesh.gameObject.SetActive(true);
+            if (mesh != null)
+            {
+                mesh.gameObject.SetActive(true);
+                mesh.enabled = true;
+            }
             var stars = PinStarsField?.GetValue(hospital) as GameObject[];
             if (stars != null)
                 foreach (var star in stars)
