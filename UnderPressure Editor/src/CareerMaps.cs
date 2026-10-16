@@ -587,7 +587,7 @@ namespace UnderPressure.Editor
         private void OnDisable() { Close(); }
         private void OnDestroy() { Close(); }
 
-        private void Close()
+        internal void Close()
         {
             if (_listWindow != null) Destroy(_listWindow);
             _listWindow = null;
@@ -675,6 +675,12 @@ namespace UnderPressure.Editor
         private static void Postfix(SelectedHospitalMenu __instance)
         {
             if (ScenarioEditorFlow.IsRunning || __instance == null) return;
+            if (ScenarioConfluxMenu.HandleNativeSetup(__instance))
+            {
+                __instance.GetComponent<ScenarioCareerMapMenu>()?.Close();
+                return;
+            }
+            __instance.GetComponent<ScenarioConfluxMenu>()?.Close();
             var component = __instance.GetComponent<ScenarioCareerMapMenu>() ??
                 __instance.gameObject.AddComponent<ScenarioCareerMapMenu>();
             component.Open(__instance);
@@ -686,6 +692,9 @@ namespace UnderPressure.Editor
     {
         private static bool Prefix(SelectedHospitalMenu __instance)
         {
+            var conflux = __instance != null ? __instance.GetComponent<ScenarioConfluxMenu>() : null;
+            if (conflux != null && conflux.IsOpen)
+                return conflux.BeforeNativeStart();
             var component = __instance != null ? __instance.GetComponent<ScenarioCareerMapMenu>() : null;
             return component == null || component.BeforeNativeStart();
         }
@@ -1137,8 +1146,12 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(MetagameMapUI), "_mapPins");
         private static readonly MethodInfo RefreshCameraBoundsMethod =
             AccessTools.Method(typeof(MetagameMapUI), "SetCameraBoundsToMapPinBounds");
+        private static readonly FieldInfo StarsField =
+            AccessTools.Field(typeof(MapPinHospital), "_stars");
         private static readonly Dictionary<MapPinHospital, string> PinMapPaths =
             new Dictionary<MapPinHospital, string>();
+        private static readonly Dictionary<MapPinHospital, WorldMapConflux> ConfluxPins =
+            new Dictionary<MapPinHospital, WorldMapConflux>();
 
         private MetagameMap _map;
         private Transform _sceneRoot;
@@ -1218,9 +1231,12 @@ namespace UnderPressure.Editor
                 var hospitals = EditWorldMap.Hospitals ?? new WorldMapHospital[0];
                 for (var index = 0; index < hospitals.Length; ++index)
                     AddHospital(hospitals[index], index);
+                var confluxes = EditWorldMap.Confluxes ?? new WorldMapConflux[0];
+                for (var index = 0; index < confluxes.Length; ++index)
+                    AddConflux(confluxes[index], index);
                 UnderPressureEditorPlugin.Log?.LogInfo(
                     "Mapamundi de autor cargado: " + meshes.Length + " mallas, " +
-                    hospitals.Length + " hospitales.");
+                    hospitals.Length + " hospitales y " + confluxes.Length + " Conflux.");
             }
             catch (Exception exception)
             {
@@ -1300,6 +1316,44 @@ namespace UnderPressure.Editor
                 ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");
         }
 
+        private void AddConflux(WorldMapConflux placement, int index)
+        {
+            if (placement == null || string.IsNullOrWhiteSpace(placement.Template)) return;
+            var source = FindSceneObject(placement.Template);
+            if (source == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Plantilla de Conflux no encontrada: " + placement.Template);
+                return;
+            }
+            var clone = Instantiate(source);
+            clone.name = "UP_WorldConflux_" + SafeId(placement.Id, index);
+            clone.transform.SetParent(_generatedRoot, true);
+            clone.transform.position = placement.Position;
+            clone.SetActive(true);
+            var pin = clone.GetComponentInChildren<MapPinHospital>(true);
+            if (pin == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "La plantilla de Conflux no contiene un MapPinHospital: " + placement.Template);
+                Destroy(clone);
+                return;
+            }
+            var stars = StarsField?.GetValue(pin) as GameObject[];
+            if (stars != null)
+                foreach (var star in stars)
+                    if (star != null) star.SetActive(false);
+            pin.enabled = true;
+            pin.Initialise(_map.Metagame, _map, _map.App.SaveSystem);
+            AppendPin(ScenePinsField, _map.App.MetagameMapScene, pin);
+            AppendPin(UiPinsField, _map.MapUI, pin);
+            _generatedHospitalPins.Add(pin);
+            ConfluxPins[pin] = placement;
+            RefreshCameraBoundsMethod?.Invoke(_map.MapUI, null);
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Pin Conflux creado: " + clone.name + " en " + clone.transform.position + ".");
+        }
+
         private static string ResolveMapPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return null;
@@ -1322,6 +1376,12 @@ namespace UnderPressure.Editor
         {
             path = null;
             return pin != null && PinMapPaths.TryGetValue(pin, out path);
+        }
+
+        internal static bool TryGetConflux(MapPinHospital pin, out WorldMapConflux conflux)
+        {
+            conflux = null;
+            return pin != null && ConfluxPins.TryGetValue(pin, out conflux);
         }
 
         private static void AppendPin(FieldInfo field, object owner, MapPin pin)
@@ -1465,6 +1525,7 @@ namespace UnderPressure.Editor
                 RemovePin(ScenePinsField, _map?.App?.MetagameMapScene, pin);
                 RemovePin(UiPinsField, _map?.MapUI, pin);
                 PinMapPaths.Remove(pin);
+                ConfluxPins.Remove(pin);
                 try { pin.PrepareForDestroy(); }
                 catch (Exception exception)
                 {
@@ -1540,9 +1601,15 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(MapPinHospital), "OnSelected")]
     internal static class ScenarioWorldMapHospitalSelectionPatch
     {
+        private static void Prefix(MapPinHospital __instance) =>
+            ScenarioConfluxMenu.BeginPinSelection(__instance);
+
         [HarmonyPriority(Priority.Last)]
         private static void Postfix(MapPinHospital __instance)
         {
+            var isConflux = ScenarioWorldMapAuthoring.TryGetConflux(__instance, out _);
+            ScenarioConfluxMenu.EndPinSelection();
+            if (isConflux) return;
             if (!ScenarioWorldMapAuthoring.TryGetMapPath(__instance, out var path)) return;
             var selector = UnityEngine.Object.FindObjectOfType<ScenarioCareerMapMenu>();
             if (selector != null && selector.SelectPath(path)) return;
