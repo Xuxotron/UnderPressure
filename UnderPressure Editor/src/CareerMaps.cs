@@ -1120,9 +1120,6 @@ namespace UnderPressure.Editor
     // Los elementos se definen en EditWorldMap.cs y F9 vuelve a aplicarlos.
     internal sealed class ScenarioWorldMapAuthoring : MonoBehaviour
     {
-        private static readonly FieldInfo PinMeshField =
-            AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
-
         private MetagameMap _map;
         private Transform _sceneRoot;
         private Transform _generatedRoot;
@@ -1250,31 +1247,21 @@ namespace UnderPressure.Editor
                     "Plantilla de hospital no encontrada: " + placement.Template);
                 return;
             }
-            var hospital = source.GetComponentInChildren<MapPinHospital>(true);
-            var sourceMesh = hospital == null
-                ? null
-                : PinMeshField?.GetValue(hospital) as MeshRenderer;
-            if (sourceMesh == null)
-            {
-                UnderPressureEditorPlugin.Log?.LogWarning(
-                    "La plantilla no contiene una malla de pin: " + placement.Template);
-                return;
-            }
-
-            // Se clona sólo la representación visual. Clonar el MapPin completo
-            // conserva su LOD y su lógica nativa, que vuelven a ocultar la copia.
-            var clone = Instantiate(sourceMesh.gameObject);
+            // La raiz completa conserva juntos PinMesh, PinPlane, estrellas,
+            // materiales, escalas y LOD del hospital nativo elegido.
+            var clone = Instantiate(source);
             clone.name = "UP_WorldHospital_" + SafeId(placement.Id, index);
             clone.transform.SetParent(_generatedRoot, true);
             clone.transform.position = placement.Position;
             clone.SetActive(true);
+            // Es una referencia visual de autor: no se registra como hospital
+            // jugable ni recibe interaccion del mapa.
+            foreach (var pin in clone.GetComponentsInChildren<MapPin>(true))
+                pin.enabled = false;
             foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
                 collider.enabled = false;
-            foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true))
-            {
-                renderer.gameObject.SetActive(true);
-                renderer.enabled = true;
-            }
+            foreach (var tooltip in clone.GetComponentsInChildren<TooltipSpawner>(true))
+                tooltip.enabled = false;
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Pin de autor creado: " + clone.name + " en " + clone.transform.position +
                 ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");

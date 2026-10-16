@@ -47,7 +47,7 @@ namespace UnderPressure.Editor
             new WorldMapMesh(
                 "isla",
                 WorldMapSource.Scene,
-                "Metagame[0]/Meta_Map_Test_V3[8]/Xmas_village[488]/polySurface7719[43]",
+                "Transformador",
                 new Vector3(4.336f, 98.794f, 3.267f))
         };
 
@@ -55,7 +55,7 @@ namespace UnderPressure.Editor
         {
             new WorldMapHospital(
                 "hospital_nuevo",
-                "MapPin_Hospital_R1_L1",
+                "Metagame[0]/Pins[7]/MapPin_Hospital_R1_L1[0]",
                 new Vector3(4.336f, 98.794f, 3.267f))
         };
     }
