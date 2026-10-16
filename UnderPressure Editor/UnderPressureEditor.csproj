@@ -101,5 +101,17 @@
     <None Include="..\Assets\icon conflux.png" Link="Assets\icon conflux.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Assets\confluxOFF.png" Link="Assets\confluxOFF.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Assets\confluxON.png" Link="Assets\confluxON.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Assets\UnderMapsOFF.png" Link="Assets\UnderMapsOFF.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Assets\UnderMapsON.png" Link="Assets\UnderMapsON.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
