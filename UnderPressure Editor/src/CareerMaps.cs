@@ -1117,44 +1117,9 @@ namespace UnderPressure.Editor
 
     // Herramienta privada de autor para añadir elementos al mapamundi sin
     // modificar ninguno de los objetos serializados por el juego.
-    // Ctrl+Alt+F10 crea/activa el fichero local; F9 lo recarga.
+    // Los elementos se definen en EditWorldMap.cs y F9 vuelve a aplicarlos.
     internal sealed class ScenarioWorldMapAuthoring : MonoBehaviour
     {
-        [Serializable]
-        private sealed class Position
-        {
-            public float x;
-            public float y;
-            public float z;
-
-            internal Vector3 ToVector3() => new Vector3(x, y, z);
-        }
-
-        [Serializable]
-        private sealed class MeshPlacement
-        {
-            public string id;
-            public string source;
-            public string asset;
-            public Position position;
-        }
-
-        [Serializable]
-        private sealed class HospitalPlacement
-        {
-            public string id;
-            public string template;
-            public Position position;
-        }
-
-        [Serializable]
-        private sealed class Document
-        {
-            public int version = 1;
-            public MeshPlacement[] meshes = new MeshPlacement[0];
-            public HospitalPlacement[] hospitals = new HospitalPlacement[0];
-        }
-
         private static readonly FieldInfo PinMeshField =
             AccessTools.Field(typeof(MapPinHospital), "_meshIcon");
 
@@ -1164,7 +1129,6 @@ namespace UnderPressure.Editor
         private bool _debugVisible;
         private Vector3 _cursorPosition;
         private bool _hasCursorPosition;
-        private string _filePath;
         private string _catalogPath;
 
         internal void Initialise(MetagameMap map)
@@ -1174,9 +1138,8 @@ namespace UnderPressure.Editor
             _map = map;
             _sceneRoot = map.App.MetagameMapScene.RootObject.transform;
             var folder = Path.Combine(ScenarioEditorStorage.Folder, "_author");
-            _filePath = Path.Combine(folder, "world_map.json");
             _catalogPath = Path.Combine(folder, "world_map_assets.txt");
-            if (File.Exists(_filePath)) Reload();
+            Reload();
         }
 
         private void Update()
@@ -1186,7 +1149,6 @@ namespace UnderPressure.Editor
             var alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
             if (control && alt && Input.GetKeyDown(KeyCode.F10))
             {
-                EnsureAuthorFiles();
                 _debugVisible = !_debugVisible;
                 if (_debugVisible)
                 {
@@ -1201,7 +1163,7 @@ namespace UnderPressure.Editor
             {
                 GUIUtility.systemCopyBuffer = string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "{{ \"x\": {0:0.###}, \"y\": {1:0.###}, \"z\": {2:0.###} }}",
+                    "new Vector3({0:0.###}f, {1:0.###}f, {2:0.###}f)",
                     _cursorPosition.x, _cursorPosition.y, _cursorPosition.z);
             }
         }
@@ -1224,43 +1186,17 @@ namespace UnderPressure.Editor
                 EditorLocalization.Get("world_map.author.shortcuts"));
         }
 
-        private void EnsureAuthorFiles()
-        {
-            if (string.IsNullOrEmpty(_filePath)) return;
-            var folder = Path.GetDirectoryName(_filePath);
-            if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
-            if (!File.Exists(_filePath))
-            {
-                File.WriteAllText(_filePath,
-                    "{\n  \"version\": 1,\n  \"meshes\": [],\n  \"hospitals\": []\n}\n",
-                    new UTF8Encoding(false));
-            }
-        }
-
         private void Reload()
         {
             ClearGenerated();
-            if (_sceneRoot == null || string.IsNullOrEmpty(_filePath) || !File.Exists(_filePath)) return;
+            if (_sceneRoot == null) return;
             try
             {
-                var json = File.ReadAllText(_filePath, Encoding.UTF8);
-                var document = JsonUtility.FromJson<Document>(json);
-                if (document == null)
-                    throw new InvalidDataException("world_map.json no contiene un documento valido.");
-                // JsonUtility de esta version del juego ignora arrays de clases
-                // anidadas. Leer cada entrada con el parser ya usado por los
-                // formatos de parcelas y Landscape conserva todos sus campos.
-                document.meshes = json.Contains("\"meshes\"")
-                    ? ScenarioMapFormat.ParseObjects<MeshPlacement>(json, "meshes")
-                    : new MeshPlacement[0];
-                document.hospitals = json.Contains("\"hospitals\"")
-                    ? ScenarioMapFormat.ParseObjects<HospitalPlacement>(json, "hospitals")
-                    : new HospitalPlacement[0];
                 EnsureGeneratedRoot();
-                var meshes = document.meshes ?? new MeshPlacement[0];
+                var meshes = EditWorldMap.Meshes ?? new WorldMapMesh[0];
                 for (var index = 0; index < meshes.Length; ++index)
                     AddMesh(meshes[index], index);
-                var hospitals = document.hospitals ?? new HospitalPlacement[0];
+                var hospitals = EditWorldMap.Hospitals ?? new WorldMapHospital[0];
                 for (var index = 0; index < hospitals.Length; ++index)
                     AddHospital(hospitals[index], index);
                 UnderPressureEditorPlugin.Log?.LogInfo(
@@ -1274,38 +1210,44 @@ namespace UnderPressure.Editor
             }
         }
 
-        private void AddMesh(MeshPlacement placement, int index)
+        private void AddMesh(WorldMapMesh placement, int index)
         {
-            if (placement == null || placement.position == null ||
-                string.IsNullOrWhiteSpace(placement.asset)) return;
+            if (placement == null || string.IsNullOrWhiteSpace(placement.Asset)) return;
             GameObject source;
-            if (string.Equals(placement.source, "scene", StringComparison.OrdinalIgnoreCase))
-                source = FindSceneObject(placement.asset);
-            else if (string.Equals(placement.source, "bundle", StringComparison.OrdinalIgnoreCase))
-                source = FindBundlePrefab(placement.asset);
+            if (placement.Source == WorldMapSource.Scene)
+                source = FindSceneObject(placement.Asset);
+            else if (placement.Source == WorldMapSource.Bundle)
+                source = FindBundlePrefab(placement.Asset);
             else
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Origen desconocido en world_map.json: " + placement.source);
+                    "Origen desconocido en EditWorldMap.cs: " + placement.Source);
                 return;
             }
             if (source == null) return;
             var clone = Instantiate(source);
-            clone.name = "UP_WorldMesh_" + SafeId(placement.id, index);
+            clone.name = "UP_WorldMesh_" + SafeId(placement.Id, index);
             clone.transform.SetParent(_generatedRoot, true);
-            clone.transform.position = placement.position.ToVector3();
+            clone.transform.position = placement.Position;
             clone.SetActive(true);
+            foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true))
+            {
+                renderer.gameObject.SetActive(true);
+                renderer.enabled = true;
+            }
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Malla de autor creada: " + clone.name + " en " + clone.transform.position +
+                ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");
         }
 
-        private void AddHospital(HospitalPlacement placement, int index)
+        private void AddHospital(WorldMapHospital placement, int index)
         {
-            if (placement == null || placement.position == null ||
-                string.IsNullOrWhiteSpace(placement.template)) return;
-            var source = FindSceneObject(placement.template);
+            if (placement == null || string.IsNullOrWhiteSpace(placement.Template)) return;
+            var source = FindSceneObject(placement.Template);
             if (source == null)
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Plantilla de hospital no encontrada: " + placement.template);
+                    "Plantilla de hospital no encontrada: " + placement.Template);
                 return;
             }
             var hospital = source.GetComponentInChildren<MapPinHospital>(true);
@@ -1315,16 +1257,16 @@ namespace UnderPressure.Editor
             if (sourceMesh == null)
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
-                    "La plantilla no contiene una malla de pin: " + placement.template);
+                    "La plantilla no contiene una malla de pin: " + placement.Template);
                 return;
             }
 
             // Se clona sólo la representación visual. Clonar el MapPin completo
             // conserva su LOD y su lógica nativa, que vuelven a ocultar la copia.
             var clone = Instantiate(sourceMesh.gameObject);
-            clone.name = "UP_WorldHospital_" + SafeId(placement.id, index);
+            clone.name = "UP_WorldHospital_" + SafeId(placement.Id, index);
             clone.transform.SetParent(_generatedRoot, true);
-            clone.transform.position = placement.position.ToVector3();
+            clone.transform.position = placement.Position;
             clone.SetActive(true);
             foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
                 collider.enabled = false;
@@ -1389,6 +1331,8 @@ namespace UnderPressure.Editor
             if (_sceneRoot == null || string.IsNullOrEmpty(_catalogPath)) return;
             try
             {
+                var folder = Path.GetDirectoryName(_catalogPath);
+                if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
                 var lines = new List<string>();
                 foreach (var candidate in _sceneRoot.GetComponentsInChildren<Transform>(true))
                 {
