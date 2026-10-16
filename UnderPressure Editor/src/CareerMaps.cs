@@ -1120,9 +1120,18 @@ namespace UnderPressure.Editor
     // Los elementos se definen en EditWorldMap.cs y F9 vuelve a aplicarlos.
     internal sealed class ScenarioWorldMapAuthoring : MonoBehaviour
     {
+        private static readonly FieldInfo ScenePinsField =
+            AccessTools.Field(typeof(MetagameMapScene), "_mapPins");
+        private static readonly FieldInfo UiPinsField =
+            AccessTools.Field(typeof(MetagameMapUI), "_mapPins");
+        private static readonly MethodInfo RefreshCameraBoundsMethod =
+            AccessTools.Method(typeof(MetagameMapUI), "SetCameraBoundsToMapPinBounds");
+
         private MetagameMap _map;
         private Transform _sceneRoot;
         private Transform _generatedRoot;
+        private readonly List<MapPinHospital> _generatedHospitalPins =
+            new List<MapPinHospital>();
         private bool _debugVisible;
         private Vector3 _cursorPosition;
         private bool _hasCursorPosition;
@@ -1254,17 +1263,46 @@ namespace UnderPressure.Editor
             clone.transform.SetParent(_generatedRoot, true);
             clone.transform.position = placement.Position;
             clone.SetActive(true);
-            // Es una referencia visual de autor: no se registra como hospital
-            // jugable ni recibe interaccion del mapa.
-            foreach (var pin in clone.GetComponentsInChildren<MapPin>(true))
-                pin.enabled = false;
-            foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
-                collider.enabled = false;
-            foreach (var tooltip in clone.GetComponentsInChildren<TooltipSpawner>(true))
-                tooltip.enabled = false;
+            var hospital = clone.GetComponentInChildren<MapPinHospital>(true);
+            if (hospital == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "La plantilla no contiene un MapPinHospital: " + placement.Template);
+                Destroy(clone);
+                return;
+            }
+
+            // Registrar e inicializar exactamente como hace MetagameMapCareerUI.
+            // El segundo pin comparte LevelConfig y progreso con el hospital nativo.
+            hospital.enabled = true;
+            hospital.Initialise(_map.Metagame, _map, _map.App.SaveSystem);
+            AppendPin(ScenePinsField, _map.App.MetagameMapScene, hospital);
+            AppendPin(UiPinsField, _map.MapUI, hospital);
+            _generatedHospitalPins.Add(hospital);
+            RefreshCameraBoundsMethod?.Invoke(_map.MapUI, null);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Pin de autor creado: " + clone.name + " en " + clone.transform.position +
                 ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");
+        }
+
+        private static void AppendPin(FieldInfo field, object owner, MapPin pin)
+        {
+            if (field == null || owner == null || pin == null) return;
+            var pins = field.GetValue(owner) as MapPin[] ?? new MapPin[0];
+            if (pins.Any(candidate => ReferenceEquals(candidate, pin))) return;
+            var expanded = new MapPin[pins.Length + 1];
+            Array.Copy(pins, expanded, pins.Length);
+            expanded[pins.Length] = pin;
+            field.SetValue(owner, expanded);
+        }
+
+        private static void RemovePin(FieldInfo field, object owner, MapPin pin)
+        {
+            if (field == null || owner == null || pin == null) return;
+            var pins = field.GetValue(owner) as MapPin[];
+            if (pins == null) return;
+            field.SetValue(owner, pins.Where(candidate =>
+                candidate != null && !ReferenceEquals(candidate, pin)).ToArray());
         }
 
         private GameObject FindSceneObject(string selector)
@@ -1382,6 +1420,19 @@ namespace UnderPressure.Editor
 
         private void ClearGenerated()
         {
+            foreach (var pin in _generatedHospitalPins)
+            {
+                if (pin == null) continue;
+                RemovePin(ScenePinsField, _map?.App?.MetagameMapScene, pin);
+                RemovePin(UiPinsField, _map?.MapUI, pin);
+                try { pin.PrepareForDestroy(); }
+                catch (Exception exception)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "No se pudo desregistrar el pin de autor: " + exception.Message);
+                }
+            }
+            _generatedHospitalPins.Clear();
             if (_generatedRoot == null) return;
             _generatedRoot.gameObject.SetActive(false);
             Destroy(_generatedRoot.gameObject);
