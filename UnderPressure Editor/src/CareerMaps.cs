@@ -1292,6 +1292,7 @@ namespace UnderPressure.Editor
             clone.name = "UP_WorldMesh_" + SafeId(placement.Id, index);
             clone.transform.SetParent(_generatedRoot, true);
             clone.transform.position = placement.Position;
+            clone.transform.localScale *= placement.ScaleMultiplier;
             clone.SetActive(true);
             foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true))
             {
@@ -1301,6 +1302,8 @@ namespace UnderPressure.Editor
             foreach (var particles in clone.GetComponentsInChildren<ParticleSystem>(true))
             {
                 particles.gameObject.SetActive(true);
+                var main = particles.main;
+                main.simulationSpeed *= placement.SpeedMultiplier;
                 if (placement.CircularEmissionRadius > 0f)
                 {
                     var shape = particles.shape;

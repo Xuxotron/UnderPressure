@@ -15,20 +15,30 @@ namespace UnderPressure.Editor
         internal readonly string Asset;
         internal readonly Vector3 Position;
         internal readonly float CircularEmissionRadius;
+        internal readonly float ScaleMultiplier;
+        internal readonly float SpeedMultiplier;
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position)
-            : this(id, source, asset, position, 0f)
+            : this(id, source, asset, position, 0f, 1f, 1f)
         {
         }
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position,
             float circularEmissionRadius)
+            : this(id, source, asset, position, circularEmissionRadius, 1f, 1f)
+        {
+        }
+
+        internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position,
+            float circularEmissionRadius, float scaleMultiplier, float speedMultiplier)
         {
             Id = id;
             Source = source;
             Asset = asset;
             Position = position;
             CircularEmissionRadius = circularEmissionRadius;
+            ScaleMultiplier = scaleMultiplier;
+            SpeedMultiplier = speedMultiplier;
         }
     }
 
@@ -82,12 +92,14 @@ namespace UnderPressure.Editor
                 "conflux_swirl",
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Swirl [5]",
-                new Vector3(1.991f, 71.773f, 1026.279f)),
+                new Vector3(1.991f, 71.773f, 1026.279f),
+                0f, 0.8f, 0.5f),
             new WorldMapMesh(
                 "conflux_halo",
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Halo[3]",
-                new Vector3(1.991f, 71.773f, 1026.279f)),
+                new Vector3(1.991f, 71.773f, 1026.279f),
+                0f, 0.8f, 0.5f),
             new WorldMapMesh(
                 "conflux_glow_lines",
                 WorldMapSource.Scene,
@@ -98,7 +110,7 @@ namespace UnderPressure.Editor
                 WorldMapSource.Scene,
                 "Metagame[0]/DLC_06[50]/Time Fissure[0]/[pfx] Time Leak[2]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                34.9f)
+                34.9f, 1.2f, 1f)
         };
 
         internal static readonly WorldMapHospital[] Hospitals =
