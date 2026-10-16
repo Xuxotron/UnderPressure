@@ -5,8 +5,7 @@ namespace UnderPressure.Editor
     internal enum WorldMapSource
     {
         Scene,
-        Bundle,
-        LoadedAsset
+        Bundle
     }
 
     internal sealed class WorldMapMesh
@@ -15,23 +14,21 @@ namespace UnderPressure.Editor
         internal readonly WorldMapSource Source;
         internal readonly string Asset;
         internal readonly Vector3 Position;
-        internal readonly string Texture;
-        internal readonly string AudioEvent;
+        internal readonly float CircularEmissionRadius;
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position)
-            : this(id, source, asset, position, null, null)
+            : this(id, source, asset, position, 0f)
         {
         }
 
         internal WorldMapMesh(string id, WorldMapSource source, string asset, Vector3 position,
-            string texture, string audioEvent)
+            float circularEmissionRadius)
         {
             Id = id;
             Source = source;
             Asset = asset;
             Position = position;
-            Texture = texture;
-            AudioEvent = audioEvent;
+            CircularEmissionRadius = circularEmissionRadius;
         }
     }
 
@@ -82,19 +79,26 @@ namespace UnderPressure.Editor
                 "Transformador",
                 new Vector3(4.336f, 98.794f, 3.267f)),
             new WorldMapMesh(
-                "conflux_gradient",
-                WorldMapSource.LoadedAsset,
-                "LS_TimePortal/PS_Portal_Idle_FX/A_Portal_Gradient",
-                new Vector3(1.991f, 71.773f, 1026.279f),
-                "T_Portal_Whirl_Glow",
-                "SFX_DLCPortalAmbience2"),
+                "conflux_swirl",
+                WorldMapSource.Scene,
+                "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Swirl [5]",
+                new Vector3(1.991f, 71.773f, 1026.279f)),
             new WorldMapMesh(
-                "conflux_whirl",
-                WorldMapSource.LoadedAsset,
-                "LS_TimePortal/PS_Portal_Idle_FX/Whirl Mesh flat",
+                "conflux_halo",
+                WorldMapSource.Scene,
+                "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Halo[3]",
+                new Vector3(1.991f, 71.773f, 1026.279f)),
+            new WorldMapMesh(
+                "conflux_glow_lines",
+                WorldMapSource.Scene,
+                "Metagame[0]/DLC_06[50]/Time Portal[1]/[pfx] Time Portal[5]/Glow Lines[2]",
+                new Vector3(1.991f, 71.773f, 1026.279f)),
+            new WorldMapMesh(
+                "conflux_time_leak",
+                WorldMapSource.Scene,
+                "Metagame[0]/DLC_06[50]/Time Fissure[0]/[pfx] Time Leak[2]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                "T_Portal_Whirl_Glow",
-                null)
+                34.9f)
         };
 
         internal static readonly WorldMapHospital[] Hospitals =
