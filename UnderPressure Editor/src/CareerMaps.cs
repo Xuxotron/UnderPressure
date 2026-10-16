@@ -1734,9 +1734,29 @@ namespace UnderPressure.Editor
             var controls = __instance.GetComponent<ScenarioCareerMapControls>() ??
                 __instance.gameObject.AddComponent<ScenarioCareerMapControls>();
             controls.Initialise(metagameMap, __instance.ButtonsMenu);
-            var authoring = __instance.GetComponent<ScenarioWorldMapAuthoring>() ??
-                __instance.gameObject.AddComponent<ScenarioWorldMapAuthoring>();
+            var root = metagameMap?.App?.MetagameMapScene?.RootObject;
+            if (root == null) return;
+            var authoring = root.GetComponent<ScenarioWorldMapAuthoring>() ??
+                root.AddComponent<ScenarioWorldMapAuthoring>();
             authoring.Initialise(metagameMap);
+        }
+    }
+
+    [HarmonyPatch(typeof(OpeningScreen), "Show")]
+    internal static class ScenarioWorldMapOpeningScreenPatch
+    {
+        private static readonly FieldInfo AppField =
+            AccessTools.Field(typeof(OpeningScreen), "_app");
+
+        private static void Postfix(OpeningScreen __instance)
+        {
+            var app = AppField?.GetValue(__instance) as App;
+            var map = app?.MetagameMap;
+            var root = app?.MetagameMapScene?.RootObject;
+            if (map == null || root == null) return;
+            var authoring = root.GetComponent<ScenarioWorldMapAuthoring>() ??
+                root.AddComponent<ScenarioWorldMapAuthoring>();
+            authoring.Initialise(map);
         }
     }
 
