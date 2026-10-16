@@ -109,6 +109,17 @@ namespace UnderPressure.Editor
             }
         }
 
+        internal bool SelectPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            var full = Path.GetFullPath(path);
+            var choice = _choices.FirstOrDefault(item => string.Equals(
+                Path.GetFullPath(item.Path), full, StringComparison.OrdinalIgnoreCase));
+            if (choice == null) return false;
+            Select(choice);
+            return true;
+        }
+
         private void LoadChoices()
         {
             _choices.Clear();
@@ -1126,6 +1137,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(MetagameMapUI), "_mapPins");
         private static readonly MethodInfo RefreshCameraBoundsMethod =
             AccessTools.Method(typeof(MetagameMapUI), "SetCameraBoundsToMapPinBounds");
+        private static readonly Dictionary<MapPinHospital, string> PinMapPaths =
+            new Dictionary<MapPinHospital, string>();
 
         private MetagameMap _map;
         private Transform _sceneRoot;
@@ -1279,10 +1292,36 @@ namespace UnderPressure.Editor
             AppendPin(ScenePinsField, _map.App.MetagameMapScene, hospital);
             AppendPin(UiPinsField, _map.MapUI, hospital);
             _generatedHospitalPins.Add(hospital);
+            var mapPath = ResolveMapPath(placement.MapPath);
+            if (mapPath != null) PinMapPaths[hospital] = mapPath;
             RefreshCameraBoundsMethod?.Invoke(_map.MapUI, null);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Pin de autor creado: " + clone.name + " en " + clone.transform.position +
                 ", renderers=" + clone.GetComponentsInChildren<Renderer>(true).Length + ".");
+        }
+
+        private static string ResolveMapPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            var root = Path.GetFullPath(ScenarioEditorStorage.Folder)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            var full = Path.GetFullPath(Path.Combine(root, path));
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
+                !full.EndsWith(".upmap", StringComparison.OrdinalIgnoreCase) ||
+                !File.Exists(full))
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Mapa asignado al pin no encontrado: " + path);
+                return null;
+            }
+            return full;
+        }
+
+        internal static bool TryGetMapPath(MapPinHospital pin, out string path)
+        {
+            path = null;
+            return pin != null && PinMapPaths.TryGetValue(pin, out path);
         }
 
         private static void AppendPin(FieldInfo field, object owner, MapPin pin)
@@ -1425,6 +1464,7 @@ namespace UnderPressure.Editor
                 if (pin == null) continue;
                 RemovePin(ScenePinsField, _map?.App?.MetagameMapScene, pin);
                 RemovePin(UiPinsField, _map?.MapUI, pin);
+                PinMapPaths.Remove(pin);
                 try { pin.PrepareForDestroy(); }
                 catch (Exception exception)
                 {
@@ -1495,6 +1535,20 @@ namespace UnderPressure.Editor
     {
         private static void Postfix(MapPinHospital __instance) =>
             ScenarioCareerMapControls.RevealHospital(__instance);
+    }
+
+    [HarmonyPatch(typeof(MapPinHospital), "OnSelected")]
+    internal static class ScenarioWorldMapHospitalSelectionPatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(MapPinHospital __instance)
+        {
+            if (!ScenarioWorldMapAuthoring.TryGetMapPath(__instance, out var path)) return;
+            var selector = UnityEngine.Object.FindObjectOfType<ScenarioCareerMapMenu>();
+            if (selector != null && selector.SelectPath(path)) return;
+            UnderPressureEditorPlugin.Log?.LogWarning(
+                "El pin no pudo seleccionar su mapa asignado: " + path);
+        }
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "IsPinUnlocked")]

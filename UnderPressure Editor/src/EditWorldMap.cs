@@ -29,12 +29,19 @@ namespace UnderPressure.Editor
         internal readonly string Id;
         internal readonly string Template;
         internal readonly Vector3 Position;
+        internal readonly string MapPath;
 
         internal WorldMapHospital(string id, string template, Vector3 position)
+            : this(id, template, position, null)
+        {
+        }
+
+        internal WorldMapHospital(string id, string template, Vector3 position, string mapPath)
         {
             Id = id;
             Template = template;
             Position = position;
+            MapPath = mapPath;
         }
     }
 
@@ -54,9 +61,15 @@ namespace UnderPressure.Editor
         internal static readonly WorldMapHospital[] Hospitals =
         {
             new WorldMapHospital(
-                "hospital_nuevo",
+				"hogsport_plus",
                 "Metagame[0]/Pins[7]/MapPin_Hospital_R1_L1[0]",
-                new Vector3(4.336f, 98.794f, 3.267f))
+                new Vector3(4.336f, 98.794f, 3.267f),
+				@"901\Hogsport_Plus\Hogsport_Plus.upmap"),
+
+            new WorldMapHospital(
+               "Conflux",
+               "Metagame[0]/Pins[7]/MapPin_Hospital_R1_L1[0]",
+              new Vector3(1.991f, 71.773f, 1026.279f)),
         };
     }
 }
