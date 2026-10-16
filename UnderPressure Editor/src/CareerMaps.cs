@@ -1121,7 +1121,7 @@ namespace UnderPressure.Editor
     internal sealed class ScenarioWorldMapAuthoring : MonoBehaviour
     {
         [Serializable]
-        private sealed class Position
+        public sealed class Position
         {
             public float x;
             public float y;
@@ -1131,7 +1131,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        private sealed class MeshPlacement
+        public sealed class MeshPlacement
         {
             public string id;
             public string source;
@@ -1140,7 +1140,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        private sealed class HospitalPlacement
+        public sealed class HospitalPlacement
         {
             public string id;
             public string template;
@@ -1148,7 +1148,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        private sealed class Document
+        public sealed class Document
         {
             public int version = 1;
             public MeshPlacement[] meshes = new MeshPlacement[0];
