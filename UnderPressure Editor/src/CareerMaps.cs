@@ -1121,7 +1121,7 @@ namespace UnderPressure.Editor
     internal sealed class ScenarioWorldMapAuthoring : MonoBehaviour
     {
         [Serializable]
-        public sealed class Position
+        private sealed class Position
         {
             public float x;
             public float y;
@@ -1131,7 +1131,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        public sealed class MeshPlacement
+        private sealed class MeshPlacement
         {
             public string id;
             public string source;
@@ -1140,7 +1140,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        public sealed class HospitalPlacement
+        private sealed class HospitalPlacement
         {
             public string id;
             public string template;
@@ -1148,7 +1148,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        public sealed class Document
+        private sealed class Document
         {
             public int version = 1;
             public MeshPlacement[] meshes = new MeshPlacement[0];
@@ -1239,7 +1239,12 @@ namespace UnderPressure.Editor
             if (string.IsNullOrEmpty(_filePath)) return;
             var folder = Path.GetDirectoryName(_filePath);
             if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
-            if (!File.Exists(_filePath)) ScenarioMapFormat.WriteJson(_filePath, new Document());
+            if (!File.Exists(_filePath))
+            {
+                File.WriteAllText(_filePath,
+                    "{\n  \"version\": 1,\n  \"meshes\": [],\n  \"hospitals\": []\n}\n",
+                    new UTF8Encoding(false));
+            }
         }
 
         private void Reload()
@@ -1248,9 +1253,19 @@ namespace UnderPressure.Editor
             if (_sceneRoot == null || string.IsNullOrEmpty(_filePath) || !File.Exists(_filePath)) return;
             try
             {
-                var document = JsonUtility.FromJson<Document>(File.ReadAllText(_filePath));
+                var json = File.ReadAllText(_filePath, Encoding.UTF8);
+                var document = JsonUtility.FromJson<Document>(json);
                 if (document == null)
                     throw new InvalidDataException("world_map.json no contiene un documento valido.");
+                // JsonUtility de esta version del juego ignora arrays de clases
+                // anidadas. Leer cada entrada con el parser ya usado por los
+                // formatos de parcelas y Landscape conserva todos sus campos.
+                document.meshes = json.Contains("\"meshes\"")
+                    ? ScenarioMapFormat.ParseObjects<MeshPlacement>(json, "meshes")
+                    : new MeshPlacement[0];
+                document.hospitals = json.Contains("\"hospitals\"")
+                    ? ScenarioMapFormat.ParseObjects<HospitalPlacement>(json, "hospitals")
+                    : new HospitalPlacement[0];
                 EnsureGeneratedRoot();
                 var meshes = document.meshes ?? new MeshPlacement[0];
                 for (var index = 0; index < meshes.Length; ++index)
