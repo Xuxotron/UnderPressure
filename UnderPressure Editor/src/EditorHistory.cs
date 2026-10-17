@@ -24,6 +24,7 @@ namespace UnderPressure.Editor
         private const float CaptureInterval = 0.22f;
         private const float PositionEpsilonSquared = 0.0004f;
         private const float RotationEpsilon = 0.05f;
+        private const float HistoryPanelWidth = 184f;
         private static readonly FieldInfo LandscapeCarryingField =
             AccessTools.Field(typeof(ScenarioLandscape), "_carrying");
         private static readonly FieldInfo LandscapeEditedField =
@@ -769,7 +770,7 @@ namespace UnderPressure.Editor
             panel.anchorMax = new Vector2(1f, 1f);
             panel.pivot = new Vector2(1f, 1f);
             panel.anchoredPosition = new Vector2(-20f, -100f);
-            panel.sizeDelta = new Vector2(304f,
+            panel.sizeDelta = new Vector2(HistoryPanelWidth,
                 Mathf.Max(110f, Mathf.Min(430f, Screen.height - 145f)));
             panelGo.GetComponent<Image>().color = new Color(.045f, .070f, .095f, .94f);
 
@@ -859,7 +860,7 @@ namespace UnderPressure.Editor
         private bool OverHistory()
         {
             if (_historyUi == null || !_historyUi.activeInHierarchy) return false;
-            var width = 304f;
+            var width = HistoryPanelWidth;
             var height = Mathf.Max(110f, Mathf.Min(430f, Screen.height - 145f));
             var mouse = Input.mousePosition;
             return mouse.x >= Screen.width - 20f - width &&

@@ -6,6 +6,7 @@ using HarmonyLib;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using TH20;
 using TMPro;
@@ -1931,6 +1932,10 @@ namespace UnderPressure.Editor
 
         internal static bool IsDialogOpen => _active != null && _active._dialog != null;
 
+        internal static void ShowSaveFromPause() => _active?.ShowSave();
+        internal static void ShowLoadFromPause() => _active?.ShowLoad();
+        internal static void ShowEmptyMapFromPause() => _active?.ShowEmptyMapConfirmation();
+
         internal void Initialise(EditHospitalMenu menu, Level level)
         {
             if (_menu != null) return;
@@ -1947,8 +1952,6 @@ namespace UnderPressure.Editor
                 return;
             }
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            AddToolbarButton(T("editor.map.save"), 0, ShowSave);
-            AddToolbarButton(T("editor.map.open"), 1, ShowLoad);
             AddStylesToolbarButton();
             AddPlotIsolationButton();
             InitialisePlotActions();
@@ -2523,6 +2526,34 @@ rect.pivot = new Vector2(1f, 1f);
                     UnderPressureEditorPlugin.Log?.LogError(exception);
                 }
             });
+        }
+
+        private void ShowEmptyMapConfirmation()
+        {
+            BuildDialog(T("editor.map.empty"));
+            if (_dialog == null) return;
+            AddText(_dialogPanel, T("editor.map.empty.warning"),
+                24f, 72f, 484f, 170f, 19, TextAnchor.MiddleCenter);
+            SetDialogCloseLabel(T("common.cancel"));
+            AddDialogButton(T("editor.map.empty.accept"), new Vector2(-85f, -289f), () =>
+            {
+                CloseDialog();
+                ScenarioEditorTerrainPainter.ClearMap(_level);
+            });
+        }
+
+        private void SetDialogCloseLabel(string value)
+        {
+            var close = _dialogPanel?.Find("UP Map - Cerrar");
+            if (close == null) return;
+            var label = close.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.text = value;
+                return;
+            }
+            var ordinary = close.GetComponentInChildren<Text>(true);
+            if (ordinary != null) ordinary.text = value;
         }
 
         private void ShowSave()
@@ -3122,6 +3153,53 @@ PriorVisibility.Clear();
             var component = __instance.GetComponent<ScenarioEditorStorageMenu>() ??
                             __instance.gameObject.AddComponent<ScenarioEditorStorageMenu>();
             component.Initialise(__instance, __0);
+        }
+    }
+
+    // El HUD ya instancia una copia del prefab de pausa para cada nivel.
+    // Personalizamos únicamente esa instancia durante el editor; el menú del
+    // juego normal y su prefab permanecen intactos.
+    [HarmonyPatch(typeof(PauseMenu), "Setup")]
+    internal static class ScenarioEditorPauseMenuPatch
+    {
+        private static readonly FieldInfo QuickSaveField =
+            AccessTools.Field(typeof(PauseMenu), "_quickSaveButton");
+        private static readonly FieldInfo QuickLoadField =
+            AccessTools.Field(typeof(PauseMenu), "_quickLoadButton");
+        private static readonly FieldInfo RestartField =
+            AccessTools.Field(typeof(PauseMenu), "_restartLevelButton");
+
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(PauseMenu __instance)
+        {
+            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
+                __instance == null) return;
+            __instance.gameObject.name = "UP Editor Pause Menu";
+            Configure(QuickSaveField?.GetValue(__instance) as Button,
+                "editor.map.save", ScenarioEditorStorageMenu.ShowSaveFromPause);
+            Configure(QuickLoadField?.GetValue(__instance) as Button,
+                "editor.map.open", ScenarioEditorStorageMenu.ShowLoadFromPause);
+            Configure(RestartField?.GetValue(__instance) as Button,
+                "editor.map.empty", ScenarioEditorStorageMenu.ShowEmptyMapFromPause);
+        }
+
+        private static void Configure(Button button, string key, Action action)
+        {
+            if (button == null) return;
+            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => action());
+            button.interactable = true;
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.text = EditorLocalization.Get(key);
+                return;
+            }
+            var ordinary = button.GetComponentInChildren<Text>(true);
+            if (ordinary != null) ordinary.text = EditorLocalization.Get(key);
         }
     }
 }

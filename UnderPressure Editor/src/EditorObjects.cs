@@ -572,11 +572,25 @@ namespace UnderPressure.Editor
                     {
                         var size = scrollRect.sizeDelta;
                         size.y = Mathf.Max(size.y, 190f);
-                        scrollRect.sizeDelta = size;
+                        if (scrollRect.anchorMin.x == scrollRect.anchorMax.x)
+                        {
+                            size.x = Mathf.Max(260f, size.x - 224f);
+                            scrollRect.sizeDelta = size;
+                        }
+                        else
+                        {
+                            var offset = scrollRect.offsetMax;
+                            offset.x -= 224f;
+                            scrollRect.offsetMax = offset;
+                        }
                     }
                     RestoreScrollbar(scroll, __instance);
                 }
-                if (input != null) MoveSearchBelowPlots(input, __instance);
+                if (input != null)
+                {
+                    ScenarioEditorCatalogLoadGate.Initialise(__instance, input);
+                    MoveSearchBelowPlots(input, __instance);
+                }
             }
             catch (Exception ex)
             {
@@ -695,7 +709,7 @@ namespace UnderPressure.Editor
             inputRect.SetParent(menuRect, false);
             inputRect.anchorMin = inputRect.anchorMax = new Vector2(0f, 1f);
             inputRect.pivot = new Vector2(0f, 1f);
-            inputRect.sizeDelta = new Vector2(147f, 27f);
+            inputRect.sizeDelta = new Vector2(88f, 27f);
             var labelObject = new GameObject("UP_SearchLabel", typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(TextMeshProUGUI));
             labelObject.transform.SetParent(inputRect.parent, false);
@@ -709,9 +723,44 @@ namespace UnderPressure.Editor
             label.alignment = TextAlignmentOptions.MidlineLeft;
             label.color = Color.white;
             label.raycastTarget = false;
+            var showAll = CreateShowAllButton(menu, inputRect.parent);
             follower = input.gameObject.AddComponent<ScenarioEditorSearchBelowPlots>();
-            follower.Configure(viewport, labelObject.transform as RectTransform);
+            follower.Configure(viewport, labelObject.transform as RectTransform, showAll);
             follower.Place();
+        }
+
+        private static RectTransform CreateShowAllButton(LandscapeObjectsMenu menu,
+            Transform parent)
+        {
+            var editMenu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var template = AccessTools.Field(typeof(EditHospitalMenu), "_objectsButton")
+                ?.GetValue(editMenu) as Button;
+            if (template == null) return null;
+            var button = UnityEngine.Object.Instantiate(template, parent, false);
+            button.gameObject.name = "UP Objects - Show All";
+            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => ScenarioEditorCatalogLoadGate.ShowAll(menu));
+            button.interactable = true;
+            var text = button.GetComponentInChildren<TMP_Text>(true);
+            if (text != null)
+            {
+                text.text = EditorLocalization.Get("editor.objects.show_all");
+                text.enableAutoSizing = true;
+                text.fontSizeMin = 10f;
+                text.fontSizeMax = 16f;
+            }
+            var rect = button.transform as RectTransform;
+            if (rect != null)
+            {
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+                rect.pivot = new Vector2(0f, 1f);
+                rect.sizeDelta = new Vector2(82f, 27f);
+            }
+            button.gameObject.SetActive(true);
+            return rect;
         }
     }
 
@@ -751,13 +800,16 @@ namespace UnderPressure.Editor
     {
         private RectTransform _plotViewport;
         private RectTransform _label;
+        private RectTransform _showAll;
         private RectTransform _input;
         private readonly Vector3[] _corners = new Vector3[4];
 
-        internal void Configure(RectTransform plotViewport, RectTransform label)
+        internal void Configure(RectTransform plotViewport, RectTransform label,
+            RectTransform showAll)
         {
             _plotViewport = plotViewport;
             _label = label;
+            _showAll = showAll;
             _input = transform as RectTransform;
         }
 
@@ -775,13 +827,75 @@ namespace UnderPressure.Editor
             _label.sizeDelta = new Vector2(64f, 28f);
             _label.position = origin;
             _input.position = origin + parent.TransformVector(new Vector3(65f, 0f, 0f));
+            if (_showAll != null)
+                _showAll.position = origin + parent.TransformVector(new Vector3(158f, 0f, 0f));
         }
 
         private void LateUpdate() { Place(); }
         private void OnDestroy()
         {
             if (_label != null) UnityEngine.Object.Destroy(_label.gameObject);
+            if (_showAll != null) UnityEngine.Object.Destroy(_showAll.gameObject);
         }
+    }
+
+    internal sealed class ScenarioEditorCatalogLoadGate : MonoBehaviour
+    {
+        private static readonly FieldInfo PendingItemsField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
+        private readonly List<RoomItemDefinition> _emptyPending =
+            new List<RoomItemDefinition>();
+        private TMP_InputField _search;
+        private bool _showAll;
+
+        internal static void Initialise(LandscapeObjectsMenu menu, TMP_InputField search)
+        {
+            if (menu == null) return;
+            var gate = menu.GetComponent<ScenarioEditorCatalogLoadGate>() ??
+                       menu.gameObject.AddComponent<ScenarioEditorCatalogLoadGate>();
+            gate._search = search;
+        }
+
+        internal static void ShowAll(LandscapeObjectsMenu menu)
+        {
+            var gate = menu == null ? null : menu.GetComponent<ScenarioEditorCatalogLoadGate>();
+            if (gate != null) gate._showAll = true;
+        }
+
+        internal bool CanLoad => _showAll ||
+            (_search != null && !string.IsNullOrWhiteSpace(_search.text));
+
+        internal static List<RoomItemDefinition> Suspend(LandscapeObjectsMenu menu)
+        {
+            var gate = menu == null ? null : menu.GetComponent<ScenarioEditorCatalogLoadGate>();
+            if (gate == null || gate.CanLoad || PendingItemsField == null) return null;
+            var pending = PendingItemsField.GetValue(menu) as List<RoomItemDefinition>;
+            if (pending == null || pending.Count == 0) return null;
+            PendingItemsField.SetValue(menu, gate._emptyPending);
+            return pending;
+        }
+
+        internal static void Restore(LandscapeObjectsMenu menu,
+            List<RoomItemDefinition> pending)
+        {
+            if (menu != null && pending != null && PendingItemsField != null)
+                PendingItemsField.SetValue(menu, pending);
+        }
+    }
+
+    [HarmonyPatch(typeof(LandscapeObjectsMenu), "Update")]
+    internal static class ScenarioEditorCatalogLazyLoadPatch
+    {
+        private static void Prefix(LandscapeObjectsMenu __instance,
+            ref List<RoomItemDefinition> __state)
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                __state = ScenarioEditorCatalogLoadGate.Suspend(__instance);
+        }
+
+        private static void Postfix(LandscapeObjectsMenu __instance,
+            List<RoomItemDefinition> __state) =>
+            ScenarioEditorCatalogLoadGate.Restore(__instance, __state);
     }
 }
 // ===== END ORIGINAL: ScenarioEditorObjectLayout.cs =====

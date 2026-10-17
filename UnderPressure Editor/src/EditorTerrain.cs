@@ -307,8 +307,8 @@ namespace UnderPressure.Editor
             rect.anchorMin = new Vector2(1f, 0f);
             rect.anchorMax = new Vector2(1f, 0f);
             rect.pivot = new Vector2(1f, 0f);
-            rect.anchoredPosition = new Vector2(-14f, 285f); // Subir panel completo; no invade objetos.
-            rect.sizeDelta = new Vector2(180f, 575f);
+            rect.anchoredPosition = new Vector2(-14f, 14f);
+            rect.sizeDelta = new Vector2(180f, 535f);
             var image = go.GetComponent<Image>();
             image.color = new Color(0f, 0f, 0f, 0.55f);
             _behaviour = go.GetComponent<ScenarioEditorTerrainPainterBehaviour>();
@@ -1583,30 +1583,28 @@ namespace UnderPressure.Editor
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
             _opacitySlider = CreateSlider(root, new Vector2(12, -162), new Vector2(156, 17), 0, 100, 50,
                 value => ScenarioEditorTerrainPainter.SetBrushOpacity(value));
-            CreateButton(root, new Vector2(9, -191), new Vector2(162, 31),
-                T("editor.terrain.clear"), ShowClearConfirmation, out _);
-            CreateButton(root, new Vector2(9, -228), new Vector2(51, 28),
+            CreateButton(root, new Vector2(9, -191), new Vector2(51, 28),
                 T("editor.terrain.raise"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Raise), out _);
-            CreateButton(root, new Vector2(65, -228), new Vector2(51, 28),
+            CreateButton(root, new Vector2(65, -191), new Vector2(51, 28),
                 T("editor.terrain.lower"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Lower), out _);
-            CreateButton(root, new Vector2(121, -228), new Vector2(51, 28),
+            CreateButton(root, new Vector2(121, -191), new Vector2(51, 28),
                 T("editor.terrain.flatten"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
-            CreateButton(root, new Vector2(9, -263), new Vector2(162, 30),
+            CreateButton(root, new Vector2(9, -226), new Vector2(162, 30),
                 T("editor.terrain.depth_of_field"), () =>
                 {
                     ScenarioEditorDepthOfField.Toggle();
                     RefreshTexts();
                 }, out _depthText);
-            CreateButton(root, new Vector2(9, -298), new Vector2(162, 30),
+            CreateButton(root, new Vector2(9, -261), new Vector2(162, 30),
                 T("editor.terrain.wireframe"), () => ScenarioEditorTerrainPainter.ToggleWireframe(),
                 out _wireText);
             var scrollRoot = NewUi("Textures", root, typeof(Image), typeof(ScrollRect));
             var scrollRect = (RectTransform)scrollRoot.transform;
-            Place(scrollRect, new Vector2(8, -336), new Vector2(164, 227));
+            Place(scrollRect, new Vector2(8, -299), new Vector2(164, 227));
             scrollRoot.GetComponent<Image>().color = new Color(0f,0f,0f,0.18f);
             _scroll = scrollRoot.GetComponent<ScrollRect>();
             _scroll.vertical = true;
