@@ -2005,6 +2005,7 @@ namespace UnderPressure.Editor
             new Dictionary<object, bool>();
         private static readonly FieldInfo CameraPostProcessVolume =
             AccessTools.Field(typeof(TopDownCameraLogic), "_postProcessVolume");
+        private static ScenarioEditorDepthOfFieldGuard _cameraGuard;
         private static bool _enteredEditor;
         internal static bool Disabled { get; private set; }
         private const BindingFlags Flags = BindingFlags.Instance |
@@ -2016,6 +2017,7 @@ namespace UnderPressure.Editor
             _enteredEditor = true;
             var count = Apply(false, true);
             Disabled = count > 0;
+            if (Disabled) AttachCameraGuard(ScenarioEditorSession.Level?.CameraLogic);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Editor: profundidad de campo anulada en " + count +
                 " perfiles de escena. El resto del postprocesado no cambia.");
@@ -2026,6 +2028,7 @@ namespace UnderPressure.Editor
             if (Disabled) { Restore(); return; }
             var count = Apply(false, true);
             Disabled = count > 0;
+            if (Disabled) AttachCameraGuard(ScenarioEditorSession.Level?.CameraLogic);
             if (count == 0) UnderPressureEditorPlugin.Log?.LogWarning(
                 "Profundidad de campo: no se encontraron efectos activos en perfiles de la escena.");
             else UnderPressureEditorPlugin.Log?.LogInfo("Profundidad de campo desactivada: " + count);
@@ -2088,8 +2091,19 @@ namespace UnderPressure.Editor
             }
         }
 
+        private static void AttachCameraGuard(TopDownCameraLogic camera)
+        {
+            var cameraComponent = camera?.CameraComponent;
+            if (cameraComponent == null) return;
+            _cameraGuard = cameraComponent.GetComponent<ScenarioEditorDepthOfFieldGuard>() ??
+                cameraComponent.gameObject.AddComponent<ScenarioEditorDepthOfFieldGuard>();
+            _cameraGuard.CameraLogic = camera;
+        }
+
         internal static void Restore()
         {
+            if (_cameraGuard != null) UnityEngine.Object.Destroy(_cameraGuard);
+            _cameraGuard = null;
             foreach (var entry in Originals)
             {
                 try
@@ -2108,15 +2122,16 @@ namespace UnderPressure.Editor
         }
     }
 
-    // La cámara aplica sus efectos después de que el menú del editor ya exista.
-    // Mantener aquí la elección evita que la carga del mapa reactive su DoF.
-    [HarmonyPatch(typeof(TopDownCameraLogic), "ApplyEffects")]
-    internal static class ScenarioEditorDepthOfFieldCameraPatch
+    // El juego puede reactivar el DoF durante el ciclo de la cámara. Este
+    // componente sólo existe en la cámara del editor y lo corrige justo antes
+    // de renderizar, sin parchear el método global de cámara del juego.
+    internal sealed class ScenarioEditorDepthOfFieldGuard : MonoBehaviour
     {
-        private static void Postfix(TopDownCameraLogic __instance)
+        internal TopDownCameraLogic CameraLogic;
+
+        private void OnPreCull()
         {
-            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active) return;
-            ScenarioEditorDepthOfField.EnforceOnCamera(__instance);
+            ScenarioEditorDepthOfField.EnforceOnCamera(CameraLogic);
         }
     }
 
