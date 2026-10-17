@@ -1229,6 +1229,26 @@ namespace UnderPressure.Editor
             Reload();
         }
 
+        internal void InitialiseOpeningScreen(App app, MetagameMapScene mapScene)
+        {
+            var map = app?.MetagameMap;
+            if (map != null)
+            {
+                Initialise(map);
+                return;
+            }
+
+            var root = mapScene?.RootObject;
+            if (root == null) return;
+            if (_map == null && _sceneRoot == root.transform && _generatedRoot != null) return;
+            ClearGenerated();
+            _map = null;
+            _sceneRoot = root.transform;
+            var folder = Path.Combine(ScenarioEditorStorage.Folder, "_author");
+            _catalogPath = Path.Combine(folder, "world_map_assets.txt");
+            Reload();
+        }
+
         private void Update()
         {
             if (_map == null || !_map.IsVisible) return;
@@ -1283,10 +1303,14 @@ namespace UnderPressure.Editor
                 var meshes = EditWorldMap.Meshes ?? new WorldMapMesh[0];
                 for (var index = 0; index < meshes.Length; ++index)
                     AddMesh(meshes[index], index);
-                var hospitals = EditWorldMap.Hospitals ?? new WorldMapHospital[0];
+                var hospitals = _map == null
+                    ? new WorldMapHospital[0]
+                    : EditWorldMap.Hospitals ?? new WorldMapHospital[0];
                 for (var index = 0; index < hospitals.Length; ++index)
                     AddHospital(hospitals[index], index);
-                var confluxes = EditWorldMap.Confluxes ?? new WorldMapConflux[0];
+                var confluxes = _map == null
+                    ? new WorldMapConflux[0]
+                    : EditWorldMap.Confluxes ?? new WorldMapConflux[0];
                 for (var index = 0; index < confluxes.Length; ++index)
                     AddConflux(confluxes[index], index);
                 UnderPressureEditorPlugin.Log?.LogInfo(
@@ -1332,6 +1356,9 @@ namespace UnderPressure.Editor
                 var main = particles.main;
                 main.simulationSpeed *= placement.SpeedMultiplier;
                 if (placement.TintMagenta) TintParticleSystem(particles);
+                if (string.Equals(placement.Id, "conflux_swirl",
+                    StringComparison.OrdinalIgnoreCase))
+                    RestoreSwirlOpacity(particles);
                 if (placement.CircularEmissionRadius > 0f)
                 {
                     var shape = particles.shape;
@@ -1514,6 +1541,26 @@ namespace UnderPressure.Editor
             SetMaterialMagenta(trailMaterial, "_Color", magenta);
             SetMaterialMagenta(trailMaterial, "_TintColor", magenta);
             SetMaterialMagenta(trailMaterial, "_EmissionColor", magenta);
+        }
+
+        private static void RestoreSwirlOpacity(ParticleSystem particles)
+        {
+            var lifetime = particles.colorOverLifetime;
+            var source = lifetime.color;
+            var gradient = source.gradient;
+            if (gradient == null) return;
+
+            // Curva alfa serializada del Swirl original del DLC temporal.
+            var restored = new Gradient { mode = gradient.mode };
+            restored.SetKeys(gradient.colorKeys, new[]
+            {
+                new GradientAlphaKey(0f, 0f),
+                new GradientAlphaKey(0.7254902f, 0.0500038f),
+                new GradientAlphaKey(0.7333333f, 0.9473106f),
+                new GradientAlphaKey(0f, 1f)
+            });
+            lifetime.enabled = true;
+            lifetime.color = new ParticleSystem.MinMaxGradient(restored);
         }
 
         private static ParticleSystem.MinMaxGradient TintGradient(
@@ -1837,12 +1884,24 @@ namespace UnderPressure.Editor
         private static void Postfix(OpeningScreen __instance)
         {
             var app = AppField?.GetValue(__instance) as App;
-            var map = app?.MetagameMap;
             var root = app?.MetagameMapScene?.RootObject;
-            if (map == null || root == null) return;
+            if (root == null) return;
             var authoring = root.GetComponent<ScenarioWorldMapAuthoring>() ??
                 root.AddComponent<ScenarioWorldMapAuthoring>();
-            authoring.Initialise(map);
+            authoring.InitialiseOpeningScreen(app, app.MetagameMapScene);
+        }
+    }
+
+    [HarmonyPatch(typeof(OpeningScreen), "Setup")]
+    internal static class ScenarioWorldMapOpeningScreenSetupPatch
+    {
+        private static void Postfix(App __0, MetagameMapScene __2)
+        {
+            var root = __2?.RootObject;
+            if (root == null) return;
+            var authoring = root.GetComponent<ScenarioWorldMapAuthoring>() ??
+                root.AddComponent<ScenarioWorldMapAuthoring>();
+            authoring.InitialiseOpeningScreen(__0, __2);
         }
     }
 
