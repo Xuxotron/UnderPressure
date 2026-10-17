@@ -1905,6 +1905,7 @@ namespace UnderPressure.Editor
         private EditHospitalMenu _menu;
         private Level _level;
         private Button _template;
+        private bool _templateWasActive;
         private GameObject _dialog;
         private InputField _nameInput;
         private Text _statusText;
@@ -1958,6 +1959,7 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogError("El prefab del editor no contiene su boton de salida.");
                 return;
             }
+            _templateWasActive = _template.gameObject.activeSelf;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             AddLayerButtons();
             AddStylesToolbarButton();
@@ -1968,8 +1970,35 @@ namespace UnderPressure.Editor
             level.HospitalEditEvents.OnSelectHospitalPlot += OnPlotSelected;
             AddMapIdentity();
             AddCursorCoordinates();
+            PrepareNativeToolbar();
             RefreshMapIdentity();
             _initialVisibilityFrames = 12;
+        }
+
+        private void PrepareNativeToolbar()
+        {
+            SetNativeButtonLabel("_tileMapPreviewButton", "editor.toolbar.tile_view");
+            SetNativeButtonLabel("_toggleCameraButton", "editor.toolbar.free_camera");
+            SetNativeButtonLabel("_buildButton", "editor.toolbar.edit_plot");
+            SetNativeButtonLabel("_objectsButton", "editor.objects.title");
+            SetNativeButtonLabel("_moveButton", "editor.toolbar.move_plot");
+            _template.gameObject.SetActive(false);
+        }
+
+        private void SetNativeButtonLabel(string fieldName, string key)
+        {
+            var button = AccessTools.Field(typeof(EditHospitalMenu), fieldName)?
+                .GetValue(_menu) as Button;
+            if (button == null) return;
+            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label == null) return;
+            label.text = T(key);
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 11f;
+            label.fontSizeMax = 17f;
         }
 
         private void AddLayerButtons()
@@ -1995,7 +2024,7 @@ namespace UnderPressure.Editor
             root.anchorMax = dropdownRect.anchorMax;
             root.pivot = dropdownRect.pivot;
             root.anchoredPosition = dropdownRect.anchoredPosition;
-            root.sizeDelta = dropdownRect.sizeDelta;
+            root.sizeDelta = new Vector2(244f, dropdownRect.sizeDelta.y);
             root.localRotation = dropdownRect.localRotation;
             root.localScale = dropdownRect.localScale;
             var layout = _layerButtonsRoot.AddComponent<LayoutElement>();
@@ -3110,6 +3139,7 @@ rect.pivot = new Vector2(1f, 1f);
                 if (_createdLayerDropdownCanvasGroup)
                     UnityEngine.Object.Destroy(_layerDropdownCanvasGroup);
             }
+            if (_template != null) _template.gameObject.SetActive(_templateWasActive);
             if (ReferenceEquals(_active, this)) _active = null;
             CloseDialog();
             foreach (var button in _buttons)
