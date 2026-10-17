@@ -1556,7 +1556,7 @@ namespace UnderPressure.Editor
             {
                 new GradientAlphaKey(0f, 0f),
                 new GradientAlphaKey(0.7254902f, 0.0500038f),
-                new GradientAlphaKey(0.7333333f, 0.9473106f),
+                new GradientAlphaKey(0.7333333f, 0.9470664f),
                 new GradientAlphaKey(0f, 1f)
             });
             lifetime.enabled = true;
@@ -1600,7 +1600,9 @@ namespace UnderPressure.Editor
 
         private static Color TintColor(Color source, Color magenta)
         {
-            var intensity = Mathf.Max(1f, source.r, source.g, source.b);
+            // El negro forma parte de las curvas originales de fundido de las
+            // partículas. No se puede elevar a intensidad 1 al cambiar el tono.
+            var intensity = Mathf.Max(source.r, source.g, source.b);
             return new Color(magenta.r * intensity, magenta.g * intensity,
                 magenta.b * intensity, source.a);
         }
@@ -1609,7 +1611,9 @@ namespace UnderPressure.Editor
         {
             if (!material.HasProperty(property)) return;
             var original = material.GetColor(property);
-            var intensity = Mathf.Max(1f, original.r, original.g, original.b);
+            // Conserva las propiedades negras: varios shaders las usan para
+            // apagar emisión y para completar el degradado al final de vida.
+            var intensity = Mathf.Max(original.r, original.g, original.b);
             material.SetColor(property, new Color(
                 magenta.r * intensity, magenta.g * intensity, magenta.b * intensity, original.a));
         }
