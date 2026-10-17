@@ -2003,6 +2003,8 @@ namespace UnderPressure.Editor
     {
         private static readonly Dictionary<object, bool> Originals =
             new Dictionary<object, bool>();
+        private static readonly FieldInfo CameraPostProcessVolume =
+            AccessTools.Field(typeof(TopDownCameraLogic), "_postProcessVolume");
         private static bool _enteredEditor;
         internal static bool Disabled { get; private set; }
         private const BindingFlags Flags = BindingFlags.Instance |
@@ -2037,34 +2039,53 @@ namespace UnderPressure.Editor
                 if (component == null || !component.gameObject.scene.IsValid() ||
                     component.GetType().FullName !=
                         "UnityEngine.Rendering.PostProcessing.PostProcessVolume") continue;
-                try
-                {
-                    var profileMember = component.GetType().GetProperty("profile", Flags);
-                    var profile = profileMember?.GetValue(component, null);
-                    if (profile == null) continue;
-                    var listField = profile.GetType().GetField("settings", Flags);
-                    var list = listField?.GetValue(profile) as System.Collections.IEnumerable;
-                    if (list == null) continue;
-                    foreach (var setting in list)
-                    {
-                        if (setting == null || setting.GetType().Name != "DepthOfField") continue;
-                        var field = setting.GetType().GetField("active", Flags);
-                        var prop = setting.GetType().GetProperty("active", Flags);
-                        if (field == null && prop == null) continue;
-                        bool active = Convert.ToBoolean(field != null ? field.GetValue(setting) :
-                            prop.GetValue(setting, null));
-                        if (capture && !Originals.ContainsKey(setting)) Originals[setting] = active;
-                        if (field != null) field.SetValue(setting, enabled);
-                        else prop.SetValue(setting, enabled, null);
-                        changed++;
-                    }
-                }
+                try { changed += ApplyToVolume(component, enabled, capture); }
                 catch (Exception error)
                 {
                     UnderPressureEditorPlugin.Log?.LogWarning("Profundidad de campo: " + error.Message);
                 }
             }
             return changed;
+        }
+
+        private static int ApplyToVolume(object volume, bool enabled, bool capture)
+        {
+            if (volume == null) return 0;
+            var profileMember = volume.GetType().GetProperty("profile", Flags);
+            var profile = profileMember?.GetValue(volume, null);
+            if (profile == null) return 0;
+            var listField = profile.GetType().GetField("settings", Flags);
+            var list = listField?.GetValue(profile) as System.Collections.IEnumerable;
+            if (list == null) return 0;
+            int changed = 0;
+            foreach (var setting in list)
+            {
+                if (setting == null || setting.GetType().Name != "DepthOfField") continue;
+                var field = setting.GetType().GetField("active", Flags);
+                var prop = setting.GetType().GetProperty("active", Flags);
+                if (field == null && prop == null) continue;
+                bool active = Convert.ToBoolean(field != null ? field.GetValue(setting) :
+                    prop.GetValue(setting, null));
+                if (capture && !Originals.ContainsKey(setting)) Originals[setting] = active;
+                if (field != null) field.SetValue(setting, enabled);
+                else prop.SetValue(setting, enabled, null);
+                changed++;
+            }
+            return changed;
+        }
+
+        internal static void EnforceOnCamera(TopDownCameraLogic camera)
+        {
+            if (!Disabled || camera == null) return;
+            try
+            {
+                ApplyToVolume(CameraPostProcessVolume?.GetValue(camera), false, true);
+            }
+            catch (Exception error)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Profundidad de campo de camara: " + error.Message);
+            }
         }
 
         internal static void Restore()
@@ -2084,6 +2105,18 @@ namespace UnderPressure.Editor
             Originals.Clear();
             Disabled = false;
             _enteredEditor = false;
+        }
+    }
+
+    // La cámara aplica sus efectos después de que el menú del editor ya exista.
+    // Mantener aquí la elección evita que la carga del mapa reactive su DoF.
+    [HarmonyPatch(typeof(TopDownCameraLogic), "ApplyEffects")]
+    internal static class ScenarioEditorDepthOfFieldCameraPatch
+    {
+        private static void Postfix(TopDownCameraLogic __instance)
+        {
+            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active) return;
+            ScenarioEditorDepthOfField.EnforceOnCamera(__instance);
         }
     }
 
