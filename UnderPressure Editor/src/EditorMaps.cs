@@ -1912,6 +1912,13 @@ namespace UnderPressure.Editor
         private Font _font;
         private HospitalPlot _selectedPlot;
         private TMP_Dropdown _layerDropdown;
+        private CanvasGroup _layerDropdownCanvasGroup;
+        private bool _createdLayerDropdownCanvasGroup;
+        private float _layerDropdownOriginalAlpha;
+        private bool _layerDropdownOriginalInteractable;
+        private bool _layerDropdownOriginalBlocksRaycasts;
+        private readonly Button[] _layerButtons = new Button[3];
+        private GameObject _layerButtonsRoot;
         private RectTransform _plotListViewport;
         private Image _landscapeSelectBackground;
         private Outline _landscapeBorder;
@@ -1952,6 +1959,7 @@ namespace UnderPressure.Editor
                 return;
             }
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            AddLayerButtons();
             AddStylesToolbarButton();
             AddPlotIsolationButton();
             InitialisePlotActions();
@@ -1962,6 +1970,113 @@ namespace UnderPressure.Editor
             AddCursorCoordinates();
             RefreshMapIdentity();
             _initialVisibilityFrames = 12;
+        }
+
+        private void AddLayerButtons()
+        {
+            var dropdownRect = _layerDropdown?.transform as RectTransform;
+            if (dropdownRect == null) return;
+            _layerDropdownCanvasGroup = _layerDropdown.GetComponent<CanvasGroup>();
+            if (_layerDropdownCanvasGroup == null)
+            {
+                _layerDropdownCanvasGroup = _layerDropdown.gameObject.AddComponent<CanvasGroup>();
+                _createdLayerDropdownCanvasGroup = true;
+            }
+            _layerDropdownOriginalAlpha = _layerDropdownCanvasGroup.alpha;
+            _layerDropdownOriginalInteractable = _layerDropdownCanvasGroup.interactable;
+            _layerDropdownOriginalBlocksRaycasts = _layerDropdownCanvasGroup.blocksRaycasts;
+            _layerDropdownCanvasGroup.alpha = 0f;
+            _layerDropdownCanvasGroup.interactable = false;
+            _layerDropdownCanvasGroup.blocksRaycasts = false;
+
+            _layerButtonsRoot = AddUi("UP Plot Layer Buttons", dropdownRect.parent);
+            var root = _layerButtonsRoot.GetComponent<RectTransform>();
+            root.anchorMin = dropdownRect.anchorMin;
+            root.anchorMax = dropdownRect.anchorMax;
+            root.pivot = dropdownRect.pivot;
+            root.anchoredPosition = dropdownRect.anchoredPosition;
+            root.sizeDelta = dropdownRect.sizeDelta;
+            root.localRotation = dropdownRect.localRotation;
+            root.localScale = dropdownRect.localScale;
+            var layout = _layerButtonsRoot.AddComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+
+            var keys = new[] { "editor.layer.base", "editor.layer.built", "editor.layer.unbuilt" };
+            for (var i = 0; i < _layerButtons.Length; ++i)
+            {
+                var layerIndex = i;
+                var button = CloneButton(_template, root, T(keys[i]), () => SelectLayer(layerIndex));
+                button.gameObject.name = "UP Plot Layer - " + ((HospitalPlotLayer)i);
+                var rect = button.transform as RectTransform;
+                if (rect != null)
+                {
+                    rect.anchorMin = new Vector2(i / 3f, 0f);
+                    rect.anchorMax = new Vector2((i + 1f) / 3f, 1f);
+                    rect.pivot = new Vector2(.5f, .5f);
+                    rect.anchoredPosition = Vector2.zero;
+                    rect.sizeDelta = Vector2.zero;
+                    rect.offsetMin = new Vector2(i == 0 ? 0f : 2f, 0f);
+                    rect.offsetMax = new Vector2(i == 2 ? 0f : -2f, 0f);
+                }
+                var label = button.GetComponentInChildren<TMP_Text>(true);
+                if (label != null)
+                {
+                    label.enableAutoSizing = true;
+                    label.fontSizeMin = 8f;
+                    label.fontSizeMax = 14f;
+                    label.alignment = TextAlignmentOptions.Center;
+                }
+                _layerButtons[i] = button;
+            }
+            _layerDropdown.onValueChanged.AddListener(OnLayerDropdownValueChanged);
+            _level.HospitalEditEvents.OnSelectHospitalPlotLayer += OnLayerSelected;
+            RefreshLayerButtons((HospitalPlotLayer)Mathf.Clamp(_layerDropdown.value, 0, 2));
+            _buttons.Add(_layerButtonsRoot);
+        }
+
+        private void SelectLayer(int index)
+        {
+            if (_layerDropdown == null || index < 0 || index >= _layerButtons.Length) return;
+            if (_layerDropdown.value != index)
+                _layerDropdown.value = index;
+            else
+                _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke((HospitalPlotLayer)index);
+        }
+
+        private void OnLayerDropdownValueChanged(int index) =>
+            RefreshLayerButtons((HospitalPlotLayer)Mathf.Clamp(index, 0, 2));
+
+        private void OnLayerSelected(HospitalPlotLayer layer)
+        {
+            var index = Mathf.Clamp((int)layer, 0, 2);
+            if (_layerDropdown != null && _layerDropdown.value != index)
+                _layerDropdown.SetValueWithoutNotify(index);
+            RefreshLayerButtons((HospitalPlotLayer)index);
+        }
+
+        private void SetLayerControlsVisible(bool visible)
+        {
+            if (_layerButtonsRoot != null) _layerButtonsRoot.SetActive(visible);
+        }
+
+        private void RefreshLayerButtons(HospitalPlotLayer selected)
+        {
+            for (var i = 0; i < _layerButtons.Length; ++i)
+            {
+                var button = _layerButtons[i];
+                if (button == null) continue;
+                var active = i == (int)selected;
+                var colors = button.colors;
+                colors.normalColor = active
+                    ? new Color(.04f, .58f, .91f, 1f)
+                    : new Color(.42f, .50f, .54f, 1f);
+                colors.highlightedColor = active
+                    ? new Color(.08f, .72f, 1f, 1f)
+                    : new Color(.55f, .63f, .67f, 1f);
+                colors.pressedColor = new Color(.03f, .43f, .72f, 1f);
+                colors.selectedColor = colors.highlightedColor;
+                button.colors = colors;
+            }
         }
 
         // Dos lineas a la izquierda de Parcelas; no tapa los controles nativos.
@@ -2172,7 +2287,7 @@ rect.pivot = new Vector2(1f, 1f);
             {
                 ScenarioEditorScene.Deselect();
                 ScenarioLandscape.Deselect();
-                if (_layerDropdown != null) _layerDropdown.gameObject.SetActive(true);
+                SetLayerControlsVisible(true);
                 RefreshLandscapeButton();
             }
             if (_plotIsolation) ApplyPlotIsolation();
@@ -2236,7 +2351,7 @@ rect.pivot = new Vector2(1f, 1f);
                 if (plotUiMethod != null)
                     foreach (var plotUi in listRoot.GetComponentsInChildren<PlotSelectionItem>(true))
                         plotUiMethod.Invoke(plotUi, new object[] { null });
-                if (_layerDropdown != null) _layerDropdown.gameObject.SetActive(false);
+                SetLayerControlsVisible(false);
                 var plotInfo = AccessTools.Field(typeof(EditHospitalMenu),
                     "_infoText")?.GetValue(_menu) as TMP_Text;
                 if (plotInfo != null) plotInfo.text = "Landscape";
@@ -2981,7 +3096,20 @@ rect.pivot = new Vector2(1f, 1f);
             ScenarioLandscape.Release();
             if (_plotIsolation) SetPlotIsolation(false);
             if (_level != null)
+            {
                 _level.HospitalEditEvents.OnSelectHospitalPlot -= OnPlotSelected;
+                _level.HospitalEditEvents.OnSelectHospitalPlotLayer -= OnLayerSelected;
+            }
+            if (_layerDropdown != null)
+                _layerDropdown.onValueChanged.RemoveListener(OnLayerDropdownValueChanged);
+            if (_layerDropdownCanvasGroup != null)
+            {
+                _layerDropdownCanvasGroup.alpha = _layerDropdownOriginalAlpha;
+                _layerDropdownCanvasGroup.interactable = _layerDropdownOriginalInteractable;
+                _layerDropdownCanvasGroup.blocksRaycasts = _layerDropdownOriginalBlocksRaycasts;
+                if (_createdLayerDropdownCanvasGroup)
+                    UnityEngine.Object.Destroy(_layerDropdownCanvasGroup);
+            }
             if (ReferenceEquals(_active, this)) _active = null;
             CloseDialog();
             foreach (var button in _buttons)
