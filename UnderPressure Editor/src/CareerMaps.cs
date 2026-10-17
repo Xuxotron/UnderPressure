@@ -1358,7 +1358,7 @@ namespace UnderPressure.Editor
                 if (placement.TintMagenta) TintParticleSystem(particles);
                 if (string.Equals(placement.Id, "conflux_swirl",
                     StringComparison.OrdinalIgnoreCase))
-                    RestoreSwirlOpacity(particles);
+                    RemoveSwirlOpacityCurve(particles);
                 if (placement.CircularEmissionRadius > 0f)
                 {
                     var shape = particles.shape;
@@ -1543,24 +1543,22 @@ namespace UnderPressure.Editor
             SetMaterialMagenta(trailMaterial, "_EmissionColor", magenta);
         }
 
-        private static void RestoreSwirlOpacity(ParticleSystem particles)
+        private static void RemoveSwirlOpacityCurve(ParticleSystem particles)
         {
             var lifetime = particles.colorOverLifetime;
             var source = lifetime.color;
             var gradient = source.gradient;
             if (gradient == null) return;
 
-            // Curva alfa serializada del Swirl original del DLC temporal.
-            var restored = new Gradient { mode = gradient.mode };
-            restored.SetKeys(gradient.colorKeys, new[]
+            // Conserva el color del Swirl, pero elimina su variacion de opacidad.
+            var flattened = new Gradient { mode = gradient.mode };
+            flattened.SetKeys(gradient.colorKeys, new[]
             {
-                new GradientAlphaKey(0f, 0f),
-                new GradientAlphaKey(0.7254902f, 0.0500038f),
-                new GradientAlphaKey(0.7333333f, 0.9470664f),
-                new GradientAlphaKey(0f, 1f)
+                new GradientAlphaKey(1f, 0f),
+                new GradientAlphaKey(1f, 1f)
             });
             lifetime.enabled = true;
-            lifetime.color = new ParticleSystem.MinMaxGradient(restored);
+            lifetime.color = new ParticleSystem.MinMaxGradient(flattened);
         }
 
         private static ParticleSystem.MinMaxGradient TintGradient(
