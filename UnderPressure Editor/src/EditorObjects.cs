@@ -571,7 +571,6 @@ namespace UnderPressure.Editor
                     if (scrollRect != null)
                     {
                         var size = scrollRect.sizeDelta;
-                        size.y = Mathf.Max(size.y, 190f);
                         if (scrollRect.anchorMin.x == scrollRect.anchorMax.x)
                         {
                             size.x = Mathf.Max(260f, size.x - 224f);
@@ -583,6 +582,10 @@ namespace UnderPressure.Editor
                             offset.x -= 224f;
                             scrollRect.offsetMax = offset;
                         }
+                        SetHeightPreservingTop(scrollRect, 190f);
+                        var viewport = scroll.viewport ?? rect.parent as RectTransform;
+                        if (viewport != null && viewport != scrollRect)
+                            SetHeightPreservingTop(viewport, 190f);
                     }
                     RestoreScrollbar(scroll, __instance);
                 }
@@ -631,7 +634,27 @@ namespace UnderPressure.Editor
             extra.anchorMin = Vector2.zero;
             extra.anchorMax = Vector2.one;
             extra.offsetMin = new Vector2(0f, -117f);
-            extra.offsetMax = new Vector2(0f, 38f);
+            extra.offsetMax = Vector2.zero;
+        }
+
+        private static void SetHeightPreservingTop(RectTransform rect, float height)
+        {
+            if (rect == null) return;
+            var delta = height - rect.rect.height;
+            if (delta <= .01f) return;
+            if (Mathf.Approximately(rect.anchorMin.y, rect.anchorMax.y))
+            {
+                var size = rect.sizeDelta;
+                size.y += delta;
+                rect.sizeDelta = size;
+                var position = rect.anchoredPosition;
+                position.y -= delta * (1f - rect.pivot.y);
+                rect.anchoredPosition = position;
+                return;
+            }
+            var offset = rect.offsetMin;
+            offset.y -= delta;
+            rect.offsetMin = offset;
         }
 
         private static void RestoreScrollbar(ScrollRect scroll, LandscapeObjectsMenu menu)

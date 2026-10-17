@@ -2083,7 +2083,7 @@ rect.pivot = new Vector2(1f, 1f);
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
                 rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-18f, -58f);
+                rect.anchoredPosition = new Vector2(-212f, -18f);
                 rect.sizeDelta = new Vector2(168f, 34f);
             }
             _buttons.Add(button.gameObject);
@@ -2100,7 +2100,7 @@ rect.pivot = new Vector2(1f, 1f);
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
                 rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-192f, -58f);
+                rect.anchoredPosition = new Vector2(-212f, -58f);
                 rect.sizeDelta = new Vector2(168f, 34f);
             }
             _buttons.Add(_plotIsolationButton.gameObject);

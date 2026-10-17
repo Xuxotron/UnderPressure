@@ -769,7 +769,7 @@ namespace UnderPressure.Editor
             panel.anchorMin = new Vector2(1f, 1f);
             panel.anchorMax = new Vector2(1f, 1f);
             panel.pivot = new Vector2(1f, 1f);
-            panel.anchoredPosition = new Vector2(-20f, -100f);
+            panel.anchoredPosition = new Vector2(-20f, -18f);
             panel.sizeDelta = new Vector2(HistoryPanelWidth,
                 Mathf.Max(110f, Mathf.Min(430f, Screen.height - 145f)));
             panelGo.GetComponent<Image>().color = new Color(.045f, .070f, .095f, .94f);
@@ -865,8 +865,8 @@ namespace UnderPressure.Editor
             var mouse = Input.mousePosition;
             return mouse.x >= Screen.width - 20f - width &&
                    mouse.x <= Screen.width - 20f &&
-                   mouse.y <= Screen.height - 100f &&
-                   mouse.y >= Screen.height - 100f - height;
+                   mouse.y <= Screen.height - 18f &&
+                   mouse.y >= Screen.height - 18f - height;
         }
 
         private void RestoreState(State desired)
