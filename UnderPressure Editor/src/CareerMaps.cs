@@ -1892,19 +1892,6 @@ namespace UnderPressure.Editor
         }
     }
 
-    [HarmonyPatch(typeof(OpeningScreen), "Setup")]
-    internal static class ScenarioWorldMapOpeningScreenSetupPatch
-    {
-        private static void Postfix(App __0, MetagameMapScene __2)
-        {
-            var root = __2?.RootObject;
-            if (root == null) return;
-            var authoring = root.GetComponent<ScenarioWorldMapAuthoring>() ??
-                root.AddComponent<ScenarioWorldMapAuthoring>();
-            authoring.InitialiseOpeningScreen(__0, __2);
-        }
-    }
-
     [HarmonyPatch(typeof(TopDownCameraLogic), "GetOffset")]
     internal static class ScenarioCareerMapControlsZoomPatch
     {
