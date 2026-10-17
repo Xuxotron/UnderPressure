@@ -599,7 +599,8 @@ namespace UnderPressure.Editor
         }
 
         // No redimensionar el LandscapeObjectsMenu: altera tambien la
-        // ubicacion nativa de los iconos. Sólo extender su fondo visual.
+        // ubicacion nativa de los iconos. Se sube una fila completa y se
+        // conserva un unico fondo extendido hasta el borde inferior.
         private static void GrowBackdropOnly(LandscapeObjectsMenu menu)
         {
             var root = menu.transform as RectTransform;
@@ -607,6 +608,7 @@ namespace UnderPressure.Editor
             var extra = root.Find("UP_Backdrop_Extension") as RectTransform;
             if (extra == null)
             {
+                root.anchoredPosition += new Vector2(0f, 93f);
                 var background = new GameObject("UP_Backdrop_Extension",
                     typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
                 background.transform.SetParent(root, false);
@@ -618,6 +620,9 @@ namespace UnderPressure.Editor
                     target.sprite = source.sprite;
                     target.type = source.type;
                     target.color = source.color;
+                    var sourceColor = source.color;
+                    sourceColor.a = 0f;
+                    source.color = sourceColor;
                 }
                 else target.color = new Color(.93f, .93f, .93f, .75f);
                 target.raycastTarget = false;
@@ -625,7 +630,7 @@ namespace UnderPressure.Editor
             }
             extra.anchorMin = Vector2.zero;
             extra.anchorMax = Vector2.one;
-            extra.offsetMin = new Vector2(0f, -24f);
+            extra.offsetMin = new Vector2(0f, -117f);
             extra.offsetMax = new Vector2(0f, 38f);
         }
 
