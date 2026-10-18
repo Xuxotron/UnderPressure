@@ -1980,6 +1980,11 @@ namespace UnderPressure.Editor
             if (positioned) _cursor.anchoredPosition = position;
         }
 
+        private void LateUpdate()
+        {
+            ScenarioEditorDepthOfField.EnforceOnActiveEditorCamera();
+        }
+
         private void OnDestroy()
         {
             CloseDialog();
@@ -2003,9 +2008,9 @@ namespace UnderPressure.Editor
     {
         private static readonly Dictionary<object, bool> Originals =
             new Dictionary<object, bool>();
-        private static readonly FieldInfo CameraPostProcessVolume =
-            AccessTools.Field(typeof(TopDownCameraLogic), "_postProcessVolume");
-        private static ScenarioEditorDepthOfFieldGuard _cameraGuard;
+        private static readonly MethodInfo CameraDepthOfFieldChange =
+            AccessTools.Method(typeof(TopDownCameraLogic), "OnDepthOfFieldChange");
+        private static readonly object[] DisableArgument = { false };
         private static bool _enteredEditor;
         internal static bool Disabled { get; private set; }
         private const BindingFlags Flags = BindingFlags.Instance |
@@ -2017,7 +2022,7 @@ namespace UnderPressure.Editor
             _enteredEditor = true;
             var count = Apply(false, true);
             Disabled = count > 0;
-            if (Disabled) AttachCameraGuard(ScenarioEditorSession.Level?.CameraLogic);
+            EnforceOnActiveEditorCamera();
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Editor: profundidad de campo anulada en " + count +
                 " perfiles de escena. El resto del postprocesado no cambia.");
@@ -2028,7 +2033,7 @@ namespace UnderPressure.Editor
             if (Disabled) { Restore(); return; }
             var count = Apply(false, true);
             Disabled = count > 0;
-            if (Disabled) AttachCameraGuard(ScenarioEditorSession.Level?.CameraLogic);
+            EnforceOnActiveEditorCamera();
             if (count == 0) UnderPressureEditorPlugin.Log?.LogWarning(
                 "Profundidad de campo: no se encontraron efectos activos en perfiles de la escena.");
             else UnderPressureEditorPlugin.Log?.LogInfo("Profundidad de campo desactivada: " + count);
@@ -2077,12 +2082,14 @@ namespace UnderPressure.Editor
             return changed;
         }
 
-        internal static void EnforceOnCamera(TopDownCameraLogic camera)
+        internal static void EnforceOnActiveEditorCamera()
         {
-            if (!Disabled || camera == null) return;
+            if (!Disabled) return;
+            var camera = ScenarioEditorSession.Level?.CameraLogic;
+            if (camera == null || CameraDepthOfFieldChange == null) return;
             try
             {
-                ApplyToVolume(CameraPostProcessVolume?.GetValue(camera), false, true);
+                CameraDepthOfFieldChange.Invoke(camera, DisableArgument);
             }
             catch (Exception error)
             {
@@ -2091,19 +2098,8 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void AttachCameraGuard(TopDownCameraLogic camera)
-        {
-            var cameraComponent = camera?.CameraComponent;
-            if (cameraComponent == null) return;
-            _cameraGuard = cameraComponent.GetComponent<ScenarioEditorDepthOfFieldGuard>() ??
-                cameraComponent.gameObject.AddComponent<ScenarioEditorDepthOfFieldGuard>();
-            _cameraGuard.CameraLogic = camera;
-        }
-
         internal static void Restore()
         {
-            if (_cameraGuard != null) UnityEngine.Object.Destroy(_cameraGuard);
-            _cameraGuard = null;
             foreach (var entry in Originals)
             {
                 try
@@ -2119,19 +2115,6 @@ namespace UnderPressure.Editor
             Originals.Clear();
             Disabled = false;
             _enteredEditor = false;
-        }
-    }
-
-    // El juego puede reactivar el DoF durante el ciclo de la cámara. Este
-    // componente sólo existe en la cámara del editor y lo corrige justo antes
-    // de renderizar, sin parchear el método global de cámara del juego.
-    internal sealed class ScenarioEditorDepthOfFieldGuard : MonoBehaviour
-    {
-        internal TopDownCameraLogic CameraLogic;
-
-        private void OnPreCull()
-        {
-            ScenarioEditorDepthOfField.EnforceOnCamera(CameraLogic);
         }
     }
 
