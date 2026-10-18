@@ -31,6 +31,8 @@ namespace UnderPressure.Editor
         // o de una carga completos, nunca al abrir un cuadro de dialogo.
         private static Level _namedMapLevel;
         private static string _namedMap;
+        private static Level _architectLevel;
+        private static string _architectName;
         private static Level _perimeterModeLevel;
         private static string _perimeterMode = ScenarioMapFormat.PerimeterNone;
         private static string[] _perimeterPrefabs = new string[0];
@@ -54,6 +56,20 @@ namespace UnderPressure.Editor
         {
             _namedMapLevel = level;
             _namedMap = name;
+        }
+
+        internal static void BeginNewMap(Level level, string architect)
+        {
+            _architectLevel = level;
+            _architectName = string.IsNullOrWhiteSpace(architect)
+                ? UnderPressureEditorPlugin.ArchitectName : architect.Trim();
+        }
+
+        private static string CurrentArchitect(Level level)
+        {
+            return ReferenceEquals(_architectLevel, level) &&
+                   !string.IsNullOrWhiteSpace(_architectName)
+                ? _architectName : UnderPressureEditorPlugin.ArchitectName;
         }
         internal static string CurrentPerimeterMode(Level level)
         {
@@ -255,7 +271,7 @@ namespace UnderPressure.Editor
                 throw new ArgumentException("Introduce un nombre de mapa de 1 a 80 caracteres.");
             var baseId = level.Config.UniqueId;
             var baseName = level.Config.GetLocalisedDisplayName();
-            var folder = Path.Combine(Folder, SafeName(baseId), SafeName(name));
+            var folder = Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
             Directory.CreateDirectory(folder);
             var main = Path.Combine(folder, SafeName(name) + ".upmap");
             var originalDescription = name;
@@ -613,6 +629,8 @@ namespace UnderPressure.Editor
                     Path.GetDirectoryName(full), landscapeFile));
                 ScenarioEditorStorageMenu.NotifyLoadedMap();
                 MarkCurrentMap(level, map.Header.name);
+                _architectLevel = level;
+                _architectName = ArchitectFromPath(full);
             }
             catch
             {
@@ -1085,6 +1103,8 @@ namespace UnderPressure.Editor
             PlotNames.Clear();
             _namedMapLevel = null;
             _namedMap = null;
+            _architectLevel = null;
+            _architectName = null;
             ScenarioEditorScene.Clear();
             _perimeterModeLevel = null;
             _perimeterMode = ScenarioMapFormat.PerimeterNone;
@@ -1106,6 +1126,23 @@ namespace UnderPressure.Editor
             value = value.Trim(' ', '.').Replace(' ', '_');
             if (value.Length == 0) throw new ArgumentException("Nombre sin caracteres validos.");
             return value;
+        }
+
+        private static string ArchitectFromPath(string mapPath)
+        {
+            var root = Path.GetFullPath(Folder).TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            var full = Path.GetFullPath(mapPath);
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                return UnderPressureEditorPlugin.ArchitectName;
+            var relative = full.Substring(root.Length);
+            var separator = relative.IndexOfAny(new[]
+            {
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar
+            });
+            return separator > 0 ? relative.Substring(0, separator) :
+                UnderPressureEditorPlugin.ArchitectName;
         }
     }
 

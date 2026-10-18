@@ -485,8 +485,11 @@ namespace UnderPressure.Editor
         private static ScrollColumn _hospitalsColumn;
         private static ScrollColumn _mapsColumn;
         private static TMP_Text _selectedHospitalTitle;
+        private static TMP_InputField _architectInput;
         private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
         private static string _pendingMap;
+        private static string _pendingArchitect;
+        private static bool _pendingNewMap;
 
         internal static GameObject CreateSelector(
             Transform canvas, GameObject rowTemplate, IReadOnlyList<LevelConfig> levels,
@@ -542,6 +545,10 @@ namespace UnderPressure.Editor
                     ClearPendingMap();
                     _onCancel?.Invoke();
                 }, false);
+            CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.architect_name"),
+                new Vector2(466f, -511f), new Vector2(190f, 56f));
+            _architectInput = CreateArchitectInput(panel.transform,
+                new Vector2(654f, -511f), new Vector2(187f, 56f));
 
             foreach (var level in levels.Where(l => l != null).Distinct()
                                         .OrderBy(l => l.GetLocalisedDisplayName(),
@@ -613,6 +620,9 @@ namespace UnderPressure.Editor
                     return;
                 }
             }
+            _pendingNewMap = string.IsNullOrEmpty(mapPath);
+            _pendingArchitect = _pendingNewMap
+                ? UnderPressureEditorPlugin.ArchitectName : null;
             _pendingMap = mapPath;
             _onOpen(_selectedLevel, mapPath);
         }
@@ -620,6 +630,14 @@ namespace UnderPressure.Editor
         internal static void OnEditorOpened(Level level)
         {
             var mapPath = _pendingMap;
+            if (_pendingNewMap)
+            {
+                if (level == null || !ScenarioEditorSession.Active) return;
+                ScenarioEditorStorage.BeginNewMap(level, _pendingArchitect);
+                _pendingNewMap = false;
+                _pendingArchitect = null;
+                return;
+            }
             if (string.IsNullOrEmpty(mapPath)) return;
             // No consumir el mapa cuando el evento de apertura aun no termino
             // de inicializar el editor nativo. Si se pierde este valor se abre
@@ -653,12 +671,18 @@ namespace UnderPressure.Editor
             _hospitalsColumn = null;
             _mapsColumn = null;
             _selectedHospitalTitle = null;
+            _architectInput = null;
             // La seleccion puede sobrevivir al cierre/recreacion del Canvas
             // mientras se carga el nivel. Solo se borra al aplicarla o cancelar.
             _hospitalChoices.Clear();
         }
 
-        internal static void ClearPendingMap() => _pendingMap = null;
+        internal static void ClearPendingMap()
+        {
+            _pendingMap = null;
+            _pendingArchitect = null;
+            _pendingNewMap = false;
+        }
 
         private static List<MapChoice> ReadMaps(string hospitalId)
         {
@@ -856,6 +880,52 @@ namespace UnderPressure.Editor
             text.fontSizeMax = 28f;
             text.raycastTarget = false;
             return text;
+        }
+
+        private static TMP_InputField CreateArchitectInput(
+            Transform parent, Vector2 position, Vector2 size)
+        {
+            var root = Ui("UP_ArchitectName", parent, typeof(Image), typeof(TMP_InputField));
+            var rect = (RectTransform)root.transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = size;
+            root.GetComponent<Image>().color = new Color(0.94f, 0.97f, 0.98f, 1f);
+
+            var viewport = Ui("Text Area", root.transform);
+            var viewportRect = (RectTransform)viewport.transform;
+            Stretch(viewportRect);
+            viewportRect.offsetMin = new Vector2(12f, 5f);
+            viewportRect.offsetMax = new Vector2(-12f, -5f);
+
+            var textObject = UnityEngine.Object.Instantiate(
+                _nativeTextTemplate.gameObject, viewport.transform, false);
+            textObject.name = "Text";
+            textObject.SetActive(true);
+            DisableNativeLocalizers(textObject);
+            var text = textObject.GetComponent<TMP_Text>();
+            Stretch(text.rectTransform);
+            text.color = new Color(0.07f, 0.10f, 0.12f, 1f);
+            text.alignment = TextAlignmentOptions.MidlineLeft;
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 13f;
+            text.fontSizeMax = 22f;
+
+            var input = root.GetComponent<TMP_InputField>();
+            input.textViewport = viewportRect;
+            input.textComponent = text;
+            input.lineType = TMP_InputField.LineType.SingleLine;
+            input.characterLimit = 64;
+            input.text = UnderPressureEditorPlugin.ArchitectName;
+            input.onEndEdit.AddListener(value =>
+            {
+                var name = (value ?? "").Trim();
+                if (name.Length == 0) name = UnderPressureEditorPlugin.ArchitectName;
+                UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
+                input.SetTextWithoutNotify(name);
+            });
+            return input;
         }
 
         private static Scrollbar CreateScrollbar(Transform parent)

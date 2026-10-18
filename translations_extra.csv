@@ -129,6 +129,7 @@ scenario_editor.tooltip,,,,,
 scenario_editor.base_scenario,,,,,
 scenario_editor.edit,,,,,
 scenario_editor.return_to_menu,,,,,
+scenario_editor.architect_name,Architect name:,Nombre del arquitecto:,,,,
 editor.map.styles,Стили карты,Style mapy,맵 스타일,地图样式,地圖樣式
 editor.map.style.original,Оригинал,Oryginalny,원본,原始,原始
 editor.map.style.none,Без периметра,Bez obwodu,둘레 없음,无外围,無外圍
@@ -148,6 +149,8 @@ common.save,,,,,
 editor.settings.career,,,,,
 editor.settings.show_new_maps,,,,,
 editor.settings.show_new_maps.description,,,,,
+editor.settings.architect,Architect name,Nombre del arquitecto,,,,
+editor.settings.architect.description,Folder used for newly created maps.,Carpeta utilizada para los mapas nuevos.,,,,
 scenario_editor.hospital,,,,,
 scenario_editor.hospitals,,,,,
 scenario_editor.maps,,,,,

@@ -129,6 +129,7 @@ scenario_editor.tooltip,Open the original scenario editor in an isolated session
 scenario_editor.base_scenario,Base scenario,Escenario base,,,,
 scenario_editor.edit,Edit scenario,Editar escenario,,,,
 scenario_editor.return_to_menu,Return to main menu,Volver al menú principal,,,,
+scenario_editor.architect_name,Architect name:,Nombre del arquitecto:,,,,
 editor.map.styles,Map styles,Estilos del mapa,Styles de la carte,Kartenstile,Stili della mappa,Estilos do mapa
 editor.map.style.original,Original,Original,Original,Original,Original,Original
 editor.map.style.none,No perimeter,Sin perímetro,Aucun périmètre,Kein Umfang,Nessun perimetro,Sem perímetro
@@ -148,6 +149,8 @@ common.save,Save,Guardar,,,,
 editor.settings.career,Career,Carrera,,,,
 editor.settings.show_new_maps,Show new maps,Mostrar nuevos mapas,,,,
 editor.settings.show_new_maps.description,Shows the custom scenario selector on the Career map.,Muestra el selector de escenarios personalizados en el mapa de Carrera.,,,,
+editor.settings.architect,Architect name,Nombre del arquitecto,,,,
+editor.settings.architect.description,Folder used for newly created maps.,Carpeta utilizada para los mapas nuevos.,,,,
 scenario_editor.hospital,Hospital,Hospital,,,,
 scenario_editor.hospitals,Hospitals,Hospitales,,,,
 scenario_editor.maps,Maps,Mapas,,,,

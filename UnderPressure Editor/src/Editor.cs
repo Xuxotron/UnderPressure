@@ -29,7 +29,11 @@ namespace UnderPressure.Editor
 
         internal static ModLogSource Log { get; private set; }
         internal static ConfigEntry<bool> ShowNewMapsSetting { get; private set; }
+        internal static ConfigEntry<string> ArchitectNameSetting { get; private set; }
         internal static bool ShowNewMaps => ShowNewMapsSetting == null || ShowNewMapsSetting.Value;
+        internal static string ArchitectName =>
+            string.IsNullOrWhiteSpace(ArchitectNameSetting?.Value)
+                ? "Xuxotron" : ArchitectNameSetting.Value.Trim();
 
         private Harmony _harmony;
 
@@ -40,6 +44,10 @@ namespace UnderPressure.Editor
                 EditorLocalization.Get("editor.settings.career"),
                 EditorLocalization.Get("editor.settings.show_new_maps"), true,
                 EditorLocalization.Get("editor.settings.show_new_maps.description"));
+            ArchitectNameSetting = Config.Bind(
+                EditorLocalization.Get("editor.settings.maps"),
+                EditorLocalization.Get("editor.settings.architect"), "Xuxotron",
+                EditorLocalization.Get("editor.settings.architect.description"));
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
             Logger.LogInfo($"{PluginName} {PluginVersion} cargado.");
