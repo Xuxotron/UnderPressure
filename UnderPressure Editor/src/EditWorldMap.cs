@@ -123,7 +123,7 @@ namespace UnderPressure.Editor
 				"hogsport_plus",
                 "Metagame[0]/Pins[7]/MapPin_Hospital_R1_L1[0]",
                 new Vector3(4.336f, 98.794f, 3.267f),
-				@"901\Hogsport_Plus\Hogsport_Plus.upmap"),
+				@"Xuxotron\Hogsport_Plus\Hogsport_Plus.upmap"),
 
         };
 
