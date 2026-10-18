@@ -1999,13 +1999,18 @@ namespace UnderPressure.Editor
         }
     }
 
-    // Sólo la profundidad de campo, no todo el postprocesado de la escena.
+    // Sólo los dos efectos que desenfocan la escena, no todo el postprocesado.
     // Reflección: no obliga a añadir Unity.Postprocessing.Runtime.dll
     // como nueva referencia del proyecto.
     // El juego usa DepthOfField.active (no el parámetro enabled.value).
     // Se obtiene por reflexión para no añadir referencias al proyecto.
     internal static class ScenarioEditorDepthOfField
     {
+        private static readonly HashSet<string> BlurEffectNames = new HashSet<string>
+        {
+            "DepthOfField",
+            "BlurDitheredSettings"
+        };
         private static readonly Dictionary<object, bool> Originals =
             new Dictionary<object, bool>();
         private static readonly MethodInfo CameraDepthOfFieldChange =
@@ -2024,7 +2029,7 @@ namespace UnderPressure.Editor
             Disabled = count > 0;
             EnforceOnActiveEditorCamera();
             UnderPressureEditorPlugin.Log?.LogInfo(
-                "Editor: profundidad de campo anulada en " + count +
+                "Editor: desenfoque anulado en " + count +
                 " perfiles de escena. El resto del postprocesado no cambia.");
         }
 
@@ -2035,8 +2040,8 @@ namespace UnderPressure.Editor
             Disabled = count > 0;
             EnforceOnActiveEditorCamera();
             if (count == 0) UnderPressureEditorPlugin.Log?.LogWarning(
-                "Profundidad de campo: no se encontraron efectos activos en perfiles de la escena.");
-            else UnderPressureEditorPlugin.Log?.LogInfo("Profundidad de campo desactivada: " + count);
+                "Desenfoque: no se encontraron efectos activos en perfiles de la escena.");
+            else UnderPressureEditorPlugin.Log?.LogInfo("Desenfoque desactivado: " + count);
         }
 
         private static int Apply(bool enabled, bool capture)
@@ -2050,7 +2055,7 @@ namespace UnderPressure.Editor
                 try { changed += ApplyToVolume(component, enabled, capture); }
                 catch (Exception error)
                 {
-                    UnderPressureEditorPlugin.Log?.LogWarning("Profundidad de campo: " + error.Message);
+                    UnderPressureEditorPlugin.Log?.LogWarning("Desenfoque: " + error.Message);
                 }
             }
             return changed;
@@ -2068,7 +2073,7 @@ namespace UnderPressure.Editor
             int changed = 0;
             foreach (var setting in list)
             {
-                if (setting == null || setting.GetType().Name != "DepthOfField") continue;
+                if (setting == null || !BlurEffectNames.Contains(setting.GetType().Name)) continue;
                 var field = setting.GetType().GetField("active", Flags);
                 var prop = setting.GetType().GetProperty("active", Flags);
                 if (field == null && prop == null) continue;
