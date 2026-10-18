@@ -313,10 +313,9 @@ namespace UnderPressure.Editor
             image.color = new Color(0f, 0f, 0f, 0.55f);
             _behaviour = go.GetComponent<ScenarioEditorTerrainPainterBehaviour>();
             _behaviour.BuildUi();
-            // Los perfiles de postprocesado del hospital aplican un DoF
-            // cinematografico muy intenso a los exteriores. No desactivar
-            // ningun otro efecto ni modificar los assets compartidos.
-            ScenarioEditorDepthOfField.EnterEditor();
+            // El hospital asigna su mascara de Fog of War al proxy global de
+            // postprocesado. Se anula sólo esa referencia durante la edición.
+            ScenarioEditorFogOfWar.EnterEditor();
             _behaviour.RefreshTexts();
         }
 
@@ -1550,7 +1549,7 @@ namespace UnderPressure.Editor
         private GameObject _dialog;
         private readonly List<Button> _slots = new List<Button>();
         private readonly List<Texture2D> _previewCopies = new List<Texture2D>();
-        private Text _depthText;
+        private Text _fogOfWarText;
         private Text _wireText;
         private RectTransform _cursor;
         private RawImage _cursorImage;
@@ -1594,11 +1593,11 @@ namespace UnderPressure.Editor
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
             CreateButton(root, new Vector2(9, -226), new Vector2(162, 30),
-                T("editor.terrain.depth_of_field"), () =>
+                T("editor.terrain.fog_of_war"), () =>
                 {
-                    ScenarioEditorDepthOfField.Toggle();
+                    ScenarioEditorFogOfWar.Toggle();
                     RefreshTexts();
-                }, out _depthText);
+                }, out _fogOfWarText);
             CreateButton(root, new Vector2(9, -261), new Vector2(162, 30),
                 T("editor.terrain.wireframe"), () => ScenarioEditorTerrainPainter.ToggleWireframe(),
                 out _wireText);
@@ -1903,9 +1902,9 @@ namespace UnderPressure.Editor
             if (_wireText != null) _wireText.text = T(
                 ScenarioEditorTerrainPainter.WireframeEnabled
                     ? "editor.terrain.wireframe.on" : "editor.terrain.wireframe.off");
-            if (_depthText != null)
-                _depthText.text = T(ScenarioEditorDepthOfField.Disabled
-                    ? "editor.terrain.depth.off" : "editor.terrain.depth.on");
+            if (_fogOfWarText != null)
+                _fogOfWarText.text = T(ScenarioEditorFogOfWar.Disabled
+                    ? "editor.terrain.fog.off" : "editor.terrain.fog.on");
             if (_toggleText != null)
                 _toggleText.text = ScenarioEditorTerrainPainter.SculptMeshUnavailable ?
                     T("editor.terrain.mesh_uneditable") :
@@ -1982,13 +1981,13 @@ namespace UnderPressure.Editor
 
         private void LateUpdate()
         {
-            ScenarioEditorDepthOfField.EnforceOnActiveEditorCamera();
+            ScenarioEditorFogOfWar.EnforceDisabled();
         }
 
         private void OnDestroy()
         {
             CloseDialog();
-            ScenarioEditorDepthOfField.Restore();
+            ScenarioEditorFogOfWar.Restore();
             foreach (var preview in _previewCopies)
                 if (preview != null) UnityEngine.Object.Destroy(preview);
             _previewCopies.Clear();
@@ -1999,122 +1998,46 @@ namespace UnderPressure.Editor
         }
     }
 
-    // Sólo los dos efectos que desenfocan la escena, no todo el postprocesado.
-    // Reflección: no obliga a añadir Unity.Postprocessing.Runtime.dll
-    // como nueva referencia del proyecto.
-    // El juego usa DepthOfField.active (no el parámetro enabled.value).
-    // Se obtiene por reflexión para no añadir referencias al proyecto.
-    internal static class ScenarioEditorDepthOfField
+    // FogOfWarRenderer deja pasar la imagen sin modificar cuando la definición
+    // del proxy es nula. Se conserva cada valor original para restaurarlo al salir.
+    internal static class ScenarioEditorFogOfWar
     {
-        private static readonly HashSet<string> BlurEffectNames = new HashSet<string>
-        {
-            "DepthOfField",
-            "BlurDitheredSettings"
-        };
-        private static readonly Dictionary<object, bool> Originals =
-            new Dictionary<object, bool>();
-        private static readonly MethodInfo CameraDepthOfFieldChange =
-            AccessTools.Method(typeof(TopDownCameraLogic), "OnDepthOfFieldChange");
-        private static readonly object[] DisableArgument = { false };
+        private static readonly Dictionary<PostProcessingRendererData,
+            FogOfWarLevelTextureDefinition> Originals =
+            new Dictionary<PostProcessingRendererData, FogOfWarLevelTextureDefinition>();
         private static bool _enteredEditor;
         internal static bool Disabled { get; private set; }
-        private const BindingFlags Flags = BindingFlags.Instance |
-            BindingFlags.Public | BindingFlags.NonPublic;
 
         internal static void EnterEditor()
         {
             if (_enteredEditor) return;
             _enteredEditor = true;
-            var count = Apply(false, true);
-            Disabled = count > 0;
-            EnforceOnActiveEditorCamera();
-            UnderPressureEditorPlugin.Log?.LogInfo(
-                "Editor: desenfoque anulado en " + count +
-                " perfiles de escena. El resto del postprocesado no cambia.");
+            Disabled = true;
+            EnforceDisabled();
         }
 
         internal static void Toggle()
         {
             if (Disabled) { Restore(); return; }
-            var count = Apply(false, true);
-            Disabled = count > 0;
-            EnforceOnActiveEditorCamera();
-            if (count == 0) UnderPressureEditorPlugin.Log?.LogWarning(
-                "Desenfoque: no se encontraron efectos activos en perfiles de la escena.");
-            else UnderPressureEditorPlugin.Log?.LogInfo("Desenfoque desactivado: " + count);
+            Disabled = true;
+            EnforceDisabled();
         }
 
-        private static int Apply(bool enabled, bool capture)
-        {
-            int changed = 0;
-            foreach (var component in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
-            {
-                if (component == null || !component.gameObject.scene.IsValid() ||
-                    component.GetType().FullName !=
-                        "UnityEngine.Rendering.PostProcessing.PostProcessVolume") continue;
-                try { changed += ApplyToVolume(component, enabled, capture); }
-                catch (Exception error)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning("Desenfoque: " + error.Message);
-                }
-            }
-            return changed;
-        }
-
-        private static int ApplyToVolume(object volume, bool enabled, bool capture)
-        {
-            if (volume == null) return 0;
-            var profileMember = volume.GetType().GetProperty("profile", Flags);
-            var profile = profileMember?.GetValue(volume, null);
-            if (profile == null) return 0;
-            var listField = profile.GetType().GetField("settings", Flags);
-            var list = listField?.GetValue(profile) as System.Collections.IEnumerable;
-            if (list == null) return 0;
-            int changed = 0;
-            foreach (var setting in list)
-            {
-                if (setting == null || !BlurEffectNames.Contains(setting.GetType().Name)) continue;
-                var field = setting.GetType().GetField("active", Flags);
-                var prop = setting.GetType().GetProperty("active", Flags);
-                if (field == null && prop == null) continue;
-                bool active = Convert.ToBoolean(field != null ? field.GetValue(setting) :
-                    prop.GetValue(setting, null));
-                if (capture && !Originals.ContainsKey(setting)) Originals[setting] = active;
-                if (field != null) field.SetValue(setting, enabled);
-                else prop.SetValue(setting, enabled, null);
-                changed++;
-            }
-            return changed;
-        }
-
-        internal static void EnforceOnActiveEditorCamera()
+        internal static void EnforceDisabled()
         {
             if (!Disabled) return;
-            var camera = ScenarioEditorSession.Level?.CameraLogic;
-            if (camera == null || CameraDepthOfFieldChange == null) return;
-            try
-            {
-                CameraDepthOfFieldChange.Invoke(camera, DisableArgument);
-            }
-            catch (Exception error)
-            {
-                UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Profundidad de campo de camara: " + error.Message);
-            }
+            var data = PostProcessingRendererProxy.Instance?.PostProcessRendererData;
+            if (data == null) return;
+            if (!Originals.ContainsKey(data))
+                Originals.Add(data, data.FogOfWarDefinition);
+            data.FogOfWarDefinition = null;
         }
 
         internal static void Restore()
         {
             foreach (var entry in Originals)
             {
-                try
-                {
-                    if (entry.Key == null) continue;
-                    var field = entry.Key.GetType().GetField("active", Flags);
-                    if (field != null) field.SetValue(entry.Key, entry.Value);
-                    else entry.Key.GetType().GetProperty("active", Flags)?
-                        .SetValue(entry.Key, entry.Value, null);
-                }
+                try { if (entry.Key != null) entry.Key.FogOfWarDefinition = entry.Value; }
                 catch { }
             }
             Originals.Clear();
