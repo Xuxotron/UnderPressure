@@ -46,8 +46,15 @@ namespace UnderPressure.Editor
         private static Text _alphaText;
         private static Text _mapText;
         private static Text _opacityText;
+        private static Text _sizeText;
+        private static Text _pressureText;
+        private static Level _level;
+        private static GameObject _mapLayerRoot;
+        private static RectTransform _brushCursor;
+        private static Texture2D _brushCursorTexture;
         private static PaintMode _paintMode = PaintMode.Add;
         private static int _brushSize = 10;
+        private static int _brushPressure = 100;
         private static float _previewOpacity = 1f;
         private static bool _alphaEnabled = true;
         private static bool _mapEnabled;
@@ -61,6 +68,7 @@ namespace UnderPressure.Editor
             if (menu == null || level == null) return;
             var canvas = menu.GetComponentInParent<Canvas>();
             if (canvas == null) return;
+            _level = level;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             var button = CreateButton(canvas.transform, "UP_FogViewerToggle",
                 T("editor.fog.button"), new Vector2(208f, 40f), HighlightColor, Toggle);
@@ -90,6 +98,7 @@ namespace UnderPressure.Editor
             {
                 _paintMode = PaintMode.Add;
                 _brushSize = 10;
+                _brushPressure = 100;
                 _previewOpacity = 1f;
                 _alphaEnabled = true;
                 _mapEnabled = false;
@@ -114,15 +123,35 @@ namespace UnderPressure.Editor
                 _addButton = CreateButton(panel.transform, "Add", T("editor.fog.add"),
                     new Vector2(112f, 42f), HighlightColor,
                     () => SelectPaintMode(PaintMode.Add)).GetComponent<Button>();
-                SetTop(_addButton.transform, -224f, -18f);
-                var size = CreateSlider(panel.transform, "BrushSize", new Vector2(290f, 22f),
-                    1f, 100f, _brushSize, Slider.Direction.LeftToRight,
-                    value => _brushSize = Mathf.RoundToInt(value));
-                SetTop(size.transform, 0f, -28f);
+                SetTop(_addButton.transform, -245f, -25f);
+
+                _sizeText = CreateText(panel.transform, "", 14,
+                    new Vector2(-78f, -10f), new Vector2(145f, 20f), TextAnchor.MiddleCenter);
+                var size = CreateSlider(panel.transform, "BrushSize", new Vector2(145f, 20f),
+                    1f, 50f, _brushSize, Slider.Direction.LeftToRight,
+                    value =>
+                    {
+                        _brushSize = Mathf.RoundToInt(value);
+                        RefreshControlTexts();
+                        RefreshBrushCursorSize();
+                    });
+                SetTop(size.transform, -78f, -38f);
+
+                _pressureText = CreateText(panel.transform, "", 14,
+                    new Vector2(78f, -10f), new Vector2(145f, 20f), TextAnchor.MiddleCenter);
+                var pressure = CreateSlider(panel.transform, "BrushPressure", new Vector2(145f, 20f),
+                    0f, 100f, _brushPressure, Slider.Direction.LeftToRight,
+                    value =>
+                    {
+                        _brushPressure = Mathf.RoundToInt(value);
+                        RefreshControlTexts();
+                    });
+                SetTop(pressure.transform, 78f, -38f);
+
                 _removeButton = CreateButton(panel.transform, "Remove", T("editor.fog.remove"),
                     new Vector2(112f, 42f), ButtonColor,
                     () => SelectPaintMode(PaintMode.Remove)).GetComponent<Button>();
-                SetTop(_removeButton.transform, 224f, -18f);
+                SetTop(_removeButton.transform, 245f, -25f);
 
                 var previewBack = Ui("PreviewBackground", panel.transform, typeof(Image));
                 var backRect = (RectTransform)previewBack.transform;
@@ -130,7 +159,9 @@ namespace UnderPressure.Editor
                 backRect.pivot = new Vector2(0.5f, 1f);
                 backRect.anchoredPosition = new Vector2(0f, -74f);
                 backRect.sizeDelta = new Vector2(520f, 520f);
-                previewBack.GetComponent<Image>().color = new Color(0.82f, 0.84f, 0.86f, 1f);
+                previewBack.GetComponent<Image>().color = Color.black;
+
+                CreateMapLayers(previewBack.transform);
 
                 if (_workingTexture != null)
                 {
@@ -139,7 +170,8 @@ namespace UnderPressure.Editor
                     _preview = previewRoot.GetComponent<RawImage>();
                     _preview.raycastTarget = true;
                     var paintSurface = previewRoot.AddComponent<FogMaskPaintSurface>();
-                    paintSurface.Initialise(PaintAt);
+                    paintSurface.Initialise(PaintAt, ShowBrushCursor, HideBrushCursor);
+                    CreateBrushCursor(previewRoot.transform);
                     RebuildPreview();
                 }
 
@@ -196,8 +228,8 @@ namespace UnderPressure.Editor
 
         private static void ToggleMap()
         {
-            // La imagen del mapa se incorporará en la siguiente fase.
             _mapEnabled = !_mapEnabled;
+            if (_mapLayerRoot != null) _mapLayerRoot.SetActive(_mapEnabled);
             RefreshControlTexts();
         }
 
@@ -210,6 +242,10 @@ namespace UnderPressure.Editor
             if (_opacityText != null)
                 _opacityText.text = EditorLocalization.Format("editor.fog.opacity",
                     Mathf.RoundToInt(_previewOpacity * 100f));
+            if (_sizeText != null)
+                _sizeText.text = EditorLocalization.Format("editor.fog.size", _brushSize);
+            if (_pressureText != null)
+                _pressureText.text = EditorLocalization.Format("editor.fog.pressure", _brushPressure);
         }
 
         private static void PaintAt(Vector2 normalized)
@@ -224,17 +260,23 @@ namespace UnderPressure.Editor
             var maxX = Mathf.Min(width - 1, Mathf.CeilToInt(centerX + radius));
             var minY = Mathf.Max(0, Mathf.FloorToInt(centerY - radius));
             var maxY = Mathf.Min(height - 1, Mathf.CeilToInt(centerY + radius));
-            var radiusSquared = radius * radius;
             var pixels = _workingTexture.GetPixels32();
-            var alpha = _paintMode == PaintMode.Add ? (byte)0 : (byte)255;
+            var targetAlpha = _paintMode == PaintMode.Add ? 0f : 255f;
+            var pressure = _brushPressure / 100f;
+            if (pressure <= 0f) return;
             for (var y = minY; y <= maxY; ++y)
             {
                 for (var x = minX; x <= maxX; ++x)
                 {
                     var dx = x - centerX;
                     var dy = y - centerY;
-                    if (dx * dx + dy * dy > radiusSquared) continue;
+                    var normalizedDistance = Mathf.Sqrt(dx * dx + dy * dy) / radius;
+                    if (normalizedDistance > 1f) continue;
+                    var softness = Mathf.SmoothStep(0f, 1f, 1f - normalizedDistance);
+                    var blend = pressure * softness;
                     var index = y * width + x;
+                    var alpha = (byte)Mathf.RoundToInt(
+                        Mathf.Lerp(pixels[index].a, targetAlpha, blend));
                     pixels[index] = new Color32(0, 0, 0, alpha);
                 }
             }
@@ -284,12 +326,114 @@ namespace UnderPressure.Editor
             _previewTexture.Apply(false, false);
         }
 
+        private static void CreateMapLayers(Transform parent)
+        {
+            _mapLayerRoot = Ui("MapLayers", parent);
+            Stretch((RectTransform)_mapLayerRoot.transform);
+            _mapLayerRoot.SetActive(_mapEnabled);
+            var plots = _level?.WorldState?.HospitalPlots;
+            if (plots == null || _workingTexture == null) return;
+            var count = 0;
+            foreach (var plot in plots)
+            {
+                var texture = plot?.Definition?.FloorImage;
+                if (texture == null) continue;
+                if (texture.width != _workingTexture.width || texture.height != _workingTexture.height)
+                {
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Fog of War: se omite una parcela con dimensiones " +
+                        texture.width + "x" + texture.height + " frente a " +
+                        _workingTexture.width + "x" + _workingTexture.height + ".");
+                    continue;
+                }
+                var layer = Ui("Plot_" + count++, _mapLayerRoot.transform, typeof(RawImage));
+                Stretch((RectTransform)layer.transform);
+                var image = layer.GetComponent<RawImage>();
+                image.texture = texture;
+                image.color = Color.white;
+                image.raycastTarget = false;
+            }
+        }
+
+        private static void CreateBrushCursor(Transform parent)
+        {
+            _brushCursorTexture = BuildBrushCursorTexture();
+            var cursor = Ui("BrushCursor", parent, typeof(RawImage));
+            _brushCursor = (RectTransform)cursor.transform;
+            _brushCursor.anchorMin = _brushCursor.anchorMax = new Vector2(0.5f, 0.5f);
+            _brushCursor.pivot = new Vector2(0.5f, 0.5f);
+            var image = cursor.GetComponent<RawImage>();
+            image.texture = _brushCursorTexture;
+            image.color = Color.white;
+            image.raycastTarget = false;
+            RefreshBrushCursorSize();
+            cursor.SetActive(false);
+        }
+
+        private static Texture2D BuildBrushCursorTexture()
+        {
+            const int size = 128;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
+            {
+                name = "UP_FogBrushCursor",
+                hideFlags = HideFlags.DontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var pixels = new Color32[size * size];
+            var center = (size - 1) * 0.5f;
+            for (var y = 0; y < size; ++y)
+            {
+                for (var x = 0; x < size; ++x)
+                {
+                    var distance = Mathf.Sqrt((x - center) * (x - center) +
+                                              (y - center) * (y - center));
+                    var edge = Mathf.Abs(distance - (center - 2f));
+                    var alpha = (byte)Mathf.RoundToInt(
+                        Mathf.Clamp01(1.5f - edge) * 255f);
+                    pixels[y * size + x] = new Color32(40, 225, 255, alpha);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        private static void ShowBrushCursor(Vector2 normalized)
+        {
+            if (_brushCursor == null) return;
+            _brushCursor.gameObject.SetActive(true);
+            var parent = _brushCursor.parent as RectTransform;
+            if (parent == null) return;
+            _brushCursor.anchoredPosition = new Vector2(
+                (normalized.x - 0.5f) * parent.rect.width,
+                (normalized.y - 0.5f) * parent.rect.height);
+        }
+
+        private static void HideBrushCursor()
+        {
+            if (_brushCursor != null) _brushCursor.gameObject.SetActive(false);
+        }
+
+        private static void RefreshBrushCursorSize()
+        {
+            if (_brushCursor == null) return;
+            var parent = _brushCursor.parent as RectTransform;
+            if (parent == null) return;
+            var diameter = Mathf.Min(parent.rect.width, parent.rect.height) * (_brushSize / 100f);
+            _brushCursor.sizeDelta = new Vector2(diameter, diameter);
+        }
+
         internal static void Close()
         {
             if (_overlay != null) UnityEngine.Object.Destroy(_overlay);
             _overlay = null;
             if (_previewTexture != null) UnityEngine.Object.Destroy(_previewTexture);
             _previewTexture = null;
+            if (_brushCursorTexture != null) UnityEngine.Object.Destroy(_brushCursorTexture);
+            _brushCursorTexture = null;
+            _brushCursor = null;
+            _mapLayerRoot = null;
             _preview = null;
             if (_workingTexture != null && !_workingTextureInstalled)
                 UnityEngine.Object.Destroy(_workingTexture);
@@ -300,6 +444,8 @@ namespace UnderPressure.Editor
             _alphaText = null;
             _mapText = null;
             _opacityText = null;
+            _sizeText = null;
+            _pressureText = null;
             if (_toggleText != null) _toggleText.text = T("editor.fog.button");
         }
 
@@ -309,6 +455,7 @@ namespace UnderPressure.Editor
             if (_toggleRoot != null) UnityEngine.Object.Destroy(_toggleRoot);
             _toggleRoot = null;
             _toggleText = null;
+            _level = null;
         }
 
         private static GameObject Ui(string name, Transform parent, params Type[] components)
@@ -410,13 +557,22 @@ namespace UnderPressure.Editor
     }
 
     internal sealed class FogMaskPaintSurface : MonoBehaviour, IPointerDownHandler,
-        IDragHandler, IPointerUpHandler
+        IDragHandler, IPointerUpHandler, IPointerEnterHandler, IPointerExitHandler
     {
         private Action<Vector2> _paint;
+        private Action<Vector2> _hover;
+        private Action _exit;
         private Vector2 _lastPoint;
         private bool _hasLastPoint;
+        private bool _pointerInside;
+        private Camera _eventCamera;
 
-        internal void Initialise(Action<Vector2> paint) => _paint = paint;
+        internal void Initialise(Action<Vector2> paint, Action<Vector2> hover, Action exit)
+        {
+            _paint = paint;
+            _hover = hover;
+            _exit = exit;
+        }
 
         public void OnPointerDown(PointerEventData eventData)
         {
@@ -427,6 +583,25 @@ namespace UnderPressure.Editor
         public void OnDrag(PointerEventData eventData) => Paint(eventData);
 
         public void OnPointerUp(PointerEventData eventData) => _hasLastPoint = false;
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            _pointerInside = true;
+            _eventCamera = eventData.enterEventCamera;
+            Hover(eventData.position, _eventCamera);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            _pointerInside = false;
+            _eventCamera = null;
+            _exit?.Invoke();
+        }
+
+        private void Update()
+        {
+            if (_pointerInside) Hover(Input.mousePosition, _eventCamera);
+        }
 
         private void Paint(PointerEventData eventData)
         {
@@ -451,6 +626,19 @@ namespace UnderPressure.Editor
             }
             _lastPoint = point;
             _hasLastPoint = true;
+            _hover?.Invoke(point);
+        }
+
+        private void Hover(Vector2 screenPosition, Camera eventCamera)
+        {
+            var rect = transform as RectTransform;
+            Vector2 local;
+            if (rect == null || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    rect, screenPosition, eventCamera, out local)) return;
+            var area = rect.rect;
+            _hover?.Invoke(new Vector2(
+                Mathf.Clamp01((local.x - area.xMin) / area.width),
+                Mathf.Clamp01((local.y - area.yMin) / area.height)));
         }
     }
 }

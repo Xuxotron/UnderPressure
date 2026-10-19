@@ -485,7 +485,7 @@ namespace UnderPressure.Editor
         private static ScrollColumn _hospitalsColumn;
         private static ScrollColumn _mapsColumn;
         private static TMP_Text _selectedHospitalTitle;
-        private static TMP_InputField _architectInput;
+        private static InputField _architectInput;
         private static GameObject _architectDropdown;
         private static ScrollColumn _architectColumn;
         private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
@@ -887,11 +887,10 @@ namespace UnderPressure.Editor
             return text;
         }
 
-        private static TMP_InputField CreateArchitectInput(
+        private static InputField CreateArchitectInput(
             Transform parent, Vector2 position, Vector2 size)
         {
-            var root = Ui("UP_ArchitectName", parent, typeof(Image), typeof(TMP_InputField));
-            root.AddComponent<ScenarioEditorTextCursor>();
+            var root = Ui("UP_ArchitectName", parent, typeof(Image), typeof(InputField));
             var rect = (RectTransform)root.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
@@ -899,37 +898,39 @@ namespace UnderPressure.Editor
             rect.sizeDelta = size;
             root.GetComponent<Image>().color = new Color(0.94f, 0.97f, 0.98f, 1f);
 
-            var viewport = Ui("Text Area", root.transform);
-            var viewportRect = (RectTransform)viewport.transform;
-            Stretch(viewportRect);
-            viewportRect.offsetMin = new Vector2(12f, 5f);
-            viewportRect.offsetMax = new Vector2(-12f, -5f);
-
-            var textObject = UnityEngine.Object.Instantiate(
-                _nativeTextTemplate.gameObject, viewport.transform, false);
-            textObject.name = "Text";
-            textObject.SetActive(true);
-            DisableNativeLocalizers(textObject);
-            var text = textObject.GetComponent<TMP_Text>();
-            Stretch(text.rectTransform);
+            var textObject = Ui("Text", root.transform, typeof(Text));
+            var textRect = (RectTransform)textObject.transform;
+            Stretch(textRect);
+            textRect.offsetMin = new Vector2(12f, 5f);
+            textRect.offsetMax = new Vector2(-12f, -5f);
+            var text = textObject.GetComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.fontSize = 22;
             text.color = new Color(0.07f, 0.10f, 0.12f, 1f);
-            text.alignment = TextAlignmentOptions.MidlineLeft;
-            text.enableAutoSizing = true;
-            text.fontSizeMin = 13f;
-            text.fontSizeMax = 22f;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.supportRichText = false;
+            text.raycastTarget = false;
+            text.resizeTextForBestFit = true;
+            text.resizeTextMinSize = 13;
+            text.resizeTextMaxSize = 22;
 
-            var input = root.GetComponent<TMP_InputField>();
-            input.textViewport = viewportRect;
+            var input = root.GetComponent<InputField>();
+            input.targetGraphic = root.GetComponent<Image>();
             input.textComponent = text;
-            input.lineType = TMP_InputField.LineType.SingleLine;
+            input.lineType = InputField.LineType.SingleLine;
             input.characterLimit = 64;
+            input.customCaretColor = true;
+            input.caretColor = new Color(0.04f, 0.07f, 0.09f, 1f);
+            input.caretWidth = 2;
+            input.caretBlinkRate = 0.85f;
+            input.selectionColor = new Color(0.18f, 0.60f, 0.90f, 0.55f);
             input.text = UnderPressureEditorPlugin.ArchitectName;
             input.onEndEdit.AddListener(value =>
             {
                 var name = (value ?? "").Trim();
                 if (name.Length == 0) name = UnderPressureEditorPlugin.ArchitectName;
                 UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
-                input.SetTextWithoutNotify(name);
+                input.text = name;
             });
             return input;
         }
@@ -972,7 +973,7 @@ namespace UnderPressure.Editor
                     OnClick = () =>
                     {
                         if (_architectInput != null)
-                            _architectInput.SetTextWithoutNotify(selected);
+                            _architectInput.text = selected;
                         UnderPressureEditorPlugin.ArchitectNameSetting.Value = selected;
                         CloseArchitectDropdown();
                     }
@@ -1059,65 +1060,6 @@ namespace UnderPressure.Editor
         public void OnScroll(PointerEventData eventData)
         {
             if (Scroll != null) Scroll(eventData.scrollDelta.y);
-        }
-    }
-
-    // TMP_InputField no cambia el cursor del sistema en esta versión de Unity.
-    // Este cursor I-beam se genera en memoria y solo se activa sobre el campo.
-    public sealed class ScenarioEditorTextCursor : MonoBehaviour,
-        IPointerEnterHandler, IPointerExitHandler
-    {
-        private static Texture2D _ibeam;
-        private bool _inside;
-
-        public void OnPointerEnter(PointerEventData eventData)
-        {
-            _inside = true;
-            Cursor.SetCursor(GetCursor(), new Vector2(8f, 12f), UnityEngine.CursorMode.Auto);
-        }
-
-        public void OnPointerExit(PointerEventData eventData)
-        {
-            _inside = false;
-            Cursor.SetCursor(null, Vector2.zero, UnityEngine.CursorMode.Auto);
-        }
-
-        private void OnDisable()
-        {
-            if (_inside) Cursor.SetCursor(null, Vector2.zero, UnityEngine.CursorMode.Auto);
-            _inside = false;
-        }
-
-        private static Texture2D GetCursor()
-        {
-            if (_ibeam != null) return _ibeam;
-            _ibeam = new Texture2D(16, 24, TextureFormat.RGBA32, false)
-            {
-                name = "UP_TextCursor",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.DontSave
-            };
-            var pixels = new Color32[16 * 24];
-            var clear = new Color32(0, 0, 0, 0);
-            for (var i = 0; i < pixels.Length; ++i) pixels[i] = clear;
-            var white = new Color32(255, 255, 255, 255);
-            var black = new Color32(20, 20, 20, 255);
-            Action<int, int, Color32> put = (x, y, color) =>
-            {
-                if (x >= 0 && x < 16 && y >= 0 && y < 24) pixels[y * 16 + x] = color;
-            };
-            for (var y = 2; y <= 21; ++y)
-            {
-                put(6, y, white); put(7, y, black); put(8, y, black); put(9, y, white);
-            }
-            for (var x = 4; x <= 11; ++x)
-            {
-                put(x, 1, white); put(x, 2, black); put(x, 21, black); put(x, 22, white);
-            }
-            _ibeam.SetPixels32(pixels);
-            _ibeam.Apply(false, true);
-            return _ibeam;
         }
     }
 
