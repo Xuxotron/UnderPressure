@@ -373,6 +373,9 @@ namespace UnderPressure.Editor
             header.builtRoomStyle = styles.builtRoomStyle;
             header.buildingRoomStyle = styles.buildingRoomStyle;
             header.unbuiltRoomStyle = styles.unbuiltRoomStyle;
+            // La máscara conserva su resolución nativa (128 o 256) y la
+            // definición se registra en la cabecera; no se genera ningún .asset.
+            ScenarioEditorFogOfWar.Export(folder, header);
             // Verificar TODAS las parcelas antes de publicar el indice. Nunca
             // informar de un guardado correcto si ha desaparecido una capa.
             foreach (var entry in saved)
@@ -620,6 +623,7 @@ namespace UnderPressure.Editor
                 world.UpdateNavigation();
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
+                ScenarioEditorFogOfWar.ApplyLoaded(map.Header, map.FogOfWarPng);
                 // Evitar que decoracion original importada vuelva a mezclarse
                 // con objetos de parcelas. Solo permanecen objetos nativos.
                 ScenarioEditorFixedGeometry.Scan(level, true);

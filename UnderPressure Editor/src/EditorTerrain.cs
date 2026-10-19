@@ -1999,14 +1999,31 @@ namespace UnderPressure.Editor
     }
 
     // FogOfWarRenderer deja pasar la imagen sin modificar cuando la definición
-    // del proxy es nula. Se conserva cada valor original para restaurarlo al salir.
+    // del proxy es nula. Se conserva la definición nativa y la activa por mapa.
     internal static class ScenarioEditorFogOfWar
     {
+        internal const string FileName = "fog_of_war.png";
         private static readonly Dictionary<PostProcessingRendererData,
-            FogOfWarLevelTextureDefinition> Originals =
+            FogOfWarLevelTextureDefinition> NativeDefinitions =
             new Dictionary<PostProcessingRendererData, FogOfWarLevelTextureDefinition>();
+        private static readonly Dictionary<PostProcessingRendererData,
+            FogOfWarLevelTextureDefinition> ActiveDefinitions =
+            new Dictionary<PostProcessingRendererData, FogOfWarLevelTextureDefinition>();
+        private static FogOfWarLevelTextureDefinition _ownedDefinition;
         private static bool _enteredEditor;
         internal static bool Disabled { get; private set; }
+
+        internal static FogOfWarLevelTextureDefinition CurrentDefinition
+        {
+            get
+            {
+                var data = PostProcessingRendererProxy.Instance?.PostProcessRendererData;
+                if (data == null) return null;
+                FogOfWarLevelTextureDefinition definition;
+                if (ActiveDefinitions.TryGetValue(data, out definition)) return definition;
+                return data.FogOfWarDefinition;
+            }
+        }
 
         internal static void EnterEditor()
         {
@@ -2018,9 +2035,8 @@ namespace UnderPressure.Editor
 
         internal static void Toggle()
         {
-            if (Disabled) { Restore(); return; }
-            Disabled = true;
-            EnforceDisabled();
+            Disabled = !Disabled;
+            ApplyVisibility();
         }
 
         internal static void EnforceDisabled()
@@ -2028,19 +2044,162 @@ namespace UnderPressure.Editor
             if (!Disabled) return;
             var data = PostProcessingRendererProxy.Instance?.PostProcessRendererData;
             if (data == null) return;
-            if (!Originals.ContainsKey(data))
-                Originals.Add(data, data.FogOfWarDefinition);
+            RememberNative(data);
             data.FogOfWarDefinition = null;
+        }
+
+        private static void ApplyVisibility()
+        {
+            var data = PostProcessingRendererProxy.Instance?.PostProcessRendererData;
+            if (data == null) return;
+            RememberNative(data);
+            data.FogOfWarDefinition = Disabled ? null : ActiveDefinitions[data];
+        }
+
+        private static void RememberNative(PostProcessingRendererData data)
+        {
+            if (NativeDefinitions.ContainsKey(data)) return;
+            NativeDefinitions.Add(data, data.FogOfWarDefinition);
+            ActiveDefinitions.Add(data, data.FogOfWarDefinition);
+        }
+
+        internal static void Export(string folder, ScenarioMapFormat.Map header)
+        {
+            if (header == null) throw new ArgumentNullException(nameof(header));
+            var definition = CurrentDefinition;
+            if (definition == null || definition.FogOfWarTexture == null)
+            {
+                header.fogOfWarFile = "";
+                return;
+            }
+
+            var readable = CloneReadable(definition.FogOfWarTexture, "UP_FogOfWarExport");
+            try
+            {
+                var png = ImageConversion.EncodeToPNG(readable);
+                if (png == null || png.Length < 24)
+                    throw new InvalidDataException("El PNG Fog of War esta vacio.");
+                ScenarioMapFormat.WriteBytes(Path.Combine(folder, FileName), png);
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(readable);
+            }
+
+            header.fogOfWarFile = FileName;
+            header.fogTileWidth = definition.TileWidth;
+            header.fogTileHeight = definition.TileHeight;
+            header.fogMaxDistance = definition.MaxDistance;
+            header.fogAnchorX = definition.Anchor.x;
+            header.fogAnchorY = definition.Anchor.y;
+            header.fogUseCameraBoundingBoxExtents = definition.UseCameraBoundingBoxExtents;
+        }
+
+        internal static FogOfWarLevelTextureDefinition CreateDefinition(
+            ScenarioMapFormat.Map header, byte[] png)
+        {
+            if (header == null || string.IsNullOrEmpty(header.fogOfWarFile)) return null;
+            if (png == null || png.Length < 24)
+                throw new InvalidDataException("Falta el PNG Fog of War del mapa.");
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, true)
+            {
+                name = "UP_FogOfWar",
+                hideFlags = HideFlags.DontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            FogOfWarLevelTextureDefinition definition = null;
+            try
+            {
+                if (!ImageConversion.LoadImage(texture, png, false))
+                    throw new InvalidDataException("No se pudo interpretar fog_of_war.png.");
+                if (texture.width != header.fogTileWidth || texture.height != header.fogTileHeight)
+                    throw new InvalidDataException("fog_of_war.png no coincide con su cuadrícula " +
+                        header.fogTileWidth + "x" + header.fogTileHeight + ".");
+                texture.filterMode = FilterMode.Bilinear;
+                texture.wrapMode = TextureWrapMode.Clamp;
+                definition = ScriptableObject.CreateInstance<FogOfWarLevelTextureDefinition>();
+                definition.name = "UP_FogOfWarDefinition";
+                definition.hideFlags = HideFlags.DontSave;
+                definition.TileWidth = header.fogTileWidth;
+                definition.TileHeight = header.fogTileHeight;
+                definition.MaxDistance = header.fogMaxDistance;
+                definition.Anchor = new Vector2Int(header.fogAnchorX, header.fogAnchorY);
+                definition.UseCameraBoundingBoxExtents = header.fogUseCameraBoundingBoxExtents;
+                definition.FogOfWarTexture = texture;
+                return definition;
+            }
+            catch
+            {
+                if (definition != null) UnityEngine.Object.Destroy(definition);
+                UnityEngine.Object.Destroy(texture);
+                throw;
+            }
+        }
+
+        internal static void ApplyLoaded(ScenarioMapFormat.Map header, byte[] png)
+        {
+            var data = PostProcessingRendererProxy.Instance?.PostProcessRendererData;
+            if (data == null) throw new InvalidOperationException(
+                "No esta disponible el postprocesado para cargar Fog of War.");
+            RememberNative(data);
+            var definition = string.IsNullOrEmpty(header?.fogOfWarFile)
+                ? NativeDefinitions[data] : CreateDefinition(header, png);
+            var previousOwned = _ownedDefinition;
+            ActiveDefinitions[data] = definition;
+            _ownedDefinition = ReferenceEquals(definition, NativeDefinitions[data]) ? null : definition;
+            data.FogOfWarDefinition = Disabled ? null : definition;
+            if (previousOwned != null && !ReferenceEquals(previousOwned, definition))
+            {
+                if (previousOwned.FogOfWarTexture != null)
+                    UnityEngine.Object.Destroy(previousOwned.FogOfWarTexture);
+                UnityEngine.Object.Destroy(previousOwned);
+            }
+        }
+
+        private static Texture2D CloneReadable(Texture source, string name)
+        {
+            var clone = new Texture2D(source.width, source.height,
+                TextureFormat.RGBA32, false, true)
+            {
+                name = name,
+                hideFlags = HideFlags.DontSave,
+                filterMode = source.filterMode,
+                wrapMode = source.wrapMode,
+                anisoLevel = source.anisoLevel
+            };
+            var temporary = RenderTexture.GetTemporary(source.width, source.height, 0,
+                RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            var previous = RenderTexture.active;
+            try
+            {
+                Graphics.Blit(source, temporary);
+                RenderTexture.active = temporary;
+                clone.ReadPixels(new Rect(0f, 0f, source.width, source.height), 0, 0, false);
+                clone.Apply(false, false);
+                return clone;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(clone);
+                throw;
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(temporary);
+            }
         }
 
         internal static void Restore()
         {
-            foreach (var entry in Originals)
+            foreach (var entry in ActiveDefinitions)
             {
                 try { if (entry.Key != null) entry.Key.FogOfWarDefinition = entry.Value; }
                 catch { }
             }
-            Originals.Clear();
+            NativeDefinitions.Clear();
+            ActiveDefinitions.Clear();
             Disabled = false;
             _enteredEditor = false;
         }

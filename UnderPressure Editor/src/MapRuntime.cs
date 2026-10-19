@@ -46,6 +46,7 @@ namespace UnderPressure.Editor
         private static bool _active;
         private static ScenarioMapFormat.LoadedMap _map;
         private static ScenarioPlotRuntime.Collection _plotAssets;
+        private static FogOfWarLevelTextureDefinition _runtimeFog;
         private static SaveSystem _registeredSaveSystem;
         private static readonly Dictionary<int, object> RegisteredSaveAssets =
             new Dictionary<int, object>();
@@ -95,6 +96,13 @@ namespace UnderPressure.Editor
             UnregisterSaveAssets();
             _plotAssets?.DestroyAssets();
             _plotAssets = null;
+            if (_runtimeFog != null)
+            {
+                if (_runtimeFog.FogOfWarTexture != null)
+                    UnityEngine.Object.Destroy(_runtimeFog.FogOfWarTexture);
+                UnityEngine.Object.Destroy(_runtimeFog);
+            }
+            _runtimeFog = null;
             _base = null;
             _path = null;
             _map = null;
@@ -228,6 +236,12 @@ namespace UnderPressure.Editor
                 // La escena original los contiene precocinados para el juego base,
                 // pero el UPMap debe mostrar sus propias modificaciones.
                 cloned.createBaseLandscapeItems = true;
+                if (!string.IsNullOrEmpty(_map.Header.fogOfWarFile))
+                {
+                    _runtimeFog = ScenarioEditorFogOfWar.CreateDefinition(
+                        _map.Header, _map.FogOfWarPng);
+                    cloned.FogOfWarDefinition = _runtimeFog;
+                }
                 ScenarioHospitalStyles.Apply(level, _map.Header, cloned, _plotAssets.Definitions);
                 config = cloned;
                 _active = true;

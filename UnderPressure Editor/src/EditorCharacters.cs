@@ -96,6 +96,7 @@ namespace UnderPressure.Editor
             if (_toggleRoot == null || _overlay != null) return;
             var canvas = _toggleRoot.GetComponentInParent<Canvas>();
             if (canvas == null) return;
+            ScenarioFogViewer.Close();
             try
             {
                 _overlay = UI("UP_CharacterViewerOverlay", canvas.transform, typeof(Image));
@@ -199,7 +200,7 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void Close()
+        internal static void Close()
         {
             _component = null;
             if (_overlay != null) UnityEngine.Object.Destroy(_overlay);

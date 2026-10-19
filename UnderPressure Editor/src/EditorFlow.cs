@@ -486,6 +486,8 @@ namespace UnderPressure.Editor
         private static ScrollColumn _mapsColumn;
         private static TMP_Text _selectedHospitalTitle;
         private static TMP_InputField _architectInput;
+        private static GameObject _architectDropdown;
+        private static ScrollColumn _architectColumn;
         private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
         private static string _pendingMap;
         private static string _pendingArchitect;
@@ -548,7 +550,9 @@ namespace UnderPressure.Editor
             CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.architect_name"),
                 new Vector2(466f, -511f), new Vector2(190f, 56f));
             _architectInput = CreateArchitectInput(panel.transform,
-                new Vector2(654f, -511f), new Vector2(187f, 56f));
+                new Vector2(654f, -511f), new Vector2(135f, 56f));
+            CreateNativeRow(panel.transform, "▼", new Vector2(794f, -511f),
+                new Vector2(47f, 56f), () => ToggleArchitectDropdown(panel.transform), false);
 
             foreach (var level in levels.Where(l => l != null).Distinct()
                                         .OrderBy(l => l.GetLocalisedDisplayName(),
@@ -662,6 +666,7 @@ namespace UnderPressure.Editor
 
         internal static void Reset()
         {
+            CloseArchitectDropdown();
             _root = null;
             _nativeButtonTemplate = null;
             _nativeTextTemplate = null;
@@ -886,6 +891,7 @@ namespace UnderPressure.Editor
             Transform parent, Vector2 position, Vector2 size)
         {
             var root = Ui("UP_ArchitectName", parent, typeof(Image), typeof(TMP_InputField));
+            root.AddComponent<ScenarioEditorTextCursor>();
             var rect = (RectTransform)root.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
@@ -926,6 +932,66 @@ namespace UnderPressure.Editor
                 input.SetTextWithoutNotify(name);
             });
             return input;
+        }
+
+        private static void ToggleArchitectDropdown(Transform panel)
+        {
+            if (_architectDropdown != null)
+            {
+                CloseArchitectDropdown();
+                return;
+            }
+            var root = ScenarioEditorStorage.Folder;
+            var names = Directory.Exists(root)
+                ? Directory.GetDirectories(root, "*", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name) &&
+                                   !name.StartsWith("_", StringComparison.Ordinal))
+                    .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                    .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList()
+                : new List<string>();
+
+            _architectDropdown = Ui("UP_ArchitectDropdown", panel, typeof(Image));
+            var rect = (RectTransform)_architectDropdown.transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(654f, -82f);
+            rect.sizeDelta = new Vector2(187f, 422f);
+            _architectDropdown.GetComponent<Image>().color =
+                new Color(0.12f, 0.15f, 0.18f, 0.99f);
+            _architectDropdown.transform.SetAsLastSibling();
+            _architectColumn = CreateColumn(_architectDropdown.transform,
+                "Architects", Vector2.zero, new Vector2(187f, 422f));
+            foreach (var architect in names)
+            {
+                var selected = architect;
+                _architectColumn.Entries.Add(new RowEntry
+                {
+                    Label = selected,
+                    OnClick = () =>
+                    {
+                        if (_architectInput != null)
+                            _architectInput.SetTextWithoutNotify(selected);
+                        UnderPressureEditorPlugin.ArchitectNameSetting.Value = selected;
+                        CloseArchitectDropdown();
+                    }
+                });
+            }
+            if (names.Count == 0)
+                _architectColumn.Entries.Add(new RowEntry
+                {
+                    Label = EditorLocalization.Get("scenario_editor.no_architects"),
+                    OnClick = CloseArchitectDropdown
+                });
+            RefreshRows(_architectColumn);
+        }
+
+        private static void CloseArchitectDropdown()
+        {
+            if (_architectDropdown != null) UnityEngine.Object.Destroy(_architectDropdown);
+            _architectDropdown = null;
+            _architectColumn = null;
         }
 
         private static Scrollbar CreateScrollbar(Transform parent)
@@ -993,6 +1059,65 @@ namespace UnderPressure.Editor
         public void OnScroll(PointerEventData eventData)
         {
             if (Scroll != null) Scroll(eventData.scrollDelta.y);
+        }
+    }
+
+    // TMP_InputField no cambia el cursor del sistema en esta versión de Unity.
+    // Este cursor I-beam se genera en memoria y solo se activa sobre el campo.
+    public sealed class ScenarioEditorTextCursor : MonoBehaviour,
+        IPointerEnterHandler, IPointerExitHandler
+    {
+        private static Texture2D _ibeam;
+        private bool _inside;
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            _inside = true;
+            Cursor.SetCursor(GetCursor(), new Vector2(8f, 12f), UnityEngine.CursorMode.Auto);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            _inside = false;
+            Cursor.SetCursor(null, Vector2.zero, UnityEngine.CursorMode.Auto);
+        }
+
+        private void OnDisable()
+        {
+            if (_inside) Cursor.SetCursor(null, Vector2.zero, UnityEngine.CursorMode.Auto);
+            _inside = false;
+        }
+
+        private static Texture2D GetCursor()
+        {
+            if (_ibeam != null) return _ibeam;
+            _ibeam = new Texture2D(16, 24, TextureFormat.RGBA32, false)
+            {
+                name = "UP_TextCursor",
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.DontSave
+            };
+            var pixels = new Color32[16 * 24];
+            var clear = new Color32(0, 0, 0, 0);
+            for (var i = 0; i < pixels.Length; ++i) pixels[i] = clear;
+            var white = new Color32(255, 255, 255, 255);
+            var black = new Color32(20, 20, 20, 255);
+            Action<int, int, Color32> put = (x, y, color) =>
+            {
+                if (x >= 0 && x < 16 && y >= 0 && y < 24) pixels[y * 16 + x] = color;
+            };
+            for (var y = 2; y <= 21; ++y)
+            {
+                put(6, y, white); put(7, y, black); put(8, y, black); put(9, y, white);
+            }
+            for (var x = 4; x <= 11; ++x)
+            {
+                put(x, 1, white); put(x, 2, black); put(x, 21, black); put(x, 22, white);
+            }
+            _ibeam.SetPixels32(pixels);
+            _ibeam.Apply(false, true);
+            return _ibeam;
         }
     }
 

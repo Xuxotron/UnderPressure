@@ -34,6 +34,13 @@ namespace UnderPressure.Editor
             public string baseHospitalName = "";
             public string description = "";
             public string terrainManifest = "";
+            public string fogOfWarFile = "";
+            public int fogTileWidth;
+            public int fogTileHeight;
+            public int fogMaxDistance;
+            public int fogAnchorX;
+            public int fogAnchorY;
+            public bool fogUseCameraBoundingBoxExtents;
             public string plotPerimeter = PerimeterNone;
             public string[] perimeterPrefabs = new string[0];
             public string builtRoomStyle = "";
@@ -148,6 +155,7 @@ namespace UnderPressure.Editor
             internal Map Header;
             internal Scene SceneData = new Scene();
             internal readonly List<LoadedPlot> Plots = new List<LoadedPlot>();
+            internal byte[] FogOfWarPng;
         }
 
         internal static Map ReadHeader(string file)
@@ -167,6 +175,7 @@ namespace UnderPressure.Editor
                 HasInvalidStyleId(header.buildingRoomStyle) ||
                 HasInvalidStyleId(header.unbuiltRoomStyle) ||
                 HasInvalidStyleId(header.sceneFile) ||
+                HasInvalidStyleId(header.fogOfWarFile) ||
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
                 throw new InvalidDataException("Cabecera .upmap incorrecta o version incompatible.");
             return header;
@@ -205,6 +214,18 @@ namespace UnderPressure.Editor
             var header = ReadHeader(file);
             var result = new LoadedMap { Header = header };
             var folder = Path.GetDirectoryName(Path.GetFullPath(file));
+            if (!string.IsNullOrEmpty(header.fogOfWarFile))
+            {
+                if (header.fogTileWidth <= 0 || header.fogTileHeight <= 0 ||
+                    header.fogMaxDistance <= 0)
+                    throw new InvalidDataException("Definicion Fog of War incompleta.");
+                var fogPath = Resolve(folder, header.fogOfWarFile, ".png");
+                var fogInfo = new FileInfo(fogPath);
+                if (!fogInfo.Exists || fogInfo.Length < 24 || fogInfo.Length > MaxPngBytes)
+                    throw new InvalidDataException("PNG Fog of War vacio o excesivo: " +
+                        header.fogOfWarFile);
+                result.FogOfWarPng = File.ReadAllBytes(fogPath);
+            }
             // Los experimentos anteriores con scene.json permanecen ignorados.
             // No se borra ni sobrescribe ningun archivo original.
             result.SceneData = new Scene();
