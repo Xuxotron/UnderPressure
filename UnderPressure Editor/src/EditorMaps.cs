@@ -2138,19 +2138,30 @@ namespace UnderPressure.Editor
 
         private void RefreshLayerButtons(HospitalPlotLayer selected)
         {
+            var nativeColors = AccessTools.Field(typeof(EditHospitalMenu), "_editFrameColors")
+                ?.GetValue(_menu) as Color[];
+            var fallback = new[]
+            {
+                new Color(.78f, .80f, .80f, 1f),
+                new Color(.08f, .37f, .61f, 1f),
+                new Color(.39f, .62f, .22f, 1f)
+            };
             for (var i = 0; i < _layerButtons.Length; ++i)
             {
                 var button = _layerButtons[i];
                 if (button == null) continue;
                 var active = i == (int)selected;
                 var colors = button.colors;
-                colors.normalColor = active
-                    ? new Color(.04f, .58f, .91f, 1f)
-                    : new Color(.42f, .50f, .54f, 1f);
+                var activeColor = nativeColors != null && nativeColors.Length > i
+                    ? nativeColors[i] : fallback[i];
+                activeColor.a = 1f;
+                colors.normalColor = active ? activeColor : new Color(.42f, .50f, .54f, 1f);
                 colors.highlightedColor = active
-                    ? new Color(.08f, .72f, 1f, 1f)
+                    ? Color.Lerp(activeColor, Color.white, .18f)
                     : new Color(.55f, .63f, .67f, 1f);
-                colors.pressedColor = new Color(.03f, .43f, .72f, 1f);
+                colors.pressedColor = active
+                    ? Color.Lerp(activeColor, Color.black, .18f)
+                    : new Color(.33f, .40f, .44f, 1f);
                 colors.selectedColor = colors.highlightedColor;
                 button.colors = colors;
             }
@@ -2980,6 +2991,7 @@ rect.pivot = new Vector2(1f, 1f);
         private void BuildDialog(string title)
         {
             CloseDialog();
+            ScenarioEditorTerrainPainter.DisableTools();
             var canvas = _menu.GetComponentInParent<Canvas>();
             if (canvas == null)
             {

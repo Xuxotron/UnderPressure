@@ -377,6 +377,14 @@ namespace UnderPressure.Editor
             _behaviour?.RefreshTexts();
         }
 
+        internal static void DisableTools()
+        {
+            _brushEnabled = false;
+            _sculptMode = SculptMode.Off;
+            RefreshCursor();
+            _behaviour?.RefreshTexts();
+        }
+
         internal static bool CloseDialogIfOpen() =>
             _behaviour != null && _behaviour.CloseDialogIfOpen();
 
@@ -1796,6 +1804,7 @@ namespace UnderPressure.Editor
         private void ShowClearConfirmation()
         {
             if (_dialog != null) return;
+            ScenarioEditorTerrainPainter.DisableTools();
             var canvas=GetComponentInParent<Canvas>();
             if (canvas==null) return;
             _dialog=NewUi("UP_Clear_Confirm",canvas.transform,typeof(Image));

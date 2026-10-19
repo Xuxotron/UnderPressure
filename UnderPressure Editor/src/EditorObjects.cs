@@ -561,7 +561,9 @@ namespace UnderPressure.Editor
                 grid.cellSize = new Vector2(105f, 88f);
                 grid.spacing = new Vector2(7f, 5f);
                 var fitter = content.GetComponent<ContentSizeFitter>() ?? content.AddComponent<ContentSizeFitter>();
-                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                // El ancho preferido resultante no coincide con las columnas
+                // visibles y deja aproximadamente media barra sin objetos.
+                fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
                 fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
                 var scroll = content.GetComponentInParent<ScrollRect>();
@@ -577,13 +579,13 @@ namespace UnderPressure.Editor
                         var size = scrollRect.sizeDelta;
                         if (scrollRect.anchorMin.x == scrollRect.anchorMax.x)
                         {
-                            size.x = Mathf.Max(260f, size.x - 224f);
+                            size.x = Mathf.Max(260f, size.x - 219f);
                             scrollRect.sizeDelta = size;
                         }
                         else
                         {
                             var offset = scrollRect.offsetMax;
-                            offset.x -= 224f;
+                            offset.x -= 219f;
                             scrollRect.offsetMax = offset;
                         }
                         SetHeightPreservingTop(scrollRect, 190f);
@@ -591,6 +593,9 @@ namespace UnderPressure.Editor
                         if (viewport != null && viewport != scrollRect)
                             SetHeightPreservingTop(viewport, 190f);
                         GrowBackdropOnly(__instance, viewport ?? scrollRect);
+                        var sizer = content.GetComponent<ScenarioCatalogContentSizer>() ??
+                            content.AddComponent<ScenarioCatalogContentSizer>();
+                        sizer.Initialize(__instance, rect, grid, viewport ?? scrollRect);
                     }
                     RestoreScrollbar(scroll, __instance);
                 }
@@ -863,6 +868,57 @@ namespace UnderPressure.Editor
         private void LateUpdate() { Place(); }
     }
 
+    // Ajusta el recorrido a los elementos realmente visibles, tanto durante la
+    // carga progresiva nativa como al filtrar o reconstruir el catalogo.
+    internal sealed class ScenarioCatalogContentSizer : MonoBehaviour
+    {
+        private static readonly FieldInfo ListObjectsField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_listObjects");
+        private LandscapeObjectsMenu _menu;
+        private RectTransform _content;
+        private RectTransform _viewport;
+        private GridLayoutGroup _grid;
+        private int _lastVisible = -1;
+        private float _lastViewportWidth = -1f;
+
+        internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
+            GridLayoutGroup grid, RectTransform viewport)
+        {
+            _menu = menu;
+            _content = content;
+            _grid = grid;
+            _viewport = viewport;
+            Resize();
+        }
+
+        private void LateUpdate() => Resize();
+
+        private void Resize()
+        {
+            if (_menu == null || _content == null || _grid == null || _viewport == null)
+                return;
+            var objects = ListObjectsField?.GetValue(_menu) as IList<GameObject>;
+            if (objects == null) return;
+            var visible = 0;
+            for (var i = 0; i < objects.Count; ++i)
+                if (objects[i] != null && objects[i].activeInHierarchy)
+                    ++visible;
+            var viewportWidth = _viewport.rect.width;
+            if (visible == _lastVisible && Mathf.Approximately(viewportWidth, _lastViewportWidth))
+                return;
+            _lastVisible = visible;
+            _lastViewportWidth = viewportWidth;
+            var rows = Mathf.Max(1, _grid.constraintCount);
+            var columns = Mathf.CeilToInt(visible / (float)rows);
+            var preferred = (float)(_grid.padding.left + _grid.padding.right);
+            if (columns > 0)
+                preferred += columns * _grid.cellSize.x + (columns - 1) * _grid.spacing.x;
+            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
+                Mathf.Max(viewportWidth, preferred));
+            LayoutRebuilder.MarkLayoutForRebuild(_content);
+        }
+    }
+
     [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
     internal static class ScenarioEditorObjectPreviewAnglePatch
     {
@@ -873,6 +929,28 @@ namespace UnderPressure.Editor
         {
             if (ScenarioEditorFlow.IsRunning && __instance != null)
                 CameraPitchField?.SetValue(__instance, -45f);
+        }
+    }
+
+    [HarmonyPatch(typeof(LandscapeObjectListItem), "FrameCamera")]
+    internal static class ScenarioEditorObjectPreviewYawPatch
+    {
+        private static readonly FieldInfo CameraRotationField =
+            AccessTools.Field(typeof(LandscapeObjectListItem), "_rotation");
+
+        private static void Prefix(LandscapeObjectListItem __instance, out float __state)
+        {
+            __state = float.NaN;
+            if (!ScenarioEditorFlow.IsRunning || __instance == null || CameraRotationField == null)
+                return;
+            __state = (float)CameraRotationField.GetValue(__instance);
+            CameraRotationField.SetValue(__instance, __state - 20f);
+        }
+
+        private static void Postfix(LandscapeObjectListItem __instance, float __state)
+        {
+            if (!float.IsNaN(__state) && __instance != null)
+                CameraRotationField?.SetValue(__instance, __state);
         }
     }
 

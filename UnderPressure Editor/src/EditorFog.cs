@@ -96,6 +96,7 @@ namespace UnderPressure.Editor
             var canvas = _toggleRoot.GetComponentInParent<Canvas>();
             if (canvas == null) return;
             ScenarioCharacterViewer.Close();
+            ScenarioEditorTerrainPainter.DisableTools();
             try
             {
                 _paintMode = PaintMode.Add;
@@ -277,7 +278,7 @@ namespace UnderPressure.Editor
                     var index = y * width + x;
                     var delta = 255f * pressure * softness;
                     var alpha = (byte)Mathf.RoundToInt(Mathf.Clamp(
-                        pixels[index].a + (_paintMode == PaintMode.Add ? -delta : delta),
+                        pixels[index].a + (_paintMode == PaintMode.Add ? delta : -delta),
                         0f, 255f));
                     pixels[index] = new Color32(0, 0, 0, alpha);
                 }
@@ -316,13 +317,12 @@ namespace UnderPressure.Editor
             var globalAlpha = (byte)Mathf.RoundToInt(_previewOpacity * 255f);
             for (var i = 0; i < source.Length; ++i)
             {
-                // En el editor blanco representa zona añadida (sin niebla) y
-                // negro zona eliminada (niebla completa).
-                var value = (byte)(255 - source[i].a);
                 var alpha = _alphaEnabled
                     ? (byte)Mathf.RoundToInt(source[i].a * _previewOpacity)
                     : globalAlpha;
-                preview[i] = new Color32(value, value, value, alpha);
+                // La mascara es exclusivamente alfa sobre RGB negro. Mostrar
+                // blanco/gris en la previsualizacion creaba falsos contornos.
+                preview[i] = new Color32(0, 0, 0, alpha);
             }
             _previewTexture.SetPixels32(preview);
             _previewTexture.Apply(false, false);

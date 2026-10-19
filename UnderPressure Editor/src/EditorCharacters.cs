@@ -99,6 +99,7 @@ namespace UnderPressure.Editor
             var canvas = _toggleRoot.GetComponentInParent<Canvas>();
             if (canvas == null) return;
             ScenarioFogViewer.Close();
+            ScenarioEditorTerrainPainter.DisableTools();
             try
             {
                 _overlay = UI("UP_CharacterViewerOverlay", canvas.transform, typeof(Image));
