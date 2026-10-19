@@ -2157,6 +2157,48 @@ namespace UnderPressure.Editor
             }
         }
 
+        internal static Texture2D CloneForEditing(Texture source, string name)
+        {
+            if (source == null) return null;
+            return CloneReadable(source, name);
+        }
+
+        internal static void ApplyEditedTexture(Texture2D texture)
+        {
+            if (texture == null) throw new ArgumentNullException(nameof(texture));
+            var data = PostProcessingRendererProxy.Instance?.PostProcessRendererData;
+            if (data == null) throw new InvalidOperationException(
+                "No esta disponible el postprocesado para editar Fog of War.");
+            RememberNative(data);
+            var source = ActiveDefinitions[data];
+            if (source == null) throw new InvalidOperationException(
+                "El mapa actual no tiene una definicion Fog of War.");
+            if (texture.width != source.TileWidth || texture.height != source.TileHeight)
+                throw new InvalidDataException("La mascara editada no coincide con su cuadricula.");
+
+            var definition = ScriptableObject.CreateInstance<FogOfWarLevelTextureDefinition>();
+            definition.name = "UP_FogOfWarDefinitionEdited";
+            definition.hideFlags = HideFlags.DontSave;
+            definition.TileWidth = source.TileWidth;
+            definition.TileHeight = source.TileHeight;
+            definition.MaxDistance = source.MaxDistance;
+            definition.Anchor = source.Anchor;
+            definition.UseCameraBoundingBoxExtents = source.UseCameraBoundingBoxExtents;
+            definition.FogOfWarTexture = texture;
+
+            var previousOwned = _ownedDefinition;
+            ActiveDefinitions[data] = definition;
+            _ownedDefinition = definition;
+            data.FogOfWarDefinition = Disabled ? null : definition;
+            if (previousOwned != null && !ReferenceEquals(previousOwned, definition))
+            {
+                if (previousOwned.FogOfWarTexture != null &&
+                    !ReferenceEquals(previousOwned.FogOfWarTexture, texture))
+                    UnityEngine.Object.Destroy(previousOwned.FogOfWarTexture);
+                UnityEngine.Object.Destroy(previousOwned);
+            }
+        }
+
         private static Texture2D CloneReadable(Texture source, string name)
         {
             var clone = new Texture2D(source.width, source.height,

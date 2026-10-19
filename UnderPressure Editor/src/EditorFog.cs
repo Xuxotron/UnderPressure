@@ -3,6 +3,7 @@ using System.Linq;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace UnderPressure.Editor
@@ -24,9 +25,12 @@ namespace UnderPressure.Editor
         private static void Prefix() => ScenarioFogViewer.Detach();
     }
 
-    // Visor de solo lectura. La edición de la máscara se añadirá por separado.
+    // Editor de la mascara Fog of War. La copia editable sustituye a la activa
+    // solo al realizar la primera pincelada; nunca modifica el recurso nativo.
     internal static class ScenarioFogViewer
     {
+        private enum PaintMode { Add, Remove }
+
         private static readonly Color PanelColor = new Color(0.135f, 0.165f, 0.195f, 0.98f);
         private static readonly Color ButtonColor = new Color(0.24f, 0.31f, 0.36f, 1f);
         private static readonly Color HighlightColor = new Color(0.24f, 0.46f, 0.49f, 1f);
@@ -34,6 +38,20 @@ namespace UnderPressure.Editor
         private static GameObject _overlay;
         private static Text _toggleText;
         private static Font _font;
+        private static Texture2D _workingTexture;
+        private static Texture2D _previewTexture;
+        private static RawImage _preview;
+        private static Button _addButton;
+        private static Button _removeButton;
+        private static Text _alphaText;
+        private static Text _mapText;
+        private static Text _opacityText;
+        private static PaintMode _paintMode = PaintMode.Add;
+        private static int _brushSize = 10;
+        private static float _previewOpacity = 1f;
+        private static bool _alphaEnabled = true;
+        private static bool _mapEnabled;
+        private static bool _workingTextureInstalled;
 
         private static string T(string key) => EditorLocalization.Get(key);
 
@@ -70,6 +88,16 @@ namespace UnderPressure.Editor
             ScenarioCharacterViewer.Close();
             try
             {
+                _paintMode = PaintMode.Add;
+                _brushSize = 10;
+                _previewOpacity = 1f;
+                _alphaEnabled = true;
+                _mapEnabled = false;
+                _workingTextureInstalled = false;
+                if (definition?.FogOfWarTexture != null)
+                    _workingTexture = ScenarioEditorFogOfWar.CloneForEditing(
+                        definition.FogOfWarTexture, "UP_FogOfWarWorking");
+
                 _overlay = Ui("UP_FogViewerOverlay", canvas.transform, typeof(Image));
                 Stretch((RectTransform)_overlay.transform);
                 _overlay.GetComponent<Image>().color = new Color(0.01f, 0.02f, 0.035f, 0.64f);
@@ -83,56 +111,195 @@ namespace UnderPressure.Editor
                 panelRect.sizeDelta = new Vector2(620f, 700f);
                 panel.GetComponent<Image>().color = PanelColor;
 
-                CreateText(panel.transform, T("editor.fog.title"), 28,
-                    new Vector2(0f, -18f), new Vector2(560f, 42f), TextAnchor.MiddleCenter);
+                _addButton = CreateButton(panel.transform, "Add", T("editor.fog.add"),
+                    new Vector2(112f, 42f), HighlightColor,
+                    () => SelectPaintMode(PaintMode.Add)).GetComponent<Button>();
+                SetTop(_addButton.transform, -224f, -18f);
+                var size = CreateSlider(panel.transform, "BrushSize", new Vector2(290f, 22f),
+                    1f, 100f, _brushSize, Slider.Direction.LeftToRight,
+                    value => _brushSize = Mathf.RoundToInt(value));
+                SetTop(size.transform, 0f, -28f);
+                _removeButton = CreateButton(panel.transform, "Remove", T("editor.fog.remove"),
+                    new Vector2(112f, 42f), ButtonColor,
+                    () => SelectPaintMode(PaintMode.Remove)).GetComponent<Button>();
+                SetTop(_removeButton.transform, 224f, -18f);
 
                 var previewBack = Ui("PreviewBackground", panel.transform, typeof(Image));
                 var backRect = (RectTransform)previewBack.transform;
                 backRect.anchorMin = backRect.anchorMax = new Vector2(0.5f, 1f);
                 backRect.pivot = new Vector2(0.5f, 1f);
-                backRect.anchoredPosition = new Vector2(0f, -75f);
+                backRect.anchoredPosition = new Vector2(0f, -74f);
                 backRect.sizeDelta = new Vector2(520f, 520f);
                 previewBack.GetComponent<Image>().color = new Color(0.82f, 0.84f, 0.86f, 1f);
 
-                if (definition?.FogOfWarTexture != null)
+                if (_workingTexture != null)
                 {
-                    var preview = Ui("FogMask", previewBack.transform, typeof(RawImage));
-                    Stretch((RectTransform)preview.transform);
-                    var raw = preview.GetComponent<RawImage>();
-                    raw.texture = definition.FogOfWarTexture;
-                    raw.color = Color.white;
-                    raw.raycastTarget = false;
-                    CreateText(panel.transform,
-                        EditorLocalization.Format("editor.fog.details",
-                            definition.TileWidth, definition.TileHeight,
-                            definition.MaxDistance, definition.Anchor.x, definition.Anchor.y),
-                        17, new Vector2(0f, -607f), new Vector2(560f, 31f),
-                        TextAnchor.MiddleCenter);
-                }
-                else
-                {
-                    CreateText(previewBack.transform, T("editor.fog.none"), 22,
-                        Vector2.zero, new Vector2(460f, 80f), TextAnchor.MiddleCenter);
+                    var previewRoot = Ui("FogMask", previewBack.transform, typeof(RawImage));
+                    Stretch((RectTransform)previewRoot.transform);
+                    _preview = previewRoot.GetComponent<RawImage>();
+                    _preview.raycastTarget = true;
+                    var paintSurface = previewRoot.AddComponent<FogMaskPaintSurface>();
+                    paintSurface.Initialise(PaintAt);
+                    RebuildPreview();
                 }
 
-                var close = CreateButton(panel.transform, "Close", T("editor.fog.close"),
-                    new Vector2(220f, 42f), ButtonColor, Close);
-                SetTop(close.transform, 0f, -648f);
+                var alpha = CreateButton(panel.transform, "Alpha", "",
+                    new Vector2(132f, 42f), HighlightColor, ToggleAlpha);
+                SetTop(alpha.transform, -220f, -626f);
+                _alphaText = alpha.GetComponentInChildren<Text>();
+
+                _opacityText = CreateText(panel.transform, "", 14,
+                    new Vector2(0f, -602f), new Vector2(250f, 20f), TextAnchor.MiddleCenter);
+                var opacity = CreateSlider(panel.transform, "Opacity", new Vector2(250f, 22f),
+                    0f, 100f, 100f, Slider.Direction.RightToLeft, value =>
+                    {
+                        _previewOpacity = value / 100f;
+                        RefreshControlTexts();
+                        RebuildPreview();
+                    });
+                SetTop(opacity.transform, 0f, -636f);
+
+                var map = CreateButton(panel.transform, "Map", "",
+                    new Vector2(132f, 42f), ButtonColor, ToggleMap);
+                SetTop(map.transform, 220f, -626f);
+                _mapText = map.GetComponentInChildren<Text>();
+                RefreshControlTexts();
+
                 _toggleRoot.transform.SetAsLastSibling();
                 if (_toggleText != null) _toggleText.text = T("editor.fog.close");
             }
             catch (Exception exception)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Fog of War: no se pudo abrir el visor: " + exception);
+                    "Fog of War: no se pudo abrir el editor: " + exception);
                 Close();
             }
+        }
+
+        private static void SelectPaintMode(PaintMode mode)
+        {
+            _paintMode = mode;
+            if (_addButton != null)
+                _addButton.GetComponent<Image>().color = mode == PaintMode.Add
+                    ? HighlightColor : ButtonColor;
+            if (_removeButton != null)
+                _removeButton.GetComponent<Image>().color = mode == PaintMode.Remove
+                    ? HighlightColor : ButtonColor;
+        }
+
+        private static void ToggleAlpha()
+        {
+            _alphaEnabled = !_alphaEnabled;
+            RefreshControlTexts();
+            RebuildPreview();
+        }
+
+        private static void ToggleMap()
+        {
+            // La imagen del mapa se incorporará en la siguiente fase.
+            _mapEnabled = !_mapEnabled;
+            RefreshControlTexts();
+        }
+
+        private static void RefreshControlTexts()
+        {
+            if (_alphaText != null)
+                _alphaText.text = T(_alphaEnabled ? "editor.fog.alpha.on" : "editor.fog.alpha.off");
+            if (_mapText != null)
+                _mapText.text = T(_mapEnabled ? "editor.fog.map.on" : "editor.fog.map.off");
+            if (_opacityText != null)
+                _opacityText.text = EditorLocalization.Format("editor.fog.opacity",
+                    Mathf.RoundToInt(_previewOpacity * 100f));
+        }
+
+        private static void PaintAt(Vector2 normalized)
+        {
+            if (_workingTexture == null) return;
+            var width = _workingTexture.width;
+            var height = _workingTexture.height;
+            var centerX = Mathf.RoundToInt(normalized.x * (width - 1));
+            var centerY = Mathf.RoundToInt(normalized.y * (height - 1));
+            var radius = Mathf.Max(0.5f, Mathf.Min(width, height) * (_brushSize / 100f) * 0.5f);
+            var minX = Mathf.Max(0, Mathf.FloorToInt(centerX - radius));
+            var maxX = Mathf.Min(width - 1, Mathf.CeilToInt(centerX + radius));
+            var minY = Mathf.Max(0, Mathf.FloorToInt(centerY - radius));
+            var maxY = Mathf.Min(height - 1, Mathf.CeilToInt(centerY + radius));
+            var radiusSquared = radius * radius;
+            var pixels = _workingTexture.GetPixels32();
+            var alpha = _paintMode == PaintMode.Add ? (byte)0 : (byte)255;
+            for (var y = minY; y <= maxY; ++y)
+            {
+                for (var x = minX; x <= maxX; ++x)
+                {
+                    var dx = x - centerX;
+                    var dy = y - centerY;
+                    if (dx * dx + dy * dy > radiusSquared) continue;
+                    var index = y * width + x;
+                    pixels[index] = new Color32(0, 0, 0, alpha);
+                }
+            }
+            _workingTexture.SetPixels32(pixels);
+            _workingTexture.Apply(false, false);
+            if (!_workingTextureInstalled)
+            {
+                ScenarioEditorFogOfWar.ApplyEditedTexture(_workingTexture);
+                _workingTextureInstalled = true;
+            }
+            RebuildPreview();
+        }
+
+        private static void RebuildPreview()
+        {
+            if (_workingTexture == null || _preview == null) return;
+            if (_previewTexture == null || _previewTexture.width != _workingTexture.width ||
+                _previewTexture.height != _workingTexture.height)
+            {
+                if (_previewTexture != null) UnityEngine.Object.Destroy(_previewTexture);
+                _previewTexture = new Texture2D(_workingTexture.width, _workingTexture.height,
+                    TextureFormat.RGBA32, false, true)
+                {
+                    name = "UP_FogOfWarPreview",
+                    hideFlags = HideFlags.DontSave,
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp
+                };
+                _preview.texture = _previewTexture;
+                _preview.color = Color.white;
+            }
+
+            var source = _workingTexture.GetPixels32();
+            var preview = new Color32[source.Length];
+            var globalAlpha = (byte)Mathf.RoundToInt(_previewOpacity * 255f);
+            for (var i = 0; i < source.Length; ++i)
+            {
+                // En el editor blanco representa zona añadida (sin niebla) y
+                // negro zona eliminada (niebla completa).
+                var value = (byte)(255 - source[i].a);
+                var alpha = _alphaEnabled
+                    ? (byte)Mathf.RoundToInt(source[i].a * _previewOpacity)
+                    : globalAlpha;
+                preview[i] = new Color32(value, value, value, alpha);
+            }
+            _previewTexture.SetPixels32(preview);
+            _previewTexture.Apply(false, false);
         }
 
         internal static void Close()
         {
             if (_overlay != null) UnityEngine.Object.Destroy(_overlay);
             _overlay = null;
+            if (_previewTexture != null) UnityEngine.Object.Destroy(_previewTexture);
+            _previewTexture = null;
+            _preview = null;
+            if (_workingTexture != null && !_workingTextureInstalled)
+                UnityEngine.Object.Destroy(_workingTexture);
+            _workingTexture = null;
+            _workingTextureInstalled = false;
+            _addButton = null;
+            _removeButton = null;
+            _alphaText = null;
+            _mapText = null;
+            _opacityText = null;
             if (_toggleText != null) _toggleText.text = T("editor.fog.button");
         }
 
@@ -163,6 +330,37 @@ namespace UnderPressure.Editor
             button.onClick.AddListener(() => action());
             CreateText(root.transform, label, 18, Vector2.zero, size, TextAnchor.MiddleCenter);
             return root;
+        }
+
+        private static Slider CreateSlider(Transform parent, string name, Vector2 size,
+            float min, float max, float initial, Slider.Direction direction, Action<float> onChange)
+        {
+            var root = Ui(name, parent, typeof(Image), typeof(Slider));
+            ((RectTransform)root.transform).sizeDelta = size;
+            root.GetComponent<Image>().color = new Color(0.18f, 0.27f, 0.33f, 1f);
+            var fill = Ui("Fill", root.transform, typeof(Image));
+            var fillRect = (RectTransform)fill.transform;
+            Stretch(fillRect);
+            fillRect.offsetMin = new Vector2(3f, 3f);
+            fillRect.offsetMax = new Vector2(-3f, -3f);
+            fill.GetComponent<Image>().color = new Color(0.23f, 0.74f, 0.98f, 1f);
+            fill.GetComponent<Image>().raycastTarget = false;
+            var handle = Ui("Handle", root.transform, typeof(Image));
+            var handleRect = (RectTransform)handle.transform;
+            handleRect.anchorMin = handleRect.anchorMax = new Vector2(0.5f, 0.5f);
+            handleRect.sizeDelta = new Vector2(15f, 30f);
+            handle.GetComponent<Image>().color = new Color(0.97f, 0.97f, 0.91f, 1f);
+            var slider = root.GetComponent<Slider>();
+            slider.targetGraphic = handle.GetComponent<Image>();
+            slider.fillRect = fillRect;
+            slider.handleRect = handleRect;
+            slider.direction = direction;
+            slider.wholeNumbers = true;
+            slider.minValue = min;
+            slider.maxValue = max;
+            slider.value = initial;
+            slider.onValueChanged.AddListener(value => onChange?.Invoke(value));
+            return slider;
         }
 
         private static Text CreateText(Transform parent, string value, int size,
@@ -208,6 +406,51 @@ namespace UnderPressure.Editor
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
+        }
+    }
+
+    internal sealed class FogMaskPaintSurface : MonoBehaviour, IPointerDownHandler,
+        IDragHandler, IPointerUpHandler
+    {
+        private Action<Vector2> _paint;
+        private Vector2 _lastPoint;
+        private bool _hasLastPoint;
+
+        internal void Initialise(Action<Vector2> paint) => _paint = paint;
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            _hasLastPoint = false;
+            Paint(eventData);
+        }
+
+        public void OnDrag(PointerEventData eventData) => Paint(eventData);
+
+        public void OnPointerUp(PointerEventData eventData) => _hasLastPoint = false;
+
+        private void Paint(PointerEventData eventData)
+        {
+            var rect = transform as RectTransform;
+            Vector2 local;
+            if (rect == null || !RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    rect, eventData.position, eventData.pressEventCamera, out local)) return;
+            var area = rect.rect;
+            var point = new Vector2(
+                Mathf.Clamp01((local.x - area.xMin) / area.width),
+                Mathf.Clamp01((local.y - area.yMin) / area.height));
+            if (_hasLastPoint)
+            {
+                var distance = Vector2.Distance(_lastPoint, point);
+                var steps = Mathf.Max(1, Mathf.CeilToInt(distance * 256f));
+                for (var i = 1; i <= steps; ++i)
+                    _paint?.Invoke(Vector2.Lerp(_lastPoint, point, i / (float)steps));
+            }
+            else
+            {
+                _paint?.Invoke(point);
+            }
+            _lastPoint = point;
+            _hasLastPoint = true;
         }
     }
 }
