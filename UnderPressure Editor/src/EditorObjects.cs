@@ -883,7 +883,6 @@ namespace UnderPressure.Editor
         private RectTransform _viewport;
         private GridLayoutGroup _grid;
         private int _lastVisible = -1;
-        private int _lastSignature;
         private float _lastViewportWidth = -1f;
         private bool _loggedComplete;
 
@@ -894,11 +893,7 @@ namespace UnderPressure.Editor
             _content = content;
             _grid = grid;
             _viewport = viewport;
-            // La paleta se creó originalmente para una sola fila. Su layout
-            // nativo conserva un recorrido horizontal por cada elemento aunque
-            // se cambie la restricción visual a dos filas. Colocamos nosotros
-            // las dos filas para que N objetos ocupen ceil(N / 2) columnas.
-            _grid.enabled = false;
+            _grid.enabled = true;
             Resize();
         }
 
@@ -911,19 +906,13 @@ namespace UnderPressure.Editor
             var objects = ListObjectsField?.GetValue(_menu) as IList<GameObject>;
             if (objects == null) return;
             var visible = 0;
-            var signature = 17;
             for (var i = 0; i < objects.Count; ++i)
                 if (objects[i] != null && objects[i].activeInHierarchy)
-                {
                     ++visible;
-                    unchecked { signature = signature * 31 + objects[i].GetInstanceID(); }
-                }
             var viewportWidth = _viewport.rect.width;
-            if (visible == _lastVisible && signature == _lastSignature &&
-                Mathf.Approximately(viewportWidth, _lastViewportWidth))
+            if (visible == _lastVisible && Mathf.Approximately(viewportWidth, _lastViewportWidth))
                 return;
             _lastVisible = visible;
-            _lastSignature = signature;
             _lastViewportWidth = viewportWidth;
             var rows = Mathf.Max(1, _grid.constraintCount);
             var targetHeight = _grid.padding.top + _grid.padding.bottom +
@@ -931,27 +920,31 @@ namespace UnderPressure.Editor
             if (!Mathf.Approximately(_content.rect.height, targetHeight))
                 _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
 
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            var rightEdge = 0f;
             var rendered = 0;
+            var corners = new Vector3[4];
             for (var i = 0; i < objects.Count; ++i)
             {
                 var item = objects[i];
                 if (item == null || !item.activeInHierarchy) continue;
+                var listItem = item.GetComponent<LandscapeObjectListItem>();
+                if (listItem != null && PreviewItemField != null &&
+                    PreviewItemField.GetValue(listItem) as GameObject == null)
+                    continue;
                 var itemRect = item.transform as RectTransform;
                 if (itemRect == null) continue;
-                var column = rendered / rows;
-                var row = rendered % rows;
-                itemRect.anchorMin = itemRect.anchorMax = new Vector2(0f, 1f);
-                itemRect.pivot = new Vector2(0f, 1f);
-                itemRect.sizeDelta = _grid.cellSize;
-                itemRect.anchoredPosition = new Vector2(
-                    _grid.padding.left + column * (_grid.cellSize.x + _grid.spacing.x),
-                    -_grid.padding.top - row * (_grid.cellSize.y + _grid.spacing.y));
                 ++rendered;
+                itemRect.GetWorldCorners(corners);
+                for (var corner = 0; corner < corners.Length; ++corner)
+                    rightEdge = Mathf.Max(rightEdge,
+                        _content.InverseTransformPoint(corners[corner]).x);
             }
-            var columns = Mathf.CeilToInt(rendered / (float)rows);
-            var measuredWidth = _grid.padding.left + _grid.padding.right +
-                columns * _grid.cellSize.x + Mathf.Max(0, columns - 1) * _grid.spacing.x;
-            var targetWidth = Mathf.Max(viewportWidth, measuredWidth);
+            // El menú nativo mantiene el recorrido de una sola fila aunque el
+            // Grid muestre dos. El recorrido real de dos filas es exactamente
+            // la mitad del límite medido por esa disposición heredada.
+            var measuredWidth = rightEdge + _grid.padding.right;
+            var targetWidth = Mathf.Max(viewportWidth, measuredWidth * .5f);
             if (!Mathf.Approximately(_content.rect.width, targetWidth))
                 _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
 
@@ -960,7 +953,7 @@ namespace UnderPressure.Editor
             {
                 _loggedComplete = true;
                 UnderPressureEditorPlugin.Log?.LogInfo("Catalogo visual: " + visible +
-                    " entradas en " + rows + " filas y " + columns + " columnas; recorrido=" +
+                    " entradas en " + rows + " filas; recorrido reducido a la mitad=" +
                     targetWidth.ToString("F1") +
                     ", viewport=" + viewportWidth.ToString("F1") + ".");
             }

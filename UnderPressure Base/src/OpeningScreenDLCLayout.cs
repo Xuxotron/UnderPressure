@@ -200,6 +200,18 @@ namespace UnderPressure
             var logoRight = _mainBackdropParent.InverseTransformPoint(_logoCorners[2]).x;
             var width = Mathf.Max(1f, logoRight - left);
             _mainBackdrop.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            // El gráfico visible es un hijo de tamaño fijo, no una imagen
+            // estirada por el RectTransform padre. Hacerlo seguir al padre es
+            // imprescindible para que el recorte se vea realmente.
+            for (var i = 0; i < _mainBackdrop.childCount; ++i)
+            {
+                var child = _mainBackdrop.GetChild(i) as RectTransform;
+                if (child == null) continue;
+                child.anchorMin = Vector2.zero;
+                child.anchorMax = Vector2.one;
+                child.offsetMin = Vector2.zero;
+                child.offsetMax = Vector2.zero;
+            }
             _mainBackdrop.GetWorldCorners(_backdropCorners);
             var currentRight = _mainBackdropParent.InverseTransformPoint(_backdropCorners[2]).x;
             _mainBackdrop.anchoredPosition += new Vector2(logoRight - currentRight, 0f);

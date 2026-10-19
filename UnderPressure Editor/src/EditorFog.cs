@@ -164,9 +164,9 @@ namespace UnderPressure.Editor
                 backRect.pivot = new Vector2(0.5f, 1f);
                 backRect.anchoredPosition = new Vector2(0f, -74f);
                 backRect.sizeDelta = new Vector2(520f, 520f);
-                // El fondo negro permite representar el canal alfa como una
-                // máscara visible de negro a blanco puro.
-                previewBack.GetComponent<Image>().color = Color.black;
+                // El PNG es negro con información en alfa. Un fondo blanco
+                // permite ver su transparencia real sin convertir alfa a gris.
+                previewBack.GetComponent<Image>().color = Color.white;
 
                 CreateMapLayers(previewBack.transform);
 
