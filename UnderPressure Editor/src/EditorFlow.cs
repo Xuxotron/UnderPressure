@@ -890,47 +890,40 @@ namespace UnderPressure.Editor
         private static InputField CreateArchitectInput(
             Transform parent, Vector2 position, Vector2 size)
         {
-            var root = Ui("UP_ArchitectName", parent, typeof(Image), typeof(InputField));
+            var root = Ui("UP_ArchitectName", parent, typeof(Image));
             var rect = (RectTransform)root.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
             rect.anchoredPosition = position;
             rect.sizeDelta = size;
-            root.GetComponent<Image>().color = new Color(0.94f, 0.97f, 0.98f, 1f);
+            var background = root.GetComponent<Image>();
+            background.color = new Color(0.86f, 0.89f, 0.92f, 1f);
 
             var textObject = Ui("Text", root.transform, typeof(Text));
             var textRect = (RectTransform)textObject.transform;
             Stretch(textRect);
-            textRect.offsetMin = new Vector2(12f, 5f);
-            textRect.offsetMax = new Vector2(-12f, -5f);
+            textRect.offsetMin = new Vector2(10f, 1f);
+            textRect.offsetMax = new Vector2(-10f, -1f);
             var text = textObject.GetComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            text.fontSize = 22;
+            text.fontSize = 20;
             text.color = new Color(0.07f, 0.10f, 0.12f, 1f);
             text.alignment = TextAnchor.MiddleLeft;
             text.supportRichText = false;
             text.raycastTarget = false;
-            text.resizeTextForBestFit = true;
-            text.resizeTextMinSize = 13;
-            text.resizeTextMaxSize = 22;
+            text.resizeTextForBestFit = false;
 
-            var input = root.GetComponent<InputField>();
-            input.targetGraphic = root.GetComponent<Image>();
+            var input = root.AddComponent<InputField>();
+            input.targetGraphic = background;
             input.textComponent = text;
             input.lineType = InputField.LineType.SingleLine;
             input.characterLimit = 64;
-            input.customCaretColor = true;
-            input.caretColor = new Color(0.04f, 0.07f, 0.09f, 1f);
-            input.caretWidth = 2;
-            input.caretBlinkRate = 0.85f;
-            input.selectionColor = new Color(0.18f, 0.60f, 0.90f, 0.55f);
             input.text = UnderPressureEditorPlugin.ArchitectName;
-            input.onEndEdit.AddListener(value =>
+            input.onValueChanged.AddListener(value =>
             {
                 var name = (value ?? "").Trim();
-                if (name.Length == 0) name = UnderPressureEditorPlugin.ArchitectName;
-                UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
-                input.text = name;
+                if (name.Length > 0)
+                    UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
             });
             return input;
         }
