@@ -370,11 +370,15 @@ namespace UnderPressure.Editor
 
         internal static void ToggleBrush()
         {
+            var wasSelected = _brushEnabled && _sculptMode == SculptMode.Off;
             _sculptMode = SculptMode.Off;
-            _brushEnabled = !_brushEnabled;
+            _brushEnabled = !wasSelected;
             RefreshCursor();
             _behaviour?.RefreshTexts();
         }
+
+        internal static bool CloseDialogIfOpen() =>
+            _behaviour != null && _behaviour.CloseDialogIfOpen();
 
         private static void ReleaseCursor()
         {
@@ -1542,6 +1546,10 @@ namespace UnderPressure.Editor
     internal sealed class ScenarioEditorTerrainPainterBehaviour : MonoBehaviour
     {
         private Text _toggleText;
+        private Button _brushButton;
+        private Button _raiseButton;
+        private Button _lowerButton;
+        private Button _flattenButton;
         private Text _sizeText;
         private Text _opacityText;
         private Slider _sizeSlider;
@@ -1567,7 +1575,7 @@ namespace UnderPressure.Editor
             var root = (RectTransform)transform;
             CreateText(root, "Title", T("editor.terrain.title"),
                 new Vector2(9, -9), new Vector2(162, 24), 16, TextAnchor.MiddleCenter);
-            CreateButton(root, new Vector2(9, -39), new Vector2(162, 32),
+            _brushButton = CreateButton(root, new Vector2(9, -39), new Vector2(162, 32),
                 T("editor.terrain.brush"), () =>
                 ScenarioEditorTerrainPainter.ToggleBrush(), out _toggleText);
             CreateText(root, "Size", T("editor.terrain.size"),
@@ -1582,13 +1590,13 @@ namespace UnderPressure.Editor
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
             _opacitySlider = CreateSlider(root, new Vector2(12, -162), new Vector2(156, 17), 0, 100, 50,
                 value => ScenarioEditorTerrainPainter.SetBrushOpacity(value));
-            CreateButton(root, new Vector2(9, -191), new Vector2(51, 28),
+            _raiseButton = CreateButton(root, new Vector2(9, -191), new Vector2(51, 28),
                 T("editor.terrain.raise"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Raise), out _);
-            CreateButton(root, new Vector2(65, -191), new Vector2(51, 28),
+            _lowerButton = CreateButton(root, new Vector2(65, -191), new Vector2(51, 28),
                 T("editor.terrain.lower"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Lower), out _);
-            CreateButton(root, new Vector2(121, -191), new Vector2(51, 28),
+            _flattenButton = CreateButton(root, new Vector2(121, -191), new Vector2(51, 28),
                 T("editor.terrain.flatten"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
@@ -1822,6 +1830,13 @@ namespace UnderPressure.Editor
             _dialog=null;
         }
 
+        internal bool CloseDialogIfOpen()
+        {
+            if (_dialog == null) return false;
+            CloseDialog();
+            return true;
+        }
+
         private void CreateCursorOverlay(Canvas canvas)
         {
             if (canvas==null) return;
@@ -1905,26 +1920,26 @@ namespace UnderPressure.Editor
             if (_fogOfWarText != null)
                 _fogOfWarText.text = T(ScenarioEditorFogOfWar.Disabled
                     ? "editor.terrain.fog.off" : "editor.terrain.fog.on");
-            if (_toggleText != null)
-                _toggleText.text = ScenarioEditorTerrainPainter.SculptMeshUnavailable ?
-                    T("editor.terrain.mesh_uneditable") :
-                    ScenarioEditorTerrainPainter.CurrentSculptMode !=
-                    ScenarioEditorTerrainPainter.SculptMode.Off ?
-                    EditorLocalization.Format("editor.terrain.sculpting",
-                        T(ScenarioEditorTerrainPainter.CurrentSculptMode ==
-                        ScenarioEditorTerrainPainter.SculptMode.Raise ? "editor.terrain.raise" :
-                        ScenarioEditorTerrainPainter.CurrentSculptMode ==
-                        ScenarioEditorTerrainPainter.SculptMode.Lower ? "editor.terrain.lower" :
-                        "editor.terrain.flatten")) :
-                    ScenarioEditorTerrainPainter.BrushEnabled ?
-                    T("editor.terrain.brush.on") :
-                    T("editor.terrain.brush.off");
+            if (_toggleText != null) _toggleText.text = T("editor.terrain.brush");
+            var mode = ScenarioEditorTerrainPainter.CurrentSculptMode;
+            SetToolSelected(_brushButton, ScenarioEditorTerrainPainter.BrushEnabled &&
+                mode == ScenarioEditorTerrainPainter.SculptMode.Off);
+            SetToolSelected(_raiseButton, mode == ScenarioEditorTerrainPainter.SculptMode.Raise);
+            SetToolSelected(_lowerButton, mode == ScenarioEditorTerrainPainter.SculptMode.Lower);
+            SetToolSelected(_flattenButton, mode == ScenarioEditorTerrainPainter.SculptMode.Flatten);
             if (_sizeText!=null) _sizeText.text=ScenarioEditorTerrainPainter.BrushSize.ToString("0",CultureInfo.InvariantCulture);
             if (_opacityText!=null) _opacityText.text=Mathf.RoundToInt(ScenarioEditorTerrainPainter.BrushOpacity*100f)+"%";
             if (_sizeSlider!=null && Mathf.Abs(_sizeSlider.value-ScenarioEditorTerrainPainter.BrushSize)>.1f)
                 _sizeSlider.SetValueWithoutNotify(ScenarioEditorTerrainPainter.BrushSize);
             if (_opacitySlider!=null && Mathf.Abs(_opacitySlider.value-ScenarioEditorTerrainPainter.BrushOpacity*100f)>.1f)
                 _opacitySlider.SetValueWithoutNotify(ScenarioEditorTerrainPainter.BrushOpacity*100f);
+        }
+
+        private static void SetToolSelected(Button button, bool selected)
+        {
+            if (button != null && button.image != null)
+                button.image.color = selected ? new Color(.02f,.55f,.90f,1f) :
+                    new Color(.58f,.68f,.74f,1f);
         }
 
         internal void RefreshSelection()

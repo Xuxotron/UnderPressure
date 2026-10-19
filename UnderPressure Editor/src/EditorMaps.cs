@@ -1981,6 +1981,13 @@ namespace UnderPressure.Editor
 
         internal static bool IsDialogOpen => _active != null && _active._dialog != null;
 
+        internal static bool CloseOpenDialog()
+        {
+            if (!IsDialogOpen) return false;
+            _active.CloseDialog();
+            return true;
+        }
+
         internal static void ShowSaveFromPause() => _active?.ShowSave();
         internal static void ShowLoadFromPause() => _active?.ShowLoad();
         internal static void ShowEmptyMapFromPause() => _active?.ShowEmptyMapConfirmation();
@@ -3399,6 +3406,31 @@ PriorVisibility.Clear();
             }
             var ordinary = button.GetComponentInChildren<Text>(true);
             if (ordinary != null) ordinary.text = EditorLocalization.Get(key);
+        }
+    }
+
+    // El primer Escape cierra el cuadro propio del editor. El siguiente vuelve
+    // a pasar al juego y abre su menú de pausa normal.
+    [HarmonyPatch(typeof(Level), "HandlePauseLogic")]
+    internal static class ScenarioEditorModalEscapePatch
+    {
+        private static bool Prefix()
+        {
+            if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning ||
+                !Input.GetKeyDown(KeyCode.Escape)) return true;
+            if (ScenarioCharacterViewer.IsOpen)
+            {
+                ScenarioCharacterViewer.Close();
+                return false;
+            }
+            if (ScenarioFogViewer.IsOpen)
+            {
+                ScenarioFogViewer.Close();
+                return false;
+            }
+            if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
+            if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;
+            return true;
         }
     }
 }

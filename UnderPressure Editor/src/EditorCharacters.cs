@@ -55,6 +55,8 @@ namespace UnderPressure.Editor
         private static Text _toggleText;
         private static Font _font;
 
+        internal static bool IsOpen => _overlay != null;
+
         private static string T(string key) => EditorLocalization.Get(key);
         private static string F(string key, params object[] arguments) =>
             EditorLocalization.Format(key, arguments);

@@ -60,6 +60,8 @@ namespace UnderPressure.Editor
         private static bool _mapEnabled;
         private static bool _workingTextureInstalled;
 
+        internal static bool IsOpen => _overlay != null;
+
         private static string T(string key) => EditorLocalization.Get(key);
 
         internal static void Attach(EditHospitalMenu menu, Level level)
@@ -261,7 +263,6 @@ namespace UnderPressure.Editor
             var minY = Mathf.Max(0, Mathf.FloorToInt(centerY - radius));
             var maxY = Mathf.Min(height - 1, Mathf.CeilToInt(centerY + radius));
             var pixels = _workingTexture.GetPixels32();
-            var targetAlpha = _paintMode == PaintMode.Add ? 0f : 255f;
             var pressure = _brushPressure / 100f;
             if (pressure <= 0f) return;
             for (var y = minY; y <= maxY; ++y)
@@ -273,10 +274,11 @@ namespace UnderPressure.Editor
                     var normalizedDistance = Mathf.Sqrt(dx * dx + dy * dy) / radius;
                     if (normalizedDistance > 1f) continue;
                     var softness = Mathf.SmoothStep(0f, 1f, 1f - normalizedDistance);
-                    var blend = pressure * softness;
                     var index = y * width + x;
-                    var alpha = (byte)Mathf.RoundToInt(
-                        Mathf.Lerp(pixels[index].a, targetAlpha, blend));
+                    var delta = 255f * pressure * softness;
+                    var alpha = (byte)Mathf.RoundToInt(Mathf.Clamp(
+                        pixels[index].a + (_paintMode == PaintMode.Add ? -delta : delta),
+                        0f, 255f));
                     pixels[index] = new Color32(0, 0, 0, alpha);
                 }
             }
@@ -388,7 +390,7 @@ namespace UnderPressure.Editor
                 {
                     var distance = Mathf.Sqrt((x - center) * (x - center) +
                                               (y - center) * (y - center));
-                    var edge = Mathf.Abs(distance - (center - 2f));
+                    var edge = Mathf.Abs(distance - (center - 0.75f));
                     var alpha = (byte)Mathf.RoundToInt(
                         Mathf.Clamp01(1.5f - edge) * 255f);
                     pixels[y * size + x] = new Color32(40, 225, 255, alpha);
@@ -420,7 +422,11 @@ namespace UnderPressure.Editor
             if (_brushCursor == null) return;
             var parent = _brushCursor.parent as RectTransform;
             if (parent == null) return;
-            var diameter = Mathf.Min(parent.rect.width, parent.rect.height) * (_brushSize / 100f);
+            var sourceSize = _workingTexture == null ? 1f :
+                Mathf.Min(_workingTexture.width, _workingTexture.height);
+            var radius = Mathf.Max(0.5f, sourceSize * (_brushSize / 100f) * 0.5f);
+            var diameter = Mathf.Min(parent.rect.width, parent.rect.height) *
+                           (radius * 2f / sourceSize);
             _brushCursor.sizeDelta = new Vector2(diameter, diameter);
         }
 

@@ -541,6 +541,11 @@ namespace UnderPressure.Editor
                 var rect = content.transform as RectTransform;
                 if (rect == null) return;
 
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+                rect.pivot = new Vector2(0f, 1f);
+                rect.anchoredPosition = Vector2.zero;
+                rect.sizeDelta = Vector2.zero;
+
                 var horizontal = content.GetComponent<HorizontalLayoutGroup>();
                 if (horizontal != null) horizontal.enabled = false;
                 var vertical = content.GetComponent<VerticalLayoutGroup>();
@@ -562,7 +567,6 @@ namespace UnderPressure.Editor
                 var scroll = content.GetComponentInParent<ScrollRect>();
                 if (scroll != null)
                 {
-                    GrowBackdropOnly(__instance);
                     scroll.horizontal = true;
                     scroll.vertical = false;
                     scroll.scrollSensitivity = 34f;
@@ -586,6 +590,7 @@ namespace UnderPressure.Editor
                         var viewport = scroll.viewport ?? rect.parent as RectTransform;
                         if (viewport != null && viewport != scrollRect)
                             SetHeightPreservingTop(viewport, 190f);
+                        GrowBackdropOnly(__instance, viewport ?? scrollRect);
                     }
                     RestoreScrollbar(scroll, __instance);
                 }
@@ -604,7 +609,7 @@ namespace UnderPressure.Editor
         // No redimensionar el LandscapeObjectsMenu: altera tambien la
         // ubicacion nativa de los iconos. Se sube una fila completa y se
         // conserva un unico fondo extendido hasta el borde inferior.
-        private static void GrowBackdropOnly(LandscapeObjectsMenu menu)
+        private static void GrowBackdropOnly(LandscapeObjectsMenu menu, RectTransform viewport)
         {
             var root = menu.transform as RectTransform;
             if (root == null) return;
@@ -631,10 +636,10 @@ namespace UnderPressure.Editor
                 target.raycastTarget = false;
                 extra.SetAsFirstSibling();
             }
-            extra.anchorMin = Vector2.zero;
-            extra.anchorMax = Vector2.one;
-            extra.offsetMin = new Vector2(0f, -117f);
-            extra.offsetMax = Vector2.zero;
+            var follower = extra.GetComponent<ScenarioCatalogBackdropFollower>() ??
+                extra.gameObject.AddComponent<ScenarioCatalogBackdropFollower>();
+            follower.Initialize(viewport, root);
+            follower.Place();
         }
 
         private static void SetHeightPreservingTop(RectTransform rect, float height)
@@ -822,6 +827,53 @@ namespace UnderPressure.Editor
             // desactiva este hijo desde su propio LateUpdate.
         }
         private void LateUpdate() { Place(); }
+    }
+
+    // El fondo acompaña únicamente al catálogo, sin invadir el panel de terreno.
+    internal sealed class ScenarioCatalogBackdropFollower : MonoBehaviour
+    {
+        private RectTransform _viewport;
+        private RectTransform _host;
+        private RectTransform _rect;
+        private readonly Vector3[] _corners = new Vector3[4];
+
+        internal void Initialize(RectTransform viewport, RectTransform host)
+        {
+            _viewport = viewport;
+            _host = host;
+            _rect = transform as RectTransform;
+        }
+
+        internal void Place()
+        {
+            if (_viewport == null || _host == null || _rect == null) return;
+            _viewport.GetWorldCorners(_corners);
+            var bottomLeft = _host.InverseTransformPoint(_corners[0]);
+            var topLeft = _host.InverseTransformPoint(_corners[1]);
+            var topRight = _host.InverseTransformPoint(_corners[2]);
+            const float lowerExtension = 117f;
+            var bottom = bottomLeft.y - lowerExtension;
+            _rect.anchorMin = _rect.anchorMax = new Vector2(.5f, .5f);
+            _rect.pivot = new Vector2(.5f, .5f);
+            _rect.sizeDelta = new Vector2(topRight.x - topLeft.x, topLeft.y - bottom);
+            _rect.localPosition = new Vector3((topLeft.x + topRight.x) * .5f,
+                (topLeft.y + bottom) * .5f, 0f);
+        }
+
+        private void LateUpdate() { Place(); }
+    }
+
+    [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
+    internal static class ScenarioEditorObjectPreviewAnglePatch
+    {
+        private static readonly FieldInfo CameraPitchField =
+            AccessTools.Field(typeof(LandscapeObjectListItem), "_cameraPitch");
+
+        private static void Prefix(LandscapeObjectListItem __instance)
+        {
+            if (ScenarioEditorFlow.IsRunning && __instance != null)
+                CameraPitchField?.SetValue(__instance, -45f);
+        }
     }
 
     internal sealed class ScenarioEditorSearchBelowPlots : MonoBehaviour
