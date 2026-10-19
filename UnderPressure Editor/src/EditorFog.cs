@@ -39,11 +39,10 @@ namespace UnderPressure.Editor
         private static Text _toggleText;
         private static Font _font;
         private static Texture2D _workingTexture;
-        private static Texture2D _previewTexture;
+        private static Texture2D _resetTexture;
         private static RawImage _preview;
         private static Button _addButton;
         private static Button _removeButton;
-        private static Text _alphaText;
         private static Text _mapText;
         private static Text _opacityText;
         private static Text _sizeText;
@@ -56,7 +55,6 @@ namespace UnderPressure.Editor
         private static int _brushSize = 10;
         private static int _brushPressure = 100;
         private static float _previewOpacity = 1f;
-        private static bool _alphaEnabled = true;
         private static bool _mapEnabled;
         private static bool _workingTextureInstalled;
 
@@ -104,12 +102,15 @@ namespace UnderPressure.Editor
                 _brushSize = 10;
                 _brushPressure = 100;
                 _previewOpacity = 1f;
-                _alphaEnabled = true;
                 _mapEnabled = false;
                 _workingTextureInstalled = false;
                 if (definition?.FogOfWarTexture != null)
+                {
                     _workingTexture = ScenarioEditorFogOfWar.CloneForEditing(
                         definition.FogOfWarTexture, "UP_FogOfWarWorking");
+                    _resetTexture = ScenarioEditorFogOfWar.CloneForEditing(
+                        definition.FogOfWarTexture, "UP_FogOfWarReset");
+                }
 
                 _overlay = Ui("UP_FogViewerOverlay", canvas.transform, typeof(Image));
                 Stretch((RectTransform)_overlay.transform);
@@ -181,10 +182,9 @@ namespace UnderPressure.Editor
                     RebuildPreview();
                 }
 
-                var alpha = CreateButton(panel.transform, "Alpha", "",
-                    new Vector2(132f, 42f), HighlightColor, ToggleAlpha);
-                SetTop(alpha.transform, -220f, -626f);
-                _alphaText = alpha.GetComponentInChildren<Text>();
+                var reset = CreateButton(panel.transform, "Reset", T("editor.fog.reset"),
+                    new Vector2(132f, 42f), HighlightColor, ResetToLastSaved);
+                SetTop(reset.transform, -220f, -626f);
 
                 _opacityText = CreateText(panel.transform, "", 14,
                     new Vector2(0f, -602f), new Vector2(250f, 20f), TextAnchor.MiddleCenter);
@@ -225,10 +225,35 @@ namespace UnderPressure.Editor
                     ? HighlightColor : ButtonColor;
         }
 
-        private static void ToggleAlpha()
+        private static void ResetToLastSaved()
         {
-            _alphaEnabled = !_alphaEnabled;
-            RefreshControlTexts();
+            if (_level == null) return;
+            var previous = _workingTexture;
+            var previousInstalled = _workingTextureInstalled;
+            ScenarioMapFormat.Map header;
+            byte[] png;
+            if (ScenarioEditorStorage.TryReadCurrentFog(_level, out header, out png))
+            {
+                ScenarioEditorFogOfWar.ApplyLoaded(header, png);
+                if (_resetTexture != null) UnityEngine.Object.Destroy(_resetTexture);
+                _resetTexture = ScenarioEditorFogOfWar.CloneForEditing(
+                    ScenarioEditorFogOfWar.CurrentDefinition.FogOfWarTexture,
+                    "UP_FogOfWarReset");
+            }
+            else if (_resetTexture != null)
+            {
+                var restored = ScenarioEditorFogOfWar.CloneForEditing(
+                    _resetTexture, "UP_FogOfWarRestored");
+                ScenarioEditorFogOfWar.ApplyEditedTexture(restored);
+            }
+            else return;
+
+            if (previous != null && !previousInstalled)
+                UnityEngine.Object.Destroy(previous);
+            _workingTexture = ScenarioEditorFogOfWar.CloneForEditing(
+                ScenarioEditorFogOfWar.CurrentDefinition.FogOfWarTexture,
+                "UP_FogOfWarWorking");
+            _workingTextureInstalled = false;
             RebuildPreview();
         }
 
@@ -242,8 +267,6 @@ namespace UnderPressure.Editor
 
         private static void RefreshControlTexts()
         {
-            if (_alphaText != null)
-                _alphaText.text = T(_alphaEnabled ? "editor.fog.alpha.on" : "editor.fog.alpha.off");
             if (_mapText != null)
                 _mapText.text = T(_mapEnabled ? "editor.fog.map.on" : "editor.fog.map.off");
             if (_opacityText != null)
@@ -304,45 +327,10 @@ namespace UnderPressure.Editor
         private static void RebuildPreview()
         {
             if (_workingTexture == null || _preview == null) return;
-            if (_previewTexture == null || _previewTexture.width != _workingTexture.width ||
-                _previewTexture.height != _workingTexture.height)
-            {
-                if (_previewTexture != null) UnityEngine.Object.Destroy(_previewTexture);
-                _previewTexture = new Texture2D(_workingTexture.width, _workingTexture.height,
-                    TextureFormat.RGBA32, false, true)
-                {
-                    name = "UP_FogOfWarPreview",
-                    hideFlags = HideFlags.DontSave,
-                    filterMode = FilterMode.Bilinear,
-                    wrapMode = TextureWrapMode.Clamp
-                };
-                _preview.texture = _previewTexture;
-                _preview.color = Color.white;
-            }
-
-            var source = _workingTexture.GetPixels32();
-            var preview = new Color32[source.Length];
-            var globalAlpha = (byte)Mathf.RoundToInt(_previewOpacity * 255f);
-            for (var i = 0; i < source.Length; ++i)
-            {
-                // El PNG real usa RGB negro y guarda la máscara en alfa. Para
-                // editarlo se representa alfa 0 como blanco puro y alfa 255
-                // como negro, independientemente del botón Alpha.
-                var grey = (byte)(255 - source[i].a);
-                if (_mapEnabled && _alphaEnabled)
-                {
-                    // Sobre el mapa, Alpha hace transparentes las zonas blancas
-                    // y conserva las zonas negras según la opacidad general.
-                    var alpha = (byte)Mathf.RoundToInt(source[i].a * _previewOpacity);
-                    preview[i] = new Color32(0, 0, 0, alpha);
-                }
-                else
-                {
-                    preview[i] = new Color32(grey, grey, grey, globalAlpha);
-                }
-            }
-            _previewTexture.SetPixels32(preview);
-            _previewTexture.Apply(false, false);
+            // Mostrar el recurso real, sin reconstruir su alfa como luminancia.
+            // A 100 % el RawImage presenta exactamente el RGBA del PNG cargado.
+            _preview.texture = _workingTexture;
+            _preview.color = new Color(1f, 1f, 1f, _previewOpacity);
         }
 
         private static void CreateMapLayers(Transform parent)
@@ -451,8 +439,8 @@ namespace UnderPressure.Editor
         {
             if (_overlay != null) UnityEngine.Object.Destroy(_overlay);
             _overlay = null;
-            if (_previewTexture != null) UnityEngine.Object.Destroy(_previewTexture);
-            _previewTexture = null;
+            if (_resetTexture != null) UnityEngine.Object.Destroy(_resetTexture);
+            _resetTexture = null;
             if (_brushCursorTexture != null) UnityEngine.Object.Destroy(_brushCursorTexture);
             _brushCursorTexture = null;
             _brushCursor = null;
@@ -464,7 +452,6 @@ namespace UnderPressure.Editor
             _workingTextureInstalled = false;
             _addButton = null;
             _removeButton = null;
-            _alphaText = null;
             _mapText = null;
             _opacityText = null;
             _sizeText = null;

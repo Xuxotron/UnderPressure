@@ -42,12 +42,19 @@ namespace UnderPressure
         private RectTransform _backdrop;
         private RectTransform _bottomRow;
         private RectTransform _buttonLayout;
+        private OpeningScreen _screen;
+        private RectTransform _mainBackdrop;
+        private RectTransform _mainLogo;
+        private RectTransform _mainBackdropParent;
+        private readonly Vector3[] _backdropCorners = new Vector3[4];
+        private readonly Vector3[] _logoCorners = new Vector3[4];
         private Vector2 _buttonLayoutOriginalPosition;
         private bool _buttonLayoutCaptured;
         private Coroutine _pending;
 
         internal void ApplyWhenReady(OpeningScreen screen)
         {
+            _screen = screen;
             if (_pending != null) StopCoroutine(_pending);
             _pending = StartCoroutine(ApplyAfterLayout(screen));
         }
@@ -96,7 +103,8 @@ namespace UnderPressure
 
             ArrangeBottomRow(rects, screen);
             MoveButtonLayoutDown(screen);
-            FitMainBackdropToLogo(screen);
+            FindMainBackdrop(screen);
+            FitMainBackdropToLogo();
         }
 
         private void ArrangeBottomRow(List<RectTransform> rects, OpeningScreen screen)
@@ -174,29 +182,36 @@ namespace UnderPressure
             return index >= 0 ? index : int.MaxValue;
         }
 
-        private static void FitMainBackdropToLogo(OpeningScreen screen)
+        private void FindMainBackdrop(OpeningScreen screen)
         {
             var menu = screen.GetComponentInChildren<OpeningScreenMenu>(true);
             var root = menu == null ? null : menu.transform;
-            var backdrop = root?.Find("BackPanel_FrostedGlass") as RectTransform;
-            var logo = root?.Find("GameLogo") as RectTransform;
-            var parent = backdrop == null ? null : backdrop.parent as RectTransform;
-            if (backdrop == null || logo == null || parent == null) return;
+            _mainBackdrop = root?.Find("BackPanel_FrostedGlass") as RectTransform;
+            _mainLogo = root?.Find("GameLogo") as RectTransform;
+            _mainBackdropParent = _mainBackdrop == null ? null : _mainBackdrop.parent as RectTransform;
+        }
 
-            Canvas.ForceUpdateCanvases();
-            var backdropCorners = new Vector3[4];
-            var logoCorners = new Vector3[4];
-            backdrop.GetWorldCorners(backdropCorners);
-            logo.GetWorldCorners(logoCorners);
-            var left = parent.InverseTransformPoint(backdropCorners[0]).x;
-            var logoRight = parent.InverseTransformPoint(logoCorners[2]).x;
+        private void FitMainBackdropToLogo()
+        {
+            if (_mainBackdrop == null || _mainLogo == null || _mainBackdropParent == null) return;
+            _mainBackdrop.GetWorldCorners(_backdropCorners);
+            _mainLogo.GetWorldCorners(_logoCorners);
+            var left = _mainBackdropParent.InverseTransformPoint(_backdropCorners[0]).x;
+            var logoRight = _mainBackdropParent.InverseTransformPoint(_logoCorners[2]).x;
             var width = Mathf.Max(1f, logoRight - left);
-            backdrop.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            _mainBackdrop.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            _mainBackdrop.GetWorldCorners(_backdropCorners);
+            var currentRight = _mainBackdropParent.InverseTransformPoint(_backdropCorners[2]).x;
+            _mainBackdrop.anchoredPosition += new Vector2(logoRight - currentRight, 0f);
+        }
 
-            Canvas.ForceUpdateCanvases();
-            backdrop.GetWorldCorners(backdropCorners);
-            var currentRight = parent.InverseTransformPoint(backdropCorners[2]).x;
-            backdrop.anchoredPosition += new Vector2(logoRight - currentRight, 0f);
+        private void LateUpdate()
+        {
+            if (_screen == null || !_screen.IsVisible) return;
+            if (_mainBackdrop == null) FindMainBackdrop(_screen);
+            // El Animator del menú restaura el RectTransform durante el frame.
+            // Aplicar el límite después deja el borde derecho bajo el logo.
+            FitMainBackdropToLogo();
         }
 
         private sealed class IconInfo

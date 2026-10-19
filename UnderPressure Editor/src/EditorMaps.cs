@@ -52,6 +52,34 @@ namespace UnderPressure.Editor
             return ReferenceEquals(_namedMapLevel, level) ? _namedMap ?? "" : "";
         }
 
+        internal static bool TryReadCurrentFog(Level level,
+            out ScenarioMapFormat.Map header, out byte[] png)
+        {
+            header = null;
+            png = null;
+            var name = NameForSave(level);
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            var folder = Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
+            var main = Path.Combine(folder, SafeName(name) + ".upmap");
+            if (!File.Exists(main)) return false;
+            try
+            {
+                var loaded = ScenarioMapFormat.Read(main);
+                header = loaded.Header;
+                png = loaded.FogOfWarPng;
+                return header != null && !string.IsNullOrEmpty(header.fogOfWarFile) &&
+                       png != null && png.Length >= 24;
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Fog of War: no se pudo releer el último guardado: " + exception.Message);
+                header = null;
+                png = null;
+                return false;
+            }
+        }
+
         private static void MarkCurrentMap(Level level, string name)
         {
             _namedMapLevel = level;
