@@ -163,10 +163,9 @@ namespace UnderPressure.Editor
                 backRect.pivot = new Vector2(0.5f, 1f);
                 backRect.anchoredPosition = new Vector2(0f, -74f);
                 backRect.sizeDelta = new Vector2(520f, 520f);
-                // La mascara real permanece negra y solo contiene informacion
-                // en alfa. Un fondo claro permite ver esa transparencia sin
-                // convertir el PNG a blanco/gris ni alterar sus canales RGB.
-                previewBack.GetComponent<Image>().color = new Color(.72f, .72f, .72f, 1f);
+                // El fondo negro permite representar el canal alfa como una
+                // máscara visible de negro a blanco puro.
+                previewBack.GetComponent<Image>().color = Color.black;
 
                 CreateMapLayers(previewBack.transform);
 
@@ -238,6 +237,7 @@ namespace UnderPressure.Editor
             _mapEnabled = !_mapEnabled;
             if (_mapLayerRoot != null) _mapLayerRoot.SetActive(_mapEnabled);
             RefreshControlTexts();
+            RebuildPreview();
         }
 
         private static void RefreshControlTexts()
@@ -278,9 +278,11 @@ namespace UnderPressure.Editor
                     var dy = y - centerY;
                     var normalizedDistance = Mathf.Sqrt(dx * dx + dy * dy) / radius;
                     if (normalizedDistance > 1f) continue;
-                    // Caida cuadratica: conserva el centro del pincel y difumina
-                    // mucho mas gradualmente el borde, como la mascara nativa.
-                    var softness = Mathf.Pow(Mathf.Clamp01(1f - normalizedDistance), 2f);
+                    // Aerógrafo gaussiano con salida gradual a cero. El borde
+                    // ocupa una parte amplia del radio y no forma un aro duro.
+                    var gaussian = Mathf.Exp(-3f * normalizedDistance * normalizedDistance);
+                    var taper = 1f - Mathf.SmoothStep(0.82f, 1f, normalizedDistance);
+                    var softness = gaussian * taper;
                     var index = y * width + x;
                     var delta = 255f * pressure * softness;
                     var alpha = (byte)Mathf.RoundToInt(Mathf.Clamp(
@@ -323,12 +325,21 @@ namespace UnderPressure.Editor
             var globalAlpha = (byte)Mathf.RoundToInt(_previewOpacity * 255f);
             for (var i = 0; i < source.Length; ++i)
             {
-                var alpha = _alphaEnabled
-                    ? (byte)Mathf.RoundToInt(source[i].a * _previewOpacity)
-                    : globalAlpha;
-                // La mascara es exclusivamente alfa sobre RGB negro. Mostrar
-                // blanco/gris en la previsualizacion creaba falsos contornos.
-                preview[i] = new Color32(0, 0, 0, alpha);
+                // El PNG real usa RGB negro y guarda la máscara en alfa. Para
+                // editarlo se representa alfa 0 como blanco puro y alfa 255
+                // como negro, independientemente del botón Alpha.
+                var grey = (byte)(255 - source[i].a);
+                if (_mapEnabled && _alphaEnabled)
+                {
+                    // Sobre el mapa, Alpha hace transparentes las zonas blancas
+                    // y conserva las zonas negras según la opacidad general.
+                    var alpha = (byte)Mathf.RoundToInt(source[i].a * _previewOpacity);
+                    preview[i] = new Color32(0, 0, 0, alpha);
+                }
+                else
+                {
+                    preview[i] = new Color32(grey, grey, grey, globalAlpha);
+                }
             }
             _previewTexture.SetPixels32(preview);
             _previewTexture.Apply(false, false);
@@ -638,7 +649,7 @@ namespace UnderPressure.Editor
                 // cualquier presion durante un unico arrastre.
                 var diameterPixels = Mathf.Max(1f,
                     256f * ScenarioFogViewer.BrushSizeForStroke / 100f);
-                var spacingPixels = Mathf.Max(1f, diameterPixels * 0.18f);
+                var spacingPixels = Mathf.Max(1f, diameterPixels * 0.5f);
                 var steps = Mathf.Max(1, Mathf.CeilToInt(distance * 256f / spacingPixels));
                 for (var i = 1; i <= steps; ++i)
                     _paint?.Invoke(Vector2.Lerp(_lastPoint, point, i / (float)steps));

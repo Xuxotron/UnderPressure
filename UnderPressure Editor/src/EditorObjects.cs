@@ -877,6 +877,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listObjects");
         private static readonly FieldInfo PendingItemsField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
+        private static readonly FieldInfo PreviewItemField =
+            AccessTools.Field(typeof(LandscapeObjectListItem), "_item");
         private LandscapeObjectsMenu _menu;
         private RectTransform _content;
         private RectTransform _viewport;
@@ -913,28 +915,48 @@ namespace UnderPressure.Editor
             _lastVisible = visible;
             _lastViewportWidth = viewportWidth;
             var rows = Mathf.Max(1, _grid.constraintCount);
-            var columns = Mathf.CeilToInt(visible / (float)rows);
-            var preferred = (float)(_grid.padding.left + _grid.padding.right);
-            if (columns > 0)
-                preferred += columns * _grid.cellSize.x + (columns - 1) * _grid.spacing.x;
-            // El catalogo nativo informa el doble del recorrido util observado:
-            // aplicamos literalmente la mitad solicitada, sin intentar inferirlo.
-            var targetWidth = Mathf.Max(viewportWidth, preferred * 0.5f);
             var targetHeight = _grid.padding.top + _grid.padding.bottom +
                 rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
-            if (!Mathf.Approximately(_content.rect.width, targetWidth))
-                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
             if (!Mathf.Approximately(_content.rect.height, targetHeight))
                 _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
-            LayoutRebuilder.MarkLayoutForRebuild(_content);
+
+            // El GridLayoutGroup decide la posición real de cada icono. Medir
+            // sus límites evita confundir número de objetos, filas y columnas.
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            var rightEdge = 0f;
+            var rendered = 0;
+            var corners = new Vector3[4];
+            for (var i = 0; i < objects.Count; ++i)
+            {
+                var item = objects[i];
+                if (item == null || !item.activeInHierarchy) continue;
+                var listItem = item.GetComponent<LandscapeObjectListItem>();
+                if (listItem != null && PreviewItemField != null &&
+                    PreviewItemField.GetValue(listItem) as GameObject == null)
+                    continue;
+                var itemRect = item.transform as RectTransform;
+                if (itemRect == null) continue;
+                ++rendered;
+                itemRect.GetWorldCorners(corners);
+                for (var corner = 0; corner < corners.Length; ++corner)
+                    rightEdge = Mathf.Max(rightEdge,
+                        _content.InverseTransformPoint(corners[corner]).x);
+            }
+            var measuredWidth = rightEdge + _grid.padding.right;
+            var targetWidth = Mathf.Max(viewportWidth, measuredWidth);
+            if (!Mathf.Approximately(_content.rect.width, targetWidth))
+            {
+                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
+                LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            }
 
             var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
             if (!_loggedComplete && visible > 0 && pending != null && pending.Count == 0)
             {
                 _loggedComplete = true;
                 UnderPressureEditorPlugin.Log?.LogInfo("Catalogo visual: " + visible +
-                    " objetos en " + columns + " columnas; ancho medido=" +
-                    preferred.ToString("F1") + ", recorrido=" + targetWidth.ToString("F1") +
+                    " entradas, " + rendered + " modelos; limite ultimo modelo=" +
+                    rightEdge.ToString("F1") + ", recorrido=" + targetWidth.ToString("F1") +
                     ", viewport=" + viewportWidth.ToString("F1") + ".");
             }
         }
