@@ -61,6 +61,7 @@ namespace UnderPressure.Editor
         private static bool _workingTextureInstalled;
 
         internal static bool IsOpen => _overlay != null;
+        internal static int BrushSizeForStroke => _brushSize;
 
         private static string T(string key) => EditorLocalization.Get(key);
 
@@ -277,7 +278,9 @@ namespace UnderPressure.Editor
                     var dy = y - centerY;
                     var normalizedDistance = Mathf.Sqrt(dx * dx + dy * dy) / radius;
                     if (normalizedDistance > 1f) continue;
-                    var softness = Mathf.SmoothStep(0f, 1f, 1f - normalizedDistance);
+                    // Caida cuadratica: conserva el centro del pincel y difumina
+                    // mucho mas gradualmente el borde, como la mascara nativa.
+                    var softness = Mathf.Pow(Mathf.Clamp01(1f - normalizedDistance), 2f);
                     var index = y * width + x;
                     var delta = 255f * pressure * softness;
                     var alpha = (byte)Mathf.RoundToInt(Mathf.Clamp(
@@ -625,7 +628,18 @@ namespace UnderPressure.Editor
             if (_hasLastPoint)
             {
                 var distance = Vector2.Distance(_lastPoint, point);
-                var steps = Mathf.Max(1, Mathf.CeilToInt(distance * 256f));
+                if (distance <= 0.0001f)
+                {
+                    _hover?.Invoke(point);
+                    return;
+                }
+                // Separa las muestras segun el diametro real del pincel. El
+                // muestreo anterior repetia demasiadas capas y saturaba a 100%
+                // cualquier presion durante un unico arrastre.
+                var diameterPixels = Mathf.Max(1f,
+                    256f * ScenarioFogViewer.BrushSizeForStroke / 100f);
+                var spacingPixels = Mathf.Max(1f, diameterPixels * 0.18f);
+                var steps = Mathf.Max(1, Mathf.CeilToInt(distance * 256f / spacingPixels));
                 for (var i = 1; i <= steps; ++i)
                     _paint?.Invoke(Vector2.Lerp(_lastPoint, point, i / (float)steps));
             }

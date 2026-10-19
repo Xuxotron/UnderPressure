@@ -1,11 +1,11 @@
 // Updated: 2026-10-13
-// UnderPressure Base: compacta exclusivamente los iconos DLC del menu principal.
-// No cambia los botones, sus tamanos, sus padres ni su funcionamiento nativo.
+// UnderPressure Base: ordena los iconos DLC y compacta el menu principal.
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using FullInspector;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -34,6 +34,8 @@ namespace UnderPressure
 
         private static readonly FieldInfo DlcButtonsField =
             AccessTools.Field(typeof(OpeningScreen), "_dlcButtons");
+        private static readonly FieldInfo DlcDefinitionField =
+            AccessTools.Field(typeof(DLCBuyButton), "_dlcDefinition");
         private static readonly FieldInfo SettingsButtonField =
             AccessTools.Field(typeof(OpeningScreenMenu), "_settingsButton");
 
@@ -58,12 +60,17 @@ namespace UnderPressure
             _pending = null;
             if (screen == null || !screen.IsVisible) yield break;
 
-            var buttons = DlcButtonsField == null
+            var nativeButtons = DlcButtonsField == null
                 ? null
                 : DlcButtonsField.GetValue(screen) as DLCBuyButton[];
-            if (buttons == null || buttons.Length < 3) yield break;
+            if (nativeButtons == null || nativeButtons.Length < 3) yield break;
 
-            var rects = buttons.Where(b => b != null)
+            // Hospital Pass no forma parte de OpeningScreen._dlcButtons aunque
+            // si es un DLCBuyButton de la escena. Recogemos los once botones.
+            var rects = screen.GetComponentsInChildren<DLCBuyButton>(true)
+                .Where(b => b != null && b.gameObject.activeInHierarchy)
+                .OrderBy(DlcGroup)
+                .ThenBy(b => NativeIndex(nativeButtons, b))
                 .Select(b => b.GetComponent<RectTransform>())
                 .Where(r => r != null && r.gameObject.activeInHierarchy)
                 .Distinct().ToList();
@@ -77,28 +84,19 @@ namespace UnderPressure
                 var canvas = AccessTools.Field(typeof(OpeningScreen), "_rootCanvas")
                     ?.GetValue(screen) as Canvas;
                 if (canvas == null) yield break;
-                var row = new GameObject("UP DLC Bottom Row", typeof(RectTransform),
-                    typeof(CanvasRenderer), typeof(Image));
+                var row = new GameObject("UP DLC Bottom Row", typeof(RectTransform));
                 row.transform.SetParent(canvas.transform, false);
                 _bottomRow = (RectTransform)row.transform;
                 _bottomRow.anchorMin = _bottomRow.anchorMax = new Vector2(0f, 0f);
                 _bottomRow.pivot = new Vector2(0f, 0f);
                 _bottomRow.anchoredPosition = Vector2.zero;
-                var background = row.GetComponent<Image>();
-                background.raycastTarget = false;
                 var originalImage = _backdrop == null ? null : _backdrop.GetComponent<Image>();
-                if (originalImage != null)
-                {
-                    background.sprite = originalImage.sprite;
-                    background.type = originalImage.type;
-                    background.color = originalImage.color;
-                    originalImage.enabled = false;
-                }
-                else background.color = new Color(.08f, .14f, .11f, .82f);
+                if (originalImage != null) originalImage.enabled = false;
             }
 
             ArrangeBottomRow(rects, screen);
             MoveButtonLayoutDown(screen);
+            FitMainBackdropToLogo(screen);
         }
 
         private void ArrangeBottomRow(List<RectTransform> rects, OpeningScreen screen)
@@ -118,11 +116,11 @@ namespace UnderPressure
             }
             var iconsWidth = widths.Sum();
             var minimumWidth = iconsWidth + IconGap * (rects.Count - 1) + RowPadding * 2f;
-            var rowWidth = Mathf.Max(canvasRect.rect.width * .5f, minimumWidth);
+            var rowWidth = minimumWidth;
             var rowHeight = heights.Max() + RowPadding * 2f;
             _bottomRow.sizeDelta = new Vector2(rowWidth, rowHeight);
 
-            var x = Mathf.Max(RowPadding, (rowWidth - minimumWidth) * .5f + RowPadding);
+            var x = RowPadding;
             for (var i = 0; i < rects.Count; ++i)
             {
                 var rect = rects[i];
@@ -151,6 +149,54 @@ namespace UnderPressure
             }
             _buttonLayout.anchoredPosition = _buttonLayoutOriginalPosition +
                 new Vector2(0f, -MenuButtonsDown);
+        }
+
+        private static DLCItemDefinition Definition(DLCBuyButton button)
+        {
+            if (button == null || DlcDefinitionField == null) return null;
+            var wrapper = DlcDefinitionField.GetValue(button) as SharedInstance<DLCItemDefinition>;
+            return wrapper == null ? null : wrapper.Instance;
+        }
+
+        private static int DlcGroup(DLCBuyButton button)
+        {
+            var definition = Definition(button);
+            if (definition == null) return 1;
+            if (definition.IsHospitalPassSignup) return 2;
+            return definition.Name.Term != null &&
+                   definition.Name.Term.StartsWith("Levels/DLC_", StringComparison.Ordinal)
+                ? 0 : 1;
+        }
+
+        private static int NativeIndex(DLCBuyButton[] nativeButtons, DLCBuyButton button)
+        {
+            var index = Array.IndexOf(nativeButtons, button);
+            return index >= 0 ? index : int.MaxValue;
+        }
+
+        private static void FitMainBackdropToLogo(OpeningScreen screen)
+        {
+            var menu = screen.GetComponentInChildren<OpeningScreenMenu>(true);
+            var root = menu == null ? null : menu.transform;
+            var backdrop = root?.Find("BackPanel_FrostedGlass") as RectTransform;
+            var logo = root?.Find("GameLogo") as RectTransform;
+            var parent = backdrop == null ? null : backdrop.parent as RectTransform;
+            if (backdrop == null || logo == null || parent == null) return;
+
+            Canvas.ForceUpdateCanvases();
+            var backdropCorners = new Vector3[4];
+            var logoCorners = new Vector3[4];
+            backdrop.GetWorldCorners(backdropCorners);
+            logo.GetWorldCorners(logoCorners);
+            var left = parent.InverseTransformPoint(backdropCorners[0]).x;
+            var logoRight = parent.InverseTransformPoint(logoCorners[2]).x;
+            var width = Mathf.Max(1f, logoRight - left);
+            backdrop.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+
+            Canvas.ForceUpdateCanvases();
+            backdrop.GetWorldCorners(backdropCorners);
+            var currentRight = parent.InverseTransformPoint(backdropCorners[2]).x;
+            backdrop.anchoredPosition += new Vector2(logoRight - currentRight, 0f);
         }
 
         private sealed class IconInfo

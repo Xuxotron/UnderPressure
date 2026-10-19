@@ -908,6 +908,8 @@ namespace UnderPressure.Editor
                 if (objects[i] != null && objects[i].activeInHierarchy)
                     ++visible;
             var viewportWidth = _viewport.rect.width;
+            if (visible == _lastVisible && Mathf.Approximately(viewportWidth, _lastViewportWidth))
+                return;
             _lastVisible = visible;
             _lastViewportWidth = viewportWidth;
             var rows = Mathf.Max(1, _grid.constraintCount);
@@ -915,7 +917,9 @@ namespace UnderPressure.Editor
             var preferred = (float)(_grid.padding.left + _grid.padding.right);
             if (columns > 0)
                 preferred += columns * _grid.cellSize.x + (columns - 1) * _grid.spacing.x;
-            var targetWidth = Mathf.Max(viewportWidth, preferred);
+            // El catalogo nativo informa el doble del recorrido util observado:
+            // aplicamos literalmente la mitad solicitada, sin intentar inferirlo.
+            var targetWidth = Mathf.Max(viewportWidth, preferred * 0.5f);
             var targetHeight = _grid.padding.top + _grid.padding.bottom +
                 rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
             if (!Mathf.Approximately(_content.rect.width, targetWidth))
@@ -929,7 +933,8 @@ namespace UnderPressure.Editor
             {
                 _loggedComplete = true;
                 UnderPressureEditorPlugin.Log?.LogInfo("Catalogo visual: " + visible +
-                    " objetos en " + columns + " columnas; ancho=" + targetWidth.ToString("F1") +
+                    " objetos en " + columns + " columnas; ancho medido=" +
+                    preferred.ToString("F1") + ", recorrido=" + targetWidth.ToString("F1") +
                     ", viewport=" + viewportWidth.ToString("F1") + ".");
             }
         }
