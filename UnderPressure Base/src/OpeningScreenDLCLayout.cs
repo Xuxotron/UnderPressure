@@ -28,22 +28,20 @@ namespace UnderPressure
 
     internal sealed class OpeningScreenDLCLayoutController : MonoBehaviour
     {
-        // Distancias pequenas: compactan las dos filas sin cambiar el tamano de ningun icono.
-        private const float FirstRowDown = 7f;
-        private const float HospitalPassUp = 7f;
-        private const float BackdropHeightReduction = 11f;
-        private const float BackdropWidthReductionPerSide = 5f;
+        private const float MenuButtonsDown = 27f;
+        private const float RowPadding = 7f;
+        private const float IconGap = 5f;
 
         private static readonly FieldInfo DlcButtonsField =
             AccessTools.Field(typeof(OpeningScreen), "_dlcButtons");
-
-        private readonly Dictionary<RectTransform, Vector2> _originalPositions =
-            new Dictionary<RectTransform, Vector2>();
+        private static readonly FieldInfo SettingsButtonField =
+            AccessTools.Field(typeof(OpeningScreenMenu), "_settingsButton");
 
         private RectTransform _backdrop;
-        private Vector2 _originalBackdropOffsetMax;
-        private Vector2 _originalBackdropOffsetMin;
-        private bool _captured;
+        private RectTransform _bottomRow;
+        private RectTransform _buttonLayout;
+        private Vector2 _buttonLayoutOriginalPosition;
+        private bool _buttonLayoutCaptured;
         private Coroutine _pending;
 
         internal void ApplyWhenReady(OpeningScreen screen)
@@ -72,53 +70,87 @@ namespace UnderPressure
             if (rects.Count < 3) yield break;
 
             Canvas.ForceUpdateCanvases();
-            // Solo clasificar las filas la primera vez. En aperturas sucesivas se
-            // restauran las coordenadas capturadas, sin acumular desplazamientos.
-            if (!_captured)
+            if (_bottomRow == null)
             {
                 var centers = rects.Select(r => new IconInfo(r, Center(r))).ToList();
-                float highest = centers.Max(c => c.Position.y);
-                float lowest = centers.Min(c => c.Position.y);
-                float typicalHeight = centers.Average(c => WorldHeight(c.Rect));
-                if (highest - lowest < typicalHeight * 0.40f) yield break;
-
-                float split = (highest + lowest) * 0.5f;
-                var firstRow = centers.Where(c => c.Position.y > split).ToList();
-                var lowerRow = centers.Where(c => c.Position.y <= split).ToList();
-                if (firstRow.Count < 2 || lowerRow.Count == 0) yield break;
-
-                // El emblema HP del extremo derecho ocupa la segunda fila.
-                var hospitalPass = lowerRow.OrderByDescending(c => c.Position.x).First();
-                var affected = new HashSet<RectTransform>(firstRow.Select(c => c.Rect));
-                affected.Add(hospitalPass.Rect);
-                foreach (var rect in affected)
-                    _originalPositions[rect] = rect.anchoredPosition;
-
                 _backdrop = FindBackdrop(screen, centers);
-                if (_backdrop != null)
+                var canvas = AccessTools.Field(typeof(OpeningScreen), "_rootCanvas")
+                    ?.GetValue(screen) as Canvas;
+                if (canvas == null) yield break;
+                var row = new GameObject("UP DLC Bottom Row", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                row.transform.SetParent(canvas.transform, false);
+                _bottomRow = (RectTransform)row.transform;
+                _bottomRow.anchorMin = _bottomRow.anchorMax = new Vector2(0f, 0f);
+                _bottomRow.pivot = new Vector2(0f, 0f);
+                _bottomRow.anchoredPosition = Vector2.zero;
+                var background = row.GetComponent<Image>();
+                background.raycastTarget = false;
+                var originalImage = _backdrop == null ? null : _backdrop.GetComponent<Image>();
+                if (originalImage != null)
                 {
-                    _originalBackdropOffsetMax = _backdrop.offsetMax;
-                    _originalBackdropOffsetMin = _backdrop.offsetMin;
+                    background.sprite = originalImage.sprite;
+                    background.type = originalImage.type;
+                    background.color = originalImage.color;
+                    originalImage.enabled = false;
                 }
-
-                foreach (var c in firstRow)
-                    _originalPositions[c.Rect] += new Vector2(0f, -FirstRowDown);
-                _originalPositions[hospitalPass.Rect] += new Vector2(0f, HospitalPassUp);
-                _captured = true;
+                else background.color = new Color(.08f, .14f, .11f, .82f);
             }
 
-            foreach (var pair in _originalPositions)
-                if (pair.Key != null) pair.Key.anchoredPosition = pair.Value;
+            ArrangeBottomRow(rects, screen);
+            MoveButtonLayoutDown(screen);
+        }
 
-            // Reduce el borde superior (NO mueve el borde inferior del fondo).
-            // Si no se reconoce el fondo original, lo deja intacto.
-            if (_backdrop != null)
+        private void ArrangeBottomRow(List<RectTransform> rects, OpeningScreen screen)
+        {
+            if (_bottomRow == null || rects == null || rects.Count == 0) return;
+            var canvas = AccessTools.Field(typeof(OpeningScreen), "_rootCanvas")
+                ?.GetValue(screen) as Canvas;
+            var canvasRect = canvas == null ? null : canvas.transform as RectTransform;
+            if (canvasRect == null) return;
+
+            var widths = new List<float>(rects.Count);
+            var heights = new List<float>(rects.Count);
+            foreach (var rect in rects)
             {
-                _backdrop.offsetMin = _originalBackdropOffsetMin +
-                    new Vector2(BackdropWidthReductionPerSide, 0f);
-                _backdrop.offsetMax = _originalBackdropOffsetMax +
-                    new Vector2(-BackdropWidthReductionPerSide, -BackdropHeightReduction);
+                widths.Add(Mathf.Max(1f, rect.rect.width));
+                heights.Add(Mathf.Max(1f, rect.rect.height));
             }
+            var iconsWidth = widths.Sum();
+            var minimumWidth = iconsWidth + IconGap * (rects.Count - 1) + RowPadding * 2f;
+            var rowWidth = Mathf.Max(canvasRect.rect.width * .5f, minimumWidth);
+            var rowHeight = heights.Max() + RowPadding * 2f;
+            _bottomRow.sizeDelta = new Vector2(rowWidth, rowHeight);
+
+            var x = Mathf.Max(RowPadding, (rowWidth - minimumWidth) * .5f + RowPadding);
+            for (var i = 0; i < rects.Count; ++i)
+            {
+                var rect = rects[i];
+                if (rect.parent != _bottomRow) rect.SetParent(_bottomRow, false);
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, .5f);
+                rect.pivot = new Vector2(.5f, .5f);
+                rect.localScale = Vector3.one;
+                rect.localRotation = Quaternion.identity;
+                rect.sizeDelta = new Vector2(widths[i], heights[i]);
+                rect.anchoredPosition = new Vector2(x + widths[i] * .5f, 0f);
+                x += widths[i] + IconGap;
+            }
+        }
+
+        private void MoveButtonLayoutDown(OpeningScreen screen)
+        {
+            var menu = screen.GetComponentInChildren<OpeningScreenMenu>(true);
+            var settings = menu == null ? null : SettingsButtonField?.GetValue(menu) as Component;
+            var layout = settings?.transform?.parent?.parent as RectTransform;
+            if (layout == null) return;
+            if (!_buttonLayoutCaptured || _buttonLayout != layout)
+            {
+                _buttonLayout = layout;
+                _buttonLayoutOriginalPosition = layout.anchoredPosition;
+                _buttonLayoutCaptured = true;
+            }
+            _buttonLayout.anchoredPosition = _buttonLayoutOriginalPosition +
+                new Vector2(0f, -MenuButtonsDown);
         }
 
         private sealed class IconInfo

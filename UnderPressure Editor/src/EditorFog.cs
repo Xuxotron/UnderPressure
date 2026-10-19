@@ -162,7 +162,10 @@ namespace UnderPressure.Editor
                 backRect.pivot = new Vector2(0.5f, 1f);
                 backRect.anchoredPosition = new Vector2(0f, -74f);
                 backRect.sizeDelta = new Vector2(520f, 520f);
-                previewBack.GetComponent<Image>().color = Color.black;
+                // La mascara real permanece negra y solo contiene informacion
+                // en alfa. Un fondo claro permite ver esa transparencia sin
+                // convertir el PNG a blanco/gris ni alterar sus canales RGB.
+                previewBack.GetComponent<Image>().color = new Color(.72f, .72f, .72f, 1f);
 
                 CreateMapLayers(previewBack.transform);
 

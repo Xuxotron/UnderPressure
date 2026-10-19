@@ -564,7 +564,8 @@ namespace UnderPressure.Editor
                 // El ancho preferido resultante no coincide con las columnas
                 // visibles y deja aproximadamente media barra sin objetos.
                 fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+                fitter.enabled = false;
 
                 var scroll = content.GetComponentInParent<ScrollRect>();
                 if (scroll != null)
@@ -874,12 +875,15 @@ namespace UnderPressure.Editor
     {
         private static readonly FieldInfo ListObjectsField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listObjects");
+        private static readonly FieldInfo PendingItemsField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
         private LandscapeObjectsMenu _menu;
         private RectTransform _content;
         private RectTransform _viewport;
         private GridLayoutGroup _grid;
         private int _lastVisible = -1;
         private float _lastViewportWidth = -1f;
+        private bool _loggedComplete;
 
         internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
             GridLayoutGroup grid, RectTransform viewport)
@@ -904,8 +908,6 @@ namespace UnderPressure.Editor
                 if (objects[i] != null && objects[i].activeInHierarchy)
                     ++visible;
             var viewportWidth = _viewport.rect.width;
-            if (visible == _lastVisible && Mathf.Approximately(viewportWidth, _lastViewportWidth))
-                return;
             _lastVisible = visible;
             _lastViewportWidth = viewportWidth;
             var rows = Mathf.Max(1, _grid.constraintCount);
@@ -913,9 +915,23 @@ namespace UnderPressure.Editor
             var preferred = (float)(_grid.padding.left + _grid.padding.right);
             if (columns > 0)
                 preferred += columns * _grid.cellSize.x + (columns - 1) * _grid.spacing.x;
-            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
-                Mathf.Max(viewportWidth, preferred));
+            var targetWidth = Mathf.Max(viewportWidth, preferred);
+            var targetHeight = _grid.padding.top + _grid.padding.bottom +
+                rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
+            if (!Mathf.Approximately(_content.rect.width, targetWidth))
+                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
+            if (!Mathf.Approximately(_content.rect.height, targetHeight))
+                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
             LayoutRebuilder.MarkLayoutForRebuild(_content);
+
+            var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
+            if (!_loggedComplete && visible > 0 && pending != null && pending.Count == 0)
+            {
+                _loggedComplete = true;
+                UnderPressureEditorPlugin.Log?.LogInfo("Catalogo visual: " + visible +
+                    " objetos en " + columns + " columnas; ancho=" + targetWidth.ToString("F1") +
+                    ", viewport=" + viewportWidth.ToString("F1") + ".");
+            }
         }
     }
 
