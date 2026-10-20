@@ -971,13 +971,10 @@ namespace UnderPressure.Editor
             {
                 var name = (value ?? "").Trim();
                 if (name.Length > 0)
+                {
                     UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
-            });
-            input.onEndEdit.AddListener(value =>
-            {
-                var name = (value ?? "").Trim();
-                if (name.Length == 0) return;
-                ShowArchitectMaps(name);
+                    ShowArchitectMaps(name);
+                }
             });
             return input;
         }
