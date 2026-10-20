@@ -560,11 +560,11 @@ namespace UnderPressure.Editor
                 grid.cellSize = new Vector2(105f, 88f);
                 grid.spacing = new Vector2(7f, 5f);
                 var fitter = content.GetComponent<ContentSizeFitter>() ?? content.AddComponent<ContentSizeFitter>();
-                // El ancho preferido resultante no coincide con las columnas
-                // visibles y deja aproximadamente media barra sin objetos.
-                fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-                fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
-                fitter.enabled = false;
+                // Mantener la cadena nativa de Unity: el Grid calcula el ancho
+                // de ceil(objetos / 2) columnas y el fitter lo aplica al contenido.
+                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.enabled = true;
 
                 var scroll = content.GetComponentInParent<ScrollRect>();
                 if (scroll != null)
@@ -602,9 +602,6 @@ namespace UnderPressure.Editor
                         if (viewport != null && viewport != scrollRect)
                             SetHeightPreservingTop(viewport, 197f);
                         GrowBackdropOnly(__instance, viewport ?? scrollRect);
-                        var sizer = content.GetComponent<ScenarioCatalogContentSizer>() ??
-                            content.AddComponent<ScenarioCatalogContentSizer>();
-                        sizer.Initialize(__instance, rect, grid, viewport ?? scrollRect);
                     }
                     RestoreScrollbar(scroll, __instance);
                 }
@@ -880,103 +877,6 @@ namespace UnderPressure.Editor
         }
 
         private void LateUpdate() { Place(); }
-    }
-
-    // Ajusta el recorrido a los elementos realmente visibles, tanto durante la
-    // carga progresiva nativa como al filtrar o reconstruir el catalogo.
-    internal sealed class ScenarioCatalogContentSizer : MonoBehaviour
-    {
-        private static readonly FieldInfo ListObjectsField =
-            AccessTools.Field(typeof(LandscapeObjectsMenu), "_listObjects");
-        private static readonly FieldInfo PendingItemsField =
-            AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
-        private static readonly FieldInfo FilterField =
-            AccessTools.Field(typeof(LandscapeObjectsMenu), "_filter");
-        private LandscapeObjectsMenu _menu;
-        private RectTransform _content;
-        private RectTransform _viewport;
-        private GridLayoutGroup _grid;
-        private int _lastVisible = -1;
-        private int _lastObjectCount = -1;
-        private string _lastFilter;
-        private bool _loggedComplete;
-
-        internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
-            GridLayoutGroup grid, RectTransform viewport)
-        {
-            _menu = menu;
-            _content = content;
-            _grid = grid;
-            _viewport = viewport;
-            // El Grid conserva el tamaño y aspecto original de las miniaturas.
-            // El ancho desplazable se corrige aparte mediante LayoutElement.
-            _grid.enabled = true;
-            Resize();
-        }
-
-        private void LateUpdate() => Resize();
-
-        private void Resize()
-        {
-            if (_menu == null || _content == null || _grid == null || _viewport == null)
-                return;
-            // Filter() nativo activa y desactiva estos objetos. El GridLayoutGroup
-            // los dispone por columnas: superior, inferior, siguiente columna.
-            var objects = ListObjectsField?.GetValue(_menu) as IList<GameObject>;
-            if (objects == null) return;
-            var filter = FilterField?.GetValue(_menu) as string ?? string.Empty;
-            // No recorrer cientos de objetos en cada fotograma. Solo cambia la
-            // geometría cuando termina de entrar otro lote o cambia el filtro.
-            if (objects.Count == _lastObjectCount &&
-                string.Equals(filter, _lastFilter, StringComparison.Ordinal)) return;
-            _lastObjectCount = objects.Count;
-            _lastFilter = filter;
-            var visible = 0;
-            for (var i = 0; i < objects.Count; ++i)
-            {
-                var item = objects[i];
-                // activeSelf refleja el filtro aunque el menú completo esté
-                // temporalmente oculto durante Setup.
-                if (item == null || !item.activeSelf) continue;
-                ++visible;
-            }
-
-            const int rows = 2;
-            var columns = (visible + rows - 1) / rows;
-            var targetHeight = _grid.padding.top + _grid.padding.bottom +
-                rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
-            // Ajustar solo el contenido desplazable. El viewport conserva
-            // siempre el tamaño nativo de la ventana.
-            var contentWidth =
-                _grid.padding.left + columns * _grid.cellSize.x +
-                Mathf.Max(0, columns - 1) * _grid.spacing.x + 5f;
-            var viewportWidth = _viewport.rect.width;
-            var targetWidth = Mathf.Max(viewportWidth, contentWidth);
-
-            if (visible == _lastVisible && Mathf.Approximately(_content.rect.width, targetWidth) &&
-                Mathf.Approximately(_content.rect.height, targetHeight)) return;
-
-            _lastVisible = visible;
-            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
-            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
-            var layout = _content.GetComponent<LayoutElement>() ??
-                _content.gameObject.AddComponent<LayoutElement>();
-            layout.minWidth = layout.preferredWidth = targetWidth;
-            layout.minHeight = layout.preferredHeight = targetHeight;
-            layout.flexibleWidth = layout.flexibleHeight = 0f;
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-
-            var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
-            if (!_loggedComplete && visible > 0 && pending != null && pending.Count == 0)
-            {
-                _loggedComplete = true;
-                UnderPressureEditorPlugin.Log?.LogInfo("Catalogo visual: " + visible +
-                    " objetos, " + rows + " filas, " + columns + " columnas, ancho=" +
-                    targetWidth.ToString("F1") + ", viewport=" +
-                    viewportWidth.ToString("F1") + ".");
-            }
-        }
-
     }
 
     [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
