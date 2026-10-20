@@ -560,9 +560,9 @@ namespace UnderPressure.Editor
                 grid.cellSize = new Vector2(105f, 88f);
                 grid.spacing = new Vector2(7f, 5f);
                 var fitter = content.GetComponent<ContentSizeFitter>() ?? content.AddComponent<ContentSizeFitter>();
-                // Mantener la cadena nativa de Unity: el Grid calcula el ancho
-                // de ceil(objetos / 2) columnas y el fitter lo aplica al contenido.
-                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                // El ancho se ajusta al limite real de las miniaturas despues
+                // de que Unity haya distribuido las dos filas.
+                fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
                 fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
                 fitter.enabled = true;
 
@@ -602,6 +602,9 @@ namespace UnderPressure.Editor
                         if (viewport != null && viewport != scrollRect)
                             SetHeightPreservingTop(viewport, 197f);
                         GrowBackdropOnly(__instance, viewport ?? scrollRect);
+                        var sizer = content.GetComponent<ScenarioCatalogVisualBoundsSizer>() ??
+                            content.AddComponent<ScenarioCatalogVisualBoundsSizer>();
+                        sizer.Initialize(__instance, rect, grid, viewport ?? scrollRect);
                     }
                     RestoreScrollbar(scroll, __instance);
                 }
@@ -879,6 +882,85 @@ namespace UnderPressure.Editor
         private void LateUpdate() { Place(); }
     }
 
+    // El prefab nativo conserva un ancho equivalente a una columna por objeto.
+    // El Grid coloca dos objetos por columna, por lo que el final desplazable se
+    // obtiene de la geometria ya colocada y no del ancho preferido del prefab.
+    internal sealed class ScenarioCatalogVisualBoundsSizer : MonoBehaviour
+    {
+        private static readonly FieldInfo PendingItemsField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
+        private LandscapeObjectsMenu _menu;
+        private RectTransform _content;
+        private RectTransform _viewport;
+        private GridLayoutGroup _grid;
+        private bool _dirty = true;
+        private bool _logged;
+
+        internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
+            GridLayoutGroup grid, RectTransform viewport)
+        {
+            _menu = menu;
+            _content = content;
+            _grid = grid;
+            _viewport = viewport;
+            _dirty = true;
+        }
+
+        internal void MarkDirty() => _dirty = true;
+
+        private void OnEnable()
+        {
+            _dirty = true;
+            Canvas.willRenderCanvases += FitToVisibleChildren;
+        }
+
+        private void OnDisable() =>
+            Canvas.willRenderCanvases -= FitToVisibleChildren;
+
+        private void OnDestroy() =>
+            Canvas.willRenderCanvases -= FitToVisibleChildren;
+
+        private void OnTransformChildrenChanged() => _dirty = true;
+
+        private void FitToVisibleChildren()
+        {
+            if (!_dirty || _content == null || _viewport == null || _grid == null ||
+                !_content.gameObject.activeInHierarchy) return;
+
+            _dirty = false;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            var active = 0;
+            var maximumX = 0f;
+            for (var i = 0; i < _content.childCount; ++i)
+            {
+                var child = _content.GetChild(i) as RectTransform;
+                if (child == null || !child.gameObject.activeSelf) continue;
+                var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                    _content, child);
+                maximumX = Mathf.Max(maximumX, bounds.max.x);
+                ++active;
+            }
+
+            var previousWidth = _content.rect.width;
+            var targetWidth = Mathf.Max(_viewport.rect.width,
+                maximumX + _grid.padding.right);
+            if (!Mathf.Approximately(previousWidth, targetWidth))
+                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
+
+            var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
+            if (!_logged && active > 0 && pending != null && pending.Count == 0)
+            {
+                _logged = true;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Catalogo ajustado por limites: " + active +
+                    " miniaturas; ancho anterior=" + previousWidth.ToString("F1") +
+                    ", ancho visual=" + targetWidth.ToString("F1") +
+                    ", ancho preferido nativo=" +
+                    LayoutUtility.GetPreferredWidth(_content).ToString("F1") + ".");
+            }
+        }
+    }
+
     [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
     internal static class ScenarioEditorObjectPreviewAnglePatch
     {
@@ -1000,6 +1082,7 @@ namespace UnderPressure.Editor
                 string.Equals(filter, gate._lastAppliedFilter, StringComparison.Ordinal)) return false;
             gate._lastFilteredCount = count;
             gate._lastAppliedFilter = filter;
+            menu.GetComponent<ScenarioCatalogVisualBoundsSizer>()?.MarkDirty();
             return true;
         }
 
