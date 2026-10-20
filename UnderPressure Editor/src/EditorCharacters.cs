@@ -5,6 +5,7 @@ using HarmonyLib;
 using System.Collections.Generic;
 using System.Linq;
 using TH20;
+using TMPro;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine;
@@ -54,7 +55,7 @@ namespace UnderPressure.Editor
         private static GameObject _overlay;
         private static ScenarioCharacterViewerBehaviour _component;
         private static Level _level;
-        private static Text _toggleText;
+        private static TMP_Text _toggleText;
         private static Font _font;
 
         internal static bool IsOpen => _overlay != null;
@@ -72,14 +73,26 @@ namespace UnderPressure.Editor
             if (canvas == null) return;
             _level = level;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            var button = CreateButton(canvas.transform, "UP_CharacterViewerToggle",
-                T("editor.character.button"), new Vector2(208f, 40f), ToggleInactiveColor, Toggle);
+            var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
+                .GetValue(menu) as Button;
+            if (template == null) return;
+            var button = UnityEngine.Object.Instantiate(template, canvas.transform, false);
+            button.gameObject.name = "UP_CharacterViewerToggle";
+            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(Toggle);
+            button.interactable = true;
+            button.gameObject.SetActive(true);
             var rt = (RectTransform)button.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(0f, -12f);
-            _toggleRoot = button;
-            _toggleText = button.GetComponentInChildren<Text>();
+            rt.anchoredPosition = new Vector2(110f, -12f);
+            rt.sizeDelta = new Vector2(208f, 40f);
+            _toggleRoot = button.gameObject;
+            _toggleText = button.GetComponentInChildren<TMP_Text>(true);
+            if (_toggleText != null) _toggleText.text = T("editor.character.button");
             RefreshToggleVisual();
             UnderPressureEditorPlugin.Log?.LogInfo("Visor: boton Personajes instalado en el editor.");
         }
@@ -219,17 +232,9 @@ namespace UnderPressure.Editor
         private static void RefreshToggleVisual()
         {
             if (_toggleRoot == null) return;
-            var button = _toggleRoot.GetComponent<Button>();
-            var image = _toggleRoot.GetComponent<Image>();
+            var image = _toggleRoot.GetComponent<Button>()?.image;
             var color = IsOpen ? ToggleActiveColor : ToggleInactiveColor;
             if (image != null) image.color = color;
-            if (button == null) return;
-            var colors = button.colors;
-            colors.normalColor = color;
-            colors.highlightedColor = Color.Lerp(color, Color.white, .16f);
-            colors.pressedColor = Color.Lerp(color, Color.black, .18f);
-            colors.selectedColor = colors.highlightedColor;
-            button.colors = colors;
         }
 
         internal static void Detach()

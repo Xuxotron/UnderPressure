@@ -2017,6 +2017,7 @@ namespace UnderPressure.Editor
         private TMP_Text _cameraButtonText;
         private Button _objectsButton;
         private Button _buildButton;
+        private TMP_Text _plotInfoText;
         private Button _nativeCameraButton;
         private Button _nativeObjectsButton;
         private Button _nativeBuildButton;
@@ -2116,18 +2117,18 @@ namespace UnderPressure.Editor
             if (_nativeBuildButton != null)
             {
                 _buildButton = AddTopButton(canvas.transform, T("editor.toolbar.edit_plot"),
-                    -660f, () => ActivateNativeTool(_nativeBuildButton));
+                    -550f, () => ActivateNativeTool(_nativeBuildButton));
                 _nativeBuildButton.gameObject.SetActive(false);
             }
             if (_nativeObjectsButton != null)
             {
                 _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
-                    -440f, () => ActivateNativeTool(_nativeObjectsButton));
+                    -330f, () => ActivateNativeTool(_nativeObjectsButton));
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
             if (_nativeCameraButton != null)
             {
-                _cameraButton = AddTopButton(canvas.transform, "", -220f, () =>
+                _cameraButton = AddTopButton(canvas.transform, "", -110f, () =>
                 {
                     _nativeCameraButton.onClick.Invoke();
                     RefreshCameraButton();
@@ -2175,7 +2176,7 @@ namespace UnderPressure.Editor
             var field = AccessTools.Field(_level.CameraLogic.GetType(), "_boundCamera");
             var bounded = field?.GetValue(_level.CameraLogic) as bool?;
             _cameraButtonText.text = T(bounded == false
-                ? "editor.toolbar.fixed_camera" : "editor.toolbar.free_camera");
+                ? "editor.toolbar.free_camera" : "editor.toolbar.fixed_camera");
         }
 
         private void SetNativeButtonLabel(string fieldName, string key)
@@ -2312,15 +2313,15 @@ namespace UnderPressure.Editor
             }
         }
 
-        // Dos lineas a la izquierda de Parcelas; no tapa los controles nativos.
+        // Cabecera intercambiable justo encima del historial de objetos.
         private void AddMapIdentity()
         {
             var root = AddUi("UP Map Name or Coordinates", transform);
             var rect = root.GetComponent<RectTransform>();
             rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-381f, -10f);
-            rect.sizeDelta = new Vector2(360f, 48f);
+            rect.anchoredPosition = new Vector2(-20f, -12f);
+            rect.sizeDelta = new Vector2(184f, 40f);
             var image = root.AddComponent<Image>();
             image.color = new Color(0f, 0f, 0f, 0.001f);
             var button = root.AddComponent<Button>();
@@ -2340,7 +2341,7 @@ namespace UnderPressure.Editor
             Stretch(textRoot.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
             _mapIdentityLabel = textRoot.AddComponent<Text>();
             _mapIdentityLabel.font = _font;
-            _mapIdentityLabel.fontSize = 17;
+            _mapIdentityLabel.fontSize = 15;
             _mapIdentityLabel.fontStyle = FontStyle.Bold;
             _mapIdentityLabel.alignment = TextAnchor.MiddleRight;
             _mapIdentityLabel.color = Color.white;
@@ -2410,17 +2411,9 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void AddStylesToolbarButton()
         {
-            var button = CloneButton(_template, transform,
-                T("editor.map.styles"), ShowStyles);
-            var rect = button.transform as RectTransform;
-            if (rect != null)
-            {
-                rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
-                rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-212f, -18f);
-                rect.sizeDelta = new Vector2(168f, 34f);
-            }
-            _buttons.Add(button.gameObject);
+            var canvas = _menu.GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            AddTopButton(canvas.transform, T("editor.toolbar.styles"), 550f, ShowStyles);
         }
 
         // Bloq Mayus intercala el aislamiento; el usuario tambien puede
@@ -2531,6 +2524,10 @@ rect.pivot = new Vector2(1f, 1f);
                 UnderPressureEditorPlugin.Log?.LogWarning("No hay panel nativo de parcelas.");
                 return;
             }
+            _plotInfoText = AccessTools.Field(typeof(EditHospitalMenu), "_infoText")?
+                .GetValue(_menu) as TMP_Text;
+            if (_plotInfoText != null)
+                _plotInfoText.alignment = TextAlignmentOptions.Left;
             // Cabecera propia en el LayoutGroup del listado original.
             // NO clonar PlotSelectionItem: sus eventos y checks son privados
             // de una parcela y no deben aplicarse a Landscape.
@@ -2707,6 +2704,8 @@ rect.pivot = new Vector2(1f, 1f);
                 cursor.IsModeActive<CursorEditHospitalItem>());
             SetToolButtonSelected(_buildButton, !customToolOpen && cursor != null &&
                 cursor.IsModeActive<CursorEditHospitalBuild>());
+            SetToolButtonSelected(_movePlotButton, !customToolOpen && cursor != null &&
+                cursor.IsModeActive<CursorEditHospitalMovePlot>());
             var input = _level.InputManager;
             if (input == null) return;
             ScenarioLandscape.UpdateSelection();
@@ -2756,6 +2755,7 @@ rect.pivot = new Vector2(1f, 1f);
             // Anclar los botones a la base real de la lista evita que se muevan
             // cuando hay muchas parcelas o se modifica la resolucion.
             PositionPlotActions();
+            RefreshPlotSizeText();
             if (_initialVisibilityFrames > 0)
             {
                 --_initialVisibilityFrames;
@@ -2836,6 +2836,14 @@ rect.pivot = new Vector2(1f, 1f);
                             parentRect.TransformVector(new Vector3(buttonWidth + 2f, 0f, 0f));
             remove.position = corners[0] + offset +
                               parentRect.TransformVector(new Vector3((buttonWidth + 2f) * 2f, 0f, 0f));
+        }
+
+        private void RefreshPlotSizeText()
+        {
+            if (_plotInfoText == null || _selectedPlot?.HospitalMap?.FloorPlan == null) return;
+            // Misma medida que EditHospitalMenu.OnHospitalPlotUpdated, sin prefijo ni unidad.
+            var size = _selectedPlot.HospitalMap.FloorPlan.TileCount * MathUtils.Square(2);
+            _plotInfoText.text = size.ToString();
         }
 
         private HospitalPlot SelectedPlot()

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using HarmonyLib;
 using TH20;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -39,7 +40,7 @@ namespace UnderPressure.Editor
         private static readonly Color ToggleActiveColor = new Color(.02f, .55f, .90f, 1f);
         private static GameObject _toggleRoot;
         private static GameObject _overlay;
-        private static Text _toggleText;
+        private static TMP_Text _toggleText;
         private static Font _font;
         private static Texture2D _workingTexture;
         private static Texture2D _resetTexture;
@@ -86,14 +87,26 @@ namespace UnderPressure.Editor
             if (canvas == null) return;
             _level = level;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            var button = CreateButton(canvas.transform, "UP_FogViewerToggle",
-                T("editor.fog.button"), new Vector2(208f, 40f), ToggleInactiveColor, Toggle);
+            var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
+                .GetValue(menu) as Button;
+            if (template == null) return;
+            var button = UnityEngine.Object.Instantiate(template, canvas.transform, false);
+            button.gameObject.name = "UP_FogViewerToggle";
+            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(Toggle);
+            button.interactable = true;
+            button.gameObject.SetActive(true);
             var rect = (RectTransform)button.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(220f, -12f);
-            _toggleRoot = button;
-            _toggleText = button.GetComponentInChildren<Text>();
+            rect.anchoredPosition = new Vector2(330f, -12f);
+            rect.sizeDelta = new Vector2(208f, 40f);
+            _toggleRoot = button.gameObject;
+            _toggleText = button.GetComponentInChildren<TMP_Text>(true);
+            if (_toggleText != null) _toggleText.text = T("editor.fog.button");
             RefreshToggleVisual();
         }
 
@@ -926,17 +939,9 @@ namespace UnderPressure.Editor
         private static void RefreshToggleVisual()
         {
             if (_toggleRoot == null) return;
-            var button = _toggleRoot.GetComponent<Button>();
-            var image = _toggleRoot.GetComponent<Image>();
+            var image = _toggleRoot.GetComponent<Button>()?.image;
             var color = IsOpen ? ToggleActiveColor : ToggleInactiveColor;
             if (image != null) image.color = color;
-            if (button == null) return;
-            var colors = button.colors;
-            colors.normalColor = color;
-            colors.highlightedColor = Color.Lerp(color, Color.white, .16f);
-            colors.pressedColor = Color.Lerp(color, Color.black, .18f);
-            colors.selectedColor = colors.highlightedColor;
-            button.colors = colors;
         }
 
         internal static void Detach()
