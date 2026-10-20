@@ -47,7 +47,6 @@ namespace UnderPressure.Editor
         private static Text _plotText;
         private static Text _alphaText;
         private static Text _fogText;
-        private static Text _generateMapText;
         private static Image _previewBackground;
         private static RawImage _checkerLayer;
         private static Text _sizeText;
@@ -69,7 +68,6 @@ namespace UnderPressure.Editor
         private static bool _strokeDirty;
         private static bool _plotsEnabled;
         private static bool _alphaEnabled = true;
-        private static bool _fogEnabled = true;
         private static bool _workingTextureInstalled;
 
         internal static bool IsOpen => _overlay != null;
@@ -269,7 +267,6 @@ namespace UnderPressure.Editor
                 _brushMaxOpacity = 100;
                 _plotsEnabled = false;
                 _alphaEnabled = true;
-                _fogEnabled = true;
                 _workingTextureInstalled = false;
 
                 // La visualizacion no debe depender de que el postprocesado
@@ -399,32 +396,27 @@ namespace UnderPressure.Editor
 
                 var reset = CreateButton(panel.transform, "Reset", T("editor.fog.reset"),
                     new Vector2(150f, 42f), HighlightColor, ResetToLastSaved);
-                SetTop(reset.transform, -320f, -847f);
+                SetTop(reset.transform, -300f, -847f);
 
                 var alpha = CreateButton(panel.transform, "Alpha", "",
                     new Vector2(150f, 42f), ButtonColor, ToggleAlpha);
-                SetTop(alpha.transform, -160f, -847f);
+                SetTop(alpha.transform, -100f, -847f);
                 _alphaText = alpha.GetComponentInChildren<Text>();
 
                 var fog = CreateButton(panel.transform, "Fog", "",
-                    new Vector2(150f, 42f), ButtonColor, ToggleFog);
-                SetTop(fog.transform, 0f, -847f);
+                    new Vector2(150f, 42f), ButtonColor, ToggleSceneFog);
+                SetTop(fog.transform, 100f, -847f);
                 _fogText = fog.GetComponentInChildren<Text>();
 
                 var plots = CreateButton(panel.transform, "Plots", "",
                     new Vector2(150f, 42f), ButtonColor, TogglePlots);
-                SetTop(plots.transform, 160f, -847f);
+                SetTop(plots.transform, 300f, -847f);
                 _plotText = plots.GetComponentInChildren<Text>();
-
-                var generateMap = CreateButton(panel.transform, "GenerateMap",
-                    T("editor.fog.generate_map"), new Vector2(150f, 42f),
-                    HighlightColor, GenerateMap);
-                SetTop(generateMap.transform, 320f, -847f);
-                _generateMapText = generateMap.GetComponentInChildren<Text>();
                 RefreshAlphaBackground();
                 RefreshControlTexts();
                 _toggleRoot.transform.SetAsLastSibling();
                 if (_toggleText != null) _toggleText.text = T("editor.fog.close");
+                GenerateMap();
             }
             catch (Exception exception)
             {
@@ -515,27 +507,16 @@ namespace UnderPressure.Editor
 
         private static void GenerateMap()
         {
-            if (_generateMapText != null)
-                _generateMapText.text = T("editor.fog.generate_map.working");
+            if (string.IsNullOrEmpty(EditorMapCapture.GetMapImagePath(_level))) return;
             EditorMapCapture.Capture(path =>
             {
-                if (string.IsNullOrEmpty(path))
-                {
-                    if (_generateMapText != null)
-                        _generateMapText.text = T("editor.fog.generate_map.error");
-                    return;
-                }
-                LoadGeneratedMap(path);
-                if (_generateMapText != null)
-                    _generateMapText.text = T("editor.fog.generate_map.saved");
+                if (!string.IsNullOrEmpty(path)) LoadGeneratedMap(path);
             });
         }
 
-        private static void ToggleFog()
+        private static void ToggleSceneFog()
         {
-            _fogEnabled = !_fogEnabled;
-            if (_preview != null) _preview.gameObject.SetActive(_fogEnabled);
-            if (!_fogEnabled) HideBrushCursor();
+            ScenarioEditorFogOfWar.Toggle();
             RefreshControlTexts();
         }
 
@@ -564,8 +545,8 @@ namespace UnderPressure.Editor
                 _alphaText.text = T(_alphaEnabled
                     ? "editor.fog.alpha.on" : "editor.fog.alpha.off");
             if (_fogText != null)
-                _fogText.text = T(_fogEnabled
-                    ? "editor.fog.fog.on" : "editor.fog.fog.off");
+                _fogText.text = T(ScenarioEditorFogOfWar.Disabled
+                    ? "editor.terrain.fog.off" : "editor.terrain.fog.on");
             if (_plotText != null)
                 _plotText.text = T(_plotsEnabled
                     ? "editor.fog.map.on" : "editor.fog.map.off");
@@ -768,7 +749,9 @@ namespace UnderPressure.Editor
                 var bytes = File.ReadAllBytes(path);
                 if (bytes.Length == 0 || bytes.Length > 32 * 1024 * 1024)
                     throw new InvalidDataException("JPG de mapa vacio o demasiado grande.");
-                texture = new Texture2D(2, 2, TextureFormat.RGB24, false, true)
+                // Los JPG usan color sRGB. Marcarlos como lineales provoca que
+                // la UI aplique una segunda conversion gamma y los muestre lavados.
+                texture = new Texture2D(2, 2, TextureFormat.RGB24, false, false)
                 {
                     name = "UP_GeneratedMap",
                     hideFlags = HideFlags.DontSave,
@@ -927,7 +910,6 @@ namespace UnderPressure.Editor
             _plotText = null;
             _alphaText = null;
             _fogText = null;
-            _generateMapText = null;
             _previewBackground = null;
             _checkerLayer = null;
             _sizeText = null;

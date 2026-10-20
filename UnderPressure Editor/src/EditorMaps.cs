@@ -52,6 +52,13 @@ namespace UnderPressure.Editor
             return ReferenceEquals(_namedMapLevel, level) ? _namedMap ?? "" : "";
         }
 
+        internal static string CurrentMapFolder(Level level)
+        {
+            var name = NameForSave(level);
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            return Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
+        }
+
         internal static bool TryReadCurrentFog(Level level,
             out ScenarioMapFormat.Map header, out byte[] png)
         {

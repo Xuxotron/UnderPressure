@@ -108,10 +108,9 @@ namespace UnderPressure.Editor
         internal static string GetMapImagePath(Level level)
         {
             if (level == null) return null;
-            var carpeta = Path.Combine(ScenarioEditorStorage.Folder, "Capturas");
-            var nombreMapa = SafeFileName(
-                ScenarioEditorStorage.CurrentMapName(level));
-            return Path.Combine(carpeta, nombreMapa + ".jpg");
+            var carpeta = ScenarioEditorStorage.CurrentMapFolder(level);
+            return string.IsNullOrEmpty(carpeta)
+                ? null : Path.Combine(carpeta, "map.jpg");
         }
 
         internal static void Capture(Action<string> completed)
@@ -244,8 +243,12 @@ namespace UnderPressure.Editor
                     imagen.Apply(false, false);
 
                     // El directorio de capturas es independiente de los recursos
-                    // del mapa: no altera UPMap, plots ni texturas de Fog.
+                    // editables: el JPG acompana al mapa, pero no altera UPMap,
+                    // parcelas ni texturas de Fog.
                     var archivo = GetMapImagePath(_level);
+                    if (string.IsNullOrEmpty(archivo))
+                        throw new InvalidOperationException(
+                            "Guarda primero el mapa antes de generar su imagen cenital.");
                     var carpeta = Path.GetDirectoryName(archivo);
                     Directory.CreateDirectory(carpeta);
                     var jpg = ImageConversion.EncodeToJPG(imagen, CalidadJpeg);

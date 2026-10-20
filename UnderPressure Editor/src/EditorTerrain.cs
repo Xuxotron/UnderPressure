@@ -1565,7 +1565,6 @@ namespace UnderPressure.Editor
         private GameObject _dialog;
         private readonly List<Button> _slots = new List<Button>();
         private readonly List<Texture2D> _previewCopies = new List<Texture2D>();
-        private Text _fogOfWarText;
         private Text _wireText;
         private RectTransform _cursor;
         private RawImage _cursorImage;
@@ -1609,17 +1608,11 @@ namespace UnderPressure.Editor
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
             CreateButton(root, new Vector2(9, -226), new Vector2(162, 30),
-                T("editor.terrain.fog_of_war"), () =>
-                {
-                    ScenarioEditorFogOfWar.Toggle();
-                    RefreshTexts();
-                }, out _fogOfWarText);
-            CreateButton(root, new Vector2(9, -261), new Vector2(162, 30),
                 T("editor.terrain.wireframe"), () => ScenarioEditorTerrainPainter.ToggleWireframe(),
                 out _wireText);
             var scrollRoot = NewUi("Textures", root, typeof(Image), typeof(ScrollRect));
             var scrollRect = (RectTransform)scrollRoot.transform;
-            Place(scrollRect, new Vector2(8, -299), new Vector2(164, 227));
+            Place(scrollRect, new Vector2(8, -264), new Vector2(164, 262));
             scrollRoot.GetComponent<Image>().color = new Color(0f,0f,0f,0.18f);
             _scroll = scrollRoot.GetComponent<ScrollRect>();
             _scroll.vertical = true;
@@ -1926,9 +1919,6 @@ namespace UnderPressure.Editor
             if (_wireText != null) _wireText.text = T(
                 ScenarioEditorTerrainPainter.WireframeEnabled
                     ? "editor.terrain.wireframe.on" : "editor.terrain.wireframe.off");
-            if (_fogOfWarText != null)
-                _fogOfWarText.text = T(ScenarioEditorFogOfWar.Disabled
-                    ? "editor.terrain.fog.off" : "editor.terrain.fog.on");
             if (_toggleText != null) _toggleText.text = T("editor.terrain.brush");
             var mode = ScenarioEditorTerrainPainter.CurrentSculptMode;
             SetToolSelected(_brushButton, ScenarioEditorTerrainPainter.BrushEnabled &&
