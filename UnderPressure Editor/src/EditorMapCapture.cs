@@ -134,7 +134,8 @@ namespace UnderPressure.Editor
                 // NUNCA mover, girar ni modificar el objeto original.
                 GameObject camaraObject = null;
                 Camera camara = null;
-                GameObject luzObject = null;
+                Light[] lucesEscena = null;
+                bool[] lucesActivas = null;
                 RenderTexture destino = null;
                 Texture2D imagen = null;
                 var anterior = RenderTexture.active;
@@ -144,6 +145,8 @@ namespace UnderPressure.Editor
                 var ambienteModoAnterior = RenderSettings.ambientMode;
                 var ambienteColorAnterior = RenderSettings.ambientLight;
                 var ambienteIntensidadAnterior = RenderSettings.ambientIntensity;
+                var reflejosAnteriores = RenderSettings.reflectionIntensity;
+                var solAnterior = RenderSettings.sun;
 
                 try
                 {
@@ -174,10 +177,9 @@ namespace UnderPressure.Editor
                     camara.layerCullDistances = new float[32];
                     camara.layerCullSpherical = false;
 
-                    // La camara cenital esta fuera del rango de iluminacion y
-                    // sombras calculado para la camara jugable. Durante este
-                    // Render sincrono se usa ambiente plano y una luz propia;
-                    // todos los valores globales se restauran en finally.
+                    // La captura debe mostrar las texturas sin focos, sombras ni
+                    // reflejos. Se desactivan temporalmente todas las luces y se
+                    // usa solo ambiente blanco plano; finally restaura la escena.
                     QualitySettings.shadows = ShadowQuality.Disable;
                     QualitySettings.shadowDistance = camara.farClipPlane;
                     QualitySettings.lodBias = Mathf.Max(lodAnterior, 10f);
@@ -185,16 +187,17 @@ namespace UnderPressure.Editor
                         UnityEngine.Rendering.AmbientMode.Flat;
                     RenderSettings.ambientLight = Color.white;
                     RenderSettings.ambientIntensity = 1f;
-
-                    luzObject = new GameObject("UP_LuzCapturaCenital", typeof(Light));
-                    luzObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-                    var luz = luzObject.GetComponent<Light>();
-                    luz.type = LightType.Directional;
-                    luz.color = Color.white;
-                    luz.intensity = 1f;
-                    luz.shadows = LightShadows.None;
-                    luz.renderMode = LightRenderMode.ForcePixel;
-                    luz.cullingMask = camara.cullingMask;
+                    RenderSettings.reflectionIntensity = 0f;
+                    RenderSettings.sun = null;
+                    lucesEscena = UnityEngine.Object.FindObjectsOfType<Light>(true);
+                    lucesActivas = new bool[lucesEscena.Length];
+                    for (var i = 0; i < lucesEscena.Length; ++i)
+                    {
+                        var luz = lucesEscena[i];
+                        if (luz == null) continue;
+                        lucesActivas[i] = luz.enabled;
+                        luz.enabled = false;
+                    }
 
                     // Una captura de la escena 3D, sin interfaz en Screen Space
                     // y sin elementos World Space de la capa UI.
@@ -250,10 +253,19 @@ namespace UnderPressure.Editor
                     RenderSettings.ambientMode = ambienteModoAnterior;
                     RenderSettings.ambientLight = ambienteColorAnterior;
                     RenderSettings.ambientIntensity = ambienteIntensidadAnterior;
+                    RenderSettings.reflectionIntensity = reflejosAnteriores;
+                    RenderSettings.sun = solAnterior;
+                    if (lucesEscena != null && lucesActivas != null)
+                    {
+                        for (var i = 0; i < lucesEscena.Length; ++i)
+                        {
+                            var luz = lucesEscena[i];
+                            if (luz != null) luz.enabled = lucesActivas[i];
+                        }
+                    }
                     if (camara != null) camara.targetTexture = null;
                     if (destino != null) RenderTexture.ReleaseTemporary(destino);
                     if (imagen != null) UnityEngine.Object.Destroy(imagen);
-                    if (luzObject != null) UnityEngine.Object.Destroy(luzObject);
                     if (camaraObject != null) UnityEngine.Object.Destroy(camaraObject);
                 }
             }
