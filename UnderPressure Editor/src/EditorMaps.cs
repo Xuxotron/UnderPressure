@@ -2030,6 +2030,11 @@ namespace UnderPressure.Editor
         private readonly Dictionary<HospitalPlot, bool> _plotVisibilityBeforeIsolation =
             new Dictionary<HospitalPlot, bool>();
         internal static bool PlotIsolationActive => _active != null && _active._plotIsolation;
+        internal Button ObjectsButton => _objectsButton;
+        internal Button BuildButton => _buildButton;
+        internal Button CameraButton => _cameraButton;
+        internal Button StylesButton => _stylesButton;
+        internal Transform PlotLayerRoot => _layerButtonsRoot?.transform;
 
         private static string T(string key) => EditorLocalization.Get(key);
 
@@ -2075,6 +2080,7 @@ namespace UnderPressure.Editor
             PrepareNativeToolbar();
             RefreshMapIdentity();
             _initialVisibilityFrames = 12;
+            ScenarioEditorDockLayout.Attach(_menu, _level, this, _template, _plotListViewport);
         }
 
         private void PrepareNativeToolbar()
@@ -2120,12 +2126,14 @@ namespace UnderPressure.Editor
             {
                 _buildButton = AddTopButton(canvas.transform, T("editor.toolbar.edit_plot"),
                     -550f, () => ActivateNativeTool(_nativeBuildButton));
+                _buildButton.gameObject.name = "UP Tiles Toolbar Button";
                 _nativeBuildButton.gameObject.SetActive(false);
             }
             if (_nativeObjectsButton != null)
             {
                 _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
                     -330f, () => ActivateNativeTool(_nativeObjectsButton));
+                _objectsButton.gameObject.name = "UP Objects Dock Toggle";
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
             if (_nativeCameraButton != null)
@@ -2135,6 +2143,7 @@ namespace UnderPressure.Editor
                     _nativeCameraButton.onClick.Invoke();
                     RefreshCameraButton();
                 });
+                _cameraButton.gameObject.name = "UP Camera Toolbar Button";
                 _cameraButtonText = _cameraButton.GetComponentInChildren<TMP_Text>(true);
                 _nativeCameraButton.gameObject.SetActive(false);
                 RefreshCameraButton();
@@ -2417,6 +2426,7 @@ rect.pivot = new Vector2(1f, 1f);
             if (canvas == null) return;
             _stylesButton = AddTopButton(canvas.transform, T("editor.toolbar.styles"),
                 550f, ShowStyles);
+            _stylesButton.gameObject.name = "UP Styles Toolbar Button";
         }
 
         // Bloq Mayus intercala el aislamiento; el usuario tambien puede

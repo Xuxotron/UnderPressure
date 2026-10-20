@@ -74,6 +74,8 @@ namespace UnderPressure.Editor
         private static bool _workingTextureInstalled;
 
         internal static bool IsOpen => _overlay != null;
+        internal static Button ToggleButton => _toggleRoot == null
+            ? null : _toggleRoot.GetComponent<Button>();
         internal static int BrushSizeForStroke => _brushSize;
         internal static int BrushTextureWidth => _workingTexture != null ? _workingTexture.width : 128;
         internal static int BrushTextureHeight => _workingTexture != null ? _workingTexture.height : 128;

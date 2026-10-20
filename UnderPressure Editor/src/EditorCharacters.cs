@@ -59,6 +59,8 @@ namespace UnderPressure.Editor
         private static Font _font;
 
         internal static bool IsOpen => _overlay != null;
+        internal static Button ToggleButton => _toggleRoot == null
+            ? null : _toggleRoot.GetComponent<Button>();
 
         private static string T(string key) => EditorLocalization.Get(key);
         private static string F(string key, params object[] arguments) =>

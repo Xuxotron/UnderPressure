@@ -24,7 +24,6 @@ namespace UnderPressure.Editor
         private const float CaptureInterval = 0.22f;
         private const float PositionEpsilonSquared = 0.0004f;
         private const float RotationEpsilon = 0.05f;
-        private const float HistoryPanelWidth = 184f;
         private static readonly FieldInfo LandscapeCarryingField =
             AccessTools.Field(typeof(ScenarioLandscape), "_carrying");
         private static readonly FieldInfo LandscapeEditedField =
@@ -57,10 +56,31 @@ namespace UnderPressure.Editor
         private bool _initialVisibilityPending = true;
         private float _ignoreChangesUntil;
         private GameObject _historyUi;
+        private RectTransform _historyPanel;
         private RectTransform _historyContent;
         private ScrollRect _historyScroll;
         private Text _historyTitle;
         private Font _historyFont;
+        private static bool _dockVisible = true;
+        private static float _dockWidth = ScenarioEditorDockLayout.PanelWidth;
+        private static float _dockHeight = 320f;
+        private static float _dockTop = ScenarioEditorDockLayout.BarHeight;
+
+        internal static void SetDockVisible(bool visible)
+        {
+            _dockVisible = visible;
+            if (_active?._historyUi != null) _active._historyUi.SetActive(visible);
+        }
+
+        internal static void SetDockRect(float width, float height, float top)
+        {
+            _dockWidth = width;
+            _dockHeight = Mathf.Max(0f, height);
+            _dockTop = top;
+            _active?.ApplyDockRect();
+        }
+
+        private static string T(string key) => EditorLocalization.Get(key);
 
         internal static bool Ready => _active != null && _active._baseline != null &&
             !_active._applying && _active.IsValid();
@@ -765,16 +785,13 @@ namespace UnderPressure.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
 
             var panelGo = new GameObject("Historial", typeof(RectTransform), typeof(Image));
-            var panel = UiRect(panelGo, _historyUi.transform);
-            panel.anchorMin = new Vector2(1f, 1f);
-            panel.anchorMax = new Vector2(1f, 1f);
-            panel.pivot = new Vector2(1f, 1f);
-            panel.anchoredPosition = new Vector2(-20f, -68f);
-            panel.sizeDelta = new Vector2(HistoryPanelWidth,
-                Mathf.Max(110f, Mathf.Min(430f, Screen.height - 145f)));
+            _historyPanel = UiRect(panelGo, _historyUi.transform);
+            _historyPanel.anchorMin = new Vector2(1f, 1f);
+            _historyPanel.anchorMax = new Vector2(1f, 1f);
+            _historyPanel.pivot = new Vector2(1f, 1f);
             panelGo.GetComponent<Image>().color = new Color(.045f, .070f, .095f, .94f);
 
-            _historyTitle = UiText("Titulo", panel, _historyFont, 15, TextAnchor.MiddleLeft);
+            _historyTitle = UiText("Titulo", _historyPanel, _historyFont, 15, TextAnchor.MiddleLeft);
             var titleRect = _historyTitle.rectTransform;
             titleRect.anchorMin = new Vector2(0f, 1f);
             titleRect.anchorMax = new Vector2(1f, 1f);
@@ -784,7 +801,7 @@ namespace UnderPressure.Editor
 
             var scrollGo = new GameObject("Desplazamiento", typeof(RectTransform),
                 typeof(ScrollRect));
-            var scrollRect = UiRect(scrollGo, panel);
+            var scrollRect = UiRect(scrollGo, _historyPanel);
             scrollRect.anchorMin = Vector2.zero;
             scrollRect.anchorMax = Vector2.one;
             scrollRect.offsetMin = new Vector2(8f, 8f);
@@ -813,13 +830,25 @@ namespace UnderPressure.Editor
             _historyContent.sizeDelta = Vector2.zero;
             _historyScroll.viewport = viewport;
             _historyScroll.content = _historyContent;
+            ApplyDockRect();
+            _historyUi.SetActive(_dockVisible);
+        }
+
+        private void ApplyDockRect()
+        {
+            if (_historyPanel == null) return;
+            _historyPanel.anchorMin = _historyPanel.anchorMax = Vector2.one;
+            _historyPanel.pivot = Vector2.one;
+            _historyPanel.anchoredPosition = new Vector2(0f, -_dockTop);
+            _historyPanel.sizeDelta = new Vector2(_dockWidth, _dockHeight);
         }
 
         private void RefreshHistoryUI()
         {
             if (!IsValid()) return;
             EnsureHistoryUI();
-            _historyTitle.text = "Historial de objetos   " + _position + "/" + _changes.Count;
+            _historyTitle.text = EditorLocalization.Format("editor.history.title",
+                _position, _changes.Count);
             for (var j = _historyContent.childCount - 1; j >= 0; --j)
                 Destroy(_historyContent.GetChild(j).gameObject);
             const float rowHeight = 29f;
@@ -860,13 +889,8 @@ namespace UnderPressure.Editor
         private bool OverHistory()
         {
             if (_historyUi == null || !_historyUi.activeInHierarchy) return false;
-            var width = HistoryPanelWidth;
-            var height = Mathf.Max(110f, Mathf.Min(430f, Screen.height - 145f));
-            var mouse = Input.mousePosition;
-            return mouse.x >= Screen.width - 20f - width &&
-                   mouse.x <= Screen.width - 20f &&
-                   mouse.y <= Screen.height - 68f &&
-                   mouse.y >= Screen.height - 68f - height;
+            return _historyPanel != null && RectTransformUtility.RectangleContainsScreenPoint(
+                _historyPanel, Input.mousePosition, null);
         }
 
         private void RestoreState(State desired)

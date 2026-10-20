@@ -41,6 +41,10 @@ namespace UnderPressure.Editor
         private static float _brushOpacity = 0.5f;
         private static TerrainLayerSlot _selectedSlot;
         private static ScenarioEditorTerrainPainterBehaviour _behaviour;
+        private static bool _dockVisible = true;
+        private static float _dockWidth = ScenarioEditorDockLayout.PanelWidth;
+        private static float _dockHeight = 535f;
+        private static float _dockTop = ScenarioEditorDockLayout.BarHeight;
         private static Canvas _canvas;
         private static float _nextBrushTime;
         private static Texture2D _crosshairCursor;
@@ -310,19 +314,44 @@ namespace UnderPressure.Editor
                 typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(ScenarioEditorTerrainPainterBehaviour));
             go.transform.SetParent(_canvas.transform, false);
             var rect = (RectTransform)go.transform;
-            rect.anchorMin = new Vector2(1f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(1f, 0f);
-            rect.anchoredPosition = new Vector2(-14f, 14f);
-            rect.sizeDelta = new Vector2(180f, 535f);
+            rect.anchorMin = rect.anchorMax = Vector2.one;
+            rect.pivot = Vector2.one;
+            rect.anchoredPosition = new Vector2(0f, -_dockTop);
+            rect.sizeDelta = new Vector2(_dockWidth, _dockHeight);
             var image = go.GetComponent<Image>();
             image.color = new Color(0f, 0f, 0f, 0.55f);
             _behaviour = go.GetComponent<ScenarioEditorTerrainPainterBehaviour>();
             _behaviour.BuildUi();
+            _behaviour.ApplyDockSize(_dockWidth, _dockHeight);
+            go.SetActive(_dockVisible);
             // El hospital asigna su mascara de Fog of War al proxy global de
             // postprocesado. Se anula sólo esa referencia durante la edición.
             ScenarioEditorFogOfWar.EnterEditor();
             _behaviour.RefreshTexts();
+        }
+
+        internal static void SetDockVisible(bool visible)
+        {
+            _dockVisible = visible;
+            if (!visible) DisableTools();
+            if (_behaviour != null) _behaviour.gameObject.SetActive(visible);
+        }
+
+        internal static void SetDockRect(float width, float height, float top, float bottom)
+        {
+            _dockWidth = width;
+            _dockHeight = Mathf.Max(0f, height);
+            _dockTop = top;
+            if (_behaviour == null) return;
+            var rect = _behaviour.transform as RectTransform;
+            if (rect != null)
+            {
+                rect.anchorMin = rect.anchorMax = Vector2.one;
+                rect.pivot = Vector2.one;
+                rect.anchoredPosition = new Vector2(0f, -top);
+                rect.sizeDelta = new Vector2(width, _dockHeight);
+            }
+            _behaviour.ApplyDockSize(width, _dockHeight);
         }
 
         internal static void Cleanup()
@@ -1668,6 +1697,47 @@ namespace UnderPressure.Editor
             CreateCursorOverlay(root.GetComponentInParent<Canvas>());
             RefreshTexts();
             RefreshSelection();
+        }
+
+        internal void ApplyDockSize(float width, float height)
+        {
+            var innerWidth = Mathf.Max(120f, width - 18f);
+            var title = transform.Find("Title") as RectTransform;
+            if (title != null) title.sizeDelta = new Vector2(innerWidth, 24f);
+            if (_brushButton != null)
+                ((RectTransform)_brushButton.transform).sizeDelta = new Vector2(innerWidth, 32f);
+            if (_sizeSlider != null)
+                ((RectTransform)_sizeSlider.transform).sizeDelta = new Vector2(width - 24f, 17f);
+            if (_opacitySlider != null)
+                ((RectTransform)_opacitySlider.transform).sizeDelta = new Vector2(width - 24f, 17f);
+
+            var sculptWidth = (innerWidth - 10f) / 3f;
+            if (_raiseButton != null)
+            {
+                var rect = (RectTransform)_raiseButton.transform;
+                rect.anchoredPosition = new Vector2(9f, -191f);
+                rect.sizeDelta = new Vector2(sculptWidth, 28f);
+            }
+            if (_lowerButton != null)
+            {
+                var rect = (RectTransform)_lowerButton.transform;
+                rect.anchoredPosition = new Vector2(14f + sculptWidth, -191f);
+                rect.sizeDelta = new Vector2(sculptWidth, 28f);
+            }
+            if (_flattenButton != null)
+            {
+                var rect = (RectTransform)_flattenButton.transform;
+                rect.anchoredPosition = new Vector2(19f + sculptWidth * 2f, -191f);
+                rect.sizeDelta = new Vector2(sculptWidth, 28f);
+            }
+            var wireButton = _wireText?.transform.parent as RectTransform;
+            if (wireButton != null) wireButton.sizeDelta = new Vector2(innerWidth, 30f);
+            if (_scroll != null)
+            {
+                var rect = _scroll.transform as RectTransform;
+                if (rect != null)
+                    rect.sizeDelta = new Vector2(width - 16f, Mathf.Max(40f, height - 272f));
+            }
         }
 
         private static GameObject NewUi(string name, Transform parent, params Type[] components)
