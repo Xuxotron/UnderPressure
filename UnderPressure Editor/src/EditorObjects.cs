@@ -1,4 +1,4 @@
-// Updated: 2026-10-19 - Catalogo exterior en 2 filas, contenido de ancho exacto y scroll horizontal completo.
+// Updated: 2026-10-20 - Desactivar DynamicLayoutGroup nativo que duplica el ancho del catalogo de dos filas.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -545,6 +545,12 @@ namespace UnderPressure.Editor
                 rect.anchoredPosition = Vector2.zero;
                 rect.sizeDelta = Vector2.zero;
 
+                // El prefab conserva el layout nativo de una fila.
+                // Sus 113952 unidades de ancho pisan las 51521 del Grid de dos filas.
+                // Desactivarlo evita que ambos controladores escriban sobre el mismo Content.
+                var nativeLayout = content.GetComponent<TH20.UI.DynamicLayoutGroup>();
+                if (nativeLayout != null) nativeLayout.enabled = false;
+
                 var horizontal = content.GetComponent<HorizontalLayoutGroup>();
                 if (horizontal != null) horizontal.enabled = false;
                 var vertical = content.GetComponent<VerticalLayoutGroup>();
@@ -560,8 +566,7 @@ namespace UnderPressure.Editor
                 grid.cellSize = new Vector2(105f, 88f);
                 grid.spacing = new Vector2(7f, 5f);
                 var fitter = content.GetComponent<ContentSizeFitter>() ?? content.AddComponent<ContentSizeFitter>();
-                // El ancho se ajusta al limite real de las miniaturas despues
-                // de que Unity haya distribuido las dos filas.
+                // En el commit 3007ecb el ancho lo controla VisualBoundsSizer.
                 fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
                 fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
                 fitter.enabled = true;
@@ -578,9 +583,7 @@ namespace UnderPressure.Editor
                     {
                         var layoutState = scrollRect.GetComponent<ScenarioCatalogLayoutState>() ??
                             scrollRect.gameObject.AddComponent<ScenarioCatalogLayoutState>();
-                        // Setup puede ejecutarse varias veces sobre el mismo menú.
-                        // Reservar el lateral una sola vez evita restar 219 px
-                        // en cada reapertura y terminar cortando el catálogo.
+                        // Aplicar el margen lateral una unica vez por instancia.
                         if (!layoutState.HorizontalInsetApplied)
                         {
                             var size = scrollRect.sizeDelta;
@@ -882,9 +885,9 @@ namespace UnderPressure.Editor
         private void LateUpdate() { Place(); }
     }
 
-    // El prefab nativo conserva un ancho equivalente a una columna por objeto.
-    // El Grid coloca dos objetos por columna, por lo que el final desplazable se
-    // obtiene de la geometria ya colocada y no del ancho preferido del prefab.
+    // Conserva el GridLayoutGroup original de 2 filas. Este componente mide
+    // el contenido real y registra las coordenadas que emplea ScrollRect.
+    // NO cambia celdas, miniaturas, pivotes ni la escala del catalogo.
     internal sealed class ScenarioCatalogVisualBoundsSizer : MonoBehaviour
     {
         private static readonly FieldInfo PendingItemsField =
@@ -893,8 +896,12 @@ namespace UnderPressure.Editor
         private RectTransform _content;
         private RectTransform _viewport;
         private GridLayoutGroup _grid;
+        private ScrollRect _scroll;
         private bool _dirty = true;
-        private bool _logged;
+        private int _lastLoggedBucket = -1;
+        private int _lastLoggedChildren = -1;
+        private bool _initialLogPending;
+        private readonly Vector3[] _corners = new Vector3[4];
 
         internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
             GridLayoutGroup grid, RectTransform viewport)
@@ -903,7 +910,11 @@ namespace UnderPressure.Editor
             _content = content;
             _grid = grid;
             _viewport = viewport;
+            _scroll = content != null ? content.GetComponentInParent<ScrollRect>() : null;
             _dirty = true;
+            _lastLoggedBucket = -1;
+            _lastLoggedChildren = -1;
+            _initialLogPending = false;
         }
 
         internal void MarkDirty() => _dirty = true;
@@ -914,50 +925,157 @@ namespace UnderPressure.Editor
             Canvas.willRenderCanvases += FitToVisibleChildren;
         }
 
-        private void OnDisable() =>
-            Canvas.willRenderCanvases -= FitToVisibleChildren;
-
-        private void OnDestroy() =>
-            Canvas.willRenderCanvases -= FitToVisibleChildren;
-
+        private void OnDisable() => Canvas.willRenderCanvases -= FitToVisibleChildren;
+        private void OnDestroy() => Canvas.willRenderCanvases -= FitToVisibleChildren;
         private void OnTransformChildrenChanged() => _dirty = true;
 
         private void FitToVisibleChildren()
         {
-            if (!_dirty || _content == null || _viewport == null || _grid == null ||
+            if (_content == null || _viewport == null || _grid == null ||
                 !_content.gameObject.activeInHierarchy) return;
 
-            _dirty = false;
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-            var active = 0;
-            var maximumX = 0f;
-            for (var i = 0; i < _content.childCount; ++i)
+            // Mecanica existente del commit 3007ecb: conservada exactamente.
+            if (_dirty)
             {
-                var child = _content.GetChild(i) as RectTransform;
-                if (child == null || !child.gameObject.activeSelf) continue;
-                var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
-                    _content, child);
-                maximumX = Mathf.Max(maximumX, bounds.max.x);
-                ++active;
+                _dirty = false;
+                LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+                var maximumX = 0f;
+                for (var i = 0; i < _content.childCount; ++i)
+                {
+                    var child = _content.GetChild(i) as RectTransform;
+                    if (child == null || !child.gameObject.activeSelf) continue;
+                    var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                        _content, child);
+                    maximumX = Mathf.Max(maximumX, bounds.max.x);
+                }
+                var targetWidth = Mathf.Max(_viewport.rect.width,
+                    maximumX + _grid.padding.right);
+                if (!Mathf.Approximately(_content.rect.width, targetWidth))
+                    _content.SetSizeWithCurrentAnchors(
+                        RectTransform.Axis.Horizontal, targetWidth);
             }
 
-            var previousWidth = _content.rect.width;
-            var targetWidth = Mathf.Max(_viewport.rect.width,
-                maximumX + _grid.padding.right);
-            if (!Mathf.Approximately(previousWidth, targetWidth))
-                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
-
+            // Esperar al render completado; el mismo Canvas puede reconstruir
+            // el layout DESPUES de nuestra medicion. Solo 5 muestras por barrido.
+            if (_scroll == null || _menu == null) return;
             var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
-            if (!_logged && active > 0 && pending != null && pending.Count == 0)
+            if (pending == null || pending.Count != 0 || _content.childCount == 0) return;
+            var position = _scroll.horizontalNormalizedPosition;
+            var bucket = Mathf.Clamp(Mathf.RoundToInt(position * 4f), 0, 4);
+            if (_initialLogPending ||
+                (bucket == _lastLoggedBucket && _lastLoggedChildren == _content.childCount))
+                return;
+            _lastLoggedBucket = bucket;
+            _lastLoggedChildren = _content.childCount;
+            _initialLogPending = true;
+            StartCoroutine(LogAfterRender(bucket));
+        }
+
+        private System.Collections.IEnumerator LogAfterRender(int bucket)
+        {
+            yield return new WaitForEndOfFrame();
+            _initialLogPending = false;
+            if (_content == null || _viewport == null || _scroll == null ||
+                !ScenarioEditorFlow.IsRunning) yield break;
+            try
             {
-                _logged = true;
-                UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Catalogo ajustado por limites: " + active +
-                    " miniaturas; ancho anterior=" + previousWidth.ToString("F1") +
-                    ", ancho visual=" + targetWidth.ToString("F1") +
-                    ", ancho preferido nativo=" +
-                    LayoutUtility.GetPreferredWidth(_content).ToString("F1") + ".");
+                RectTransform first = null, last = null;
+                int count = 0;
+                for (int i = 0; i < _content.childCount; i++)
+                {
+                    var child = _content.GetChild(i) as RectTransform;
+                    if (child == null || !child.gameObject.activeSelf) continue;
+                    if (first == null) first = child;
+                    last = child;
+                    count++;
+                }
+
+                var actualContent = _scroll.content;
+                var realViewport = _scroll.viewport != null ? _scroll.viewport :
+                    _scroll.transform as RectTransform;
+                var sb = new System.Text.StringBuilder(1800);
+                sb.Append("CatalogoScroll DIAGNOSTICO [").Append(bucket)
+                    .Append("/4], activos=").Append(count)
+                    .Append(", normalizado=").Append(_scroll.horizontalNormalizedPosition.ToString("F4"))
+                    .Append(", scroll.content==_listContent=")
+                    .Append(ReferenceEquals(actualContent, _content)).AppendLine();
+                AppendRect(sb, "_listContent", _content);
+                AppendRect(sb, "scroll.content", actualContent);
+                AppendRect(sb, "viewport pasado", _viewport);
+                AppendRect(sb, "scroll.viewport real", realViewport);
+                if (realViewport != null)
+                {
+                    sb.Append("bounds en viewport real: content=")
+                        .Append(WorldXBounds(actualContent, realViewport))
+                        .Append(", primero=").Append(WorldXBounds(first, realViewport))
+                        .Append(", ultimo=").Append(WorldXBounds(last, realViewport))
+                        .AppendLine();
+                    if (actualContent != null)
+                    {
+                        var contentBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(
+                            realViewport, actualContent);
+                        sb.Append("ScrollRect contentBounds.size.x=")
+                            .Append(contentBounds.size.x.ToString("F2"))
+                            .Append(", viewport.rect.width=")
+                            .Append(realViewport.rect.width.ToString("F2"))
+                            .AppendLine();
+                    }
+                }
+                sb.Append("Primero x=").Append(first != null ? first.anchoredPosition.x.ToString("F2") : "n/a")
+                    .Append(", ultimo x=")
+                    .Append(last != null ? last.anchoredPosition.x.ToString("F2") : "n/a")
+                    .Append(", preferidoGrid=").Append(LayoutUtility.GetPreferredWidth(_content).ToString("F2"))
+                    .AppendLine();
+                sb.Append("Elementos de layout del contenido: ");
+                foreach (var component in _content.GetComponents<Component>())
+                {
+                    var layout = component as ILayoutElement;
+                    if (layout == null) continue;
+                    sb.Append(component.GetType().Name)
+                        .Append("{prio=").Append(layout.layoutPriority)
+                        .Append(",min=").Append(layout.minWidth.ToString("F1"))
+                        .Append(",pref=").Append(layout.preferredWidth.ToString("F1"))
+                        .Append("} ");
+                }
+                UnderPressureEditorPlugin.Log?.LogInfo(sb.ToString());
             }
+            catch (Exception ex)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning("CatalogoScroll diagnostico: " + ex);
+            }
+        }
+
+        private static void AppendRect(System.Text.StringBuilder sb, string label,
+            RectTransform rect)
+        {
+            if (rect == null) { sb.Append(label).Append("=NULL").AppendLine(); return; }
+            sb.Append(label).Append(" path=").Append(rect.name)
+                .Append(", rect.width=").Append(rect.rect.width.ToString("F2"))
+                .Append(", sizeDelta=").Append(rect.sizeDelta)
+                .Append(", localScale=").Append(rect.localScale)
+                .Append(", lossyScale=").Append(rect.lossyScale)
+                .Append(", anchors=").Append(rect.anchorMin).Append("->").Append(rect.anchorMax)
+                .Append(", pivot=").Append(rect.pivot)
+                .Append(", parent=").Append(rect.parent != null ? rect.parent.name : "none")
+                .AppendLine();
+        }
+
+        // Proyeccion equivalente a los bounds utilizados por ScrollRect,
+        // incluyendo escalas y posibles contenedores intermedios.
+        private static string WorldXBounds(RectTransform rect, RectTransform relativeTo)
+        {
+            if (rect == null || relativeTo == null) return "NULL";
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            var min = float.PositiveInfinity;
+            var max = float.NegativeInfinity;
+            foreach (var point in corners)
+            {
+                var x = relativeTo.InverseTransformPoint(point).x;
+                min = Mathf.Min(min, x);
+                max = Mathf.Max(max, x);
+            }
+            return "[" + min.ToString("F1") + "," + max.ToString("F1") + "]";
         }
     }
 
@@ -1161,6 +1279,7 @@ namespace UnderPressure.Editor
         private readonly HashSet<ScenarioEditorScene.SceneObject> _ctrlSceneSelected =
             new HashSet<ScenarioEditorScene.SceneObject>();
         private bool _ctrlDragging;
+        private bool _ctrlHoverLocked;
         private Vector3 _ctrlStart;
         private Vector3 _ctrlEnd;
         private GameObject _ctrlRectangle;
@@ -1756,6 +1875,25 @@ namespace UnderPressure.Editor
             }
         }
 
+        // Ctrl cambia la parcela al pasar por encima de un objeto, SIN clic.
+        // Bloq Mayus desactiva solo este cambio automatico.
+        private void UpdateCtrlPlotHover()
+        {
+            if (!CtrlDown || _ctrlDragging || _nativeMulti.Count > 0 || _ctrlHoverLocked ||
+                Input.GetMouseButton(0) || OverUi() ||
+                _level?.CursorManager == null ||
+                !_level.CursorManager.IsModeActive<CursorEditHospitalItem>() ||
+                _level.CursorManager.IsModeActive<CursorRoomItem>()) return;
+            HospitalPlot owner;
+            LandscapeRoomItem item;
+            if (!TryPickNative(Input.mousePosition, out owner, out item) || owner == null) return;
+            if (!ScenarioEditorStorageMenu.PlotIsolationActive &&
+                !ReferenceEquals(owner, _selection))
+                _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
+            if (_ctrlSelected.Count == 0 && _ctrlSceneSelected.Count == 0)
+                _level.HighlightManager.HighlightObject(item);
+        }
+
         private void UpdateCtrlRectangle()
         {
             if (_nativeMulti.Count > 0) return;
@@ -1787,6 +1925,7 @@ namespace UnderPressure.Editor
                 // objetos fuera de sus bordes ni mezclar capas.
                 _ctrlSelected.Clear();
                 _ctrlSceneSelected.Clear();
+                _ctrlHoverLocked = true;
                 _ctrlDragging = true;
                 BeginCtrlRectangle();
             }
@@ -1945,6 +2084,7 @@ namespace UnderPressure.Editor
         private void ClearCtrlSelection()
         {
             _ctrlDragging = false;
+            _ctrlHoverLocked = false;
             _ctrlSelected.Clear();
             _ctrlSceneSelected.Clear();
             DestroyCtrlRectangle();
@@ -1986,6 +2126,8 @@ namespace UnderPressure.Editor
             RefreshSearch();
             if (ScenarioLandscape.IsActive) return;
 
+            if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
+            UpdateCtrlPlotHover();
             if (_ctrlDragging || (CtrlDown && !OverUi())) UpdateCtrlRectangle();
             // Mayus clona y Alt roba, pero ambos deben mostrar siempre el
             // contorno del objeto alcanzado aunque pertenezca a otra parcela o capa.
@@ -2066,17 +2208,7 @@ namespace UnderPressure.Editor
                 if (Vector2.Distance(_rightDown, Input.mousePosition) <= 5f &&
                     TryPickForScene(out var scene, out var owner, out var item, out var definition) &&
                     definition != null)
-                {
-                    if (owner != null && item != null)
-                    {
-                        var layer = ReadLayer(item);
-                        if (!ReferenceEquals(owner, _selection))
-                            _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
-                        if (CursorEditHospital.HospitalPlotLayer != layer)
-                            _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke(layer);
-                    }
                     SetSearch(GetObjectName(definition));
-                }
                 _rightClickPending = false;
             }
         }
