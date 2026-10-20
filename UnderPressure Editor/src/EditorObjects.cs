@@ -908,7 +908,9 @@ namespace UnderPressure.Editor
             _content = content;
             _grid = grid;
             _viewport = viewport;
-            _grid.enabled = true;
+            // Conservamos sus medidas, pero no su cálculo de layout: el menú
+            // nativo sigue reservando una columna horizontal por cada objeto.
+            _grid.enabled = false;
             Resize();
         }
 
@@ -931,10 +933,25 @@ namespace UnderPressure.Editor
             _lastFilter = filter;
             var visible = 0;
             for (var i = 0; i < objects.Count; ++i)
-                if (objects[i] != null && objects[i].activeInHierarchy)
-                    ++visible;
+            {
+                var item = objects[i];
+                // activeSelf refleja el filtro aunque el menú completo esté
+                // temporalmente oculto durante Setup.
+                if (item == null || !item.activeSelf) continue;
+                var itemRect = item.transform as RectTransform;
+                if (itemRect == null) continue;
+                var row = visible % 2;
+                var column = visible / 2;
+                itemRect.anchorMin = itemRect.anchorMax = new Vector2(0f, 1f);
+                itemRect.pivot = new Vector2(0f, 1f);
+                itemRect.sizeDelta = _grid.cellSize;
+                itemRect.anchoredPosition = new Vector2(
+                    _grid.padding.left + column * (_grid.cellSize.x + _grid.spacing.x),
+                    -_grid.padding.top - row * (_grid.cellSize.y + _grid.spacing.y));
+                ++visible;
+            }
 
-            var rows = Mathf.Max(1, _grid.constraintCount);
+            const int rows = 2;
             var columns = (visible + rows - 1) / rows;
             var targetHeight = _grid.padding.top + _grid.padding.bottom +
                 rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
@@ -952,7 +969,11 @@ namespace UnderPressure.Editor
             _lastVisible = visible;
             _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
             _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            var layout = _content.GetComponent<LayoutElement>() ??
+                _content.gameObject.AddComponent<LayoutElement>();
+            layout.minWidth = layout.preferredWidth = targetWidth;
+            layout.minHeight = layout.preferredHeight = targetHeight;
+            layout.flexibleWidth = layout.flexibleHeight = 0f;
 
             var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
             if (!_loggedComplete && visible > 0 && pending != null && pending.Count == 0)
