@@ -59,6 +59,13 @@ namespace UnderPressure.Editor
             return Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
         }
 
+        internal static string FolderForArchitect(string architect)
+        {
+            var name = string.IsNullOrWhiteSpace(architect)
+                ? UnderPressureEditorPlugin.ArchitectName : architect.Trim();
+            return Path.Combine(Folder, SafeName(name));
+        }
+
         internal static bool TryReadCurrentFog(Level level,
             out ScenarioMapFormat.Map header, out byte[] png)
         {
@@ -2004,7 +2011,14 @@ namespace UnderPressure.Editor
         private Text _cursorCoordinates;
         private float _nextCursorCoordinateRefresh;
         private Button _addPlotButton;
+        private Button _movePlotButton;
         private Button _deletePlotButton;
+        private Button _cameraButton;
+        private TMP_Text _cameraButtonText;
+        private Button _objectsButton;
+        private Button _nativeCameraButton;
+        private Button _nativeObjectsButton;
+        private Button _nativeMoveButton;
         private int _initialVisibilityFrames;
         private Button _plotIsolationButton;
         private bool _plotIsolation;
@@ -2060,12 +2074,83 @@ namespace UnderPressure.Editor
 
         private void PrepareNativeToolbar()
         {
-            SetNativeButtonLabel("_tileMapPreviewButton", "editor.toolbar.tile_view");
-            SetNativeButtonLabel("_toggleCameraButton", "editor.toolbar.free_camera");
             SetNativeButtonLabel("_buildButton", "editor.toolbar.edit_plot");
-            SetNativeButtonLabel("_objectsButton", "editor.objects.title");
-            SetNativeButtonLabel("_moveButton", "editor.toolbar.move_plot");
+            AddTileViewToPlotMenu();
+            AddTopEditorButtons();
             _template.gameObject.SetActive(false);
+        }
+
+        private void AddTileViewToPlotMenu()
+        {
+            var native = AccessTools.Field(typeof(EditHospitalMenu), "_tileMapPreviewButton")?
+                .GetValue(_menu) as Button;
+            var rootValue = AccessTools.Field(typeof(EditHospitalMenu), "_tileSelectionRoot")?
+                .GetValue(_menu);
+            var root = rootValue as Transform;
+            if (root == null && rootValue is GameObject)
+                root = ((GameObject)rootValue).transform;
+            if (native == null || root == null) return;
+            var tileTemplate = root.GetComponentInChildren<Button>(true) ?? _template;
+            var button = CloneButton(tileTemplate, root, T("editor.toolbar.tile_view"),
+                () => native.onClick.Invoke());
+            button.gameObject.name = "UP View Tiles";
+            var layout = button.GetComponent<LayoutElement>() ??
+                button.gameObject.AddComponent<LayoutElement>();
+            layout.minHeight = layout.preferredHeight = 31f;
+            button.transform.SetAsFirstSibling();
+            native.gameObject.SetActive(false);
+            _buttons.Add(button.gameObject);
+        }
+
+        private void AddTopEditorButtons()
+        {
+            var canvas = _menu.GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            _nativeObjectsButton = AccessTools.Field(typeof(EditHospitalMenu), "_objectsButton")?
+                .GetValue(_menu) as Button;
+            _nativeCameraButton = AccessTools.Field(typeof(EditHospitalMenu), "_toggleCameraButton")?
+                .GetValue(_menu) as Button;
+            if (_nativeObjectsButton != null)
+            {
+                _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
+                    -440f, () => _nativeObjectsButton.onClick.Invoke());
+                _nativeObjectsButton.gameObject.SetActive(false);
+            }
+            if (_nativeCameraButton != null)
+            {
+                _cameraButton = AddTopButton(canvas.transform, "", -220f, () =>
+                {
+                    _nativeCameraButton.onClick.Invoke();
+                    RefreshCameraButton();
+                });
+                _cameraButtonText = _cameraButton.GetComponentInChildren<TMP_Text>(true);
+                _nativeCameraButton.gameObject.SetActive(false);
+                RefreshCameraButton();
+            }
+        }
+
+        private Button AddTopButton(Transform parent, string label, float x, Action action)
+        {
+            var button = CloneButton(_template, parent, label, action);
+            var rect = button.transform as RectTransform;
+            if (rect != null)
+            {
+                rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1f);
+                rect.pivot = new Vector2(.5f, 1f);
+                rect.anchoredPosition = new Vector2(x, -12f);
+                rect.sizeDelta = new Vector2(208f, 40f);
+            }
+            _buttons.Add(button.gameObject);
+            return button;
+        }
+
+        private void RefreshCameraButton()
+        {
+            if (_cameraButtonText == null || _level?.CameraLogic == null) return;
+            var field = AccessTools.Field(_level.CameraLogic.GetType(), "_boundCamera");
+            var bounded = field?.GetValue(_level.CameraLogic) as bool?;
+            _cameraButtonText.text = T(bounded == false
+                ? "editor.toolbar.fixed_camera" : "editor.toolbar.free_camera");
         }
 
         private void SetNativeButtonLabel(string fieldName, string key)
@@ -2236,18 +2321,17 @@ namespace UnderPressure.Editor
                     ScenarioEditorStorage.CurrentMapName(_level));
         }
 
-        // Coordenadas mundiales del punto bajo el raton. Se muestra junto al
-        // boton Personajes, en la barra superior, sin capturar los clics.
+        // Coordenadas mundiales del punto bajo el raton, encima del historial.
         private void AddCursorCoordinates()
         {
             var canvas = _menu != null ? _menu.GetComponentInParent<Canvas>() : null;
             if (canvas == null) return;
             var labelRoot = AddUi("UP Cursor World XYZ", canvas.transform);
             var rect = labelRoot.GetComponent<RectTransform>();
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-118f, -12f);
-            rect.sizeDelta = new Vector2(322f, 40f);
+            rect.anchoredPosition = new Vector2(-20f, -18f);
+            rect.sizeDelta = new Vector2(300f, 40f);
             _cursorCoordinates = labelRoot.AddComponent<Text>();
             _cursorCoordinates.font = _font;
             _cursorCoordinates.fontSize = 16;
@@ -2445,6 +2529,15 @@ rect.pivot = new Vector2(1f, 1f);
             });
             _deletePlotButton = CloneButton(_template, transform,
                 T("editor.plot.delete"), ShowDeleteConfirmation);
+            _nativeMoveButton = AccessTools.Field(typeof(EditHospitalMenu), "_moveButton")?
+                .GetValue(_menu) as Button;
+            if (_nativeMoveButton != null)
+            {
+                _movePlotButton = CloneButton(_template, transform,
+                    T("editor.toolbar.move_plot"), () => _nativeMoveButton.onClick.Invoke());
+                _nativeMoveButton.gameObject.SetActive(false);
+                _buttons.Add(_movePlotButton.gameObject);
+            }
             _buttons.Add(_addPlotButton.gameObject);
             _buttons.Add(_deletePlotButton.gameObject);
             PositionPlotActions();
@@ -2578,6 +2671,13 @@ rect.pivot = new Vector2(1f, 1f);
                 return;
 
             RefreshCursorCoordinates();
+            RefreshCameraButton();
+            if (_objectsButton != null && _nativeObjectsButton != null)
+                _objectsButton.interactable = _nativeObjectsButton.interactable;
+            if (_cameraButton != null && _nativeCameraButton != null)
+                _cameraButton.interactable = _nativeCameraButton.interactable;
+            if (_movePlotButton != null && _nativeMoveButton != null)
+                _movePlotButton.interactable = _nativeMoveButton.interactable;
             var input = _level.InputManager;
             if (input == null) return;
             ScenarioLandscape.UpdateSelection();
@@ -2680,7 +2780,8 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void PositionPlotActions()
         {
-            if (_plotListViewport == null || _addPlotButton == null || _deletePlotButton == null)
+            if (_plotListViewport == null || _addPlotButton == null ||
+                _movePlotButton == null || _deletePlotButton == null)
                 return;
             var parentRect = transform as RectTransform;
             if (parentRect == null) return;
@@ -2688,21 +2789,24 @@ rect.pivot = new Vector2(1f, 1f);
             _plotListViewport.GetWorldCorners(corners);
             var width = Mathf.Abs((corners[3] - corners[0]).magnitude /
                                   Mathf.Max(parentRect.lossyScale.x, 0.0001f));
-            var half = Mathf.Max(70f, (width - 6f) * 0.5f);
+            var buttonWidth = Mathf.Max(52f, (width - 8f) / 3f);
             var add = _addPlotButton.transform as RectTransform;
+            var move = _movePlotButton.transform as RectTransform;
             var remove = _deletePlotButton.transform as RectTransform;
-            if (add == null || remove == null) return;
-            foreach (var rect in new[] { add, remove })
+            if (add == null || move == null || remove == null) return;
+            foreach (var rect in new[] { add, move, remove })
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
                 rect.pivot = new Vector2(0f, 1f);
-                rect.sizeDelta = new Vector2(half - 3f, 31f);
+                rect.sizeDelta = new Vector2(buttonWidth, 31f);
             }
             // El origen de cada boton es su esquina superior izquierda.
             var offset = parentRect.TransformVector(new Vector3(2f, -4f, 0f));
             add.position = corners[0] + offset;
+            move.position = corners[0] + offset +
+                            parentRect.TransformVector(new Vector3(buttonWidth + 2f, 0f, 0f));
             remove.position = corners[0] + offset +
-                              parentRect.TransformVector(new Vector3(half, 0f, 0f));
+                              parentRect.TransformVector(new Vector3((buttonWidth + 2f) * 2f, 0f, 0f));
         }
 
         private HospitalPlot SelectedPlot()

@@ -2,11 +2,9 @@
 // Archivo INDEPENDIENTE. Anadirlo a "UnderPressure Editor/src" (no sustituye otros .cs).
 using System;
 using System.IO;
-using System.Text;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace UnderPressure.Editor
 {
@@ -39,70 +37,21 @@ namespace UnderPressure.Editor
         private const float AlturaCamara = 100f;        // Por encima del punto mas alto del terreno.
         private const float DesplazamientoX = 10f;
         private const float DesplazamientoZ = 3f;
-        private const float BotonX = 400f;              // Posicion del boton respecto al centro superior.
-        private const float BotonY = -60f;
         // ===========================
 
-        private static GameObject _buttonRoot;
-        private static Text _buttonLabel;
         private static Level _level;
         private static bool _capturing;
-        private static string T(string key) => EditorLocalization.Get(key);
 
         internal static void Attach(EditHospitalMenu menu, Level level)
         {
             Detach();
             if (menu == null || level == null) return;
-            var canvas = menu.GetComponentInParent<Canvas>();
-            if (canvas == null) return;
-
             _level = level;
-            _buttonRoot = new GameObject("UP_CapturaCenital",
-                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-            _buttonRoot.transform.SetParent(canvas.transform, false);
-
-            var rect = (RectTransform)_buttonRoot.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(BotonX, BotonY);
-            rect.sizeDelta = new Vector2(172f, 38f);
-
-            var image = _buttonRoot.GetComponent<Image>();
-            image.color = new Color(0.22f, 0.44f, 0.48f, 0.96f);
-
-            var button = _buttonRoot.GetComponent<Button>();
-            button.targetGraphic = image;
-            button.onClick.AddListener(CaptureFromToolbar);
-
-            var caption = new GameObject("Texto", typeof(RectTransform),
-                typeof(CanvasRenderer), typeof(Text));
-            caption.transform.SetParent(_buttonRoot.transform, false);
-            var captionRect = (RectTransform)caption.transform;
-            captionRect.anchorMin = Vector2.zero;
-            captionRect.anchorMax = Vector2.one;
-            captionRect.offsetMin = Vector2.zero;
-            captionRect.offsetMax = Vector2.zero;
-
-            _buttonLabel = caption.GetComponent<Text>();
-            _buttonLabel.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            _buttonLabel.fontSize = 17;
-            _buttonLabel.alignment = TextAnchor.MiddleCenter;
-            _buttonLabel.color = Color.white;
-            _buttonLabel.raycastTarget = false;
-            _buttonLabel.text = T("editor.capture.button");
         }
 
         internal static void Detach()
         {
-            if (_buttonRoot != null) UnityEngine.Object.Destroy(_buttonRoot);
-            _buttonRoot = null;
-            _buttonLabel = null;
             _level = null;
-        }
-
-        private static void CaptureFromToolbar()
-        {
-            Capture(null);
         }
 
         internal static string GetMapImagePath(Level level)
@@ -257,8 +206,6 @@ namespace UnderPressure.Editor
                     File.WriteAllBytes(archivo, jpg);
                     archivoGuardado = archivo;
 
-                    if (_buttonLabel != null)
-                        _buttonLabel.text = T("editor.capture.saved");
                     UnderPressureEditorPlugin.Log?.LogInfo(
                         "Captura cenital guardada en: " + archivo +
                         "; centro real=(" + centro.x.ToString("F2") + ", " +
@@ -293,8 +240,6 @@ namespace UnderPressure.Editor
             }
             catch (Exception ex)
             {
-                if (_buttonLabel != null)
-                    _buttonLabel.text = T("editor.capture.error");
                 UnderPressureEditorPlugin.Log?.LogError("Captura cenital: " + ex);
             }
             finally
@@ -363,14 +308,5 @@ namespace UnderPressure.Editor
             return encontrado && bounds.size.x > 0.1f && bounds.size.z > 0.1f;
         }
 
-        private static string SafeFileName(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value)) return "Mapa";
-            var invalidos = Path.GetInvalidFileNameChars();
-            var sb = new StringBuilder(value.Length);
-            foreach (var ch in value)
-                sb.Append(Array.IndexOf(invalidos, ch) >= 0 ? '_' : ch);
-            return sb.ToString().Trim();
-        }
     }
 }

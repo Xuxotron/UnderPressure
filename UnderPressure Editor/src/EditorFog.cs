@@ -520,8 +520,8 @@ namespace UnderPressure.Editor
             RefreshControlTexts();
         }
 
-        // Alpha ON muestra el canal alfa directamente en escala de grises.
-        // Alpha OFF muestra el RGBA real sobre damero.
+        // Alpha SI muestra el RGBA real usando su transparencia.
+        // Alpha NO muestra el canal alfa directamente en escala de grises.
         // Ninguno de los modos modifica los pixeles de trabajo.
         private static void ToggleAlpha()
         {
@@ -535,7 +535,7 @@ namespace UnderPressure.Editor
             if (_previewBackground != null)
                 _previewBackground.color = Color.black;
             if (_checkerLayer != null)
-                _checkerLayer.gameObject.SetActive(!_alphaEnabled);
+                _checkerLayer.gameObject.SetActive(_alphaEnabled);
             RebuildPreview();
         }
 
@@ -664,7 +664,7 @@ namespace UnderPressure.Editor
         private static void RebuildPreview()
         {
             if (_workingTexture == null || _preview == null) return;
-            if (_alphaEnabled)
+            if (!_alphaEnabled)
             {
                 if (_alphaPreviewTexture == null ||
                     _alphaPreviewTexture.width != _workingTexture.width ||

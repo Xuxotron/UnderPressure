@@ -444,6 +444,7 @@ namespace UnderPressure.Editor
         {
             internal string Path;
             internal string Name;
+            internal LevelConfig Level;
         }
 
         private sealed class HospitalChoice
@@ -457,6 +458,7 @@ namespace UnderPressure.Editor
             internal string Label;
             internal Action OnClick;
             internal bool Green;
+            internal bool Selected;
         }
 
         private sealed class ScrollColumn
@@ -486,6 +488,7 @@ namespace UnderPressure.Editor
         private static ScrollColumn _mapsColumn;
         private static TMP_Text _selectedHospitalTitle;
         private static InputField _architectInput;
+        private static string _currentArchitect;
         private static GameObject _architectDropdown;
         private static ScrollColumn _architectColumn;
         private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
@@ -519,7 +522,7 @@ namespace UnderPressure.Editor
 
             var panel = Ui("Panel", _root.transform, typeof(Image));
             var panelRect = (RectTransform)panel.transform;
-            panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.69f, 0.5f);
+            panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
             panelRect.anchoredPosition = Vector2.zero;
             panelRect.sizeDelta = new Vector2(864f, 595f);
@@ -548,11 +551,11 @@ namespace UnderPressure.Editor
                     _onCancel?.Invoke();
                 }, false);
             CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.architect_name"),
-                new Vector2(466f, -511f), new Vector2(190f, 56f));
+                new Vector2(466f, -511f), new Vector2(150f, 56f));
             _architectInput = CreateArchitectInput(panel.transform,
-                new Vector2(654f, -511f), new Vector2(135f, 56f));
-            CreateNativeRow(panel.transform, "▼", new Vector2(794f, -511f),
-                new Vector2(47f, 56f), () => ToggleArchitectDropdown(panel.transform), false);
+                new Vector2(616f, -518f), new Vector2(178f, 42f));
+            CreateNativeRow(panel.transform, "▼", new Vector2(799f, -518f),
+                new Vector2(42f, 42f), () => ToggleArchitectDropdown(panel.transform), false, false);
 
             foreach (var level in levels.Where(l => l != null).Distinct()
                                         .OrderBy(l => l.GetLocalisedDisplayName(),
@@ -569,8 +572,7 @@ namespace UnderPressure.Editor
             }
 
             RefreshRows(_hospitalsColumn);
-            if (_hospitalChoices.Count > 0)
-                SelectHospital(_hospitalChoices[0].Level);
+            ShowArchitectMaps(UnderPressureEditorPlugin.ArchitectName);
             Canvas.ForceUpdateCanvases();
             return _root;
         }
@@ -594,16 +596,53 @@ namespace UnderPressure.Editor
                 OnClick = () => OpenSelected(null)
             });
 
-            foreach (var map in ReadMaps(level.UniqueId))
+            foreach (var map in ReadMaps(_currentArchitect, level.UniqueId))
             {
-                var path = map.Path;
+                var captured = map;
                 _mapsColumn.Entries.Add(new RowEntry
                 {
                     Label = map.Name,
-                    OnClick = () => OpenSelected(path)
+                    OnClick = () => OpenMap(captured)
                 });
             }
             RefreshRows(_mapsColumn);
+        }
+
+        private static void ShowArchitectMaps(string architect)
+        {
+            if (_root == null || _mapsColumn == null) return;
+            _currentArchitect = string.IsNullOrWhiteSpace(architect)
+                ? UnderPressureEditorPlugin.ArchitectName : architect.Trim();
+            UnderPressureEditorPlugin.ArchitectNameSetting.Value = _currentArchitect;
+            _selectedLevel = null;
+            if (_selectedHospitalTitle != null)
+                _selectedHospitalTitle.text = _currentArchitect;
+            RefreshRows(_hospitalsColumn);
+
+            _mapsColumn.Entries.Clear();
+            _mapsColumn.FirstRow = 0;
+            foreach (var map in ReadMaps(_currentArchitect, null))
+            {
+                var captured = map;
+                _mapsColumn.Entries.Add(new RowEntry
+                {
+                    Label = captured.Name,
+                    OnClick = () => OpenMap(captured)
+                });
+            }
+            RefreshRows(_mapsColumn);
+        }
+
+        private static void OpenMap(MapChoice map)
+        {
+            if (map == null || map.Level == null)
+            {
+                if (_selectedHospitalTitle != null)
+                    _selectedHospitalTitle.text = EditorLocalization.Get("scenario_editor.invalid_map");
+                return;
+            }
+            _selectedLevel = map.Level;
+            OpenSelected(map.Path);
         }
 
         private static void OpenSelected(string mapPath)
@@ -677,6 +716,7 @@ namespace UnderPressure.Editor
             _mapsColumn = null;
             _selectedHospitalTitle = null;
             _architectInput = null;
+            _currentArchitect = null;
             // La seleccion puede sobrevivir al cierre/recreacion del Canvas
             // mientras se carga el nivel. Solo se borra al aplicarla o cancelar.
             _hospitalChoices.Clear();
@@ -689,22 +729,29 @@ namespace UnderPressure.Editor
             _pendingNewMap = false;
         }
 
-        private static List<MapChoice> ReadMaps(string hospitalId)
+        private static List<MapChoice> ReadMaps(string architect, string hospitalId)
         {
             var result = new List<MapChoice>();
-            var folder = ScenarioEditorStorage.Folder;
+            var folder = ScenarioEditorStorage.FolderForArchitect(architect);
             if (!Directory.Exists(folder)) return result;
             foreach (var file in Directory.GetFiles(folder, "*.upmap", SearchOption.AllDirectories))
             {
                 try
                 {
                     var header = ScenarioMapFormat.ReadHeader(file);
-                    if (!string.Equals(header.baseHospitalId, hospitalId, StringComparison.Ordinal)) continue;
+                    if (!string.IsNullOrEmpty(hospitalId) &&
+                        !string.Equals(header.baseHospitalId, hospitalId, StringComparison.Ordinal))
+                        continue;
+                    var hospital = _hospitalChoices.FirstOrDefault(choice =>
+                        string.Equals(choice.Level.UniqueId, header.baseHospitalId,
+                            StringComparison.Ordinal));
+                    if (hospital == null) continue;
                     result.Add(new MapChoice
                     {
                         Path = file,
                         Name = string.IsNullOrWhiteSpace(header.name)
-                            ? Path.GetFileNameWithoutExtension(file) : header.name
+                            ? Path.GetFileNameWithoutExtension(file) : header.name,
+                        Level = hospital.Level
                     });
                 }
                 catch (Exception exception)
@@ -789,16 +836,13 @@ namespace UnderPressure.Editor
             for (var row = 0; row < VisibleRows && row + column.FirstRow < column.Entries.Count; ++row)
             {
                 var entry = column.Entries[row + column.FirstRow];
-                var label = entry.Label;
+                var selected = entry.Selected;
                 if (ReferenceEquals(column, _hospitalsColumn))
-                {
-                    var selected = _hospitalChoices.FirstOrDefault(
+                    selected = _hospitalChoices.Any(
                         x => x.Label == entry.Label && x.Level == _selectedLevel);
-                    if (selected != null) label = "› " + label;
-                }
-                var buttonRow = CreateNativeRow(column.Viewport, label,
+                var buttonRow = CreateNativeRow(column.Viewport, entry.Label,
                     new Vector2(RowInset, -(RowInset + row * (RowHeight + RowSpacing))),
-                    new Vector2(width, RowHeight), entry.OnClick, entry.Green);
+                    new Vector2(width, RowHeight), entry.OnClick, entry.Green, selected);
                 column.VisibleRows.Add(buttonRow);
             }
         }
@@ -806,7 +850,8 @@ namespace UnderPressure.Editor
         // Todos los botones, tanto el visible inferior como los de las listas,
         // usan IDENTICA creacion y posicion absoluta (ninguno depende de LayoutGroup).
         private static GameObject CreateNativeRow(
-            Transform parent, string label, Vector2 position, Vector2 size, Action action, bool green)
+            Transform parent, string label, Vector2 position, Vector2 size, Action action,
+            bool green, bool selected = false)
         {
             var row = Ui("UP_" + label, parent);
             var rect = (RectTransform)row.transform;
@@ -848,12 +893,15 @@ namespace UnderPressure.Editor
                 text.raycastTarget = false;
             }
 
-            if (green)
+            if (green || selected)
             {
                 var colors = button.colors;
-                colors.normalColor = new Color(0.22f, 0.96f, 0.22f, 1f);
-                colors.highlightedColor = new Color(0.42f, 1f, 0.34f, 1f);
-                colors.pressedColor = new Color(0.13f, 0.75f, 0.16f, 1f);
+                var baseColor = selected
+                    ? new Color(0.96f, 0.73f, 0.17f, 1f)
+                    : new Color(0.22f, 0.96f, 0.22f, 1f);
+                colors.normalColor = baseColor;
+                colors.highlightedColor = Color.Lerp(baseColor, Color.white, 0.22f);
+                colors.pressedColor = Color.Lerp(baseColor, Color.black, 0.22f);
                 colors.selectedColor = colors.highlightedColor;
                 button.colors = colors;
                 if (button.targetGraphic != null)
@@ -925,6 +973,12 @@ namespace UnderPressure.Editor
                 if (name.Length > 0)
                     UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
             });
+            input.onEndEdit.AddListener(value =>
+            {
+                var name = (value ?? "").Trim();
+                if (name.Length == 0) return;
+                ShowArchitectMaps(name);
+            });
             return input;
         }
 
@@ -950,24 +1004,27 @@ namespace UnderPressure.Editor
             var rect = (RectTransform)_architectDropdown.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(654f, -82f);
-            rect.sizeDelta = new Vector2(187f, 422f);
+            rect.anchoredPosition = new Vector2(616f, -82f);
+            rect.sizeDelta = new Vector2(225f, 422f);
             _architectDropdown.GetComponent<Image>().color =
                 new Color(0.12f, 0.15f, 0.18f, 0.99f);
             _architectDropdown.transform.SetAsLastSibling();
             _architectColumn = CreateColumn(_architectDropdown.transform,
-                "Architects", Vector2.zero, new Vector2(187f, 422f));
+                "Architects", Vector2.zero, new Vector2(225f, 422f));
             foreach (var architect in names)
             {
                 var selected = architect;
                 _architectColumn.Entries.Add(new RowEntry
                 {
                     Label = selected,
+                    Selected = string.Equals(selected, _currentArchitect,
+                        StringComparison.CurrentCultureIgnoreCase),
                     OnClick = () =>
                     {
                         if (_architectInput != null)
                             _architectInput.text = selected;
                         UnderPressureEditorPlugin.ArchitectNameSetting.Value = selected;
+                        ShowArchitectMaps(selected);
                         CloseArchitectDropdown();
                     }
                 });
