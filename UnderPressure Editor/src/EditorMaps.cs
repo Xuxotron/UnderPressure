@@ -1992,6 +1992,7 @@ namespace UnderPressure.Editor
         private GameObject _dialog;
         private InputField _nameInput;
         private Text _statusText;
+        private GameObject _mapIdentityRoot;
         private Text _mapIdentityLabel;
         private bool _showMapCoordinates;
         private Font _font;
@@ -2035,6 +2036,12 @@ namespace UnderPressure.Editor
         internal Button CameraButton => _cameraButton;
         internal Button StylesButton => _stylesButton;
         internal Transform PlotLayerRoot => _layerButtonsRoot?.transform;
+        internal GameObject MapIdentityRoot => _mapIdentityRoot;
+        internal Button[] PlotChromeButtons => new[]
+        {
+            _layerButtons[0], _layerButtons[1], _layerButtons[2],
+            _plotIsolationButton, _addPlotButton, _movePlotButton, _deletePlotButton
+        };
 
         private static string T(string key) => EditorLocalization.Get(key);
 
@@ -2312,13 +2319,13 @@ namespace UnderPressure.Editor
                 var activeColor = nativeColors != null && nativeColors.Length > i
                     ? nativeColors[i] : fallback[i];
                 activeColor.a = 1f;
-                colors.normalColor = active ? activeColor : new Color(.42f, .50f, .54f, 1f);
+                colors.normalColor = active ? activeColor : new Color(.035f, .43f, .70f, 1f);
                 colors.highlightedColor = active
                     ? Color.Lerp(activeColor, Color.white, .18f)
-                    : new Color(.55f, .63f, .67f, 1f);
+                    : new Color(.08f, .58f, .86f, 1f);
                 colors.pressedColor = active
                     ? Color.Lerp(activeColor, Color.black, .18f)
-                    : new Color(.33f, .40f, .44f, 1f);
+                    : new Color(.025f, .32f, .55f, 1f);
                 colors.selectedColor = colors.highlightedColor;
                 button.colors = colors;
             }
@@ -2328,6 +2335,7 @@ namespace UnderPressure.Editor
         private void AddMapIdentity()
         {
             var root = AddUi("UP Map Name or Coordinates", transform);
+            _mapIdentityRoot = root;
             var rect = root.GetComponent<RectTransform>();
             rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
@@ -2508,7 +2516,7 @@ rect.pivot = new Vector2(1f, 1f);
             if (button != null && button.image != null)
                 button.image.color = selected
                     ? new Color(.02f, .55f, .90f, 1f)
-                    : new Color(.58f, .68f, .74f, 1f);
+                    : new Color(.035f, .43f, .70f, 1f);
         }
 
         private void OnPlotSelected(HospitalPlot plot)

@@ -320,6 +320,10 @@ namespace UnderPressure.Editor
             rect.sizeDelta = new Vector2(_dockWidth, _dockHeight);
             var image = go.GetComponent<Image>();
             image.color = new Color(0f, 0f, 0f, 0.55f);
+            var panelCanvas = go.AddComponent<Canvas>();
+            panelCanvas.overrideSorting = true;
+            panelCanvas.sortingOrder = 2850;
+            go.AddComponent<GraphicRaycaster>();
             _behaviour = go.GetComponent<ScenarioEditorTerrainPainterBehaviour>();
             _behaviour.BuildUi();
             _behaviour.ApplyDockSize(_dockWidth, _dockHeight);
@@ -352,6 +356,20 @@ namespace UnderPressure.Editor
                 rect.sizeDelta = new Vector2(width, _dockHeight);
             }
             _behaviour.ApplyDockSize(width, _dockHeight);
+        }
+
+        internal static void SetDockStyle(Sprite sprite, Color color)
+        {
+            if (_behaviour == null) return;
+            var image = _behaviour.GetComponent<Image>();
+            if (image == null) return;
+            if (sprite != null)
+            {
+                image.sprite = sprite;
+                image.type = Image.Type.Sliced;
+            }
+            color.a = 1f;
+            image.color = color;
         }
 
         internal static void Cleanup()

@@ -80,6 +80,20 @@ namespace UnderPressure.Editor
             _active?.ApplyDockRect();
         }
 
+        internal static void SetDockStyle(Sprite sprite, Color color)
+        {
+            if (_active?._historyPanel == null) return;
+            var image = _active._historyPanel.GetComponent<Image>();
+            if (image == null) return;
+            if (sprite != null)
+            {
+                image.sprite = sprite;
+                image.type = Image.Type.Sliced;
+            }
+            color.a = 1f;
+            image.color = color;
+        }
+
         private static string T(string key) => EditorLocalization.Get(key);
 
         internal static bool Ready => _active != null && _active._baseline != null &&

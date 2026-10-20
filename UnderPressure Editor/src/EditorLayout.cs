@@ -19,7 +19,7 @@ namespace UnderPressure.Editor
     {
         internal const float PanelWidth = 220f;
         internal const float BarHeight = 50f;
-        private const float DividerHeight = 10f;
+        private const float DividerHeight = 20f;
         private const float MinimumUpperHeight = 150f;
         private const float MinimumLowerHeight = 150f;
 
@@ -85,7 +85,11 @@ namespace UnderPressure.Editor
                 rootObject.transform.SetParent(_canvas.transform, false);
                 _root = (RectTransform)rootObject.transform;
                 Stretch(_root);
-                _root.SetAsFirstSibling();
+                var overlay = rootObject.AddComponent<Canvas>();
+                overlay.overrideSorting = true;
+                overlay.sortingOrder = 3000;
+                rootObject.AddComponent<GraphicRaycaster>();
+                _root.SetAsLastSibling();
                 BuildChrome(template);
             }
 
@@ -101,6 +105,7 @@ namespace UnderPressure.Editor
             SetRect((RectTransform)_topBackground.transform, new Vector2(0f, 1f),
                 new Vector2(1f, 1f), new Vector2(.5f, 1f), Vector2.zero,
                 new Vector2(0f, BarHeight));
+            _topBackground.SetActive(false);
 
             _leftTitle = NewImage("UP Editor Title", _root, _style.PanelSprite,
                 _style.HeaderColor, false);
@@ -119,8 +124,15 @@ namespace UnderPressure.Editor
 
         private RectTransform CreateDivider(string name, Transform parent, Action<float> setter)
         {
-            var go = NewImage(name, parent, _style.ButtonSprite,
-                new Color(.25f, .72f, .93f, .9f), true);
+            var go = NewImage(name, parent, null, new Color(0f, 0f, 0f, .01f), true);
+            var handle = NewImage("Tirador", go.transform, _style.ButtonSprite,
+                new Color(.18f, .72f, .96f, 1f), false);
+            var handleRect = (RectTransform)handle.transform;
+            handleRect.anchorMin = new Vector2(0f, .5f);
+            handleRect.anchorMax = new Vector2(1f, .5f);
+            handleRect.pivot = new Vector2(.5f, .5f);
+            handleRect.anchoredPosition = Vector2.zero;
+            handleRect.sizeDelta = new Vector2(-8f, 6f);
             var divider = go.AddComponent<ScenarioEditorDockDivider>();
             divider.Initialise(_root, setter);
             return (RectTransform)go.transform;
@@ -191,6 +203,8 @@ namespace UnderPressure.Editor
                 PlaceCornerButton(_historyToggle, true, true);
                 PlaceCornerButton(_terrainToggle, true, false);
                 PlaceTopButtons(width);
+                PlaceMapIdentity();
+                ApplyDockStyles();
                 ApplyObjectsPanel(FindActiveObjectsMenu());
                 return;
             }
@@ -216,6 +230,7 @@ namespace UnderPressure.Editor
             PlaceCornerButton(_historyToggle, true, true);
             PlaceCornerButton(_terrainToggle, true, false);
             PlaceTopButtons(width);
+            PlaceMapIdentity();
 
             var objects = FindActiveObjectsMenu();
             ApplyObjectsPanel(objects);
@@ -250,6 +265,7 @@ namespace UnderPressure.Editor
             ScenarioEditorTerrainPainter.SetDockRect(PanelWidth, terrainHeight,
                 BarHeight + historyHeight, BarHeight);
             ScenarioEditorTerrainPainter.SetDockVisible(_terrainOpen);
+            ApplyDockStyles();
 
             if (_rightDivider != null)
             {
@@ -263,10 +279,18 @@ namespace UnderPressure.Editor
             SetSelected(_terrainToggle, _terrainOpen);
         }
 
+        private void ApplyDockStyles()
+        {
+            ScenarioEditorHistory.SetDockStyle(_style.PanelSprite, _style.PanelColor);
+            ScenarioEditorTerrainPainter.SetDockStyle(_style.PanelSprite, _style.PanelColor);
+        }
+
         private void FitPlotPanel()
         {
             if (_plotPanel == null) return;
             ApplyPanelStyle(_plotPanel.gameObject);
+            EnsureSortingCanvas(_plotPanel.gameObject, 2850);
+            _plotPanel.SetAsLastSibling();
             if (_plotViewport != null)
             {
                 _plotViewport.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
@@ -279,12 +303,25 @@ namespace UnderPressure.Editor
             if (layerRoot != null)
                 layerRoot.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
                     PanelWidth - 10f);
+            foreach (var button in _storage?.PlotChromeButtons ?? new Button[0])
+            {
+                if (button == null) continue;
+                if (button.transform.parent == _menu.transform)
+                    button.transform.SetParent(_root, false);
+                ApplyButtonStyle(button);
+                button.transform.SetAsLastSibling();
+            }
+            var landscape = _plotPanel.GetComponentsInChildren<Transform>(true)
+                .FirstOrDefault(child => child.name == "UP Landscape - Row");
+            var landscapeImage = landscape?.GetComponent<Image>();
+            if (landscapeImage != null) landscapeImage.color = _style.ButtonColor;
             foreach (var row in _plotPanel.GetComponentsInChildren<PlotSelectionItem>(true))
             {
                 var rect = row.transform as RectTransform;
                 if (rect != null) rect.SetSizeWithCurrentAnchors(
                     RectTransform.Axis.Horizontal, PanelWidth - 10f);
-                CompactPlotRow(row);
+                CompactPlotRow(row, _style.ButtonSprite, _style.ButtonColor,
+                    _style.SelectedColor);
             }
         }
 
@@ -317,7 +354,8 @@ namespace UnderPressure.Editor
             return null;
         }
 
-        private static void CompactPlotRow(PlotSelectionItem row)
+        private static void CompactPlotRow(PlotSelectionItem row, Sprite sprite,
+            Color normal, Color selected)
         {
             if (row == null) return;
             var text = AccessTools.Field(typeof(PlotSelectionItem), "_text")?
@@ -330,7 +368,7 @@ namespace UnderPressure.Editor
                     textRect.anchorMin = new Vector2(0f, 0f);
                     textRect.anchorMax = new Vector2(1f, 1f);
                     textRect.offsetMin = new Vector2(7f, 0f);
-                    textRect.offsetMax = new Vector2(-105f, 0f);
+                    textRect.offsetMax = new Vector2(-126f, 0f);
                 }
                 text.enableAutoSizing = true;
                 text.fontSizeMin = 9f;
@@ -351,9 +389,12 @@ namespace UnderPressure.Editor
                 if (rect == null) continue;
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, .5f);
                 rect.pivot = new Vector2(.5f, .5f);
-                rect.anchoredPosition = new Vector2(-91f + index * 20f, 0f);
-                rect.sizeDelta = new Vector2(18f, 18f);
+                rect.anchoredPosition = new Vector2(-115f + index * 25f, 0f);
+                rect.sizeDelta = new Vector2(22f, 22f);
             }
+            var skin = row.GetComponent<ScenarioEditorPlotRowSkin>() ??
+                row.gameObject.AddComponent<ScenarioEditorPlotRowSkin>();
+            skin.Initialise(row, sprite, normal, selected);
         }
 
         private void PlaceTopButtons(float canvasWidth)
@@ -377,6 +418,7 @@ namespace UnderPressure.Editor
             {
                 var rect = button.transform as RectTransform;
                 if (rect == null) continue;
+                rect.SetParent(_root, false);
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
                 rect.pivot = new Vector2(0f, 1f);
                 rect.anchoredPosition = new Vector2(x, -5f);
@@ -392,6 +434,7 @@ namespace UnderPressure.Editor
             if (button == null) return;
             var rect = button.transform as RectTransform;
             if (rect == null) return;
+            rect.SetParent(_root, false);
             if (right)
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(1f, top ? 1f : 0f);
@@ -408,6 +451,19 @@ namespace UnderPressure.Editor
             button.transform.SetAsLastSibling();
         }
 
+        private void PlaceMapIdentity()
+        {
+            var identity = _storage?.MapIdentityRoot;
+            var rect = identity?.transform as RectTransform;
+            if (rect == null) return;
+            rect.SetParent(_root, false);
+            rect.anchorMin = rect.anchorMax = Vector2.one;
+            rect.pivot = Vector2.one;
+            rect.anchoredPosition = new Vector2(-PanelWidth - 8f, -5f);
+            rect.sizeDelta = new Vector2(184f, 40f);
+            rect.SetAsLastSibling();
+        }
+
         private void ApplyObjectsPanel(LandscapeObjectsMenu menu)
         {
             if (menu == null || _canvasRect == null) return;
@@ -421,6 +477,7 @@ namespace UnderPressure.Editor
             rect.anchoredPosition = new Vector2(0f, BarHeight);
             rect.sizeDelta = new Vector2(PanelWidth, height);
             ApplyPanelStyle(menu.gameObject);
+            EnsureSortingCanvas(menu.gameObject, 2850);
             ScenarioEditorObjectDock.Configure(menu, PanelWidth, height);
         }
 
@@ -438,14 +495,25 @@ namespace UnderPressure.Editor
 
         private void ApplyPanelStyle(GameObject panel)
         {
-            var image = panel == null ? null : panel.GetComponent<Image>();
-            if (image == null) return;
+            if (panel == null) return;
+            var image = panel.GetComponent<Image>() ?? panel.AddComponent<Image>();
             if (_style.PanelSprite != null)
             {
                 image.sprite = _style.PanelSprite;
                 image.type = Image.Type.Sliced;
             }
             image.color = _style.PanelColor;
+            image.raycastTarget = true;
+        }
+
+        private static void EnsureSortingCanvas(GameObject root, int order)
+        {
+            if (root == null) return;
+            var canvas = root.GetComponent<Canvas>() ?? root.AddComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = order;
+            if (root.GetComponent<GraphicRaycaster>() == null)
+                root.AddComponent<GraphicRaycaster>();
         }
 
         private void ApplyButtonStyle(Button button)
@@ -565,8 +633,8 @@ namespace UnderPressure.Editor
         {
             internal Sprite PanelSprite;
             internal Sprite ButtonSprite;
-            internal Color PanelColor = new Color(.025f, .30f, .52f, .96f);
-            internal Color HeaderColor = new Color(.015f, .38f, .65f, .98f);
+            internal Color PanelColor = new Color(.018f, .25f, .43f, 1f);
+            internal Color HeaderColor = new Color(.018f, .25f, .43f, 1f);
             internal Color ButtonColor = new Color(.035f, .43f, .70f, 1f);
             internal Color SelectedColor = new Color(.02f, .58f, .88f, 1f);
             internal ColorBlock ButtonColors = ColorBlock.defaultColorBlock;
@@ -608,8 +676,6 @@ namespace UnderPressure.Editor
                     if (panel != null)
                     {
                         result.PanelSprite = panel.sprite;
-                        result.PanelColor = panel.color;
-                        result.HeaderColor = panel.color;
                     }
                 }
                 catch (Exception exception)
@@ -641,6 +707,104 @@ namespace UnderPressure.Editor
         {
             if (_root == null || _setter == null || eventData == null) return;
             _setter(eventData.position.y);
+        }
+    }
+
+    internal sealed class ScenarioEditorPlotRowSkin : MonoBehaviour
+    {
+        private Button _button;
+        private Toggle[] _toggles;
+        private Sprite _sprite;
+        private Color _normal;
+        private Color _selectedColor;
+        private bool _selected;
+        private bool _initialised;
+
+        internal void Initialise(PlotSelectionItem row, Sprite sprite,
+            Color normal, Color selected)
+        {
+            _sprite = sprite;
+            _normal = normal;
+            _selectedColor = selected;
+            if (!_initialised)
+            {
+                _button = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
+                    .GetValue(row) as Button;
+                var nativeSelected = AccessTools.Field(typeof(PlotSelectionItem), "_selectedColor")?
+                    .GetValue(row);
+                if (_button?.targetGraphic != null && nativeSelected is Color)
+                    _selected = ColorDistance(_button.targetGraphic.color,
+                        (Color)nativeSelected) < .01f;
+                var names = new[]
+                {
+                    "_toggleState", "_toggleVisible", "_toggleLayerBase",
+                    "_toggleLayerBuilt", "_toggleLayerUnbuilt"
+                };
+                _toggles = names.Select(name =>
+                    AccessTools.Field(typeof(PlotSelectionItem), name)?.GetValue(row) as Toggle)
+                    .Where(toggle => toggle != null).ToArray();
+                _initialised = true;
+            }
+            Apply();
+        }
+
+        internal void SetSelected(bool selected)
+        {
+            _selected = selected;
+            Apply();
+        }
+
+        private void Apply()
+        {
+            if (_button?.targetGraphic is Image buttonImage)
+            {
+                if (_sprite != null)
+                {
+                    buttonImage.sprite = _sprite;
+                    buttonImage.type = Image.Type.Sliced;
+                }
+                var baseColor = _selected ? _selectedColor : _normal;
+                buttonImage.color = baseColor;
+                var colors = _button.colors;
+                colors.normalColor = baseColor;
+                colors.highlightedColor = Color.Lerp(baseColor, Color.white, .16f);
+                colors.pressedColor = Color.Lerp(baseColor, Color.black, .18f);
+                colors.selectedColor = colors.highlightedColor;
+                _button.colors = colors;
+            }
+            if (_toggles == null) return;
+            foreach (var toggle in _toggles)
+            {
+                if (toggle?.targetGraphic is Image background)
+                {
+                    if (_sprite != null)
+                    {
+                        background.sprite = _sprite;
+                        background.type = Image.Type.Sliced;
+                    }
+                    background.color = _normal;
+                }
+                if (toggle?.graphic is Graphic mark) mark.color = Color.white;
+            }
+        }
+
+        private static float ColorDistance(Color first, Color second) =>
+            Mathf.Abs(first.r - second.r) + Mathf.Abs(first.g - second.g) +
+            Mathf.Abs(first.b - second.b) + Mathf.Abs(first.a - second.a);
+    }
+
+    [HarmonyPatch(typeof(PlotSelectionItem), "OnSelectHospitalPlot")]
+    internal static class ScenarioEditorPlotRowSelectionPatch
+    {
+        private static readonly System.Reflection.FieldInfo PlotField =
+            AccessTools.Field(typeof(PlotSelectionItem), "_plot");
+
+        private static void Postfix(PlotSelectionItem __instance, HospitalPlot hospitalPlot)
+        {
+            if (!ScenarioEditorFlow.IsRunning || __instance == null) return;
+            var skin = __instance.GetComponent<ScenarioEditorPlotRowSkin>();
+            if (skin != null)
+                skin.SetSelected(ReferenceEquals(PlotField?.GetValue(__instance), hospitalPlot));
         }
     }
 
@@ -684,7 +848,7 @@ namespace UnderPressure.Editor
             grid.constraintCount = 2;
             grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
-            grid.childAlignment = TextAnchor.UpperCenter;
+            grid.childAlignment = TextAnchor.UpperLeft;
             grid.padding = new RectOffset(5, 9, 6, 8);
             grid.spacing = new Vector2(6f, 6f);
             grid.cellSize = new Vector2(97f, 88f);
@@ -705,6 +869,7 @@ namespace UnderPressure.Editor
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 38f;
             scroll.content = content;
+            if (scroll.viewport == null) scroll.viewport = content.parent as RectTransform;
             scrollRect.anchorMin = Vector2.zero;
             scrollRect.anchorMax = Vector2.one;
             scrollRect.pivot = new Vector2(.5f, .5f);
@@ -716,6 +881,11 @@ namespace UnderPressure.Editor
                 scroll.viewport.anchorMax = Vector2.one;
                 scroll.viewport.offsetMin = Vector2.zero;
                 scroll.viewport.offsetMax = new Vector2(-12f, 0f);
+                var viewportImage = scroll.viewport.GetComponent<Image>() ??
+                    scroll.viewport.gameObject.AddComponent<Image>();
+                if (viewportImage.sprite == null)
+                    viewportImage.color = new Color(0f, 0f, 0f, .001f);
+                viewportImage.raycastTarget = true;
             }
             EnsureVerticalScrollbar(menu.transform as RectTransform, scroll);
 
@@ -782,13 +952,12 @@ namespace UnderPressure.Editor
             existing.anchorMax = new Vector2(1f, 1f);
             existing.pivot = new Vector2(1f, .5f);
             existing.anchoredPosition = Vector2.zero;
-            existing.sizeDelta = new Vector2(10f, -49f);
-            existing.offsetMin = new Vector2(-10f, 6f);
+            existing.offsetMin = new Vector2(-12f, 6f);
             existing.offsetMax = new Vector2(0f, -43f);
             existing.gameObject.SetActive(true);
             existing.SetAsLastSibling();
             scroll.verticalScrollbar = existing.GetComponent<Scrollbar>();
-            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             scroll.verticalScrollbarSpacing = 2f;
         }
     }
