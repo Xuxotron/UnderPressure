@@ -578,23 +578,24 @@ namespace UnderPressure.Editor
                     var distance = Mathf.Sqrt(dx * dx + dy * dy) * invRadius;
                     if (distance >= 1f) continue;
 
-                    // Mismo perfil totalmente suave para ANADIR o ELIMINAR:
-                    // 100% en el centro; descenso continuo sin borde duro.
-                    var remaining = 1f - distance;
-                    var influence = remaining * remaining * (3f - 2f * remaining);
+                    // Mismo nucleo solido para ANADIR o ELIMINAR. El 85 %
+                    // interior conserva toda la fuerza y solo el borde exterior
+                    // se difumina hasta cero al alcanzar el radio del cursor.
+                    const float solidRadius = 0.85f;
+                    var feather = Mathf.Clamp01(
+                        (1f - distance) / (1f - solidRadius));
+                    var influence = feather * feather * (3f - 2f * feather);
                     var index = y * width + x;
                     if (influence <= _strokeInfluence[index]) continue;
                     _strokeInfluence[index] = influence;
 
-                    // El sello define un alfa absoluto y su complemento exacto.
-                    // Anadir nunca reduce alfa y Eliminar nunca lo aumenta, pero
-                    // ambos aplican la misma forma, radio y opacidad maxima.
-                    var strength = Mathf.Clamp01(maximumStrength * influence);
-                    var stampAlpha = Mathf.RoundToInt(255f * strength);
+                    // Eliminar y Anadir aplican el mismo delta con signo opuesto.
+                    // Asi recorrer de nuevo el mismo trazo lo restaura con el
+                    // mismo grosor, incluido todo el borde difuminado.
+                    var delta = 255f * maximumStrength * influence;
                     var originalAlpha = (int)_strokeOriginalPixels[index].a;
-                    var alpha = _paintDirection > 0
-                        ? Mathf.Max(originalAlpha, stampAlpha)
-                        : Mathf.Min(originalAlpha, 255 - stampAlpha);
+                    var alpha = Mathf.RoundToInt(Mathf.Clamp(
+                        originalAlpha + _paintDirection * delta, 0f, 255f));
                     if (alpha == _strokePixels[index].a) continue;
                     _strokePixels[index].a = (byte)alpha;
                     _strokeDirty = true;
