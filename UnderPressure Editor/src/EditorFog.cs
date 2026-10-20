@@ -55,6 +55,7 @@ namespace UnderPressure.Editor
         private static RectTransform _brushCursor;
         private static Texture2D _brushCursorTexture;
         private static Texture2D _checkerTexture;
+        private static Texture2D _alphaPreviewTexture;
         private static int _paintDirection = 1; // +1 Anadir, -1 Eliminar
         private static int _brushSize = 10;
         private static int _brushMaxOpacity = 100;
@@ -494,9 +495,9 @@ namespace UnderPressure.Editor
             RebuildPreview();
         }
 
-        // Alpha ON: transparencia real sobre damero.
-        // Alpha OFF: la misma textura RGBA encima de fondo blanco.
-        // No modifica ni la textura ni la opacidad de los pixeles.
+        // Alpha ON muestra el canal alfa directamente en escala de grises.
+        // Alpha OFF muestra el RGBA real sobre damero.
+        // Ninguno de los modos modifica los pixeles de trabajo.
         private static void ToggleAlpha()
         {
             _alphaEnabled = !_alphaEnabled;
@@ -507,9 +508,10 @@ namespace UnderPressure.Editor
         private static void RefreshAlphaBackground()
         {
             if (_previewBackground != null)
-                _previewBackground.color = _alphaEnabled ? Color.black : Color.white;
+                _previewBackground.color = Color.black;
             if (_checkerLayer != null)
-                _checkerLayer.gameObject.SetActive(_alphaEnabled);
+                _checkerLayer.gameObject.SetActive(!_alphaEnabled);
+            RebuildPreview();
         }
 
         private static void RefreshControlTexts()
@@ -635,9 +637,40 @@ namespace UnderPressure.Editor
         private static void RebuildPreview()
         {
             if (_workingTexture == null || _preview == null) return;
-            _preview.texture = _workingTexture;
-            // La vista siempre muestra RGBA real; no hay ajuste secundario
-            // que aclare u oscurezca la textura.
+            if (_alphaEnabled)
+            {
+                if (_alphaPreviewTexture == null ||
+                    _alphaPreviewTexture.width != _workingTexture.width ||
+                    _alphaPreviewTexture.height != _workingTexture.height)
+                {
+                    if (_alphaPreviewTexture != null)
+                        UnityEngine.Object.Destroy(_alphaPreviewTexture);
+                    _alphaPreviewTexture = new Texture2D(
+                        _workingTexture.width, _workingTexture.height,
+                        TextureFormat.RGBA32, false, false)
+                    {
+                        name = "UP_FogAlphaChannelPreview",
+                        hideFlags = HideFlags.DontSave,
+                        filterMode = FilterMode.Bilinear,
+                        wrapMode = TextureWrapMode.Clamp
+                    };
+                }
+
+                var source = _workingTexture.GetPixels32();
+                var previewPixels = new Color32[source.Length];
+                for (var i = 0; i < source.Length; ++i)
+                {
+                    var alpha = source[i].a;
+                    previewPixels[i] = new Color32(alpha, alpha, alpha, 255);
+                }
+                _alphaPreviewTexture.SetPixels32(previewPixels);
+                _alphaPreviewTexture.Apply(false, false);
+                _preview.texture = _alphaPreviewTexture;
+            }
+            else
+            {
+                _preview.texture = _workingTexture;
+            }
             _preview.color = Color.white;
         }
 
@@ -779,6 +812,8 @@ namespace UnderPressure.Editor
             _brushCursorTexture = null;
             if (_checkerTexture != null) UnityEngine.Object.Destroy(_checkerTexture);
             _checkerTexture = null;
+            if (_alphaPreviewTexture != null) UnityEngine.Object.Destroy(_alphaPreviewTexture);
+            _alphaPreviewTexture = null;
             _brushCursor = null;
             _mapLayerRoot = null;
             _preview = null;
