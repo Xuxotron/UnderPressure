@@ -578,15 +578,17 @@ namespace UnderPressure.Editor
                     var distance = Mathf.Sqrt(dx * dx + dy * dy) * invRadius;
                     if (distance >= 1f) continue;
 
-                    // Mismo nucleo solido para ANADIR o ELIMINAR. El borde usa
-                    // al menos 1,5 pixeles reales para evitar dientes al ampliar
-                    // la mascara, pero termina exactamente en el radio del cursor.
-                    var featherPixels = Mathf.Min(radius,
-                        Mathf.Max(1.5f, radius * 0.15f));
-                    var solidRadius = Mathf.Clamp01(1f - featherPixels / radius);
-                    var feather = Mathf.Clamp01(
-                        (1f - distance) / (1f - solidRadius));
-                    var influence = feather * feather * (3f - 2f * feather);
+                    // Nucleo solido central y caida gaussiana amplia en toda la
+                    // mitad exterior. El remate original lleva el alfa a cero
+                    // sin corte visible al alcanzar el radio del cursor.
+                    const float solidRadius = 0.50f;
+                    var edgeDistance = Mathf.Clamp01(
+                        (distance - solidRadius) / (1f - solidRadius));
+                    var gaussian = Mathf.Exp(-3f * edgeDistance * edgeDistance);
+                    var taper = 1f - Mathf.SmoothStep(0.82f, 1f, edgeDistance);
+                    var influence = distance <= solidRadius
+                        ? 1f
+                        : gaussian * taper;
                     var index = y * width + x;
                     if (influence <= _strokeInfluence[index]) continue;
                     _strokeInfluence[index] = influence;
