@@ -40,6 +40,8 @@ namespace UnderPressure.Editor
         private static readonly Color PanelColor = new Color(0.135f, 0.165f, 0.195f, 0.98f);
         private static readonly Color ButtonColor = new Color(0.24f, 0.31f, 0.36f, 1f);
         private static readonly Color HighlightColor = new Color(0.24f, 0.46f, 0.49f, 1f);
+        private static readonly Color ToggleInactiveColor = new Color(.58f, .68f, .74f, 1f);
+        private static readonly Color ToggleActiveColor = new Color(.02f, .55f, .90f, 1f);
         private static readonly string[] CharacterTypeKeys =
         {
             "editor.character.type.random_patient", "editor.character.type.male_patient",
@@ -71,13 +73,14 @@ namespace UnderPressure.Editor
             _level = level;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             var button = CreateButton(canvas.transform, "UP_CharacterViewerToggle",
-                T("editor.character.button"), new Vector2(208f, 40f), HighlightColor, Toggle);
+                T("editor.character.button"), new Vector2(208f, 40f), ToggleInactiveColor, Toggle);
             var rt = (RectTransform)button.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
             rt.anchoredPosition = new Vector2(0f, -12f);
             _toggleRoot = button;
             _toggleText = button.GetComponentInChildren<Text>();
+            RefreshToggleVisual();
             UnderPressureEditorPlugin.Log?.LogInfo("Visor: boton Personajes instalado en el editor.");
         }
 
@@ -99,6 +102,7 @@ namespace UnderPressure.Editor
             var canvas = _toggleRoot.GetComponentInParent<Canvas>();
             if (canvas == null) return;
             ScenarioFogViewer.Close();
+            ScenarioEditorStorageMenu.DeactivateNativeTools();
             ScenarioEditorTerrainPainter.DisableTools();
             try
             {
@@ -194,7 +198,7 @@ namespace UnderPressure.Editor
                 var drag = viewport.AddComponent<ScenarioCharacterViewerDrag>();
                 drag.Target = _component;
                 _toggleRoot.transform.SetAsLastSibling();
-                if (_toggleText != null) _toggleText.text = T("editor.character.close");
+                RefreshToggleVisual();
             }
             catch (Exception e)
             {
@@ -209,6 +213,23 @@ namespace UnderPressure.Editor
             if (_overlay != null) UnityEngine.Object.Destroy(_overlay);
             _overlay = null;
             if (_toggleText != null) _toggleText.text = T("editor.character.button");
+            RefreshToggleVisual();
+        }
+
+        private static void RefreshToggleVisual()
+        {
+            if (_toggleRoot == null) return;
+            var button = _toggleRoot.GetComponent<Button>();
+            var image = _toggleRoot.GetComponent<Image>();
+            var color = IsOpen ? ToggleActiveColor : ToggleInactiveColor;
+            if (image != null) image.color = color;
+            if (button == null) return;
+            var colors = button.colors;
+            colors.normalColor = color;
+            colors.highlightedColor = Color.Lerp(color, Color.white, .16f);
+            colors.pressedColor = Color.Lerp(color, Color.black, .18f);
+            colors.selectedColor = colors.highlightedColor;
+            button.colors = colors;
         }
 
         internal static void Detach()

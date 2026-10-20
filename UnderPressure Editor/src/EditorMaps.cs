@@ -1993,6 +1993,7 @@ namespace UnderPressure.Editor
         private InputField _nameInput;
         private Text _statusText;
         private Text _mapIdentityLabel;
+        private bool _showMapCoordinates;
         private Font _font;
         private HospitalPlot _selectedPlot;
         private TMP_Dropdown _layerDropdown;
@@ -2008,7 +2009,6 @@ namespace UnderPressure.Editor
         private Outline _landscapeBorder;
         private Button _landscapeButton;
         private Toggle _landscapeVisibilityToggle;
-        private Text _cursorCoordinates;
         private float _nextCursorCoordinateRefresh;
         private Button _addPlotButton;
         private Button _movePlotButton;
@@ -2016,8 +2016,10 @@ namespace UnderPressure.Editor
         private Button _cameraButton;
         private TMP_Text _cameraButtonText;
         private Button _objectsButton;
+        private Button _buildButton;
         private Button _nativeCameraButton;
         private Button _nativeObjectsButton;
+        private Button _nativeBuildButton;
         private Button _nativeMoveButton;
         private int _initialVisibilityFrames;
         private Button _plotIsolationButton;
@@ -2040,6 +2042,7 @@ namespace UnderPressure.Editor
         internal static void ShowSaveFromPause() => _active?.ShowSave();
         internal static void ShowLoadFromPause() => _active?.ShowLoad();
         internal static void ShowEmptyMapFromPause() => _active?.ShowEmptyMapConfirmation();
+        internal static void DeactivateNativeTools() => _active?.StopNativeTools();
 
         internal void Initialise(EditHospitalMenu menu, Level level)
         {
@@ -2066,7 +2069,6 @@ namespace UnderPressure.Editor
                 ? level.WorldState.HospitalPlots[0] : null;
             level.HospitalEditEvents.OnSelectHospitalPlot += OnPlotSelected;
             AddMapIdentity();
-            AddCursorCoordinates();
             PrepareNativeToolbar();
             RefreshMapIdentity();
             _initialVisibilityFrames = 12;
@@ -2074,7 +2076,6 @@ namespace UnderPressure.Editor
 
         private void PrepareNativeToolbar()
         {
-            SetNativeButtonLabel("_buildButton", "editor.toolbar.edit_plot");
             AddTileViewToPlotMenu();
             AddTopEditorButtons();
             _template.gameObject.SetActive(false);
@@ -2108,12 +2109,20 @@ namespace UnderPressure.Editor
             if (canvas == null) return;
             _nativeObjectsButton = AccessTools.Field(typeof(EditHospitalMenu), "_objectsButton")?
                 .GetValue(_menu) as Button;
+            _nativeBuildButton = AccessTools.Field(typeof(EditHospitalMenu), "_buildButton")?
+                .GetValue(_menu) as Button;
             _nativeCameraButton = AccessTools.Field(typeof(EditHospitalMenu), "_toggleCameraButton")?
                 .GetValue(_menu) as Button;
+            if (_nativeBuildButton != null)
+            {
+                _buildButton = AddTopButton(canvas.transform, T("editor.toolbar.edit_plot"),
+                    -660f, () => ActivateNativeTool(_nativeBuildButton));
+                _nativeBuildButton.gameObject.SetActive(false);
+            }
             if (_nativeObjectsButton != null)
             {
                 _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
-                    -440f, () => _nativeObjectsButton.onClick.Invoke());
+                    -440f, () => ActivateNativeTool(_nativeObjectsButton));
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
             if (_nativeCameraButton != null)
@@ -2127,6 +2136,22 @@ namespace UnderPressure.Editor
                 _nativeCameraButton.gameObject.SetActive(false);
                 RefreshCameraButton();
             }
+        }
+
+        private static void ActivateNativeTool(Button native)
+        {
+            ScenarioCharacterViewer.Close();
+            ScenarioFogViewer.Close();
+            native?.onClick.Invoke();
+        }
+
+        private void StopNativeTools()
+        {
+            var cursor = _level?.CursorManager;
+            if (cursor == null) return;
+            cursor.PopMode<CursorEditHospitalItem>();
+            cursor.PopMode<CursorEditHospitalBuild>();
+            cursor.PopMode<CursorEditHospitalMovePlot>();
         }
 
         private Button AddTopButton(Transform parent, string label, float x, Action action)
@@ -2290,13 +2315,30 @@ namespace UnderPressure.Editor
         // Dos lineas a la izquierda de Parcelas; no tapa los controles nativos.
         private void AddMapIdentity()
         {
-            var root = AddUi("UP Hospital and Map Name", transform);
+            var root = AddUi("UP Map Name or Coordinates", transform);
             var rect = root.GetComponent<RectTransform>();
             rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
             rect.anchoredPosition = new Vector2(-381f, -10f);
             rect.sizeDelta = new Vector2(360f, 48f);
-            _mapIdentityLabel = root.AddComponent<Text>();
+            var image = root.AddComponent<Image>();
+            image.color = new Color(0f, 0f, 0f, 0.001f);
+            var button = root.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(() =>
+            {
+                _showMapCoordinates = !_showMapCoordinates;
+                if (_showMapCoordinates)
+                {
+                    _nextCursorCoordinateRefresh = 0f;
+                    RefreshCursorCoordinates();
+                }
+                else
+                    RefreshMapIdentity();
+            });
+            var textRoot = AddUi("Text", root.transform);
+            Stretch(textRoot.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
+            _mapIdentityLabel = textRoot.AddComponent<Text>();
             _mapIdentityLabel.font = _font;
             _mapIdentityLabel.fontSize = 17;
             _mapIdentityLabel.fontStyle = FontStyle.Bold;
@@ -2313,43 +2355,14 @@ namespace UnderPressure.Editor
 
         private void RefreshMapIdentity()
         {
-            if (_mapIdentityLabel == null || _level == null) return;
-            var hospital = _level.Config.GetLocalisedDisplayName();
-            _mapIdentityLabel.text = EditorLocalization.Format(
-                "editor.map.hospital_line", hospital) + "\n" +
-                EditorLocalization.Format("editor.map.map_line",
-                    ScenarioEditorStorage.CurrentMapName(_level));
-        }
-
-        // Coordenadas mundiales del punto bajo el raton, encima del historial.
-        private void AddCursorCoordinates()
-        {
-            var canvas = _menu != null ? _menu.GetComponentInParent<Canvas>() : null;
-            if (canvas == null) return;
-            var labelRoot = AddUi("UP Cursor World XYZ", canvas.transform);
-            var rect = labelRoot.GetComponent<RectTransform>();
-            rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-20f, -18f);
-            rect.sizeDelta = new Vector2(300f, 40f);
-            _cursorCoordinates = labelRoot.AddComponent<Text>();
-            _cursorCoordinates.font = _font;
-            _cursorCoordinates.fontSize = 16;
-            _cursorCoordinates.fontStyle = FontStyle.Bold;
-            _cursorCoordinates.color = Color.white;
-            _cursorCoordinates.alignment = TextAnchor.MiddleRight;
-            _cursorCoordinates.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _cursorCoordinates.raycastTarget = false;
-            _cursorCoordinates.text = "X: --  Y: --  Z: --";
-            var shadow = labelRoot.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, .85f);
-            shadow.effectDistance = new Vector2(1f, -1f);
-            _buttons.Add(labelRoot);
+            if (_mapIdentityLabel == null || _level == null || _showMapCoordinates) return;
+            _mapIdentityLabel.text = ScenarioEditorStorage.CurrentMapName(_level);
         }
 
         private void RefreshCursorCoordinates()
         {
-            if (_cursorCoordinates == null || Time.unscaledTime < _nextCursorCoordinateRefresh)
+            if (!_showMapCoordinates || _mapIdentityLabel == null ||
+                Time.unscaledTime < _nextCursorCoordinateRefresh)
                 return;
             _nextCursorCoordinateRefresh = Time.unscaledTime + 0.07f;
             var camera = Camera.main;
@@ -2357,7 +2370,7 @@ namespace UnderPressure.Editor
                 Input.mousePosition.y < 0f || Input.mousePosition.x > Screen.width ||
                 Input.mousePosition.y > Screen.height)
             {
-                _cursorCoordinates.text = "X: --  Y: --  Z: --";
+                _mapIdentityLabel.text = "X: --   Z: --";
                 return;
             }
             var ray = camera.ScreenPointToRay(Input.mousePosition);
@@ -2371,14 +2384,13 @@ namespace UnderPressure.Editor
                 if (!new Plane(Vector3.up, Vector3.zero).Raycast(ray, out distance) ||
                     distance < 0f)
                 {
-                    _cursorCoordinates.text = "X: --  Y: --  Z: --";
+                    _mapIdentityLabel.text = "X: --   Z: --";
                     return;
                 }
                 point = ray.GetPoint(distance);
             }
             var invariant = System.Globalization.CultureInfo.InvariantCulture;
-            _cursorCoordinates.text = "X: " + point.x.ToString("0.00", invariant) +
-                "   Y: " + point.y.ToString("0.00", invariant) +
+            _mapIdentityLabel.text = "X: " + point.x.ToString("0.00", invariant) +
                 "   Z: " + point.z.ToString("0.00", invariant);
         }
 
@@ -2415,17 +2427,18 @@ rect.pivot = new Vector2(1f, 1f);
         // pulsar el boton. El bloqueo nunca modifica la propiedad de un objeto.
         private void AddPlotIsolationButton()
         {
-            _plotIsolationButton = CloneButton(_template, transform,
+            if (_layerButtonsRoot == null) return;
+            _plotIsolationButton = CloneButton(_template, _layerButtonsRoot.transform,
                 T("editor.plot.isolate.off"), () => SetPlotIsolation(!_plotIsolation));
             var rect = _plotIsolationButton.transform as RectTransform;
             if (rect != null)
             {
-                rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
-                rect.pivot = new Vector2(1f, 1f);
-                rect.anchoredPosition = new Vector2(-212f, -58f);
-                rect.sizeDelta = new Vector2(168f, 34f);
+                rect.anchorMin = new Vector2(2f / 3f, 1f);
+                rect.anchorMax = new Vector2(1f, 1f);
+                rect.pivot = new Vector2(.5f, 0f);
+                rect.anchoredPosition = new Vector2(0f, 4f);
+                rect.sizeDelta = new Vector2(-4f, 26f);
             }
-            _buttons.Add(_plotIsolationButton.gameObject);
             RefreshPlotIsolationButton();
         }
 
@@ -2476,12 +2489,20 @@ rect.pivot = new Vector2(1f, 1f);
             var label = _plotIsolationButton.GetComponentInChildren<TMP_Text>(true);
             if (label != null)
             {
-                label.text = T(_plotIsolation
-                    ? "editor.plot.isolate.on" : "editor.plot.isolate.off");
+                label.text = T("editor.plot.isolate.off");
                 label.enableAutoSizing = true;
                 label.fontSizeMin = 12f;
                 label.fontSizeMax = 17f;
             }
+            SetToolButtonSelected(_plotIsolationButton, _plotIsolation);
+        }
+
+        private static void SetToolButtonSelected(Button button, bool selected)
+        {
+            if (button != null && button.image != null)
+                button.image.color = selected
+                    ? new Color(.02f, .55f, .90f, 1f)
+                    : new Color(.58f, .68f, .74f, 1f);
         }
 
         private void OnPlotSelected(HospitalPlot plot)
@@ -2674,10 +2695,18 @@ rect.pivot = new Vector2(1f, 1f);
             RefreshCameraButton();
             if (_objectsButton != null && _nativeObjectsButton != null)
                 _objectsButton.interactable = _nativeObjectsButton.interactable;
+            if (_buildButton != null && _nativeBuildButton != null)
+                _buildButton.interactable = _nativeBuildButton.interactable;
             if (_cameraButton != null && _nativeCameraButton != null)
                 _cameraButton.interactable = _nativeCameraButton.interactable;
             if (_movePlotButton != null && _nativeMoveButton != null)
                 _movePlotButton.interactable = _nativeMoveButton.interactable;
+            var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen;
+            var cursor = _level.CursorManager;
+            SetToolButtonSelected(_objectsButton, !customToolOpen && cursor != null &&
+                cursor.IsModeActive<CursorEditHospitalItem>());
+            SetToolButtonSelected(_buildButton, !customToolOpen && cursor != null &&
+                cursor.IsModeActive<CursorEditHospitalBuild>());
             var input = _level.InputManager;
             if (input == null) return;
             ScenarioLandscape.UpdateSelection();
@@ -3565,7 +3594,7 @@ PriorVisibility.Clear();
     [HarmonyPatch(typeof(Level), "HandlePauseLogic")]
     internal static class ScenarioEditorModalEscapePatch
     {
-        private static bool Prefix()
+        private static bool Prefix(Level __instance)
         {
             if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning ||
                 !Input.GetKeyDown(KeyCode.Escape)) return true;
@@ -3581,6 +3610,22 @@ PriorVisibility.Clear();
             }
             if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
             if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;
+            var cursor = __instance?.CursorManager;
+            if (cursor != null && cursor.IsModeActive<CursorEditHospitalItem>())
+            {
+                cursor.PopMode<CursorEditHospitalItem>();
+                return false;
+            }
+            if (cursor != null && cursor.IsModeActive<CursorEditHospitalBuild>())
+            {
+                cursor.PopMode<CursorEditHospitalBuild>();
+                return false;
+            }
+            if (cursor != null && cursor.IsModeActive<CursorEditHospitalMovePlot>())
+            {
+                cursor.PopMode<CursorEditHospitalMovePlot>();
+                return false;
+            }
             return true;
         }
     }

@@ -385,6 +385,14 @@ namespace UnderPressure.Editor
             _behaviour?.RefreshTexts();
         }
 
+        internal static void DisableWireframe()
+        {
+            if (!_wireframeEnabled) return;
+            _wireframeEnabled = false;
+            ClearTerrainWireframe();
+            _behaviour?.RefreshTexts();
+        }
+
         internal static bool CloseDialogIfOpen() =>
             _behaviour != null && _behaviour.CloseDialogIfOpen();
 

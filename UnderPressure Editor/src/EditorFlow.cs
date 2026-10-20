@@ -893,12 +893,10 @@ namespace UnderPressure.Editor
                 text.raycastTarget = false;
             }
 
-            if (green || selected)
+            if (green)
             {
                 var colors = button.colors;
-                var baseColor = selected
-                    ? new Color(0.96f, 0.73f, 0.17f, 1f)
-                    : new Color(0.22f, 0.96f, 0.22f, 1f);
+                var baseColor = new Color(0.22f, 0.96f, 0.22f, 1f);
                 colors.normalColor = baseColor;
                 colors.highlightedColor = Color.Lerp(baseColor, Color.white, 0.22f);
                 colors.pressedColor = Color.Lerp(baseColor, Color.black, 0.22f);
@@ -906,6 +904,16 @@ namespace UnderPressure.Editor
                 button.colors = colors;
                 if (button.targetGraphic != null)
                     button.targetGraphic.color = colors.normalColor;
+            }
+            else if (selected)
+            {
+                // La seleccion usa el amarillo de resaltado del propio prefab.
+                // No se aplica un tinte inventado sobre el fondo cian: esa
+                // multiplicacion era la que convertia el boton en verde.
+                var colors = button.colors;
+                colors.normalColor = colors.highlightedColor;
+                colors.selectedColor = colors.highlightedColor;
+                button.colors = colors;
             }
             return row;
         }
