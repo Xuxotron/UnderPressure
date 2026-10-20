@@ -44,15 +44,18 @@ namespace UnderPressure.Editor
         private static RawImage _preview;
         private static Button _addButton;
         private static Button _removeButton;
-        private static Text _mapText;
+        private static Text _plotText;
         private static Text _alphaText;
         private static Text _fogText;
+        private static Text _generateMapText;
         private static Image _previewBackground;
         private static RawImage _checkerLayer;
         private static Text _sizeText;
         private static Text _pressureText;
         private static Level _level;
-        private static GameObject _mapLayerRoot;
+        private static GameObject _plotLayerRoot;
+        private static RawImage _generatedMapLayer;
+        private static Texture2D _generatedMapTexture;
         private static RectTransform _brushCursor;
         private static Texture2D _brushCursorTexture;
         private static Texture2D _checkerTexture;
@@ -64,7 +67,7 @@ namespace UnderPressure.Editor
         private static Color32[] _strokeOriginalPixels;
         private static float[] _strokeInfluence;
         private static bool _strokeDirty;
-        private static bool _mapEnabled;
+        private static bool _plotsEnabled;
         private static bool _alphaEnabled = true;
         private static bool _fogEnabled = true;
         private static bool _workingTextureInstalled;
@@ -264,7 +267,7 @@ namespace UnderPressure.Editor
                 _paintDirection = 1;
                 _brushSize = 10;
                 _brushMaxOpacity = 100;
-                _mapEnabled = false;
+                _plotsEnabled = false;
                 _alphaEnabled = true;
                 _fogEnabled = true;
                 _workingTextureInstalled = false;
@@ -372,7 +375,8 @@ namespace UnderPressure.Editor
                 checkerImage.texture = _checkerTexture;
                 _checkerLayer = checkerImage;
                 checkerImage.raycastTarget = false;
-                CreateMapLayers(previewBack.transform);
+                CreateGeneratedMapLayer(previewBack.transform);
+                CreatePlotLayers(previewBack.transform);
                 if (_workingTexture == null)
                     CreateText(previewBack.transform,
                         "No se ha encontrado fog_of_war.png para este mapa", 16,
@@ -395,22 +399,28 @@ namespace UnderPressure.Editor
 
                 var reset = CreateButton(panel.transform, "Reset", T("editor.fog.reset"),
                     new Vector2(150f, 42f), HighlightColor, ResetToLastSaved);
-                SetTop(reset.transform, -300f, -847f);
+                SetTop(reset.transform, -320f, -847f);
 
                 var alpha = CreateButton(panel.transform, "Alpha", "",
                     new Vector2(150f, 42f), ButtonColor, ToggleAlpha);
-                SetTop(alpha.transform, -100f, -847f);
+                SetTop(alpha.transform, -160f, -847f);
                 _alphaText = alpha.GetComponentInChildren<Text>();
 
                 var fog = CreateButton(panel.transform, "Fog", "",
                     new Vector2(150f, 42f), ButtonColor, ToggleFog);
-                SetTop(fog.transform, 100f, -847f);
+                SetTop(fog.transform, 0f, -847f);
                 _fogText = fog.GetComponentInChildren<Text>();
 
-                var map = CreateButton(panel.transform, "Map", "",
-                    new Vector2(150f, 42f), ButtonColor, ToggleMap);
-                SetTop(map.transform, 300f, -847f);
-                _mapText = map.GetComponentInChildren<Text>();
+                var plots = CreateButton(panel.transform, "Plots", "",
+                    new Vector2(150f, 42f), ButtonColor, TogglePlots);
+                SetTop(plots.transform, 160f, -847f);
+                _plotText = plots.GetComponentInChildren<Text>();
+
+                var generateMap = CreateButton(panel.transform, "GenerateMap",
+                    T("editor.fog.generate_map"), new Vector2(150f, 42f),
+                    HighlightColor, GenerateMap);
+                SetTop(generateMap.transform, 320f, -847f);
+                _generateMapText = generateMap.GetComponentInChildren<Text>();
                 RefreshAlphaBackground();
                 RefreshControlTexts();
                 _toggleRoot.transform.SetAsLastSibling();
@@ -495,12 +505,30 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void ToggleMap()
+        private static void TogglePlots()
         {
-            _mapEnabled = !_mapEnabled;
-            if (_mapLayerRoot != null) _mapLayerRoot.SetActive(_mapEnabled);
+            _plotsEnabled = !_plotsEnabled;
+            if (_plotLayerRoot != null) _plotLayerRoot.SetActive(_plotsEnabled);
             RefreshControlTexts();
             RebuildPreview();
+        }
+
+        private static void GenerateMap()
+        {
+            if (_generateMapText != null)
+                _generateMapText.text = T("editor.fog.generate_map.working");
+            EditorMapCapture.Capture(path =>
+            {
+                if (string.IsNullOrEmpty(path))
+                {
+                    if (_generateMapText != null)
+                        _generateMapText.text = T("editor.fog.generate_map.error");
+                    return;
+                }
+                LoadGeneratedMap(path);
+                if (_generateMapText != null)
+                    _generateMapText.text = T("editor.fog.generate_map.saved");
+            });
         }
 
         private static void ToggleFog()
@@ -538,8 +566,9 @@ namespace UnderPressure.Editor
             if (_fogText != null)
                 _fogText.text = T(_fogEnabled
                     ? "editor.fog.fog.on" : "editor.fog.fog.off");
-            if (_mapText != null)
-                _mapText.text = T(_mapEnabled ? "editor.fog.map.on" : "editor.fog.map.off");
+            if (_plotText != null)
+                _plotText.text = T(_plotsEnabled
+                    ? "editor.fog.map.on" : "editor.fog.map.off");
             if (_sizeText != null)
                 _sizeText.text = EditorLocalization.Format("editor.fog.size", _brushSize);
             if (_pressureText != null)
@@ -714,11 +743,59 @@ namespace UnderPressure.Editor
             return texture;
         }
 
-        private static void CreateMapLayers(Transform parent)
+        private static void CreateGeneratedMapLayer(Transform parent)
         {
-            _mapLayerRoot = Ui("MapLayers", parent);
-            Stretch((RectTransform)_mapLayerRoot.transform);
-            _mapLayerRoot.SetActive(_mapEnabled);
+            var layer = Ui("GeneratedMap", parent, typeof(RawImage));
+            Stretch((RectTransform)layer.transform);
+            _generatedMapLayer = layer.GetComponent<RawImage>();
+            _generatedMapLayer.color = Color.white;
+            _generatedMapLayer.raycastTarget = false;
+            LoadGeneratedMap(EditorMapCapture.GetMapImagePath(_level));
+        }
+
+        private static void LoadGeneratedMap(string path)
+        {
+            if (_generatedMapTexture != null)
+                UnityEngine.Object.Destroy(_generatedMapTexture);
+            _generatedMapTexture = null;
+            if (_generatedMapLayer != null)
+                _generatedMapLayer.texture = null;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+
+            Texture2D texture = null;
+            try
+            {
+                var bytes = File.ReadAllBytes(path);
+                if (bytes.Length == 0 || bytes.Length > 32 * 1024 * 1024)
+                    throw new InvalidDataException("JPG de mapa vacio o demasiado grande.");
+                texture = new Texture2D(2, 2, TextureFormat.RGB24, false, true)
+                {
+                    name = "UP_GeneratedMap",
+                    hideFlags = HideFlags.DontSave,
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp
+                };
+                if (!ImageConversion.LoadImage(texture, bytes, false))
+                    throw new InvalidDataException("No se pudo decodificar el JPG del mapa.");
+                _generatedMapTexture = texture;
+                if (_generatedMapLayer != null)
+                    _generatedMapLayer.texture = texture;
+                UnderPressureEditorPlugin.Log?.LogInfo(
+                    "Mapa cenital cargado en el editor de niebla: " + path);
+            }
+            catch (Exception exception)
+            {
+                if (texture != null) UnityEngine.Object.Destroy(texture);
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "No se pudo cargar el mapa cenital: " + exception.Message);
+            }
+        }
+
+        private static void CreatePlotLayers(Transform parent)
+        {
+            _plotLayerRoot = Ui("PlotLayers", parent);
+            Stretch((RectTransform)_plotLayerRoot.transform);
+            _plotLayerRoot.SetActive(_plotsEnabled);
             var plots = _level?.WorldState?.HospitalPlots;
             if (plots == null || _workingTexture == null) return;
             var count = 0;
@@ -734,7 +811,7 @@ namespace UnderPressure.Editor
                         _workingTexture.width + "x" + _workingTexture.height + ".");
                     continue;
                 }
-                var layer = Ui("Plot_" + count++, _mapLayerRoot.transform, typeof(RawImage));
+                var layer = Ui("Plot_" + count++, _plotLayerRoot.transform, typeof(RawImage));
                 Stretch((RectTransform)layer.transform);
                 var image = layer.GetComponent<RawImage>();
                 image.texture = texture;
@@ -831,8 +908,11 @@ namespace UnderPressure.Editor
             _checkerTexture = null;
             if (_alphaPreviewTexture != null) UnityEngine.Object.Destroy(_alphaPreviewTexture);
             _alphaPreviewTexture = null;
+            if (_generatedMapTexture != null) UnityEngine.Object.Destroy(_generatedMapTexture);
+            _generatedMapTexture = null;
+            _generatedMapLayer = null;
             _brushCursor = null;
-            _mapLayerRoot = null;
+            _plotLayerRoot = null;
             _preview = null;
             if (_workingTexture != null && !_workingTextureInstalled)
                 UnityEngine.Object.Destroy(_workingTexture);
@@ -844,9 +924,10 @@ namespace UnderPressure.Editor
             _strokeDirty = false;
             _addButton = null;
             _removeButton = null;
-            _mapText = null;
+            _plotText = null;
             _alphaText = null;
             _fogText = null;
+            _generateMapText = null;
             _previewBackground = null;
             _checkerLayer = null;
             _sizeText = null;

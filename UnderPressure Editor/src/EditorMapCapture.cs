@@ -33,11 +33,13 @@ namespace UnderPressure.Editor
     internal static class EditorMapCapture
     {
         // ===== VALORES EDITABLES =====
-        private const int Resolucion = 4096;           // JPG cuadrado, 4096x4096.
+        private const int Resolucion = 768;            // Coincide con el visor de niebla.
         private const int CalidadJpeg = 95;
-        private const float Margen = 1.08f;             // 8% extra para que no se corte el terreno.
-        private const float AlturaCamara = 120f;        // Por encima del punto mas alto del terreno.
-        private const float BotonX = 435f;              // Posicion del boton respecto al centro superior.
+        private const float Margen = 0.72f;             // 8% extra para que no se corte el terreno.
+        private const float AlturaCamara = 100f;        // Por encima del punto mas alto del terreno.
+        private const float DesplazamientoX = 10f;
+        private const float DesplazamientoZ = 3f;
+        private const float BotonX = 400f;              // Posicion del boton respecto al centro superior.
         private const float BotonY = -60f;
         // ===========================
 
@@ -70,7 +72,7 @@ namespace UnderPressure.Editor
 
             var button = _buttonRoot.GetComponent<Button>();
             button.targetGraphic = image;
-            button.onClick.AddListener(Capture);
+            button.onClick.AddListener(CaptureFromToolbar);
 
             var caption = new GameObject("Texto", typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Text));
@@ -98,13 +100,31 @@ namespace UnderPressure.Editor
             _level = null;
         }
 
-        private static void Capture()
+        private static void CaptureFromToolbar()
+        {
+            Capture(null);
+        }
+
+        internal static string GetMapImagePath(Level level)
+        {
+            if (level == null) return null;
+            var carpeta = Path.Combine(ScenarioEditorStorage.Folder, "Capturas");
+            var nombreMapa = SafeFileName(
+                ScenarioEditorStorage.CurrentMapName(level));
+            return Path.Combine(carpeta, nombreMapa + ".jpg");
+        }
+
+        internal static void Capture(Action<string> completed)
         {
             if (_capturing || _level == null ||
                 !ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning)
+            {
+                completed?.Invoke(null);
                 return;
+            }
 
             _capturing = true;
+            string archivoGuardado = null;
             try
             {
                 Bounds terreno;
@@ -164,7 +184,9 @@ namespace UnderPressure.Editor
                     camara.depthTextureMode = DepthTextureMode.None;
 
                     camara.transform.position = new Vector3(
-                        centro.x, terreno.max.y + AlturaCamara, centro.z);
+                        centro.x + DesplazamientoX,
+                        terreno.max.y + AlturaCamara,
+                        centro.z + DesplazamientoZ);
                     camara.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
                     camara.orthographic = true;
                     camara.orthographicSize = Mathf.Max(1f, alturaVisible);
@@ -223,17 +245,14 @@ namespace UnderPressure.Editor
 
                     // El directorio de capturas es independiente de los recursos
                     // del mapa: no altera UPMap, plots ni texturas de Fog.
-                    var carpeta = Path.Combine(ScenarioEditorStorage.Folder, "Capturas");
+                    var archivo = GetMapImagePath(_level);
+                    var carpeta = Path.GetDirectoryName(archivo);
                     Directory.CreateDirectory(carpeta);
-                    var nombreMapa = SafeFileName(
-                        ScenarioEditorStorage.CurrentMapName(_level));
-                    var nombre = "Cenital_" + nombreMapa + "_" +
-                                 DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".jpg";
-                    var archivo = Path.Combine(carpeta, nombre);
                     var jpg = ImageConversion.EncodeToJPG(imagen, CalidadJpeg);
                     if (jpg == null || jpg.Length == 0)
                         throw new IOException("No se ha podido codificar la captura JPG.");
                     File.WriteAllBytes(archivo, jpg);
+                    archivoGuardado = archivo;
 
                     if (_buttonLabel != null)
                         _buttonLabel.text = T("editor.capture.saved");
@@ -278,6 +297,7 @@ namespace UnderPressure.Editor
             finally
             {
                 _capturing = false;
+                completed?.Invoke(archivoGuardado);
             }
         }
 
