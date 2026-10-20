@@ -584,13 +584,15 @@ namespace UnderPressure.Editor
                     if (influence <= _strokeInfluence[index]) continue;
                     _strokeInfluence[index] = influence;
 
-                    // Una unica formula interpola hacia el destino de cada modo.
-                    // Asi ambos conservan el mismo perfil sin saturar antes de
-                    // tiempo por sumar o restar una cantidad absoluta.
-                    var targetAlpha = _paintDirection > 0 ? 255f : 0f;
+                    // El sello define un alfa absoluto y su complemento exacto.
+                    // Anadir nunca reduce alfa y Eliminar nunca lo aumenta, pero
+                    // ambos aplican la misma forma, radio y opacidad maxima.
                     var strength = Mathf.Clamp01(maximumStrength * influence);
-                    var alpha = Mathf.RoundToInt(Mathf.Lerp(
-                        _strokeOriginalPixels[index].a, targetAlpha, strength));
+                    var stampAlpha = Mathf.RoundToInt(255f * strength);
+                    var originalAlpha = (int)_strokeOriginalPixels[index].a;
+                    var alpha = _paintDirection > 0
+                        ? Mathf.Max(originalAlpha, stampAlpha)
+                        : Mathf.Min(originalAlpha, 255 - stampAlpha);
                     if (alpha == _strokePixels[index].a) continue;
                     _strokePixels[index].a = (byte)alpha;
                     _strokeDirty = true;
