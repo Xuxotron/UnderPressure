@@ -2855,9 +2855,9 @@ rect.pivot = new Vector2(1f, 1f);
         private void RefreshPlotSizeText()
         {
             if (_plotInfoText == null || _selectedPlot?.HospitalMap?.FloorPlan == null) return;
-            // Misma medida que EditHospitalMenu.OnHospitalPlotUpdated, sin prefijo ni unidad.
+            // Misma medida y unidad que EditHospitalMenu.OnHospitalPlotUpdated, sin prefijo.
             var size = _selectedPlot.HospitalMap.FloorPlan.TileCount * MathUtils.Square(2);
-            _plotInfoText.text = size.ToString();
+            _plotInfoText.text = size + " m²";
         }
 
         private HospitalPlot SelectedPlot()

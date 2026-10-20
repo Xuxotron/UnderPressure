@@ -576,17 +576,26 @@ namespace UnderPressure.Editor
                     var scrollRect = scroll.transform as RectTransform;
                     if (scrollRect != null)
                     {
-                        var size = scrollRect.sizeDelta;
-                        if (scrollRect.anchorMin.x == scrollRect.anchorMax.x)
+                        var layoutState = scrollRect.GetComponent<ScenarioCatalogLayoutState>() ??
+                            scrollRect.gameObject.AddComponent<ScenarioCatalogLayoutState>();
+                        // Setup puede ejecutarse varias veces sobre el mismo menú.
+                        // Reservar el lateral una sola vez evita restar 219 px
+                        // en cada reapertura y terminar cortando el catálogo.
+                        if (!layoutState.HorizontalInsetApplied)
                         {
-                            size.x = Mathf.Max(260f, size.x - 219f);
-                            scrollRect.sizeDelta = size;
-                        }
-                        else
-                        {
-                            var offset = scrollRect.offsetMax;
-                            offset.x -= 219f;
-                            scrollRect.offsetMax = offset;
+                            var size = scrollRect.sizeDelta;
+                            if (scrollRect.anchorMin.x == scrollRect.anchorMax.x)
+                            {
+                                size.x = Mathf.Max(260f, size.x - 219f);
+                                scrollRect.sizeDelta = size;
+                            }
+                            else
+                            {
+                                var offset = scrollRect.offsetMax;
+                                offset.x -= 219f;
+                                scrollRect.offsetMax = offset;
+                            }
+                            layoutState.HorizontalInsetApplied = true;
                         }
                         SetHeightPreservingTop(scrollRect, 197f);
                         var viewport = scroll.viewport ?? rect.parent as RectTransform;
@@ -800,6 +809,11 @@ namespace UnderPressure.Editor
             button.gameObject.SetActive(true);
             return rect;
         }
+    }
+
+    internal sealed class ScenarioCatalogLayoutState : MonoBehaviour
+    {
+        internal bool HorizontalInsetApplied;
     }
 
     // La barra acompaña al viewport sin quedar dentro de su máscara.
