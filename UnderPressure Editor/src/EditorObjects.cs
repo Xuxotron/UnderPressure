@@ -908,9 +908,9 @@ namespace UnderPressure.Editor
             _content = content;
             _grid = grid;
             _viewport = viewport;
-            // Conservamos sus medidas, pero no su cálculo de layout: el menú
-            // nativo sigue reservando una columna horizontal por cada objeto.
-            _grid.enabled = false;
+            // El Grid conserva el tamaño y aspecto original de las miniaturas.
+            // El ancho desplazable se corrige aparte mediante LayoutElement.
+            _grid.enabled = true;
             Resize();
         }
 
@@ -938,16 +938,6 @@ namespace UnderPressure.Editor
                 // activeSelf refleja el filtro aunque el menú completo esté
                 // temporalmente oculto durante Setup.
                 if (item == null || !item.activeSelf) continue;
-                var itemRect = item.transform as RectTransform;
-                if (itemRect == null) continue;
-                var row = visible % 2;
-                var column = visible / 2;
-                itemRect.anchorMin = itemRect.anchorMax = new Vector2(0f, 1f);
-                itemRect.pivot = new Vector2(0f, 1f);
-                itemRect.sizeDelta = _grid.cellSize;
-                itemRect.anchoredPosition = new Vector2(
-                    _grid.padding.left + column * (_grid.cellSize.x + _grid.spacing.x),
-                    -_grid.padding.top - row * (_grid.cellSize.y + _grid.spacing.y));
                 ++visible;
             }
 
@@ -974,6 +964,7 @@ namespace UnderPressure.Editor
             layout.minWidth = layout.preferredWidth = targetWidth;
             layout.minHeight = layout.preferredHeight = targetHeight;
             layout.flexibleWidth = layout.flexibleHeight = 0f;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
 
             var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
             if (!_loggedComplete && visible > 0 && pending != null && pending.Count == 0)
