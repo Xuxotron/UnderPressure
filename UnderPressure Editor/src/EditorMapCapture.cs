@@ -144,6 +144,14 @@ namespace UnderPressure.Editor
                     camara = camaraObject.GetComponent<Camera>();
                     camara.CopyFrom(original);
                     camara.enabled = false;
+                    // Los materiales opacos del juego quedan negros al renderizar
+                    // esta camara auxiliar con la ruta diferida de la principal.
+                    // Forward resuelve la iluminacion directamente para cada
+                    // material sin depender de sus buffers diferidos externos.
+                    camara.renderingPath = RenderingPath.Forward;
+                    camara.allowHDR = false;
+                    camara.allowMSAA = true;
+                    camara.depthTextureMode = DepthTextureMode.None;
 
                     camara.transform.position = new Vector3(
                         centro.x, terreno.max.y + AlturaCamara, centro.z);
@@ -166,6 +174,11 @@ namespace UnderPressure.Editor
                         RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default);
                     destino.filterMode = FilterMode.Bilinear;
                     camara.targetTexture = destino;
+                    UnderPressureEditorPlugin.Log?.LogInfo(
+                        "Captura cenital: ruta original=" +
+                        original.actualRenderingPath + "; ruta captura=" +
+                        camara.actualRenderingPath + "; mascara=0x" +
+                        camara.cullingMask.ToString("X8") + ".");
                     camara.Render();
 
                     RenderTexture.active = destino;
