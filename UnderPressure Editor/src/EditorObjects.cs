@@ -876,13 +876,15 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listObjects");
         private static readonly FieldInfo PendingItemsField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
+        private static readonly FieldInfo FilterField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_filter");
         private LandscapeObjectsMenu _menu;
         private RectTransform _content;
         private RectTransform _viewport;
         private GridLayoutGroup _grid;
         private int _lastVisible = -1;
-        private float _lastViewportWidth = -1f;
-        private float _maximumViewportWidth;
+        private int _lastObjectCount = -1;
+        private string _lastFilter;
         private bool _loggedComplete;
 
         internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
@@ -893,7 +895,6 @@ namespace UnderPressure.Editor
             _grid = grid;
             _viewport = viewport;
             _grid.enabled = true;
-            _maximumViewportWidth = Mathf.Max(260f, viewport.rect.width);
             Resize();
         }
 
@@ -907,10 +908,13 @@ namespace UnderPressure.Editor
             // los dispone por columnas: superior, inferior, siguiente columna.
             var objects = ListObjectsField?.GetValue(_menu) as IList<GameObject>;
             if (objects == null) return;
-            // La primera pasada puede ocurrir antes de que Unity haya resuelto
-            // el layout. Conservar el ancho real en cuanto esté disponible.
-            if (_lastVisible < 0 && _viewport.rect.width > _maximumViewportWidth)
-                _maximumViewportWidth = _viewport.rect.width;
+            var filter = FilterField?.GetValue(_menu) as string ?? string.Empty;
+            // No recorrer cientos de objetos en cada fotograma. Solo cambia la
+            // geometría cuando termina de entrar otro lote o cambia el filtro.
+            if (objects.Count == _lastObjectCount &&
+                string.Equals(filter, _lastFilter, StringComparison.Ordinal)) return;
+            _lastObjectCount = objects.Count;
+            _lastFilter = filter;
             var visible = 0;
             for (var i = 0; i < objects.Count; ++i)
                 if (objects[i] != null && objects[i].activeInHierarchy)
@@ -920,23 +924,18 @@ namespace UnderPressure.Editor
             var columns = (visible + rows - 1) / rows;
             var targetHeight = _grid.padding.top + _grid.padding.bottom +
                 rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
-            // El ancho visible sigue las columnas reales hasta el máximo que
-            // permite la interfaz. Así, el catálogo inicial no deja media
-            // pantalla vacía y el catálogo completo conserva desplazamiento.
+            // Ajustar solo el contenido desplazable. El viewport conserva
+            // siempre el tamaño nativo de la ventana.
             var contentWidth =
                 _grid.padding.left + columns * _grid.cellSize.x +
                 Mathf.Max(0, columns - 1) * _grid.spacing.x + 5f;
-            var viewportWidth = Mathf.Clamp(contentWidth, 260f, _maximumViewportWidth);
-            SetWidthPreservingLeft(_viewport, viewportWidth);
+            var viewportWidth = _viewport.rect.width;
             var targetWidth = Mathf.Max(viewportWidth, contentWidth);
 
-            if (visible == _lastVisible &&
-                Mathf.Approximately(viewportWidth, _lastViewportWidth) &&
-                Mathf.Approximately(_content.rect.width, targetWidth) &&
+            if (visible == _lastVisible && Mathf.Approximately(_content.rect.width, targetWidth) &&
                 Mathf.Approximately(_content.rect.height, targetHeight)) return;
 
             _lastVisible = visible;
-            _lastViewportWidth = viewportWidth;
             _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
             _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
@@ -952,15 +951,6 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void SetWidthPreservingLeft(RectTransform rect, float width)
-        {
-            if (rect == null || Mathf.Approximately(rect.rect.width, width)) return;
-            var previousWidth = rect.rect.width;
-            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
-            var position = rect.anchoredPosition;
-            position.x += (width - previousWidth) * rect.pivot.x;
-            rect.anchoredPosition = position;
-        }
     }
 
     [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
@@ -1045,10 +1035,16 @@ namespace UnderPressure.Editor
     {
         private static readonly FieldInfo PendingItemsField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
+        private static readonly FieldInfo ItemsField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_items");
+        private static readonly FieldInfo FilterField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_filter");
         private readonly List<RoomItemDefinition> _emptyPending =
             new List<RoomItemDefinition>();
         private TMP_InputField _search;
         private bool _showAll;
+        private int _lastFilteredCount = -1;
+        private string _lastAppliedFilter;
 
         internal static void Initialise(LandscapeObjectsMenu menu, TMP_InputField search)
         {
@@ -1067,6 +1063,20 @@ namespace UnderPressure.Editor
         internal bool CanLoad => _showAll ||
             (_search != null && !string.IsNullOrWhiteSpace(_search.text));
 
+        internal static bool ShouldFilter(LandscapeObjectsMenu menu)
+        {
+            var gate = menu == null ? null : menu.GetComponent<ScenarioEditorCatalogLoadGate>();
+            if (gate == null || ItemsField == null || FilterField == null) return true;
+            var items = ItemsField.GetValue(menu) as IList<RoomItemDefinition>;
+            var count = items?.Count ?? 0;
+            var filter = FilterField.GetValue(menu) as string ?? string.Empty;
+            if (count == gate._lastFilteredCount &&
+                string.Equals(filter, gate._lastAppliedFilter, StringComparison.Ordinal)) return false;
+            gate._lastFilteredCount = count;
+            gate._lastAppliedFilter = filter;
+            return true;
+        }
+
         internal static List<RoomItemDefinition> Suspend(LandscapeObjectsMenu menu)
         {
             var gate = menu == null ? null : menu.GetComponent<ScenarioEditorCatalogLoadGate>();
@@ -1083,6 +1093,13 @@ namespace UnderPressure.Editor
             if (menu != null && pending != null && PendingItemsField != null)
                 PendingItemsField.SetValue(menu, pending);
         }
+    }
+
+    [HarmonyPatch(typeof(LandscapeObjectsMenu), "Filter")]
+    internal static class ScenarioEditorCatalogFilterPatch
+    {
+        private static bool Prefix(LandscapeObjectsMenu __instance) =>
+            !ScenarioEditorFlow.IsRunning || ScenarioEditorCatalogLoadGate.ShouldFilter(__instance);
     }
 
     [HarmonyPatch(typeof(LandscapeObjectsMenu), "Update")]

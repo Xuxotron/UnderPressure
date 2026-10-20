@@ -871,7 +871,7 @@ namespace UnderPressure.Editor
                     if (_level.Config.CharactersCanWearWinterClothes) category |= CharModule.Category.Winter;
                     definition.RootModule.GetRandomCharacterData(category, _eyes, _skin, _hair, assets);
                     CharModuleUtils.BuildModularCharacterGameObject(assets, _model.transform,
-                        rig.GetComponentsInChildren<Transform>(true), true, _hair, _instances);
+                        rig.GetComponentsInChildren<Transform>(true), true, null, _instances);
                     DisableRoomLighting(_instances);
                     if (_instances.Count == 0) throw new InvalidOperationException("El generador devolvió un modelo vacío.");
                     foreach (var t in _model.GetComponentsInChildren<Transform>(true))
@@ -952,7 +952,7 @@ namespace UnderPressure.Editor
                         mask.CharacterModule.GetRandomCharacterData(category, _eyes, _skin, _hair, data);
                         var rig = _model.transform.GetChild(0);
                         CharModuleUtils.BuildModularCharacterGameObject(data, _maskRoot.transform,
-                            rig.GetComponentsInChildren<Transform>(true), true, _hair, _maskInstances);
+                            rig.GetComponentsInChildren<Transform>(true), true, null, _maskInstances);
                         DisableRoomLighting(_maskInstances);
                         foreach (var renderer in _maskRoot.GetComponentsInChildren<Renderer>(true))
                         {

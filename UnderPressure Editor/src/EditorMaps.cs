@@ -2529,12 +2529,17 @@ rect.pivot = new Vector2(1f, 1f);
             }
             _plotInfoText = AccessTools.Field(typeof(EditHospitalMenu), "_infoText")?
                 .GetValue(_menu) as TMP_Text;
-            if (_plotInfoText != null)
+            if (_plotInfoText != null && _layerButtonsRoot != null)
             {
-                _plotInfoText.alignment = TextAlignmentOptions.Right;
-                var margin = _plotInfoText.margin;
-                margin.z = 86f;
-                _plotInfoText.margin = margin;
+                var infoRect = _plotInfoText.transform as RectTransform;
+                infoRect.SetParent(_layerButtonsRoot.transform, false);
+                infoRect.anchorMin = new Vector2(0f, 1f);
+                infoRect.anchorMax = new Vector2(2f / 3f, 1f);
+                infoRect.pivot = new Vector2(.5f, 0f);
+                infoRect.anchoredPosition = new Vector2(0f, 4f);
+                infoRect.sizeDelta = new Vector2(-4f, 26f);
+                _plotInfoText.margin = Vector4.zero;
+                _plotInfoText.alignment = TextAlignmentOptions.Center;
             }
             // Cabecera propia en el LayoutGroup del listado original.
             // NO clonar PlotSelectionItem: sus eventos y checks son privados
@@ -2984,9 +2989,18 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void ShowStyles()
         {
+            if (_stylesDialogOpen)
+            {
+                CloseDialog();
+                return;
+            }
             BuildDialog(T("editor.map.styles"));
             _stylesDialogOpen = _dialog != null;
             if (_dialog == null) return;
+            SetToolButtonSelected(_stylesButton, true);
+            // El fondo modal cubre el Canvas. Mantener este conmutador por
+            // encima permite cerrarlo pulsando de nuevo el mismo botón.
+            _stylesButton.transform.SetAsLastSibling();
             var catalog = ScenarioHospitalStyles.Build(_level,
                 T("editor.map.style.original"),
                 T("editor.map.style.none"));
@@ -3362,6 +3376,7 @@ rect.pivot = new Vector2(1f, 1f);
             }
             _dialog = null;
             _stylesDialogOpen = false;
+            SetToolButtonSelected(_stylesButton, false);
             _dialogPanel = null;
             _nameInput = null;
             _statusText = null;
