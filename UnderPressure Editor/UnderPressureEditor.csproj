@@ -21,7 +21,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
@@ -41,7 +41,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.JSONSerializeModule">
@@ -49,7 +49,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.ImageConversionModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.IMGUIModule">
@@ -57,15 +57,15 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.ParticleSystemModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.ParticleSystemModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.DirectorModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.DirectorModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.DirectorModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
@@ -73,11 +73,11 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UIModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
-      <HintPath>D:\Games\Two Point Hospital\TPH_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Unity.TextMeshPro">
