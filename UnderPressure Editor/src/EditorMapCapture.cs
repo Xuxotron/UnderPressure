@@ -134,9 +134,16 @@ namespace UnderPressure.Editor
                 // NUNCA mover, girar ni modificar el objeto original.
                 GameObject camaraObject = null;
                 Camera camara = null;
+                GameObject luzObject = null;
                 RenderTexture destino = null;
                 Texture2D imagen = null;
                 var anterior = RenderTexture.active;
+                var sombrasAnteriores = QualitySettings.shadows;
+                var distanciaSombrasAnterior = QualitySettings.shadowDistance;
+                var lodAnterior = QualitySettings.lodBias;
+                var ambienteModoAnterior = RenderSettings.ambientMode;
+                var ambienteColorAnterior = RenderSettings.ambientLight;
+                var ambienteIntensidadAnterior = RenderSettings.ambientIntensity;
 
                 try
                 {
@@ -161,9 +168,33 @@ namespace UnderPressure.Editor
                     camara.aspect = 1f;
                     camara.rect = new Rect(0f, 0f, 1f, 1f);
                     camara.nearClipPlane = 0.01f;
-                    camara.farClipPlane = Mathf.Max(500f,
+                    camara.farClipPlane = Mathf.Max(2000f,
                         AlturaCamara + terreno.size.y + 100f);
                     camara.useOcclusionCulling = false;
+                    camara.layerCullDistances = new float[32];
+                    camara.layerCullSpherical = false;
+
+                    // La camara cenital esta fuera del rango de iluminacion y
+                    // sombras calculado para la camara jugable. Durante este
+                    // Render sincrono se usa ambiente plano y una luz propia;
+                    // todos los valores globales se restauran en finally.
+                    QualitySettings.shadows = ShadowQuality.Disable;
+                    QualitySettings.shadowDistance = camara.farClipPlane;
+                    QualitySettings.lodBias = Mathf.Max(lodAnterior, 10f);
+                    RenderSettings.ambientMode =
+                        UnityEngine.Rendering.AmbientMode.Flat;
+                    RenderSettings.ambientLight = Color.white;
+                    RenderSettings.ambientIntensity = 1f;
+
+                    luzObject = new GameObject("UP_LuzCapturaCenital", typeof(Light));
+                    luzObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                    var luz = luzObject.GetComponent<Light>();
+                    luz.type = LightType.Directional;
+                    luz.color = Color.white;
+                    luz.intensity = 1f;
+                    luz.shadows = LightShadows.None;
+                    luz.renderMode = LightRenderMode.ForcePixel;
+                    luz.cullingMask = camara.cullingMask;
 
                     // Una captura de la escena 3D, sin interfaz en Screen Space
                     // y sin elementos World Space de la capa UI.
@@ -213,9 +244,16 @@ namespace UnderPressure.Editor
                 finally
                 {
                     RenderTexture.active = anterior;
+                    QualitySettings.shadows = sombrasAnteriores;
+                    QualitySettings.shadowDistance = distanciaSombrasAnterior;
+                    QualitySettings.lodBias = lodAnterior;
+                    RenderSettings.ambientMode = ambienteModoAnterior;
+                    RenderSettings.ambientLight = ambienteColorAnterior;
+                    RenderSettings.ambientIntensity = ambienteIntensidadAnterior;
                     if (camara != null) camara.targetTexture = null;
                     if (destino != null) RenderTexture.ReleaseTemporary(destino);
                     if (imagen != null) UnityEngine.Object.Destroy(imagen);
+                    if (luzObject != null) UnityEngine.Object.Destroy(luzObject);
                     if (camaraObject != null) UnityEngine.Object.Destroy(camaraObject);
                 }
             }
