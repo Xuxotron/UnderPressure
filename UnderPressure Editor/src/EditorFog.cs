@@ -1034,9 +1034,10 @@ namespace UnderPressure.Editor
                 var height = ScenarioFogViewer.BrushTextureHeight;
                 var diameterPixels = Mathf.Max(1f,
                     Mathf.Min(width, height) * ScenarioFogViewer.BrushSizeForStroke / 100f);
-                // Cinco sellos por diametro, para que un trazo continuo no
-                // deje huecos ni segmentos dentados entre movimientos.
-                var spacingPixels = Mathf.Max(0.6f, diameterPixels * 0.2f);
+                // Un sello cada medio pixel como maximo elimina los dientes
+                // entre muestras incluso en curvas y pinceles pequenos.
+                var spacingPixels = Mathf.Max(0.25f,
+                    Mathf.Min(0.5f, diameterPixels * 0.05f));
                 var distancePixels = Mathf.Sqrt(
                     Mathf.Pow((point.x - _lastPoint.x) * (width - 1f), 2f) +
                     Mathf.Pow((point.y - _lastPoint.y) * (height - 1f), 2f));
