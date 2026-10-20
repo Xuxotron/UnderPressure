@@ -578,11 +578,9 @@ namespace UnderPressure.Editor
                     var distance = Mathf.Sqrt(dx * dx + dy * dy) * invRadius;
                     if (distance >= 1f) continue;
 
-                    // Todo el circulo es un degradado gaussiano: maxima fuerza
-                    // solo en el centro y caida continua hasta cero en el borde.
-                    var gaussian = Mathf.Exp(-3f * distance * distance);
-                    var taper = 1f - Mathf.SmoothStep(0.82f, 1f, distance);
-                    var influence = gaussian * taper;
+                    // Todo el circulo pinta: 100 % en el centro y descenso
+                    // continuo y uniforme hasta 0 % exactamente en el borde.
+                    var influence = 1f - distance;
                     var index = y * width + x;
                     if (influence <= _strokeInfluence[index]) continue;
                     _strokeInfluence[index] = influence;
