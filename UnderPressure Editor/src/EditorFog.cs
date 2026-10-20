@@ -578,17 +578,11 @@ namespace UnderPressure.Editor
                     var distance = Mathf.Sqrt(dx * dx + dy * dy) * invRadius;
                     if (distance >= 1f) continue;
 
-                    // Nucleo solido central y caida gaussiana amplia en toda la
-                    // mitad exterior. El remate original lleva el alfa a cero
-                    // sin corte visible al alcanzar el radio del cursor.
-                    const float solidRadius = 0.50f;
-                    var edgeDistance = Mathf.Clamp01(
-                        (distance - solidRadius) / (1f - solidRadius));
-                    var gaussian = Mathf.Exp(-3f * edgeDistance * edgeDistance);
-                    var taper = 1f - Mathf.SmoothStep(0.82f, 1f, edgeDistance);
-                    var influence = distance <= solidRadius
-                        ? 1f
-                        : gaussian * taper;
+                    // Todo el circulo es un degradado gaussiano: maxima fuerza
+                    // solo en el centro y caida continua hasta cero en el borde.
+                    var gaussian = Mathf.Exp(-3f * distance * distance);
+                    var taper = 1f - Mathf.SmoothStep(0.82f, 1f, distance);
+                    var influence = gaussian * taper;
                     var index = y * width + x;
                     if (influence <= _strokeInfluence[index]) continue;
                     _strokeInfluence[index] = influence;
