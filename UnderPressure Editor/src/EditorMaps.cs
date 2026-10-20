@@ -954,6 +954,7 @@ namespace UnderPressure.Editor
                 var label = AccessTools.Field(typeof(PlotSelectionItem),
                     "_text")?.GetValue(control) as TMP_Text;
                 if (label != null) label.text = PlotNames[originalPlots.Length];
+                ScenarioEditorDockLayout.NotifyPlotListChanged();
 
                 if (_currentCustomPlots == null)
                 {
@@ -1073,6 +1074,7 @@ namespace UnderPressure.Editor
             selected.Destroy();
             plots.RemoveAt(index);
             if (index < PlotNames.Count) PlotNames.RemoveAt(index);
+            ScenarioEditorDockLayout.NotifyPlotListChanged();
             foreach (var remaining in plots)
             {
                 if (ReferenceEquals(remaining.Definition.MergeInto?.Instance, selected.Definition))
@@ -2314,8 +2316,8 @@ namespace UnderPressure.Editor
             var selectedColors = new[]
             {
                 new Color(.78f, .80f, .80f, 1f),
-                new Color(.92f, .47f, .13f, 1f),
-                new Color(.39f, .62f, .22f, 1f)
+                new Color(1f, .58f, .08f, 1f),
+                new Color(.48f, .72f, .25f, 1f)
             };
             var inactive = new Color(.24f, .57f, .68f, 1f);
             for (var i = 0; i < _layerButtons.Length; ++i)

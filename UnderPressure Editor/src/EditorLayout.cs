@@ -49,6 +49,7 @@ namespace UnderPressure.Editor
         private bool _terrainOpen = true;
         private float _lastCanvasWidth = -1f;
         private float _lastCanvasHeight = -1f;
+        private bool _resetPlotScroll;
         private WorkshopStyle _style;
 
         internal static void Attach(EditHospitalMenu menu, Level level,
@@ -65,6 +66,18 @@ namespace UnderPressure.Editor
         internal static void RegisterObjectsMenu(LandscapeObjectsMenu menu)
         {
             if (_active != null) _active.ApplyObjectsPanel(menu, true);
+        }
+
+        internal static void RegisterPlotRow(PlotSelectionItem row)
+        {
+            if (_active == null || row == null) return;
+            _active.ApplyPlotRow(row);
+            _active.RefreshPlotPanelForCount();
+        }
+
+        internal static void NotifyPlotListChanged()
+        {
+            _active?.RefreshPlotPanelForCount();
         }
 
         private void Initialise(EditHospitalMenu menu, Level level,
@@ -97,6 +110,7 @@ namespace UnderPressure.Editor
 
             _objectsToggle = storage.ObjectsButton;
             _objectsMenu = FindActiveObjectsMenu();
+            _resetPlotScroll = true;
             if (_objectsToggle != null) _objectsToggle.gameObject.name = "UP Objects Dock Toggle";
             ApplyLayout(true);
         }
@@ -207,10 +221,7 @@ namespace UnderPressure.Editor
 
             var available = height - BarHeight * 2f;
             if (!_leftHeightChosen)
-            {
-                var count = Mathf.Max(1, _level?.WorldState?.HospitalPlots?.Count ?? 1);
-                _leftUpperHeight = 145f + 39f * (count + 1);
-            }
+                _leftUpperHeight = CalculateAutomaticPlotPanelHeight();
             if (!_rightHeightChosen) _rightUpperHeight = Mathf.Min(430f, available * .48f);
             _leftUpperHeight = Mathf.Clamp(_leftUpperHeight, MinimumUpperHeight,
                 Mathf.Max(MinimumUpperHeight, available - MinimumLowerHeight));
@@ -325,14 +336,48 @@ namespace UnderPressure.Editor
             var landscapeImage = landscape?.GetComponent<Image>();
             if (landscapeImage != null) landscapeImage.color = _style.ButtonColor;
             foreach (var row in _plotPanel.GetComponentsInChildren<PlotSelectionItem>(true))
+                ApplyPlotRow(row);
+            if (_resetPlotScroll)
             {
-                var rect = row.transform as RectTransform;
-                if (rect != null) rect.SetSizeWithCurrentAnchors(
-                    RectTransform.Axis.Horizontal, PanelWidth - 24f);
-                CompactPlotRow(row, _style.ButtonSprite,
-                    new Color(.24f, .57f, .68f, 1f),
-                    new Color(.10f, .39f, .56f, 1f));
+                var scroll = _plotViewport?.GetComponent<ScrollRect>();
+                if (scroll?.content != null)
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
+                if (scroll != null) scroll.verticalNormalizedPosition = 1f;
+                _resetPlotScroll = false;
             }
+        }
+
+        private void ApplyPlotRow(PlotSelectionItem row)
+        {
+            if (row == null) return;
+            var rect = row.transform as RectTransform;
+            if (rect != null) rect.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Horizontal, PanelWidth - 24f);
+            CompactPlotRow(row, _style.ButtonSprite,
+                new Color(.24f, .57f, .68f, 1f),
+                new Color(.10f, .39f, .56f, 1f));
+        }
+
+        private float CalculateAutomaticPlotPanelHeight()
+        {
+            foreach (var row in _plotPanel.GetComponentsInChildren<PlotSelectionItem>(true))
+                ApplyPlotRow(row);
+            var scroll = _plotViewport?.GetComponent<ScrollRect>();
+            var content = scroll?.content;
+            if (content != null)
+            {
+                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+                var preferred = LayoutUtility.GetPreferredHeight(content);
+                if (preferred > 1f) return 84f + preferred + 46f;
+            }
+            var count = Mathf.Max(1, _level?.WorldState?.HospitalPlots?.Count ?? 1);
+            return 163f + count * 36f;
+        }
+
+        private void RefreshPlotPanelForCount()
+        {
+            _resetPlotScroll = true;
+            ApplyLayout(true);
         }
 
         private static void IgnoreParentLayout(RectTransform rect)
@@ -392,11 +437,18 @@ namespace UnderPressure.Editor
                 text.fontSizeMin = 9f;
                 text.fontSizeMax = 14f;
                 text.alignment = TextAlignmentOptions.MidlineLeft;
+                var textLayout = text.GetComponent<LayoutElement>() ??
+                    text.gameObject.AddComponent<LayoutElement>();
+                textLayout.ignoreLayout = false;
+                textLayout.minWidth = 46f;
+                textLayout.preferredWidth = 52f;
+                textLayout.flexibleWidth = 1f;
+                textLayout.minHeight = textLayout.preferredHeight = 28f;
             }
 
             var rowLayout = row.GetComponent<LayoutElement>() ??
                 row.gameObject.AddComponent<LayoutElement>();
-            rowLayout.minHeight = rowLayout.preferredHeight = 44f;
+            rowLayout.minHeight = rowLayout.preferredHeight = 36f;
             var horizontal = row.GetComponent<HorizontalLayoutGroup>();
             if (horizontal != null)
             {
@@ -408,18 +460,6 @@ namespace UnderPressure.Editor
                 horizontal.childForceExpandWidth = false;
                 horizontal.childForceExpandHeight = false;
             }
-            var button = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
-                .GetValue(row) as Button;
-            if (button != null)
-            {
-                var buttonLayout = button.GetComponent<LayoutElement>() ??
-                    button.gameObject.AddComponent<LayoutElement>();
-                buttonLayout.minWidth = 56f;
-                buttonLayout.preferredWidth = 62f;
-                buttonLayout.flexibleWidth = 1f;
-                buttonLayout.minHeight = buttonLayout.preferredHeight = 36f;
-            }
-
             var names = new[]
             {
                 "_toggleState", "_toggleVisible", "_toggleLayerBase",
@@ -775,6 +815,7 @@ namespace UnderPressure.Editor
     {
         private Button _button;
         private Toggle[] _toggles;
+        private Color[] _toggleColors;
         private Sprite _sprite;
         private Color _normal;
         private Color _selectedColor;
@@ -804,6 +845,8 @@ namespace UnderPressure.Editor
                 _toggles = names.Select(name =>
                     AccessTools.Field(typeof(PlotSelectionItem), name)?.GetValue(row) as Toggle)
                     .Where(toggle => toggle != null).ToArray();
+                _toggleColors = _toggles.Select(toggle =>
+                    toggle.targetGraphic == null ? Color.white : toggle.targetGraphic.color).ToArray();
                 _initialised = true;
             }
             Apply();
@@ -834,12 +877,19 @@ namespace UnderPressure.Editor
                 _button.colors = colors;
             }
             if (_toggles == null) return;
-            foreach (var toggle in _toggles)
+            var layerColors = new[]
             {
+                new Color(.78f, .80f, .80f, 1f),
+                new Color(1f, .58f, .08f, 1f),
+                new Color(.48f, .72f, .25f, 1f)
+            };
+            for (var index = 0; index < _toggles.Length; ++index)
+            {
+                var toggle = _toggles[index];
                 if (toggle?.targetGraphic is Image background)
-                {
-                    background.color = _normal;
-                }
+                    background.color = index >= 2 && index - 2 < layerColors.Length
+                        ? layerColors[index - 2]
+                        : _toggleColors[index];
                 if (toggle?.graphic is Graphic mark) mark.color = Color.white;
             }
         }
@@ -861,6 +911,17 @@ namespace UnderPressure.Editor
             var skin = __instance.GetComponent<ScenarioEditorPlotRowSkin>();
             if (skin != null)
                 skin.SetSelected(ReferenceEquals(PlotField?.GetValue(__instance), hospitalPlot));
+        }
+    }
+
+    [HarmonyPatch(typeof(PlotSelectionItem), "Setup")]
+    internal static class ScenarioEditorPlotRowSetupPatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(PlotSelectionItem __instance)
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorDockLayout.RegisterPlotRow(__instance);
         }
     }
 
