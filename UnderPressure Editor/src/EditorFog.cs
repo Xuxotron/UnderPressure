@@ -46,6 +46,7 @@ namespace UnderPressure.Editor
         private static Button _removeButton;
         private static Text _mapText;
         private static Text _alphaText;
+        private static Text _fogText;
         private static Image _previewBackground;
         private static RawImage _checkerLayer;
         private static Text _sizeText;
@@ -65,6 +66,7 @@ namespace UnderPressure.Editor
         private static bool _strokeDirty;
         private static bool _mapEnabled;
         private static bool _alphaEnabled = true;
+        private static bool _fogEnabled = true;
         private static bool _workingTextureInstalled;
 
         internal static bool IsOpen => _overlay != null;
@@ -264,6 +266,7 @@ namespace UnderPressure.Editor
                 _brushMaxOpacity = 100;
                 _mapEnabled = false;
                 _alphaEnabled = true;
+                _fogEnabled = true;
                 _workingTextureInstalled = false;
 
                 // La visualizacion no debe depender de que el postprocesado
@@ -392,16 +395,21 @@ namespace UnderPressure.Editor
 
                 var reset = CreateButton(panel.transform, "Reset", T("editor.fog.reset"),
                     new Vector2(150f, 42f), HighlightColor, ResetToLastSaved);
-                SetTop(reset.transform, -280f, -847f);
+                SetTop(reset.transform, -300f, -847f);
 
                 var alpha = CreateButton(panel.transform, "Alpha", "",
                     new Vector2(150f, 42f), ButtonColor, ToggleAlpha);
-                SetTop(alpha.transform, 0f, -847f);
+                SetTop(alpha.transform, -100f, -847f);
                 _alphaText = alpha.GetComponentInChildren<Text>();
+
+                var fog = CreateButton(panel.transform, "Fog", "",
+                    new Vector2(150f, 42f), ButtonColor, ToggleFog);
+                SetTop(fog.transform, 100f, -847f);
+                _fogText = fog.GetComponentInChildren<Text>();
 
                 var map = CreateButton(panel.transform, "Map", "",
                     new Vector2(150f, 42f), ButtonColor, ToggleMap);
-                SetTop(map.transform, 280f, -847f);
+                SetTop(map.transform, 300f, -847f);
                 _mapText = map.GetComponentInChildren<Text>();
                 RefreshAlphaBackground();
                 RefreshControlTexts();
@@ -495,6 +503,14 @@ namespace UnderPressure.Editor
             RebuildPreview();
         }
 
+        private static void ToggleFog()
+        {
+            _fogEnabled = !_fogEnabled;
+            if (_preview != null) _preview.gameObject.SetActive(_fogEnabled);
+            if (!_fogEnabled) HideBrushCursor();
+            RefreshControlTexts();
+        }
+
         // Alpha ON muestra el canal alfa directamente en escala de grises.
         // Alpha OFF muestra el RGBA real sobre damero.
         // Ninguno de los modos modifica los pixeles de trabajo.
@@ -517,7 +533,11 @@ namespace UnderPressure.Editor
         private static void RefreshControlTexts()
         {
             if (_alphaText != null)
-                _alphaText.text = _alphaEnabled ? "Alpha: ON" : "Alpha: OFF";
+                _alphaText.text = T(_alphaEnabled
+                    ? "editor.fog.alpha.on" : "editor.fog.alpha.off");
+            if (_fogText != null)
+                _fogText.text = T(_fogEnabled
+                    ? "editor.fog.fog.on" : "editor.fog.fog.off");
             if (_mapText != null)
                 _mapText.text = T(_mapEnabled ? "editor.fog.map.on" : "editor.fog.map.off");
             if (_sizeText != null)
@@ -826,6 +846,7 @@ namespace UnderPressure.Editor
             _removeButton = null;
             _mapText = null;
             _alphaText = null;
+            _fogText = null;
             _previewBackground = null;
             _checkerLayer = null;
             _sizeText = null;
