@@ -359,11 +359,9 @@ namespace UnderPressure.Editor
             private readonly Dictionary<Renderer, Material[]> _originalMaterials =
                 new Dictionary<Renderer, Material[]>();
             private readonly List<Material> _illnessMaterials = new List<Material>();
-            private readonly List<Material> _textureMaterials = new List<Material>();
             // Materiales EXCLUSIVOS del visor: nunca modificar el original del juego.
             private readonly List<Material> _previewMaterials = new List<Material>();
             private GameObject _maskRoot;
-            private readonly List<Material> _maskTextureMaterials = new List<Material>();
             private GameObject _illnessParticles;
             private IllnessDefinition _currentIllness;
             private CharacterDefinition _currentDefinition;
@@ -872,9 +870,9 @@ namespace UnderPressure.Editor
                     if (_level.Config.CharactersCanWearSummerClothes) category |= CharModule.Category.Summer;
                     if (_level.Config.CharactersCanWearWinterClothes) category |= CharModule.Category.Winter;
                     definition.RootModule.GetRandomCharacterData(category, _eyes, _skin, _hair, assets);
-                    RecoverMissingTextures(assets);
                     CharModuleUtils.BuildModularCharacterGameObject(assets, _model.transform,
                         rig.GetComponentsInChildren<Transform>(true), true, _hair, _instances);
+                    DisableRoomLighting(_instances);
                     if (_instances.Count == 0) throw new InvalidOperationException("El generador devolvió un modelo vacío.");
                     foreach (var t in _model.GetComponentsInChildren<Transform>(true))
                         t.gameObject.layer = PreviewLayer;
@@ -889,18 +887,6 @@ namespace UnderPressure.Editor
                     }
                     // Conservar la apariencia aleatoria producida por CharModuleUtils.
                     // No sustituir shaders ni colores del personaje generado.
-                    // Diagnostico visible en mods.log para materiales planos o
-                    // sin textura que podrian explicar ropa naranja.
-                    var untextured = new List<string>();
-                    foreach (var renderer in _model.GetComponentsInChildren<Renderer>(true))
-                        foreach (var mat in renderer.sharedMaterials)
-                            if (mat != null && GetDiffuseTexture(mat) == null &&
-                                untextured.Count < 12)
-                                untextured.Add(renderer.name + "=" + mat.name);
-                    if (untextured.Count > 0)
-                        UnderPressureEditorPlugin.Log?.LogInfo(
-                            "Visor: materiales sin albedo reconocible (diagnostico): " +
-                            string.Join("; ", untextured.ToArray()));
                     _animator = _model.AddComponent<Animator>();
                     _animator.avatar = definition._avatar;
                     _animator.applyRootMotion = false;
@@ -926,101 +912,15 @@ namespace UnderPressure.Editor
                 }
             }
 
-            // TH20 utiliza materiales con varios shaders: la textura difusa no
-            // tiene por que estar en _MainTex. Examinar todas las propiedades
-            // relevantes evita que la ropa se quede con un material plano.
-            private static readonly string[] ClothingTextureSlots =
+            private static void DisableRoomLighting(List<CharModule.ModuleInstance> instances)
             {
-                "_MainTex", "_BaseMap", "_BaseColorMap", "_Albedo", "_AlbedoMap",
-                "_AlbedoTex", "_AlbedoTexture", "_BaseTex", "_Diffuse", "_DiffuseMap",
-                "_DiffuseTex", "_ColorMap", "_Texture", "_Tex", "_MainTexture"
-            };
-
-            private static Texture GetDiffuseTexture(Material material)
-            {
-                if (material == null) return null;
-                foreach (var slot in ClothingTextureSlots)
-                    if (material.HasProperty(slot))
+                foreach (var instance in instances)
+                    foreach (var material in instance.OriginalMaterials ?? new Material[0])
                     {
-                        var tex = material.GetTexture(slot);
-                        if (tex != null) return tex;
+                        if (material == null || !material.HasProperty("_ApplyRoomLighting")) continue;
+                        material.SetFloat("_ApplyRoomLighting", 0f);
+                        material.EnableKeyword("_APPLYROOMLIGHTING_OFF");
                     }
-                return null;
-            }
-
-            private static string[] TextureSlots(Material selected, Material original)
-            {
-                var slots = new HashSet<string>(ClothingTextureSlots,
-                    StringComparer.Ordinal);
-                // Este metodo existe en las versiones de Unity modernas, pero
-                // usamos reflexion para admitir tambien builds anteriores.
-                var method = AccessTools.Method(typeof(Material), "GetTexturePropertyNames", Type.EmptyTypes);
-                if (method != null)
-                    foreach (var material in new[] { selected, original })
-                    {
-                        if (material == null) continue;
-                        try
-                        {
-                            var names = method.Invoke(material, null) as string[];
-                            if (names != null)
-                                foreach (var name in names) if (!string.IsNullOrEmpty(name)) slots.Add(name);
-                        }
-                        catch (Exception) { /* Utilizar los slots conocidos. */ }
-                    }
-                return slots.ToArray();
-            }
-
-            private void RecoverMissingTextures(List<CharModule.CharModuleAssets> assets, bool mask = false)
-            {
-                var repaired = 0;
-                for (var i = 0; i < assets.Count; i++)
-                {
-                    var source = assets[i];
-                    if (source.Prefab == null) continue;
-                    var prefabRenderer = source.Prefab.GetComponentInChildren<Renderer>(true);
-                    if (prefabRenderer == null) continue;
-                    var prefabs = prefabRenderer.sharedMaterials ?? new Material[0];
-                    var first = RecoverTexture(source.Material0, prefabs.Length > 0 ? prefabs[0] : null, mask);
-                    var second = RecoverTexture(source.Material1, prefabs.Length > 1 ? prefabs[1] : null, mask);
-                    if (first != source.Material0 || second != source.Material1)
-                    {
-                        repaired++;
-                        assets[i] = new CharModule.CharModuleAssets(source.Prefab, source.Tags,
-                            first, second, source.MaterialMode0, source.MaterialMode1);
-                    }
-                }
-                if (repaired > 0)
-                    UnderPressureEditorPlugin.Log?.LogInfo(
-                        "Visor: recuperacion de propiedades de textura en " + repaired + " modulos.");
-            }
-
-            private Material RecoverTexture(Material selected, Material original, bool mask)
-            {
-                if (original == null) return selected;
-                if (selected == null || selected.shader == null) return original;
-                Material repaired = null;
-                foreach (var slot in TextureSlots(selected, original))
-                {
-                    if (!original.HasProperty(slot) || !selected.HasProperty(slot)) continue;
-                    var texture = original.GetTexture(slot);
-                    if (texture == null || selected.GetTexture(slot) != null) continue;
-                    if (repaired == null) repaired = new Material(selected);
-                    repaired.SetTexture(slot, texture);
-                    repaired.SetTextureOffset(slot, original.GetTextureOffset(slot));
-                    repaired.SetTextureScale(slot, original.GetTextureScale(slot));
-                }
-                if (repaired == null)
-                {
-                    // Cuando el shader elegido no comparte la propiedad con
-                    // el prefab, preferir el material ORIGINAL con albedo a
-                    // conservar uno sin ninguna textura visible.
-                    if (GetDiffuseTexture(selected) == null &&
-                        GetDiffuseTexture(original) != null) return original;
-                    return selected;
-                }
-                if (mask) _maskTextureMaterials.Add(repaired);
-                else _textureMaterials.Add(repaired);
-                return repaired;
             }
 
             private void ApplyIllness()
@@ -1050,10 +950,10 @@ namespace UnderPressure.Editor
                         if (_level.Config.CharactersCanWearSummerClothes) category |= CharModule.Category.Summer;
                         if (_level.Config.CharactersCanWearWinterClothes) category |= CharModule.Category.Winter;
                         mask.CharacterModule.GetRandomCharacterData(category, _eyes, _skin, _hair, data);
-                        RecoverMissingTextures(data, true);
                         var rig = _model.transform.GetChild(0);
                         CharModuleUtils.BuildModularCharacterGameObject(data, _maskRoot.transform,
                             rig.GetComponentsInChildren<Transform>(true), true, _hair, _maskInstances);
+                        DisableRoomLighting(_maskInstances);
                         foreach (var renderer in _maskRoot.GetComponentsInChildren<Renderer>(true))
                         {
                             renderer.gameObject.layer = PreviewLayer;
@@ -1137,9 +1037,6 @@ namespace UnderPressure.Editor
                 }
                 if (_maskRoot != null) UnityEngine.Object.Destroy(_maskRoot);
                 _maskRoot = null;
-                foreach (var mat in _maskTextureMaterials)
-                    if (mat != null) UnityEngine.Object.Destroy(mat);
-                _maskTextureMaterials.Clear();
                 foreach (var instance in _instances)
                     if (instance.Renderer != null) instance.Renderer.gameObject.SetActive(true);
                 foreach (var material in _illnessMaterials)
@@ -1251,9 +1148,6 @@ namespace UnderPressure.Editor
                     catch (Exception ex) { UnderPressureEditorPlugin.Log?.LogWarning("Visor: limpieza modular: " + ex.Message); }
                     _instances.Clear();
                 }
-                foreach (var mat in _textureMaterials)
-                    if (mat != null) UnityEngine.Object.Destroy(mat);
-                _textureMaterials.Clear();
                 foreach (var mat in _previewMaterials)
                     if (mat != null) UnityEngine.Object.Destroy(mat);
                 _previewMaterials.Clear();

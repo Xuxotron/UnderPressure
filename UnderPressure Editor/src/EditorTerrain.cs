@@ -179,7 +179,13 @@ namespace UnderPressure.Editor
         {
             foreach (var overlay in WireOverlays)
             {
-                if (overlay.Object != null) UnityEngine.Object.Destroy(overlay.Object);
+                // Destroy se ejecuta al final del frame. Ocultar primero evita
+                // que una captura inmediata todavía dibuje estas líneas.
+                if (overlay.Object != null)
+                {
+                    overlay.Object.SetActive(false);
+                    UnityEngine.Object.Destroy(overlay.Object);
+                }
                 if (overlay.Lines != null) UnityEngine.Object.Destroy(overlay.Lines);
             }
             WireOverlays.Clear();
@@ -2058,6 +2064,12 @@ namespace UnderPressure.Editor
         internal static void Toggle()
         {
             Disabled = !Disabled;
+            ApplyVisibility();
+        }
+
+        internal static void Disable()
+        {
+            Disabled = true;
             ApplyVisibility();
         }
 

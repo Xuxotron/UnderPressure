@@ -1,4 +1,4 @@
-// Updated: 2026-10-15 - Bloquear cursor de parcelas mientras la seleccion Landscape esta activa.
+// Updated: 2026-10-19 - Catalogo exterior en 2 filas, contenido de ancho exacto y scroll horizontal completo.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -556,7 +556,7 @@ namespace UnderPressure.Editor
                 grid.startAxis = GridLayoutGroup.Axis.Vertical;
                 grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
                 grid.childAlignment = TextAnchor.UpperLeft;
-                grid.padding = new RectOffset(8, 8, 8, 8);
+                grid.padding = new RectOffset(8, 0, 8, 8);
                 grid.cellSize = new Vector2(105f, 88f);
                 grid.spacing = new Vector2(7f, 5f);
                 var fitter = content.GetComponent<ContentSizeFitter>() ?? content.AddComponent<ContentSizeFitter>();
@@ -588,10 +588,10 @@ namespace UnderPressure.Editor
                             offset.x -= 219f;
                             scrollRect.offsetMax = offset;
                         }
-                        SetHeightPreservingTop(scrollRect, 190f);
+                        SetHeightPreservingTop(scrollRect, 197f);
                         var viewport = scroll.viewport ?? rect.parent as RectTransform;
                         if (viewport != null && viewport != scrollRect)
-                            SetHeightPreservingTop(viewport, 190f);
+                            SetHeightPreservingTop(viewport, 197f);
                         GrowBackdropOnly(__instance, viewport ?? scrollRect);
                         var sizer = content.GetComponent<ScenarioCatalogContentSizer>() ??
                             content.AddComponent<ScenarioCatalogContentSizer>();
@@ -876,14 +876,13 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listObjects");
         private static readonly FieldInfo PendingItemsField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_itemsToCreate");
-        private static readonly FieldInfo PreviewItemField =
-            AccessTools.Field(typeof(LandscapeObjectListItem), "_item");
         private LandscapeObjectsMenu _menu;
         private RectTransform _content;
         private RectTransform _viewport;
         private GridLayoutGroup _grid;
         private int _lastVisible = -1;
         private float _lastViewportWidth = -1f;
+        private float _maximumViewportWidth;
         private bool _loggedComplete;
 
         internal void Initialize(LandscapeObjectsMenu menu, RectTransform content,
@@ -894,6 +893,7 @@ namespace UnderPressure.Editor
             _grid = grid;
             _viewport = viewport;
             _grid.enabled = true;
+            _maximumViewportWidth = Mathf.Max(260f, viewport.rect.width);
             Resize();
         }
 
@@ -903,60 +903,63 @@ namespace UnderPressure.Editor
         {
             if (_menu == null || _content == null || _grid == null || _viewport == null)
                 return;
+            // Filter() nativo activa y desactiva estos objetos. El GridLayoutGroup
+            // los dispone por columnas: superior, inferior, siguiente columna.
             var objects = ListObjectsField?.GetValue(_menu) as IList<GameObject>;
             if (objects == null) return;
+            // La primera pasada puede ocurrir antes de que Unity haya resuelto
+            // el layout. Conservar el ancho real en cuanto esté disponible.
+            if (_lastVisible < 0 && _viewport.rect.width > _maximumViewportWidth)
+                _maximumViewportWidth = _viewport.rect.width;
             var visible = 0;
             for (var i = 0; i < objects.Count; ++i)
                 if (objects[i] != null && objects[i].activeInHierarchy)
                     ++visible;
-            var viewportWidth = _viewport.rect.width;
-            if (visible == _lastVisible && Mathf.Approximately(viewportWidth, _lastViewportWidth))
-                return;
-            _lastVisible = visible;
-            _lastViewportWidth = viewportWidth;
+
             var rows = Mathf.Max(1, _grid.constraintCount);
+            var columns = (visible + rows - 1) / rows;
             var targetHeight = _grid.padding.top + _grid.padding.bottom +
                 rows * _grid.cellSize.y + (rows - 1) * _grid.spacing.y;
-            if (!Mathf.Approximately(_content.rect.height, targetHeight))
-                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
+            // El ancho visible sigue las columnas reales hasta el máximo que
+            // permite la interfaz. Así, el catálogo inicial no deja media
+            // pantalla vacía y el catálogo completo conserva desplazamiento.
+            var contentWidth =
+                _grid.padding.left + columns * _grid.cellSize.x +
+                Mathf.Max(0, columns - 1) * _grid.spacing.x + 5f;
+            var viewportWidth = Mathf.Clamp(contentWidth, 260f, _maximumViewportWidth);
+            SetWidthPreservingLeft(_viewport, viewportWidth);
+            var targetWidth = Mathf.Max(viewportWidth, contentWidth);
 
+            if (visible == _lastVisible &&
+                Mathf.Approximately(viewportWidth, _lastViewportWidth) &&
+                Mathf.Approximately(_content.rect.width, targetWidth) &&
+                Mathf.Approximately(_content.rect.height, targetHeight)) return;
+
+            _lastVisible = visible;
+            _lastViewportWidth = viewportWidth;
+            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, targetHeight);
+            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
             LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-            var rightEdge = 0f;
-            var rendered = 0;
-            var corners = new Vector3[4];
-            for (var i = 0; i < objects.Count; ++i)
-            {
-                var item = objects[i];
-                if (item == null || !item.activeInHierarchy) continue;
-                var listItem = item.GetComponent<LandscapeObjectListItem>();
-                if (listItem != null && PreviewItemField != null &&
-                    PreviewItemField.GetValue(listItem) as GameObject == null)
-                    continue;
-                var itemRect = item.transform as RectTransform;
-                if (itemRect == null) continue;
-                ++rendered;
-                itemRect.GetWorldCorners(corners);
-                for (var corner = 0; corner < corners.Length; ++corner)
-                    rightEdge = Mathf.Max(rightEdge,
-                        _content.InverseTransformPoint(corners[corner]).x);
-            }
-            // El menú nativo mantiene el recorrido de una sola fila aunque el
-            // Grid muestre dos. El recorrido real de dos filas es exactamente
-            // la mitad del límite medido por esa disposición heredada.
-            var measuredWidth = rightEdge + _grid.padding.right;
-            var targetWidth = Mathf.Max(viewportWidth, measuredWidth * .5f);
-            if (!Mathf.Approximately(_content.rect.width, targetWidth))
-                _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, targetWidth);
 
             var pending = PendingItemsField?.GetValue(_menu) as IList<RoomItemDefinition>;
             if (!_loggedComplete && visible > 0 && pending != null && pending.Count == 0)
             {
                 _loggedComplete = true;
                 UnderPressureEditorPlugin.Log?.LogInfo("Catalogo visual: " + visible +
-                    " entradas en " + rows + " filas; recorrido reducido a la mitad=" +
-                    targetWidth.ToString("F1") +
-                    ", viewport=" + viewportWidth.ToString("F1") + ".");
+                    " objetos, " + rows + " filas, " + columns + " columnas, ancho=" +
+                    targetWidth.ToString("F1") + ", viewport=" +
+                    viewportWidth.ToString("F1") + ".");
             }
+        }
+
+        private static void SetWidthPreservingLeft(RectTransform rect, float width)
+        {
+            if (rect == null || Mathf.Approximately(rect.rect.width, width)) return;
+            var previousWidth = rect.rect.width;
+            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            var position = rect.anchoredPosition;
+            position.x += (width - previousWidth) * rect.pivot.x;
+            rect.anchoredPosition = position;
         }
     }
 
@@ -1132,7 +1135,6 @@ namespace UnderPressure.Editor
         private readonly HashSet<ScenarioEditorScene.SceneObject> _ctrlSceneSelected =
             new HashSet<ScenarioEditorScene.SceneObject>();
         private bool _ctrlDragging;
-        private bool _ctrlHoverLocked;
         private Vector3 _ctrlStart;
         private Vector3 _ctrlEnd;
         private GameObject _ctrlRectangle;
@@ -1728,25 +1730,6 @@ namespace UnderPressure.Editor
             }
         }
 
-        // Ctrl cambia la parcela al pasar por encima de un objeto, SIN clic.
-        // Bloq Mayus desactiva solo este cambio automatico.
-        private void UpdateCtrlPlotHover()
-        {
-            if (!CtrlDown || _ctrlDragging || _nativeMulti.Count > 0 || _ctrlHoverLocked ||
-                Input.GetMouseButton(0) || OverUi() ||
-                _level?.CursorManager == null ||
-                !_level.CursorManager.IsModeActive<CursorEditHospitalItem>() ||
-                _level.CursorManager.IsModeActive<CursorRoomItem>()) return;
-            HospitalPlot owner;
-            LandscapeRoomItem item;
-            if (!TryPickNative(Input.mousePosition, out owner, out item) || owner == null) return;
-            if (!ScenarioEditorStorageMenu.PlotIsolationActive &&
-                !ReferenceEquals(owner, _selection))
-                _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
-            if (_ctrlSelected.Count == 0 && _ctrlSceneSelected.Count == 0)
-                _level.HighlightManager.HighlightObject(item);
-        }
-
         private void UpdateCtrlRectangle()
         {
             if (_nativeMulti.Count > 0) return;
@@ -1778,7 +1761,6 @@ namespace UnderPressure.Editor
                 // objetos fuera de sus bordes ni mezclar capas.
                 _ctrlSelected.Clear();
                 _ctrlSceneSelected.Clear();
-                _ctrlHoverLocked = true;
                 _ctrlDragging = true;
                 BeginCtrlRectangle();
             }
@@ -1937,7 +1919,6 @@ namespace UnderPressure.Editor
         private void ClearCtrlSelection()
         {
             _ctrlDragging = false;
-            _ctrlHoverLocked = false;
             _ctrlSelected.Clear();
             _ctrlSceneSelected.Clear();
             DestroyCtrlRectangle();
@@ -1979,8 +1960,6 @@ namespace UnderPressure.Editor
             RefreshSearch();
             if (ScenarioLandscape.IsActive) return;
 
-            if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
-            UpdateCtrlPlotHover();
             if (_ctrlDragging || (CtrlDown && !OverUi())) UpdateCtrlRectangle();
             // Mayus clona y Alt roba, pero ambos deben mostrar siempre el
             // contorno del objeto alcanzado aunque pertenezca a otra parcela o capa.
@@ -2061,7 +2040,17 @@ namespace UnderPressure.Editor
                 if (Vector2.Distance(_rightDown, Input.mousePosition) <= 5f &&
                     TryPickForScene(out var scene, out var owner, out var item, out var definition) &&
                     definition != null)
+                {
+                    if (owner != null && item != null)
+                    {
+                        var layer = ReadLayer(item);
+                        if (!ReferenceEquals(owner, _selection))
+                            _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
+                        if (CursorEditHospital.HospitalPlotLayer != layer)
+                            _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke(layer);
+                    }
                     SetSearch(GetObjectName(definition));
+                }
                 _rightClickPending = false;
             }
         }

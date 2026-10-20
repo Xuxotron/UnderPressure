@@ -278,6 +278,7 @@ namespace UnderPressure.Editor
             ScenarioEditorStorageMenu.DeactivateNativeTools();
             ScenarioEditorTerrainPainter.DisableTools();
             ScenarioEditorTerrainPainter.DisableWireframe();
+            ScenarioEditorFogOfWar.Disable();
             try
             {
                 _paintDirection = 1;
@@ -526,6 +527,9 @@ namespace UnderPressure.Editor
         private static void GenerateMap()
         {
             if (string.IsNullOrEmpty(EditorMapCapture.GetMapImagePath(_level))) return;
+            // La captura es inmediata: retirar el postproceso antes de crear su cámara.
+            ScenarioEditorFogOfWar.Disable();
+            ScenarioEditorTerrainPainter.DisableWireframe();
             EditorMapCapture.Capture(path =>
             {
                 if (!string.IsNullOrEmpty(path)) LoadGeneratedMap(path);

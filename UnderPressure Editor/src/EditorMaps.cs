@@ -2017,6 +2017,8 @@ namespace UnderPressure.Editor
         private TMP_Text _cameraButtonText;
         private Button _objectsButton;
         private Button _buildButton;
+        private Button _stylesButton;
+        private bool _stylesDialogOpen;
         private TMP_Text _plotInfoText;
         private Button _nativeCameraButton;
         private Button _nativeObjectsButton;
@@ -2413,7 +2415,8 @@ rect.pivot = new Vector2(1f, 1f);
         {
             var canvas = _menu.GetComponentInParent<Canvas>();
             if (canvas == null) return;
-            AddTopButton(canvas.transform, T("editor.toolbar.styles"), 550f, ShowStyles);
+            _stylesButton = AddTopButton(canvas.transform, T("editor.toolbar.styles"),
+                550f, ShowStyles);
         }
 
         // Bloq Mayus intercala el aislamiento; el usuario tambien puede
@@ -2527,7 +2530,12 @@ rect.pivot = new Vector2(1f, 1f);
             _plotInfoText = AccessTools.Field(typeof(EditHospitalMenu), "_infoText")?
                 .GetValue(_menu) as TMP_Text;
             if (_plotInfoText != null)
-                _plotInfoText.alignment = TextAlignmentOptions.Left;
+            {
+                _plotInfoText.alignment = TextAlignmentOptions.Right;
+                var margin = _plotInfoText.margin;
+                margin.z = 86f;
+                _plotInfoText.margin = margin;
+            }
             // Cabecera propia en el LayoutGroup del listado original.
             // NO clonar PlotSelectionItem: sus eventos y checks son privados
             // de una parcela y no deben aplicarse a Landscape.
@@ -2706,6 +2714,7 @@ rect.pivot = new Vector2(1f, 1f);
                 cursor.IsModeActive<CursorEditHospitalBuild>());
             SetToolButtonSelected(_movePlotButton, !customToolOpen && cursor != null &&
                 cursor.IsModeActive<CursorEditHospitalMovePlot>());
+            SetToolButtonSelected(_stylesButton, _stylesDialogOpen);
             var input = _level.InputManager;
             if (input == null) return;
             ScenarioLandscape.UpdateSelection();
@@ -2976,6 +2985,7 @@ rect.pivot = new Vector2(1f, 1f);
         private void ShowStyles()
         {
             BuildDialog(T("editor.map.styles"));
+            _stylesDialogOpen = _dialog != null;
             if (_dialog == null) return;
             var catalog = ScenarioHospitalStyles.Build(_level,
                 T("editor.map.style.original"),
@@ -3351,6 +3361,7 @@ rect.pivot = new Vector2(1f, 1f);
                 UnityEngine.Object.Destroy(_dialog);
             }
             _dialog = null;
+            _stylesDialogOpen = false;
             _dialogPanel = null;
             _nameInput = null;
             _statusText = null;
