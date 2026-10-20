@@ -289,20 +289,33 @@ namespace UnderPressure.Editor
         {
             if (_plotPanel == null) return;
             ApplyPanelStyle(_plotPanel.gameObject);
+            var panelImage = _plotPanel.GetComponent<Image>();
+            if (panelImage != null)
+            {
+                panelImage.sprite = null;
+                panelImage.type = Image.Type.Simple;
+                panelImage.color = _style.PanelColor;
+            }
             EnsureSortingCanvas(_plotPanel.gameObject, 2850);
             _plotPanel.SetAsLastSibling();
             if (_plotViewport != null)
             {
-                _plotViewport.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
-                    PanelWidth - 8f);
-                var maximumListHeight = Mathf.Max(58f, _leftUpperHeight - 142f);
-                _plotViewport.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
-                    maximumListHeight);
+                IgnoreParentLayout(_plotViewport);
+                _plotViewport.anchorMin = _plotViewport.anchorMax = new Vector2(0f, 1f);
+                _plotViewport.pivot = new Vector2(0f, 1f);
+                _plotViewport.anchoredPosition = new Vector2(4f, -84f);
+                _plotViewport.sizeDelta = new Vector2(PanelWidth - 8f,
+                    Mathf.Max(58f, _leftUpperHeight - 130f));
             }
             var layerRoot = _storage?.PlotLayerRoot as RectTransform;
             if (layerRoot != null)
-                layerRoot.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
-                    PanelWidth - 10f);
+            {
+                IgnoreParentLayout(layerRoot);
+                layerRoot.anchorMin = layerRoot.anchorMax = new Vector2(0f, 1f);
+                layerRoot.pivot = new Vector2(0f, 1f);
+                layerRoot.anchoredPosition = new Vector2(5f, -48f);
+                layerRoot.sizeDelta = new Vector2(PanelWidth - 10f, 30f);
+            }
             foreach (var button in _storage?.PlotChromeButtons ?? new Button[0])
             {
                 if (button == null) continue;
@@ -323,6 +336,14 @@ namespace UnderPressure.Editor
                 CompactPlotRow(row, _style.ButtonSprite, _style.ButtonColor,
                     _style.SelectedColor);
             }
+        }
+
+        private static void IgnoreParentLayout(RectTransform rect)
+        {
+            if (rect == null) return;
+            var layout = rect.GetComponent<LayoutElement>() ??
+                rect.gameObject.AddComponent<LayoutElement>();
+            layout.ignoreLayout = true;
         }
 
         private static RectTransform FindPlotPanel(RectTransform menuRoot,
@@ -368,12 +389,38 @@ namespace UnderPressure.Editor
                     textRect.anchorMin = new Vector2(0f, 0f);
                     textRect.anchorMax = new Vector2(1f, 1f);
                     textRect.offsetMin = new Vector2(7f, 0f);
-                    textRect.offsetMax = new Vector2(-126f, 0f);
+                    textRect.offsetMax = new Vector2(-6f, 0f);
                 }
                 text.enableAutoSizing = true;
                 text.fontSizeMin = 9f;
                 text.fontSizeMax = 14f;
                 text.alignment = TextAlignmentOptions.MidlineLeft;
+            }
+
+            var rowLayout = row.GetComponent<LayoutElement>() ??
+                row.gameObject.AddComponent<LayoutElement>();
+            rowLayout.minHeight = rowLayout.preferredHeight = 34f;
+            var horizontal = row.GetComponent<HorizontalLayoutGroup>();
+            if (horizontal != null)
+            {
+                horizontal.padding = new RectOffset(4, 4, 4, 4);
+                horizontal.spacing = 3f;
+                horizontal.childAlignment = TextAnchor.MiddleLeft;
+                horizontal.childControlWidth = true;
+                horizontal.childControlHeight = true;
+                horizontal.childForceExpandWidth = false;
+                horizontal.childForceExpandHeight = false;
+            }
+            var button = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
+                .GetValue(row) as Button;
+            if (button != null)
+            {
+                var buttonLayout = button.GetComponent<LayoutElement>() ??
+                    button.gameObject.AddComponent<LayoutElement>();
+                buttonLayout.minWidth = 70f;
+                buttonLayout.preferredWidth = 78f;
+                buttonLayout.flexibleWidth = 1f;
+                buttonLayout.minHeight = buttonLayout.preferredHeight = 26f;
             }
 
             var names = new[]
@@ -387,10 +434,14 @@ namespace UnderPressure.Editor
                     .GetValue(row) as Toggle;
                 var rect = toggle?.transform as RectTransform;
                 if (rect == null) continue;
-                rect.anchorMin = rect.anchorMax = new Vector2(1f, .5f);
-                rect.pivot = new Vector2(.5f, .5f);
-                rect.anchoredPosition = new Vector2(-115f + index * 25f, 0f);
-                rect.sizeDelta = new Vector2(22f, 22f);
+                rect.localScale = Vector3.one;
+                var toggleLayout = toggle.GetComponent<LayoutElement>() ??
+                    toggle.gameObject.AddComponent<LayoutElement>();
+                toggleLayout.ignoreLayout = false;
+                toggleLayout.minWidth = toggleLayout.preferredWidth = 22f;
+                toggleLayout.flexibleWidth = 0f;
+                toggleLayout.minHeight = toggleLayout.preferredHeight = 22f;
+                toggleLayout.flexibleHeight = 0f;
             }
             var skin = row.GetComponent<ScenarioEditorPlotRowSkin>() ??
                 row.gameObject.AddComponent<ScenarioEditorPlotRowSkin>();
@@ -777,11 +828,6 @@ namespace UnderPressure.Editor
             {
                 if (toggle?.targetGraphic is Image background)
                 {
-                    if (_sprite != null)
-                    {
-                        background.sprite = _sprite;
-                        background.type = Image.Type.Sliced;
-                    }
                     background.color = _normal;
                 }
                 if (toggle?.graphic is Graphic mark) mark.color = Color.white;
