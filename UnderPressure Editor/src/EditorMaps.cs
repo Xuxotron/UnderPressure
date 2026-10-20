@@ -2025,6 +2025,9 @@ namespace UnderPressure.Editor
         private Button _nativeObjectsButton;
         private Button _nativeBuildButton;
         private Button _nativeMoveButton;
+        private readonly Vector3[] _plotViewportCorners = new Vector3[4];
+        private Vector3 _lastPlotActionsOrigin = new Vector3(float.NaN, float.NaN, float.NaN);
+        private float _lastPlotActionsWidth = float.NaN;
         private int _initialVisibilityFrames;
         private Button _plotIsolationButton;
         private bool _plotIsolation;
@@ -2300,33 +2303,33 @@ namespace UnderPressure.Editor
             if (_layerButtonsRoot != null) _layerButtonsRoot.SetActive(visible);
         }
 
+        internal void RefreshLayerColors()
+        {
+            var index = _layerDropdown == null ? 0 : _layerDropdown.value;
+            RefreshLayerButtons((HospitalPlotLayer)Mathf.Clamp(index, 0, 2));
+        }
+
         private void RefreshLayerButtons(HospitalPlotLayer selected)
         {
-            var nativeColors = AccessTools.Field(typeof(EditHospitalMenu), "_editFrameColors")
-                ?.GetValue(_menu) as Color[];
-            var fallback = new[]
+            var selectedColors = new[]
             {
                 new Color(.78f, .80f, .80f, 1f),
-                new Color(.08f, .37f, .61f, 1f),
+                new Color(.92f, .47f, .13f, 1f),
                 new Color(.39f, .62f, .22f, 1f)
             };
+            var inactive = new Color(.24f, .57f, .68f, 1f);
             for (var i = 0; i < _layerButtons.Length; ++i)
             {
                 var button = _layerButtons[i];
                 if (button == null) continue;
                 var active = i == (int)selected;
+                var display = active ? selectedColors[i] : inactive;
+                if (button.image != null) button.image.color = display;
                 var colors = button.colors;
-                var activeColor = nativeColors != null && nativeColors.Length > i
-                    ? nativeColors[i] : fallback[i];
-                activeColor.a = 1f;
-                colors.normalColor = active ? activeColor : new Color(.035f, .43f, .70f, 1f);
-                colors.highlightedColor = active
-                    ? Color.Lerp(activeColor, Color.white, .18f)
-                    : new Color(.08f, .58f, .86f, 1f);
-                colors.pressedColor = active
-                    ? Color.Lerp(activeColor, Color.black, .18f)
-                    : new Color(.025f, .32f, .55f, 1f);
-                colors.selectedColor = colors.highlightedColor;
+                colors.normalColor = display;
+                colors.highlightedColor = Color.Lerp(display, Color.white, .14f);
+                colors.pressedColor = Color.Lerp(display, Color.black, .18f);
+                colors.selectedColor = display;
                 button.colors = colors;
             }
         }
@@ -2515,8 +2518,8 @@ rect.pivot = new Vector2(1f, 1f);
         {
             if (button != null && button.image != null)
                 button.image.color = selected
-                    ? new Color(.02f, .55f, .90f, 1f)
-                    : new Color(.035f, .43f, .70f, 1f);
+                    ? new Color(.10f, .48f, .67f, 1f)
+                    : new Color(.24f, .57f, .68f, 1f);
         }
 
         private void OnPlotSelected(HospitalPlot plot)
@@ -2846,10 +2849,13 @@ rect.pivot = new Vector2(1f, 1f);
                 return;
             var parentRect = transform as RectTransform;
             if (parentRect == null) return;
-            var corners = new Vector3[4];
-            _plotListViewport.GetWorldCorners(corners);
-            var width = Mathf.Abs((corners[3] - corners[0]).magnitude /
+            _plotListViewport.GetWorldCorners(_plotViewportCorners);
+            var width = Mathf.Abs((_plotViewportCorners[3] - _plotViewportCorners[0]).magnitude /
                                   Mathf.Max(parentRect.lossyScale.x, 0.0001f));
+            if ((_plotViewportCorners[0] - _lastPlotActionsOrigin).sqrMagnitude < .0001f &&
+                Mathf.Abs(width - _lastPlotActionsWidth) < .01f) return;
+            _lastPlotActionsOrigin = _plotViewportCorners[0];
+            _lastPlotActionsWidth = width;
             var buttonWidth = Mathf.Max(52f, (width - 8f) / 3f);
             var add = _addPlotButton.transform as RectTransform;
             var move = _movePlotButton.transform as RectTransform;
@@ -2863,10 +2869,10 @@ rect.pivot = new Vector2(1f, 1f);
             }
             // El origen de cada boton es su esquina superior izquierda.
             var offset = parentRect.TransformVector(new Vector3(2f, -4f, 0f));
-            add.position = corners[0] + offset;
-            move.position = corners[0] + offset +
+            add.position = _plotViewportCorners[0] + offset;
+            move.position = _plotViewportCorners[0] + offset +
                             parentRect.TransformVector(new Vector3(buttonWidth + 2f, 0f, 0f));
-            remove.position = corners[0] + offset +
+            remove.position = _plotViewportCorners[0] + offset +
                               parentRect.TransformVector(new Vector3((buttonWidth + 2f) * 2f, 0f, 0f));
         }
 
@@ -2875,7 +2881,8 @@ rect.pivot = new Vector2(1f, 1f);
             if (_plotInfoText == null || _selectedPlot?.HospitalMap?.FloorPlan == null) return;
             // Misma medida y unidad que EditHospitalMenu.OnHospitalPlotUpdated, sin prefijo.
             var size = _selectedPlot.HospitalMap.FloorPlan.TileCount * MathUtils.Square(2);
-            _plotInfoText.text = size + " m²";
+            var value = size + " m²";
+            if (_plotInfoText.text != value) _plotInfoText.text = value;
         }
 
         private HospitalPlot SelectedPlot()

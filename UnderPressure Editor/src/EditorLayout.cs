@@ -32,6 +32,8 @@ namespace UnderPressure.Editor
         private RectTransform _root;
         private RectTransform _plotPanel;
         private RectTransform _plotViewport;
+        private LandscapeObjectsMenu _objectsMenu;
+        private float _objectsPanelHeight = -1f;
         private Button _objectsToggle;
         private Button _historyToggle;
         private Button _terrainToggle;
@@ -62,7 +64,7 @@ namespace UnderPressure.Editor
 
         internal static void RegisterObjectsMenu(LandscapeObjectsMenu menu)
         {
-            if (_active != null) _active.ApplyObjectsPanel(menu);
+            if (_active != null) _active.ApplyObjectsPanel(menu, true);
         }
 
         private void Initialise(EditHospitalMenu menu, Level level,
@@ -94,6 +96,7 @@ namespace UnderPressure.Editor
             }
 
             _objectsToggle = storage.ObjectsButton;
+            _objectsMenu = FindActiveObjectsMenu();
             if (_objectsToggle != null) _objectsToggle.gameObject.name = "UP Objects Dock Toggle";
             ApplyLayout(true);
         }
@@ -111,7 +114,6 @@ namespace UnderPressure.Editor
                 _style.HeaderColor, false);
             var titleRect = (RectTransform)_leftTitle.transform;
             SetTopLeft(titleRect, 0f, 0f, PanelWidth, BarHeight);
-            CreateLabel(_leftTitle.transform, EditorLocalization.Get("editor.layout.title"), 18f);
 
             _historyToggle = CloneButton(template, _root, "UP History Dock Toggle",
                 EditorLocalization.Get("editor.history.button"), ToggleHistory);
@@ -198,14 +200,6 @@ namespace UnderPressure.Editor
             if (!force && Mathf.Approximately(width, _lastCanvasWidth) &&
                 Mathf.Approximately(height, _lastCanvasHeight))
             {
-                _objectsToggle = _storage?.ObjectsButton;
-                PlaceCornerButton(_objectsToggle, false, false);
-                PlaceCornerButton(_historyToggle, true, true);
-                PlaceCornerButton(_terrainToggle, true, false);
-                PlaceTopButtons(width);
-                PlaceMapIdentity();
-                ApplyDockStyles();
-                ApplyObjectsPanel(FindActiveObjectsMenu());
                 return;
             }
             _lastCanvasWidth = width;
@@ -232,8 +226,7 @@ namespace UnderPressure.Editor
             PlaceTopButtons(width);
             PlaceMapIdentity();
 
-            var objects = FindActiveObjectsMenu();
-            ApplyObjectsPanel(objects);
+            ApplyObjectsPanel(_objectsMenu, true);
             if (_leftDivider != null)
             {
                 SetTopLeft(_leftDivider, 0f, BarHeight + _leftUpperHeight - DividerHeight * .5f,
@@ -316,14 +309,17 @@ namespace UnderPressure.Editor
                 layerRoot.anchoredPosition = new Vector2(5f, -48f);
                 layerRoot.sizeDelta = new Vector2(PanelWidth - 10f, 30f);
             }
-            foreach (var button in _storage?.PlotChromeButtons ?? new Button[0])
+            var plotButtons = _storage?.PlotChromeButtons ?? new Button[0];
+            for (var buttonIndex = 0; buttonIndex < plotButtons.Length; ++buttonIndex)
             {
+                var button = plotButtons[buttonIndex];
                 if (button == null) continue;
                 if (button.transform.parent == _menu.transform)
                     button.transform.SetParent(_root, false);
-                ApplyButtonStyle(button);
+                if (buttonIndex >= 3) ApplyButtonStyle(button);
                 button.transform.SetAsLastSibling();
             }
+            _storage?.RefreshLayerColors();
             var landscape = _plotPanel.GetComponentsInChildren<Transform>(true)
                 .FirstOrDefault(child => child.name == "UP Landscape - Row");
             var landscapeImage = landscape?.GetComponent<Image>();
@@ -332,9 +328,10 @@ namespace UnderPressure.Editor
             {
                 var rect = row.transform as RectTransform;
                 if (rect != null) rect.SetSizeWithCurrentAnchors(
-                    RectTransform.Axis.Horizontal, PanelWidth - 10f);
-                CompactPlotRow(row, _style.ButtonSprite, _style.ButtonColor,
-                    _style.SelectedColor);
+                    RectTransform.Axis.Horizontal, PanelWidth - 24f);
+                CompactPlotRow(row, _style.ButtonSprite,
+                    new Color(.24f, .57f, .68f, 1f),
+                    new Color(.10f, .39f, .56f, 1f));
             }
         }
 
@@ -399,12 +396,12 @@ namespace UnderPressure.Editor
 
             var rowLayout = row.GetComponent<LayoutElement>() ??
                 row.gameObject.AddComponent<LayoutElement>();
-            rowLayout.minHeight = rowLayout.preferredHeight = 34f;
+            rowLayout.minHeight = rowLayout.preferredHeight = 44f;
             var horizontal = row.GetComponent<HorizontalLayoutGroup>();
             if (horizontal != null)
             {
-                horizontal.padding = new RectOffset(4, 4, 4, 4);
-                horizontal.spacing = 3f;
+                horizontal.padding = new RectOffset(2, 2, 4, 4);
+                horizontal.spacing = 2f;
                 horizontal.childAlignment = TextAnchor.MiddleLeft;
                 horizontal.childControlWidth = true;
                 horizontal.childControlHeight = true;
@@ -417,10 +414,10 @@ namespace UnderPressure.Editor
             {
                 var buttonLayout = button.GetComponent<LayoutElement>() ??
                     button.gameObject.AddComponent<LayoutElement>();
-                buttonLayout.minWidth = 70f;
-                buttonLayout.preferredWidth = 78f;
+                buttonLayout.minWidth = 56f;
+                buttonLayout.preferredWidth = 62f;
                 buttonLayout.flexibleWidth = 1f;
-                buttonLayout.minHeight = buttonLayout.preferredHeight = 26f;
+                buttonLayout.minHeight = buttonLayout.preferredHeight = 36f;
             }
 
             var names = new[]
@@ -438,9 +435,9 @@ namespace UnderPressure.Editor
                 var toggleLayout = toggle.GetComponent<LayoutElement>() ??
                     toggle.gameObject.AddComponent<LayoutElement>();
                 toggleLayout.ignoreLayout = false;
-                toggleLayout.minWidth = toggleLayout.preferredWidth = 22f;
+                toggleLayout.minWidth = toggleLayout.preferredWidth = 24f;
                 toggleLayout.flexibleWidth = 0f;
-                toggleLayout.minHeight = toggleLayout.preferredHeight = 22f;
+                toggleLayout.minHeight = toggleLayout.preferredHeight = 24f;
                 toggleLayout.flexibleHeight = 0f;
             }
             var skin = row.GetComponent<ScenarioEditorPlotRowSkin>() ??
@@ -506,22 +503,35 @@ namespace UnderPressure.Editor
         {
             var identity = _storage?.MapIdentityRoot;
             var rect = identity?.transform as RectTransform;
-            if (rect == null) return;
-            rect.SetParent(_root, false);
-            rect.anchorMin = rect.anchorMax = Vector2.one;
-            rect.pivot = Vector2.one;
-            rect.anchoredPosition = new Vector2(-PanelWidth - 8f, -5f);
-            rect.sizeDelta = new Vector2(184f, 40f);
+            if (rect == null || _leftTitle == null) return;
+            rect.SetParent(_leftTitle.transform, false);
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(.5f, .5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.offsetMin = new Vector2(10f, 0f);
+            rect.offsetMax = new Vector2(-8f, 0f);
+            var label = identity.GetComponentInChildren<Text>(true);
+            if (label != null) label.alignment = TextAnchor.MiddleLeft;
             rect.SetAsLastSibling();
         }
 
-        private void ApplyObjectsPanel(LandscapeObjectsMenu menu)
+        private void ApplyObjectsPanel(LandscapeObjectsMenu menu, bool force)
         {
-            if (menu == null || _canvasRect == null) return;
+            if (menu == null || _canvasRect == null)
+            {
+                _objectsMenu = null;
+                _objectsPanelHeight = -1f;
+                return;
+            }
             var rect = menu.transform as RectTransform;
             if (rect == null) return;
             var height = Mathf.Max(MinimumLowerHeight,
                 _canvasRect.rect.height - BarHeight * 2f - _leftUpperHeight);
+            if (!force && ReferenceEquals(_objectsMenu, menu) &&
+                Mathf.Abs(_objectsPanelHeight - height) < .1f) return;
+            _objectsMenu = menu;
+            _objectsPanelHeight = height;
             rect.SetParent(_canvas.transform, false);
             rect.anchorMin = rect.anchorMax = Vector2.zero;
             rect.pivot = Vector2.zero;
@@ -684,8 +694,8 @@ namespace UnderPressure.Editor
         {
             internal Sprite PanelSprite;
             internal Sprite ButtonSprite;
-            internal Color PanelColor = new Color(.018f, .25f, .43f, 1f);
-            internal Color HeaderColor = new Color(.018f, .25f, .43f, 1f);
+            internal Color PanelColor = new Color(.10f, .25f, .34f, 1f);
+            internal Color HeaderColor = new Color(.10f, .25f, .34f, 1f);
             internal Color ButtonColor = new Color(.035f, .43f, .70f, 1f);
             internal Color SelectedColor = new Color(.02f, .58f, .88f, 1f);
             internal ColorBlock ButtonColors = ColorBlock.defaultColorBlock;
@@ -820,7 +830,7 @@ namespace UnderPressure.Editor
                 colors.normalColor = baseColor;
                 colors.highlightedColor = Color.Lerp(baseColor, Color.white, .16f);
                 colors.pressedColor = Color.Lerp(baseColor, Color.black, .18f);
-                colors.selectedColor = colors.highlightedColor;
+                colors.selectedColor = baseColor;
                 _button.colors = colors;
             }
             if (_toggles == null) return;
@@ -860,12 +870,15 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listContent");
         private static readonly System.Reflection.FieldInfo SearchField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_searchBox");
+        private static readonly System.Reflection.FieldInfo CreatingIconField =
+            AccessTools.Field(typeof(LandscapeObjectsMenu), "_creatingListIcon");
 
         internal static void Configure(LandscapeObjectsMenu menu, float width, float height)
         {
             if (menu == null) return;
             var contentObject = ContentField?.GetValue(menu) as GameObject;
             var search = SearchField?.GetValue(menu) as TMP_InputField;
+            var creatingIcon = CreatingIconField?.GetValue(menu) as Image;
             if (contentObject == null) return;
             var content = contentObject.transform as RectTransform;
             var scroll = content?.GetComponentInParent<ScrollRect>();
@@ -886,6 +899,11 @@ namespace UnderPressure.Editor
             if (oldBar != null) oldBar.gameObject.SetActive(false);
             var oldBackdrop = menu.transform.Find("UP_Backdrop_Extension");
             if (oldBackdrop != null) oldBackdrop.gameObject.SetActive(false);
+            if (creatingIcon != null)
+            {
+                foreach (var graphic in creatingIcon.GetComponentsInChildren<Graphic>(true))
+                    graphic.enabled = false;
+            }
 
             var grid = content.GetComponent<GridLayoutGroup>() ??
                 content.gameObject.AddComponent<GridLayoutGroup>();
@@ -1011,7 +1029,7 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(LandscapeObjectsMenu), "Setup")]
     internal static class ScenarioEditorObjectDockPatch
     {
-        [HarmonyPriority(Priority.Last)]
+        [HarmonyPriority(-100)]
         private static void Postfix(LandscapeObjectsMenu __instance)
         {
             if (ScenarioEditorFlow.IsRunning)
