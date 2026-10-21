@@ -164,26 +164,28 @@ namespace UnderPressure.Editor
             return true;
         }
 
-        // BASE, BUILD y UNBUILD: misma base RGB que los checks de parcela;
-        // seleccion = intensidad 0.84. Cambiar aqui SOLO el oscurecimiento.
+        // BASE, BUILD y UNBUILD: usar el color real de sus checks de parcela.
         internal static void StyleLayerButtons(ScenarioEditorStorageMenu storage,
             HospitalPlotLayer selected)
         {
             if (_active == null || storage == null) return;
             var buttons = storage.PlotChromeButtons;
+            var row = storage.GetComponentInChildren<PlotSelectionItem>(true);
+            var toggleFields = new[]
+            {
+                "_toggleLayerBase", "_toggleLayerBuilt", "_toggleLayerUnbuilt"
+            };
             for (var index = 0; index < 3 && index < buttons.Length; ++index)
             {
                 var button = buttons[index];
                 if (button == null) continue;
-                var exactCheckColor = ScenarioEditorPlotRowSkin.LayerColors[index];
-                // No seleccionado: mismo RGBA exacto que el check.
-                // Seleccionado: el mismo color, ligeramente oscurecido.
-                var color = index == (int)selected
-                    ? new Color(exactCheckColor.r * .84f,
-                        exactCheckColor.g * .84f, exactCheckColor.b * .84f,
-                        exactCheckColor.a)
-                    : exactCheckColor;
-                _active.ApplyButtonStyle(button, color);
+                var toggle = row == null ? null :
+                    AccessTools.Field(typeof(PlotSelectionItem), toggleFields[index])?
+                        .GetValue(row) as Toggle;
+                var exactCheckColor = toggle?.targetGraphic == null
+                    ? ScenarioEditorPlotRowSkin.LayerColors[index]
+                    : toggle.targetGraphic.color;
+                _active.ApplyButtonStyle(button, exactCheckColor);
             }
         }
 
@@ -544,12 +546,13 @@ namespace UnderPressure.Editor
             PlaceCornerButton(_historyToggle, true, true);
             PlaceCornerButton(_terrainToggle, true, false);
             PlaceTopButtons(width);
+            PlaceTileMenu();
             PlaceMapIdentity();
 
             ApplyObjectsPanel(_objectsMenu, true);
             if (_leftDivider != null)
             {
-                SetTopLeft(_leftDivider, 0f, BarHeight + _leftUpperHeight - DividerHeight * .5f,
+                SetTopLeft(_leftDivider, 0f, BarHeight + _leftUpperHeight,
                     PanelWidth, DividerHeight);
                 _leftDivider.gameObject.SetActive(true);
                 _leftDivider.SetAsLastSibling();
@@ -879,12 +882,31 @@ namespace UnderPressure.Editor
                 rect.SetParent(_root, false);
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
                 rect.pivot = new Vector2(0f, 1f);
-                rect.anchoredPosition = new Vector2(x, -5f);
+                var buttonX = ReferenceEquals(button, _storage?.BuildButton)
+                    ? PanelWidth : x;
+                rect.anchoredPosition = new Vector2(buttonX, -5f);
                 rect.sizeDelta = new Vector2(buttonWidth, 40f);
                 ApplyButtonStyle(button);
                 button.transform.SetAsLastSibling();
                 x += buttonWidth + gap;
             }
+        }
+
+        // El submenu nativo de Baldosas conserva su jerarquia y eventos;
+        // solo se acopla justo debajo de su boton superior.
+        private void PlaceTileMenu()
+        {
+            var menu = _storage?.TileSelectionRoot;
+            var buttonRect = _storage?.BuildButton?.transform as RectTransform;
+            if (menu == null || buttonRect == null) return;
+            RememberRect(menu);
+            menu.SetParent(_root, false);
+            menu.anchorMin = menu.anchorMax = new Vector2(0f, 1f);
+            menu.pivot = new Vector2(0f, 1f);
+            menu.anchoredPosition = new Vector2(PanelWidth, -BarHeight);
+            menu.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
+                buttonRect.rect.width);
+            menu.SetAsLastSibling();
         }
 
         // PESTANAS: Objetos abajo izquierda, Historial arriba derecha,

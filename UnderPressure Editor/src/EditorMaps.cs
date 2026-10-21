@@ -2007,6 +2007,7 @@ namespace UnderPressure.Editor
         private bool _layerDropdownOriginalBlocksRaycasts;
         private readonly Button[] _layerButtons = new Button[3];
         private GameObject _layerButtonsRoot;
+        private RectTransform _tileSelectionRoot;
         private RectTransform _plotListViewport;
         private Image _landscapeSelectBackground;
         private Outline _landscapeBorder;
@@ -2041,6 +2042,7 @@ namespace UnderPressure.Editor
         internal Button CameraButton => _cameraButton;
         internal Button StylesButton => _stylesButton;
         internal Transform PlotLayerRoot => _layerButtonsRoot?.transform;
+        internal RectTransform TileSelectionRoot => _tileSelectionRoot;
         internal GameObject MapIdentityRoot => _mapIdentityRoot;
         internal Button[] PlotChromeButtons => new[]
         {
@@ -2112,6 +2114,7 @@ namespace UnderPressure.Editor
             if (root == null && rootValue is GameObject)
                 root = ((GameObject)rootValue).transform;
             if (native == null || root == null) return;
+            _tileSelectionRoot = root as RectTransform;
             var tileTemplate = root.GetComponentInChildren<Button>(true) ?? _template;
             var button = CloneButton(tileTemplate, root, T("editor.toolbar.tile_view"),
                 () => native.onClick.Invoke());
