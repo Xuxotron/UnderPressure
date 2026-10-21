@@ -33,7 +33,7 @@ namespace UnderPressure.Editor
     // FitPlotPanel() + StyleCompactButtonText() (texto).
     // FILAS DE PARCELA Y SUS CHECKS: CompactPlotRow() (medidas),
     // ScenarioEditorPlotRowSkin.LayerColors (colores).
-    // CAPAS Base/Build/Unbuild: StyleLayerButtons() (colores).
+    // CAPAS Base/Build/Unbuild: ScenarioEditorStorageMenu.AddLayerButtons().
     // BOTONES DEL PINCEL (Pincel, Elevar, Bajar, Aplanar,
     // Wireframe): StyleTerrainButtons() (estilo),
     // EditorTerrain.cs/ApplyDockSize() (posicion y tamano).
@@ -142,8 +142,7 @@ namespace UnderPressure.Editor
                    local.y < bounds.yMin + BarHeight;
         }
 
-        // Referencia cromatica de Build; el color visual de las tres capas
-        // se obtiene de los checks originales en StyleLayerButtons().
+        // Referencia cromatica de Build.
         internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
 
         internal static void StyleToolbarButton(Button button, bool selected)
@@ -162,31 +161,6 @@ namespace UnderPressure.Editor
             _active.ApplyButtonStyle(button,
                 selected ? _active._style.SelectedColor : _active._style.ButtonColor);
             return true;
-        }
-
-        // BASE, BUILD y UNBUILD: usar el color real de sus checks de parcela.
-        internal static void StyleLayerButtons(ScenarioEditorStorageMenu storage,
-            HospitalPlotLayer selected)
-        {
-            if (_active == null || storage == null) return;
-            var buttons = storage.PlotChromeButtons;
-            var row = storage.GetComponentInChildren<PlotSelectionItem>(true);
-            var toggleFields = new[]
-            {
-                "_toggleLayerBase", "_toggleLayerBuilt", "_toggleLayerUnbuilt"
-            };
-            for (var index = 0; index < 3 && index < buttons.Length; ++index)
-            {
-                var button = buttons[index];
-                if (button == null) continue;
-                var toggle = row == null ? null :
-                    AccessTools.Field(typeof(PlotSelectionItem), toggleFields[index])?
-                        .GetValue(row) as Toggle;
-                var exactCheckColor = toggle?.targetGraphic == null
-                    ? ScenarioEditorPlotRowSkin.LayerColors[index]
-                    : toggle.targetGraphic.color;
-                _active.ApplyButtonStyle(button, exactCheckColor);
-            }
         }
 
         // MENU DE PAUSA: Continuar, Guardar/Abrir/Vaciar, Ajustes y Salir.
@@ -552,7 +526,8 @@ namespace UnderPressure.Editor
             ApplyObjectsPanel(_objectsMenu, true);
             if (_leftDivider != null)
             {
-                SetTopLeft(_leftDivider, 0f, BarHeight + _leftUpperHeight,
+                SetTopLeft(_leftDivider, 0f,
+                    BarHeight + _leftUpperHeight - DividerHeight * .5f,
                     PanelWidth, DividerHeight);
                 _leftDivider.gameObject.SetActive(true);
                 _leftDivider.SetAsLastSibling();
@@ -639,6 +614,9 @@ namespace UnderPressure.Editor
                 // recuperado bajo el nombre del hospital.
                 _plotViewport.sizeDelta = new Vector2(PanelWidth - 8f,
                     Mathf.Max(58f, _leftUpperHeight - 110f));
+                var plotScroll = _plotViewport.GetComponent<ScrollRect>();
+                InstallNativeVerticalScrollSlider(_plotPanel, plotScroll,
+                    "UP Plot Native Vertical Slider", 86f, 46f);
             }
             var layerRoot = _storage?.PlotLayerRoot as RectTransform;
             if (layerRoot != null)
@@ -704,17 +682,129 @@ namespace UnderPressure.Editor
             if (content != null)
             {
                 LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-                var preferred = LayoutUtility.GetPreferredHeight(content);
-                if (preferred > 1f) return 84f + preferred + 46f;
+                var layout = content.GetComponent<VerticalLayoutGroup>();
+                var visible = 0;
+                var rowsHeight = 0f;
+                for (var index = 0; index < content.childCount; ++index)
+                {
+                    var child = content.GetChild(index) as RectTransform;
+                    if (child == null || !child.gameObject.activeSelf) continue;
+                    var element = child.GetComponent<LayoutElement>();
+                    var rowHeight = element != null && element.preferredHeight > 0f
+                        ? element.preferredHeight : child.rect.height;
+                    rowsHeight += Mathf.Max(0f, rowHeight);
+                    ++visible;
+                }
+                if (visible > 0)
+                {
+                    if (layout != null)
+                    {
+                        rowsHeight += layout.padding.top + layout.padding.bottom;
+                        rowsHeight += Mathf.Max(0, visible - 1) * layout.spacing;
+                    }
+                    // 110 px corresponden a cabecera, selector de capa,
+                    // botones inferiores y margenes reales del panel.
+                    return 110f + rowsHeight;
+                }
             }
             var count = Mathf.Max(1, _level?.WorldState?.HospitalPlots?.Count ?? 1);
-            return 163f + count * 36f;
+            return 139f + count * 36f;
         }
 
         private void RefreshPlotPanelForCount()
         {
             _resetPlotScroll = true;
             ApplyLayout(true);
+        }
+
+        // BARRAS VERTICALES: clonar el Slider real de Ajustes > Video y
+        // conectarlo al ScrollRect sin reconstruir su aspecto con imagenes propias.
+        internal static Slider InstallNativeVerticalScrollSlider(RectTransform host,
+            ScrollRect scroll, string name, float top, float bottom)
+        {
+            if (_active == null || host == null || scroll == null) return null;
+            var existing = host.Find(name)?.GetComponent<Slider>();
+            if (existing == null)
+            {
+                var source = Resources.FindObjectsOfTypeAll<Slider>()
+                    .FirstOrDefault(candidate => candidate != null &&
+                        candidate.name == "MaximumFPSSlider" &&
+                        !candidate.transform.IsChildOf(host));
+                if (source == null)
+                {
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "Interfaz: no se encontro el slider nativo MaximumFPSSlider.");
+                    return null;
+                }
+                existing = UnityEngine.Object.Instantiate(source, host, false);
+                existing.gameObject.name = name;
+                foreach (var localizer in existing.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (localizer != null && localizer.GetType().FullName == "I2.Loc.Localize")
+                        localizer.enabled = false;
+                var layout = existing.GetComponent<LayoutElement>();
+                if (layout != null) layout.enabled = false;
+            }
+
+            var oldScrollbar = scroll.verticalScrollbar;
+            if (oldScrollbar != null && oldScrollbar.gameObject != existing.gameObject)
+                oldScrollbar.gameObject.SetActive(false);
+            scroll.verticalScrollbar = null;
+
+            var rect = existing.transform as RectTransform;
+            rect.anchorMin = new Vector2(1f, 0f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, .5f);
+            rect.offsetMin = new Vector2(-18f, bottom);
+            rect.offsetMax = new Vector2(-2f, -top);
+            rect.localScale = Vector3.one;
+            existing.direction = Slider.Direction.BottomToTop;
+            existing.minValue = 0f;
+            existing.maxValue = 1f;
+            existing.wholeNumbers = false;
+            existing.interactable = true;
+            ConfigureVerticalNativeSliderGeometry(existing);
+            var bridge = existing.GetComponent<ScenarioEditorNativeScrollSlider>() ??
+                existing.gameObject.AddComponent<ScenarioEditorNativeScrollSlider>();
+            bridge.Initialise(existing, scroll);
+            existing.gameObject.SetActive(true);
+            existing.transform.SetAsLastSibling();
+            return existing;
+        }
+
+        private static void ConfigureVerticalNativeSliderGeometry(Slider slider)
+        {
+            if (slider == null) return;
+            var background = slider.transform.Find("Background") as RectTransform;
+            if (background != null)
+            {
+                background.anchorMin = new Vector2(.5f, 0f);
+                background.anchorMax = new Vector2(.5f, 1f);
+                background.pivot = new Vector2(.5f, .5f);
+                background.anchoredPosition = Vector2.zero;
+                background.sizeDelta = new Vector2(5f, 0f);
+            }
+            var fillArea = slider.fillRect?.parent as RectTransform;
+            if (fillArea != null)
+            {
+                fillArea.anchorMin = new Vector2(.5f, 0f);
+                fillArea.anchorMax = new Vector2(.5f, 1f);
+                fillArea.pivot = new Vector2(.5f, .5f);
+                fillArea.anchoredPosition = Vector2.zero;
+                fillArea.sizeDelta = new Vector2(5f, -14f);
+                slider.fillRect.offsetMin = Vector2.zero;
+                slider.fillRect.offsetMax = Vector2.zero;
+            }
+            var handleArea = slider.handleRect?.parent as RectTransform;
+            if (handleArea != null)
+            {
+                handleArea.anchorMin = new Vector2(.5f, 0f);
+                handleArea.anchorMax = new Vector2(.5f, 1f);
+                handleArea.pivot = new Vector2(.5f, .5f);
+                handleArea.anchoredPosition = Vector2.zero;
+                handleArea.sizeDelta = new Vector2(16f, -16f);
+            }
+            if (slider.handleRect != null)
+                slider.handleRect.sizeDelta = new Vector2(16f, 16f);
         }
 
         private void IgnoreParentLayout(RectTransform rect)
@@ -1374,6 +1464,48 @@ namespace UnderPressure.Editor
         }
     }
 
+    internal sealed class ScenarioEditorNativeScrollSlider : MonoBehaviour
+    {
+        private Slider _slider;
+        private ScrollRect _scroll;
+        private bool _synchronising;
+
+        internal void Initialise(Slider slider, ScrollRect scroll)
+        {
+            if (_slider != null) _slider.onValueChanged.RemoveListener(OnSliderChanged);
+            if (_scroll != null) _scroll.onValueChanged.RemoveListener(OnScrollChanged);
+            _slider = slider;
+            _scroll = scroll;
+            if (_slider == null || _scroll == null) return;
+            _slider.onValueChanged.RemoveAllListeners();
+            _slider.SetValueWithoutNotify(_scroll.verticalNormalizedPosition);
+            _slider.onValueChanged.AddListener(OnSliderChanged);
+            _scroll.onValueChanged.AddListener(OnScrollChanged);
+        }
+
+        private void OnSliderChanged(float value)
+        {
+            if (_synchronising || _scroll == null) return;
+            _synchronising = true;
+            _scroll.verticalNormalizedPosition = value;
+            _synchronising = false;
+        }
+
+        private void OnScrollChanged(Vector2 position)
+        {
+            if (_synchronising || _slider == null) return;
+            _synchronising = true;
+            _slider.SetValueWithoutNotify(position.y);
+            _synchronising = false;
+        }
+
+        private void OnDestroy()
+        {
+            if (_slider != null) _slider.onValueChanged.RemoveListener(OnSliderChanged);
+            if (_scroll != null) _scroll.onValueChanged.RemoveListener(OnScrollChanged);
+        }
+    }
+
     internal sealed class ScenarioEditorPlotRowSkin : MonoBehaviour
     {
         private Button _button;
@@ -1763,47 +1895,10 @@ namespace UnderPressure.Editor
         private static void EnsureVerticalScrollbar(RectTransform host, ScrollRect scroll)
         {
             if (host == null || scroll == null) return;
-            var existing = host.Find("UP_Catalog_VerticalScrollbar") as RectTransform;
-            if (existing == null)
-            {
-                var track = new GameObject("UP_Catalog_VerticalScrollbar", typeof(RectTransform),
-                    typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
-                track.transform.SetParent(host, false);
-                existing = (RectTransform)track.transform;
-                track.GetComponent<Image>().color = new Color(.035f, .20f, .32f, .95f);
-                var area = new GameObject("Sliding Area", typeof(RectTransform));
-                area.transform.SetParent(track.transform, false);
-                var areaRect = (RectTransform)area.transform;
-                areaRect.anchorMin = Vector2.zero;
-                areaRect.anchorMax = Vector2.one;
-                areaRect.offsetMin = new Vector2(2f, 3f);
-                areaRect.offsetMax = new Vector2(-2f, -3f);
-                var handle = new GameObject("Handle", typeof(RectTransform),
-                    typeof(CanvasRenderer), typeof(Image));
-                handle.transform.SetParent(area.transform, false);
-                var handleRect = (RectTransform)handle.transform;
-                handleRect.anchorMin = Vector2.zero;
-                handleRect.anchorMax = Vector2.one;
-                handleRect.offsetMin = Vector2.zero;
-                handleRect.offsetMax = Vector2.zero;
-                var handleImage = handle.GetComponent<Image>();
-                handleImage.color = new Color(.34f, .78f, .96f, 1f);
-                var bar = track.GetComponent<Scrollbar>();
-                bar.direction = Scrollbar.Direction.BottomToTop;
-                bar.targetGraphic = handleImage;
-                bar.handleRect = handleRect;
-            }
-            existing.anchorMin = new Vector2(1f, 0f);
-            existing.anchorMax = new Vector2(1f, 1f);
-            existing.pivot = new Vector2(1f, .5f);
-            existing.anchoredPosition = Vector2.zero;
-            existing.offsetMin = new Vector2(-10f, 6f);
-            existing.offsetMax = new Vector2(0f, -43f);
-            existing.gameObject.SetActive(true);
-            existing.SetAsLastSibling();
-            scroll.verticalScrollbar = existing.GetComponent<Scrollbar>();
-            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
-            scroll.verticalScrollbarSpacing = 2f;
+            var obsolete = host.Find("UP_Catalog_VerticalScrollbar");
+            if (obsolete != null) UnityEngine.Object.Destroy(obsolete.gameObject);
+            ScenarioEditorDockLayout.InstallNativeVerticalScrollSlider(host, scroll,
+                "UP Objects Native Vertical Slider", 43f, 6f);
         }
     }
 
@@ -1896,19 +1991,6 @@ namespace UnderPressure.Editor
         {
             if (!__result && ScenarioEditorDockLayout.PointerOverDock())
                 __result = true;
-        }
-    }
-
-    // Corrige el doble tinte que hacia que BUILD se viera rojo oscuro.
-    [HarmonyPatch(typeof(ScenarioEditorStorageMenu), "RefreshLayerButtons")]
-    internal static class ScenarioEditorLayerButtonStylePatch
-    {
-        [HarmonyPriority(Priority.Last)]
-        private static void Postfix(ScenarioEditorStorageMenu __instance,
-            HospitalPlotLayer selected)
-        {
-            if (ScenarioEditorFlow.IsRunning)
-                ScenarioEditorDockLayout.StyleLayerButtons(__instance, selected);
         }
     }
 

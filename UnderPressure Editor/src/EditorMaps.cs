@@ -2255,7 +2255,7 @@ namespace UnderPressure.Editor
             root.anchorMax = dropdownRect.anchorMax;
             root.pivot = dropdownRect.pivot;
             root.anchoredPosition = dropdownRect.anchoredPosition;
-            root.sizeDelta = new Vector2(244f, dropdownRect.sizeDelta.y);
+            root.sizeDelta = new Vector2(210f, dropdownRect.sizeDelta.y);
             root.localRotation = dropdownRect.localRotation;
             root.localScale = dropdownRect.localScale;
             var layout = _layerButtonsRoot.AddComponent<LayoutElement>();
@@ -2265,7 +2265,8 @@ namespace UnderPressure.Editor
             for (var i = 0; i < _layerButtons.Length; ++i)
             {
                 var layerIndex = i;
-                var button = CloneButton(_template, root, T(keys[i]), () => SelectLayer(layerIndex));
+                var button = CreateLayerButton(root, T(keys[i]), i,
+                    () => SelectLayer(layerIndex));
                 button.gameObject.name = "UP Plot Layer - " + ((HospitalPlotLayer)i);
                 var rect = button.transform as RectTransform;
                 if (rect != null)
@@ -2278,20 +2279,68 @@ namespace UnderPressure.Editor
                     rect.offsetMin = new Vector2(i == 0 ? 0f : 2f, 0f);
                     rect.offsetMax = new Vector2(i == 2 ? 0f : -2f, 0f);
                 }
-                var label = button.GetComponentInChildren<TMP_Text>(true);
-                if (label != null)
-                {
-                    label.enableAutoSizing = true;
-                    label.fontSizeMin = 8f;
-                    label.fontSizeMax = 14f;
-                    label.alignment = TextAlignmentOptions.Center;
-                }
                 _layerButtons[i] = button;
             }
             _layerDropdown.onValueChanged.AddListener(OnLayerDropdownValueChanged);
             _level.HospitalEditEvents.OnSelectHospitalPlotLayer += OnLayerSelected;
             RefreshLayerButtons((HospitalPlotLayer)Mathf.Clamp(_layerDropdown.value, 0, 2));
             _buttons.Add(_layerButtonsRoot);
+        }
+
+        // Estos tres botones no clonan ningun Button del juego. Se construyen
+        // desde cero para que su Image conserve exactamente el RGB de cada check
+        // y el estado pulsado dependa solo del ColorBlock de Unity.
+        private Button CreateLayerButton(Transform parent, string value, int colorIndex,
+            Action action)
+        {
+            var root = AddUi("UP Layer Button", parent);
+            var image = root.AddComponent<Image>();
+            image.sprite = null;
+            image.type = Image.Type.Simple;
+            image.color = ScenarioEditorPlotRowSkin.LayerColors[colorIndex];
+            var button = root.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.transition = Selectable.Transition.ColorTint;
+            var colors = ColorBlock.defaultColorBlock;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 1f, 1f, .94f);
+            colors.pressedColor = new Color(.72f, .72f, .72f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(.55f, .55f, .55f, 1f);
+            colors.colorMultiplier = 1f;
+            colors.fadeDuration = .08f;
+            button.colors = colors;
+            button.onClick.AddListener(() => action());
+
+            var border = root.AddComponent<Outline>();
+            border.effectColor = Color.white;
+            border.effectDistance = new Vector2(1f, -1f);
+            border.useGraphicAlpha = true;
+            border.enabled = false;
+
+            var labelRoot = AddUi("Text", root.transform);
+            var labelRect = labelRoot.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = new Vector2(2f, 0f);
+            labelRect.offsetMax = new Vector2(-2f, 0f);
+            var label = labelRoot.AddComponent<TextMeshProUGUI>();
+            var sourceLabel = _template.GetComponentInChildren<TMP_Text>(true);
+            if (sourceLabel != null)
+            {
+                label.font = sourceLabel.font;
+                label.fontSharedMaterial = sourceLabel.fontSharedMaterial;
+            }
+            label.text = value;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 8f;
+            label.fontSizeMax = 14f;
+            label.fontStyle = FontStyles.Bold;
+            label.alignment = TextAlignmentOptions.Center;
+            label.color = Color.white;
+            label.raycastTarget = false;
+            root.SetActive(true);
+            return button;
         }
 
         private void SelectLayer(int index)
@@ -2327,26 +2376,15 @@ namespace UnderPressure.Editor
 
         private void RefreshLayerButtons(HospitalPlotLayer selected)
         {
-            var selectedColors = new[]
-            {
-                new Color(.78f, .80f, .80f, 1f),
-                new Color(1f, .58f, .08f, 1f),
-                new Color(.48f, .72f, .25f, 1f)
-            };
-            var inactive = new Color(.24f, .57f, .68f, 1f);
             for (var i = 0; i < _layerButtons.Length; ++i)
             {
                 var button = _layerButtons[i];
                 if (button == null) continue;
                 var active = i == (int)selected;
-                var display = active ? selectedColors[i] : inactive;
-                if (button.image != null) button.image.color = display;
-                var colors = button.colors;
-                colors.normalColor = display;
-                colors.highlightedColor = Color.Lerp(display, Color.white, .14f);
-                colors.pressedColor = Color.Lerp(display, Color.black, .18f);
-                colors.selectedColor = display;
-                button.colors = colors;
+                if (button.image != null)
+                    button.image.color = ScenarioEditorPlotRowSkin.LayerColors[i];
+                var border = button.GetComponent<Outline>();
+                if (border != null) border.enabled = active;
             }
         }
 
