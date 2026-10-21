@@ -1,6 +1,7 @@
-// Updated: 2026-10-20 - Distribucion acoplada del editor con cuatro paneles laterales de 220 px.
+// Updated: 2026-10-21 - Objetos independiente: no se cierra con Escape ni al abrir otros menus.
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using HarmonyLib;
 using TH20;
 using TH20.ExtContent;
@@ -12,6 +13,36 @@ using UnityEngine.UI;
 
 namespace UnderPressure.Editor
 {
+    // ===============================================================
+    // GUIA RAPIDA DE LA INTERFAZ (editar aqui, sin bucles de repintado)
+    // ===============================================================
+    // COLORES COMUNES: WorkshopStyle.PanelColor (paneles),
+    // WorkshopStyle.ButtonColor (botones azules),
+    // WorkshopStyle.SelectedColor (seleccionados),
+    // ScenarioEditorPlotRowSkin.LayerColors (checks gris/naranja/verde).
+    // MARCO Y SONIDO: ApplyButtonStyle / StandardiseClickSound.
+    // ANCHO DE PANELES: PanelWidth. ALTO DE BARRAS: BarHeight.
+    // BOTONES SUPERIORES (Baldosas, Camara libre, Personajes,
+    // Niebla, Estilos): PlaceTopButtons() (ancho y separacion).
+    // BOTONES DE ESQUINA (Objetos, Historial, Terreno):
+    // PlaceCornerButton() (tamano); BuildChrome() (creacion).
+    // PANEL OBJETOS PROPIO: ApplyObjectsPanel() y
+    // ScenarioEditorObjectDock.ReplaceNativePanel() (destruye el GameObject
+    // nativo; crea una nueva logica en HUD y mueve los controles).
+    // BOTONES DE PARCELAS (Aislar, Anadir, Mover, Eliminar):
+    // FitPlotPanel() + StyleCompactButtonText() (texto).
+    // FILAS DE PARCELA Y SUS CHECKS: CompactPlotRow() (medidas),
+    // ScenarioEditorPlotRowSkin.LayerColors (colores).
+    // CAPAS Base/Build/Unbuild: StyleLayerButtons() (colores).
+    // BOTONES DEL PINCEL (Pincel, Elevar, Bajar, Aplanar,
+    // Wireframe): StyleTerrainButtons() (estilo),
+    // EditorTerrain.cs/ApplyDockSize() (posicion y tamano).
+    // TEXTURAS DE TERRENO: ArrangeTerrainTextureTiles() (2 columnas,
+    // tamano cuadrado, espaciado); no son las miniaturas de Objetos.
+    // HISTORIAL: StyleHistoryButtons(); tamano de panel en ApplyLayout().
+    // MENU DE PAUSA: StylePauseMenu() (mismo estilo azul).
+    // OBJETOS no depende de Escape ni de la herramienta activa.
+    // ===============================================================
     // Un unico coordinador calcula toda la geometria. Los paneles inferiores
     // nunca deciden su altura: reciben exactamente el espacio que dejan los
     // paneles superiores y las barras de 50 px.
@@ -33,6 +64,12 @@ namespace UnderPressure.Editor
         private RectTransform _plotPanel;
         private RectTransform _plotViewport;
         private LandscapeObjectsMenu _objectsMenu;
+        // PANEL OBJETOS: el GameObject nativo SE DESTRUYE al abrir la paleta.
+        // Un componente logico nuevo gestiona el catalogo, registrado en HUD;
+        // el panel de interfaz y sus controles viven en UP Objects Panel.
+        private RectTransform _objectsDockHost;
+        private LandscapeObjectsMenu _objectsHostOwner;
+        private bool _objectsOpen = true;
         private float _objectsPanelHeight = -1f;
         private Button _objectsToggle;
         private Button _historyToggle;
@@ -51,6 +88,242 @@ namespace UnderPressure.Editor
         private float _lastCanvasHeight = -1f;
         private bool _resetPlotScroll;
         private WorkshopStyle _style;
+        // Cada boton se configura una sola vez, no en Update ni LateUpdate.
+        private readonly HashSet<Button> _styledButtons = new HashSet<Button>();
+        private readonly Dictionary<RectTransform, OriginalRect> _originalRects =
+            new Dictionary<RectTransform, OriginalRect>();
+        private readonly Dictionary<LayoutElement, bool> _originalLayouts =
+            new Dictionary<LayoutElement, bool>();
+        private readonly List<Canvas> _createdCanvases = new List<Canvas>();
+        private readonly List<GraphicRaycaster> _createdRaycasters = new List<GraphicRaycaster>();
+        private readonly List<LayoutElement> _createdLayouts = new List<LayoutElement>();
+        private bool _closing;
+
+        private struct OriginalRect
+        {
+            internal Transform Parent;
+            internal int Sibling;
+            internal Vector2 AnchorMin, AnchorMax, Pivot, Position, Size;
+            internal Vector3 Scale;
+        }
+
+        private void RememberRect(RectTransform rect)
+        {
+            if (rect == null || _originalRects.ContainsKey(rect)) return;
+            _originalRects.Add(rect, new OriginalRect
+            {
+                Parent = rect.parent,
+                Sibling = rect.GetSiblingIndex(),
+                AnchorMin = rect.anchorMin,
+                AnchorMax = rect.anchorMax,
+                Pivot = rect.pivot,
+                Position = rect.anchoredPosition,
+                Size = rect.sizeDelta,
+                Scale = rect.localScale
+            });
+        }
+
+        internal static bool PointerOverDock()
+        {
+            var dock = _active;
+            if (dock == null || dock._closing || dock._canvasRect == null ||
+                !ScenarioEditorFlow.IsRunning) return false;
+            var canvas = dock._canvas;
+            Vector2 local;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                dock._canvasRect, Input.mousePosition,
+                canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                    ? canvas.worldCamera : null, out local)) return false;
+            var bounds = dock._canvasRect.rect;
+            if (!bounds.Contains(local)) return false;
+            return local.x < bounds.xMin + PanelWidth ||
+                   local.x > bounds.xMax - PanelWidth ||
+                   local.y > bounds.yMax - BarHeight ||
+                   local.y < bounds.yMin + BarHeight;
+        }
+
+        // Referencia cromatica de Build; el color visual de las tres capas
+        // se obtiene de los checks originales en StyleLayerButtons().
+        internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
+
+        internal static void StyleToolbarButton(Button button, bool selected)
+        {
+            if (_active == null || _active._style == null || button == null) return;
+            _active.ApplyButtonStyle(button,
+                selected ? _active._style.SelectedColor : _active._style.ButtonColor);
+        }
+
+        // Intercepta el tinte gris de EditorMaps.cs sin introducir otro Update.
+        // EditorMaps sigue comprobando atajos y herramientas, pero no modifica el
+        // sprite ni escribe colores mientras el estado no cambie.
+        internal static bool OverrideToolTint(Button button, bool selected)
+        {
+            if (_active == null || _active._style == null || button == null) return false;
+            _active.ApplyButtonStyle(button,
+                selected ? _active._style.SelectedColor : _active._style.ButtonColor);
+            return true;
+        }
+
+        // BASE, BUILD y UNBUILD: misma base RGB que los checks de parcela;
+        // seleccion = intensidad 0.84. Cambiar aqui SOLO el oscurecimiento.
+        internal static void StyleLayerButtons(ScenarioEditorStorageMenu storage,
+            HospitalPlotLayer selected)
+        {
+            if (_active == null || storage == null) return;
+            var buttons = storage.PlotChromeButtons;
+            for (var index = 0; index < 3 && index < buttons.Length; ++index)
+            {
+                var button = buttons[index];
+                if (button == null) continue;
+                var exactCheckColor = ScenarioEditorPlotRowSkin.LayerColors[index];
+                // No seleccionado: mismo RGBA exacto que el check.
+                // Seleccionado: el mismo color, ligeramente oscurecido.
+                var color = index == (int)selected
+                    ? new Color(exactCheckColor.r * .84f,
+                        exactCheckColor.g * .84f, exactCheckColor.b * .84f,
+                        exactCheckColor.a)
+                    : exactCheckColor;
+                _active.ApplyButtonStyle(button, color);
+            }
+        }
+
+        // MENU DE PAUSA: Continuar, Guardar/Abrir/Vaciar, Ajustes y Salir.
+        // Colores y bordes comunes en ApplyButtonStyle()/WorkshopStyle.
+        internal static void StylePauseMenu(PauseMenu menu)
+        {
+            if (_active == null || _active._style == null || menu == null ||
+                !ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning) return;
+            var fields = new[]
+            {
+                "_resumeButton", "_quickSaveButton", "_quickLoadButton",
+                "_restartLevelButton", "_preferencesButton", "_quitToMapButton",
+                "_quitToMenuButton", "_quitToDesktopButton"
+            };
+            foreach (var name in fields)
+            {
+                var button = AccessTools.Field(typeof(PauseMenu), name)?.GetValue(menu) as Button;
+                if (button != null) _active.ApplyButtonStyle(button);
+            }
+        }
+
+        internal static void StyleUtilityToggle(Button button, bool selected)
+        {
+            StyleToolbarButton(button, selected);
+        }
+
+        internal static void StyleHistoryButtons(ScenarioEditorHistory history)
+        {
+            if (_active == null || history == null) return;
+            // El historial tenia un segundo fondo negro semitransparente
+            // en su viewport: igualar ambos fondos al panel azul.
+            var panel = AccessTools.Field(typeof(ScenarioEditorHistory), "_historyPanel")?
+                .GetValue(history) as RectTransform;
+            if (panel != null)
+            {
+                var background = panel.GetComponent<Image>();
+                if (background != null)
+                {
+                    background.overrideSprite = null;
+                    background.sprite = null;
+                    background.type = Image.Type.Simple;
+                    background.color = _active._style.PanelColor;
+                }
+                var viewport = panel.Find("Desplazamiento/Recorte");
+                var viewportImage = viewport?.GetComponent<Image>();
+                if (viewportImage != null)
+                    viewportImage.color = Color.clear;
+            }
+            foreach (var button in history.GetComponentsInChildren<Button>(true))
+            {
+                if (button == null || !button.gameObject.name.StartsWith("Paso ")) continue;
+                // El historial es texto, no una lista de botones coloreados.
+                if (button.image != null) button.image.enabled = false;
+                var label = button.GetComponentInChildren<Text>(true);
+                if (label != null) label.color = Color.white;
+            }
+        }
+
+        // TERRENO: Pincel, Elevar, Bajar, Aplanar, Wireframe.
+        // Los colores azul/seleccionado salen de WorkshopStyle;
+        // sus dimensiones originales se establecen en EditorTerrain.cs.
+        internal static void StyleTerrainButtons(ScenarioEditorTerrainPainterBehaviour painter)
+        {
+            if (_active == null || painter == null) return;
+            var kind = typeof(ScenarioEditorTerrainPainterBehaviour);
+            var brush = AccessTools.Field(kind, "_brushButton")?.GetValue(painter) as Button;
+            var raise = AccessTools.Field(kind, "_raiseButton")?.GetValue(painter) as Button;
+            var lower = AccessTools.Field(kind, "_lowerButton")?.GetValue(painter) as Button;
+            var flatten = AccessTools.Field(kind, "_flattenButton")?.GetValue(painter) as Button;
+            var mode = ScenarioEditorTerrainPainter.CurrentSculptMode;
+            var wireText = AccessTools.Field(kind, "_wireText")?.GetValue(painter) as Text;
+            var wire = wireText == null ? null :
+                wireText.GetComponentInParent<Button>();
+            _active.ApplyButtonStyle(brush,
+                ScenarioEditorTerrainPainter.BrushEnabled &&
+                mode == ScenarioEditorTerrainPainter.SculptMode.Off
+                    ? _active._style.SelectedColor : _active._style.ButtonColor);
+            _active.ApplyButtonStyle(raise,
+                mode == ScenarioEditorTerrainPainter.SculptMode.Raise
+                    ? _active._style.SelectedColor : _active._style.ButtonColor);
+            _active.ApplyButtonStyle(lower,
+                mode == ScenarioEditorTerrainPainter.SculptMode.Lower
+                    ? _active._style.SelectedColor : _active._style.ButtonColor);
+            _active.ApplyButtonStyle(flatten,
+                mode == ScenarioEditorTerrainPainter.SculptMode.Flatten
+                    ? _active._style.SelectedColor : _active._style.ButtonColor);
+            StyleCompactButtonText(raise);
+            StyleCompactButtonText(lower);
+            StyleCompactButtonText(flatten);
+            _active.ApplyButtonStyle(wire,
+                ScenarioEditorTerrainPainter.WireframeEnabled
+                    ? _active._style.SelectedColor : _active._style.ButtonColor);
+        }
+
+        // TEXTURAS DE TERRENO: dos columnas de miniaturas CUADRADAS.
+        // Cambiar Padding / Gap para espaciado y PanelWidth (arriba) para ancho.
+        // NO se anade GridLayoutGroup porque ya existe VerticalLayoutGroup
+        // en EditorTerrain.cs; ambos sobre el mismo GameObject pueden chocar.
+        // Este metodo solo se llama al crear el panel o cambiar sus medidas.
+        internal static void ArrangeTerrainTextureTiles(ScenarioEditorTerrainPainterBehaviour painter)
+        {
+            if (_active == null || painter == null) return;
+            var content = AccessTools.Field(typeof(ScenarioEditorTerrainPainterBehaviour),
+                "_content")?.GetValue(painter) as RectTransform;
+            if (content == null) return;
+            var scroll = content.GetComponentInParent<ScrollRect>();
+            if (scroll == null) return;
+
+            // El contenido lo distribuimos manualmente: sin bucles por frame.
+            var vertical = content.GetComponent<VerticalLayoutGroup>();
+            if (vertical != null) vertical.enabled = false;
+            var fitter = content.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+
+            const float padding = 6f;
+            const float spacing = 6f;
+            var scrollRect = scroll.transform as RectTransform;
+            var width = scrollRect != null && scrollRect.rect.width > 40f
+                ? scrollRect.rect.width : PanelWidth - 16f;
+            var cell = Mathf.Max(24f, (width - padding * 2f - spacing) / 2f);
+
+            var index = 0;
+            for (var childIndex = 0; childIndex < content.childCount; ++childIndex)
+            {
+                var tile = content.GetChild(childIndex) as RectTransform;
+                if (tile == null || !tile.gameObject.name.StartsWith("Texture")) continue;
+                tile.anchorMin = tile.anchorMax = new Vector2(0f, 1f);
+                tile.pivot = new Vector2(0f, 1f);
+                tile.anchoredPosition = new Vector2(padding + (index % 2) * (cell + spacing),
+                    -padding - (index / 2) * (cell + spacing));
+                tile.sizeDelta = new Vector2(cell, cell);
+                ++index;
+            }
+            // Ajusta la altura del ScrollRect a todas las filas existentes.
+            var rows = (index + 1) / 2;
+            var contentHeight = padding * 2f + rows * cell + Mathf.Max(0, rows - 1) * spacing;
+            content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                Mathf.Max(contentHeight, 1f));
+        }
 
         internal static void Attach(EditHospitalMenu menu, Level level,
             ScenarioEditorStorageMenu storage, Button template, RectTransform plotViewport)
@@ -65,8 +338,36 @@ namespace UnderPressure.Editor
 
         internal static void RegisterObjectsMenu(LandscapeObjectsMenu menu)
         {
-            if (_active != null) _active.ApplyObjectsPanel(menu, true);
+            if (_active != null && menu != null) _active.ApplyObjectsPanel(menu, true);
         }
+
+        // OBJETOS PERSISTENTE: el panel nuevo no depende de que el juego
+        // tenga activo el modo CursorEditHospitalItem ni de otros menus.
+        internal static bool ObjectsPanelIsOpen() =>
+            _active != null && !_active._closing &&
+            _active._objectsOpen &&
+            _active._objectsDockHost != null &&
+            _active._objectsDockHost.gameObject.activeInHierarchy;
+
+        // Objetos es un panel independiente: solo su propio boton cambia
+        // su visibilidad. Los cambios de herramienta y Escape no lo tocan.
+        internal static bool ToggleObjectsPanel()
+        {
+            if (_active == null || _active._closing ||
+                _active._objectsDockHost == null) return false;
+            _active._objectsOpen = !_active._objectsOpen;
+            _active._objectsDockHost.gameObject.SetActive(_active._objectsOpen);
+            _active.SetSelected(_active._objectsToggle, _active._objectsOpen);
+            return true;
+        }
+
+        // Solo protege NUESTRO menu logico. El resto de menus nativos
+        // mantiene intactos sus cierres, incluidos Escape y las opciones.
+        internal static bool ProtectObjectsMenu(MenuBase menu) =>
+            ScenarioEditorFlow.IsRunning && ScenarioEditorSession.Active &&
+            _active != null && !_active._closing &&
+            menu != null && ReferenceEquals(menu, _active._objectsMenu) &&
+            _active._objectsDockHost != null;
 
         internal static void RegisterPlotRow(PlotSelectionItem row)
         {
@@ -92,7 +393,7 @@ namespace UnderPressure.Editor
             _plotViewport = plotViewport;
             _plotPanel = FindPlotPanel(menu.transform as RectTransform, plotViewport,
                 storage.PlotLayerRoot as RectTransform);
-            _style = WorkshopStyle.Read(level, template);
+            _style = WorkshopStyle.Read(storage.BuildButton ?? template);
 
             if (_root == null)
             {
@@ -109,12 +410,17 @@ namespace UnderPressure.Editor
             }
 
             _objectsToggle = storage.ObjectsButton;
+            // El panel y su boton deben permanecer por encima de los overlays
+            // de Personajes, Niebla y del menu de pausa.
+            EnsureSortingCanvas(_objectsToggle?.gameObject, 3101);
             _objectsMenu = FindActiveObjectsMenu();
             _resetPlotScroll = true;
             if (_objectsToggle != null) _objectsToggle.gameObject.name = "UP Objects Dock Toggle";
             ApplyLayout(true);
         }
 
+        // CREA las pestanas HISTORIAL y TERRENO. El boton OBJETOS procede
+        // de ScenarioEditorStorageMenu; los tres se ubican en PlaceCornerButton.
         private void BuildChrome(Button template)
         {
             _topBackground = NewImage("UP Top Bar", _root, _style.PanelSprite,
@@ -127,7 +433,9 @@ namespace UnderPressure.Editor
             _leftTitle = NewImage("UP Editor Title", _root, _style.PanelSprite,
                 _style.HeaderColor, false);
             var titleRect = (RectTransform)_leftTitle.transform;
-            SetTopLeft(titleRect, 0f, 0f, PanelWidth, BarHeight);
+            // CABECERA HOSPITAL: altura de 30 px (antes 50).
+            // Asi se elimina el hueco entre el nombre y los controles de parcela.
+            SetTopLeft(titleRect, 0f, 0f, PanelWidth, 30f);
 
             _historyToggle = CloneButton(template, _root, "UP History Dock Toggle",
                 EditorLocalization.Get("editor.history.button"), ToggleHistory);
@@ -192,17 +500,13 @@ namespace UnderPressure.Editor
             ApplyLayout(true);
         }
 
-        private void LateUpdate()
+        // Unity notifica el cambio real de tamano del Canvas. No se necesita
+        // Update/LateUpdate para comprobarlo ni repintar botones cada fotograma.
+        private void OnRectTransformDimensionsChange()
         {
-            if (_menu == null || _canvasRect == null || !ScenarioEditorFlow.IsRunning)
-            {
-                Destroy(this);
-                return;
-            }
-            var size = _canvasRect.rect.size;
-            var changed = !Mathf.Approximately(size.x, _lastCanvasWidth) ||
-                          !Mathf.Approximately(size.y, _lastCanvasHeight);
-            ApplyLayout(changed);
+            if (_closing || _menu == null || _canvasRect == null ||
+                !ScenarioEditorFlow.IsRunning) return;
+            ApplyLayout(false);
         }
 
         private void ApplyLayout(bool force)
@@ -228,7 +532,12 @@ namespace UnderPressure.Editor
             _rightUpperHeight = Mathf.Clamp(_rightUpperHeight, MinimumUpperHeight,
                 Mathf.Max(MinimumUpperHeight, available - MinimumLowerHeight));
 
-            SetTopLeft(_plotPanel, 0f, BarHeight, PanelWidth, _leftUpperHeight);
+            RememberRect(_plotPanel);
+            // PARCELAS: subir 20 px la parte superior SIN cambiar el borde
+            // inferior, las barras ni el espacio del panel Objetos.
+            const float plotTopGain = 20f;
+            SetTopLeft(_plotPanel, 0f, BarHeight - plotTopGain,
+                PanelWidth, _leftUpperHeight + plotTopGain);
             FitPlotPanel();
 
             PlaceCornerButton(_objectsToggle, false, false);
@@ -281,14 +590,28 @@ namespace UnderPressure.Editor
             }
             SetSelected(_historyToggle, _historyOpen);
             SetSelected(_terrainToggle, _terrainOpen);
+            SetSelected(_objectsToggle, ObjectsPanelIsOpen());
         }
 
+        // Fondos de Historial/Terreno y controles internos.
+        // No se ejecuta por fotograma: solo por construccion/redimensionado.
         private void ApplyDockStyles()
         {
             ScenarioEditorHistory.SetDockStyle(_style.PanelSprite, _style.PanelColor);
             ScenarioEditorTerrainPainter.SetDockStyle(_style.PanelSprite, _style.PanelColor);
+            // Primera apertura: las vistas pueden haberse construido antes de
+            // crear el Dock, por lo que sus Postfix iniciales no tenian estilo.
+            var painter = AccessTools.Field(typeof(ScenarioEditorTerrainPainter),
+                "_behaviour")?.GetValue(null) as ScenarioEditorTerrainPainterBehaviour;
+            StyleTerrainButtons(painter);
+            ArrangeTerrainTextureTiles(painter);
+            foreach (var history in Resources.FindObjectsOfTypeAll<ScenarioEditorHistory>())
+                if (history != null && history.gameObject.scene.IsValid())
+                    StyleHistoryButtons(history);
         }
 
+        // PARCELAS: botones Aislar, Anadir, Mover, Eliminar y filas.
+        // Coordenadas de lista y cabecera ajustables en este metodo.
         private void FitPlotPanel()
         {
             if (_plotPanel == null) return;
@@ -304,16 +627,20 @@ namespace UnderPressure.Editor
             _plotPanel.SetAsLastSibling();
             if (_plotViewport != null)
             {
+                RememberRect(_plotViewport);
                 IgnoreParentLayout(_plotViewport);
                 _plotViewport.anchorMin = _plotViewport.anchorMax = new Vector2(0f, 1f);
                 _plotViewport.pivot = new Vector2(0f, 1f);
                 _plotViewport.anchoredPosition = new Vector2(4f, -84f);
+                // Mayor altura visible: las parcelas aprovechan el espacio
+                // recuperado bajo el nombre del hospital.
                 _plotViewport.sizeDelta = new Vector2(PanelWidth - 8f,
-                    Mathf.Max(58f, _leftUpperHeight - 130f));
+                    Mathf.Max(58f, _leftUpperHeight - 110f));
             }
             var layerRoot = _storage?.PlotLayerRoot as RectTransform;
             if (layerRoot != null)
             {
+                RememberRect(layerRoot);
                 IgnoreParentLayout(layerRoot);
                 layerRoot.anchorMin = layerRoot.anchorMax = new Vector2(0f, 1f);
                 layerRoot.pivot = new Vector2(0f, 1f);
@@ -325,9 +652,14 @@ namespace UnderPressure.Editor
             {
                 var button = plotButtons[buttonIndex];
                 if (button == null) continue;
+                RememberRect(button.transform as RectTransform);
                 if (button.transform.parent == _menu.transform)
                     button.transform.SetParent(_root, false);
-                if (buttonIndex >= 3) ApplyButtonStyle(button);
+                if (buttonIndex >= 3)
+                {
+                    ApplyButtonStyle(button, _style.ButtonColor);
+                    if (buttonIndex >= 4) StyleCompactButtonText(button); // Añadir, Mover, Eliminar
+                }
                 button.transform.SetAsLastSibling();
             }
             _storage?.RefreshLayerColors();
@@ -352,10 +684,12 @@ namespace UnderPressure.Editor
             if (row == null) return;
             var rect = row.transform as RectTransform;
             if (rect != null) rect.SetSizeWithCurrentAnchors(
-                RectTransform.Axis.Horizontal, PanelWidth - 24f);
+                RectTransform.Axis.Horizontal, PanelWidth - 25f);
+            var selectButton = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
+                .GetValue(row) as Button;
+            ApplyButtonStyle(selectButton);
             CompactPlotRow(row, _style.ButtonSprite,
-                new Color(.24f, .57f, .68f, 1f),
-                new Color(.10f, .39f, .56f, 1f));
+                _style.ButtonColor, _style.SelectedColor);
         }
 
         private float CalculateAutomaticPlotPanelHeight()
@@ -380,11 +714,17 @@ namespace UnderPressure.Editor
             ApplyLayout(true);
         }
 
-        private static void IgnoreParentLayout(RectTransform rect)
+        private void IgnoreParentLayout(RectTransform rect)
         {
             if (rect == null) return;
-            var layout = rect.GetComponent<LayoutElement>() ??
-                rect.gameObject.AddComponent<LayoutElement>();
+            var layout = rect.GetComponent<LayoutElement>();
+            if (layout == null)
+            {
+                layout = rect.gameObject.AddComponent<LayoutElement>();
+                _createdLayouts.Add(layout);
+            }
+            else if (!_originalLayouts.ContainsKey(layout))
+                _originalLayouts.Add(layout, layout.ignoreLayout);
             layout.ignoreLayout = true;
         }
 
@@ -417,48 +757,72 @@ namespace UnderPressure.Editor
             return null;
         }
 
+        // CADA PARCELA: ancho, alto, texto a la izquierda y 5 checks a la derecha.
+        // Ajustar checkSize/checkGap aqui; colores en ScenarioEditorPlotRowSkin.
         private static void CompactPlotRow(PlotSelectionItem row, Sprite sprite,
             Color normal, Color selected)
         {
             if (row == null) return;
+            var rowRoot = row.transform as RectTransform;
+            if (rowRoot == null) return;
+            const float rowWidth = PanelWidth - 25f;
+            const float checkSize = 23f;
+            const float checkGap = 1f;
+            const float labelInset = 9f;
+            // 5 * 23 + 4 * 1 = 119 px; todos quedan dentro de 195 px.
+            const float checksStart = rowWidth - (5f * checkSize + 4f * checkGap);
+            const float labelRight = checksStart - 3f;
+            var rowLayout = row.GetComponent<LayoutElement>() ??
+                row.gameObject.AddComponent<LayoutElement>();
+            rowLayout.minHeight = rowLayout.preferredHeight = 36f;
+            rowLayout.minWidth = rowLayout.preferredWidth = rowWidth;
+            rowLayout.flexibleWidth = 0f;
+            rowRoot.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, rowWidth);
+
+            // Nombre a la izquierda, cinco checks a su DERECHA, sin recortes;
+            // el HorizontalLayoutGroup nativo no impone medidas fuera del panel.
+            // Los toggles originales mantienen sus eventos y referencias.
+            var nativeLayout = row.GetComponent<HorizontalLayoutGroup>();
+            if (nativeLayout != null) nativeLayout.enabled = false;
+
+            var selectButton = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
+                .GetValue(row) as Button;
             var text = AccessTools.Field(typeof(PlotSelectionItem), "_text")?
                 .GetValue(row) as TMP_Text;
+            if (selectButton != null && selectButton.transform != rowRoot)
+            {
+                var backgroundRect = selectButton.transform as RectTransform;
+                if (backgroundRect != null)
+                {
+                    backgroundRect.SetParent(rowRoot, false);
+                    backgroundRect.SetAsFirstSibling();
+                    backgroundRect.anchorMin = Vector2.zero;
+                    backgroundRect.anchorMax = Vector2.one;
+                    backgroundRect.offsetMin = Vector2.zero;
+                    backgroundRect.offsetMax = Vector2.zero;
+                    var element = selectButton.GetComponent<LayoutElement>() ??
+                        selectButton.gameObject.AddComponent<LayoutElement>();
+                    element.ignoreLayout = true;
+                }
+            }
             if (text != null)
             {
                 var textRect = text.transform as RectTransform;
                 if (textRect != null)
                 {
-                    textRect.anchorMin = new Vector2(0f, 0f);
-                    textRect.anchorMax = new Vector2(1f, 1f);
-                    textRect.offsetMin = new Vector2(7f, 0f);
-                    textRect.offsetMax = new Vector2(-6f, 0f);
+                    // El texto conserva su padre y su funcionalidad original.
+                    textRect.anchorMin = Vector2.zero;
+                    textRect.anchorMax = Vector2.one;
+                    textRect.offsetMin = new Vector2(labelInset, 0f);
+                    textRect.offsetMax = new Vector2(labelRight - rowWidth, 0f);
                 }
                 text.enableAutoSizing = true;
                 text.fontSizeMin = 9f;
-                text.fontSizeMax = 14f;
+                text.fontSizeMax = 12f;
                 text.alignment = TextAlignmentOptions.MidlineLeft;
-                var textLayout = text.GetComponent<LayoutElement>() ??
-                    text.gameObject.AddComponent<LayoutElement>();
-                textLayout.ignoreLayout = false;
-                textLayout.minWidth = 46f;
-                textLayout.preferredWidth = 52f;
-                textLayout.flexibleWidth = 1f;
-                textLayout.minHeight = textLayout.preferredHeight = 28f;
-            }
-
-            var rowLayout = row.GetComponent<LayoutElement>() ??
-                row.gameObject.AddComponent<LayoutElement>();
-            rowLayout.minHeight = rowLayout.preferredHeight = 36f;
-            var horizontal = row.GetComponent<HorizontalLayoutGroup>();
-            if (horizontal != null)
-            {
-                horizontal.padding = new RectOffset(2, 2, 4, 4);
-                horizontal.spacing = 2f;
-                horizontal.childAlignment = TextAnchor.MiddleLeft;
-                horizontal.childControlWidth = true;
-                horizontal.childControlHeight = true;
-                horizontal.childForceExpandWidth = false;
-                horizontal.childForceExpandHeight = false;
+                text.color = Color.white;
+                var labelLayout = text.GetComponent<LayoutElement>();
+                if (labelLayout != null) labelLayout.ignoreLayout = true;
             }
             var names = new[]
             {
@@ -471,20 +835,25 @@ namespace UnderPressure.Editor
                     .GetValue(row) as Toggle;
                 var rect = toggle?.transform as RectTransform;
                 if (rect == null) continue;
+                rect.SetParent(rowRoot, false);
+                rect.SetAsLastSibling();
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, .5f);
+                rect.pivot = new Vector2(0f, .5f);
+                rect.anchoredPosition = new Vector2(checksStart + index *
+                    (checkSize + checkGap), 0f);
+                rect.sizeDelta = new Vector2(checkSize, checkSize);
                 rect.localScale = Vector3.one;
-                var toggleLayout = toggle.GetComponent<LayoutElement>() ??
+                var element = toggle.GetComponent<LayoutElement>() ??
                     toggle.gameObject.AddComponent<LayoutElement>();
-                toggleLayout.ignoreLayout = false;
-                toggleLayout.minWidth = toggleLayout.preferredWidth = 24f;
-                toggleLayout.flexibleWidth = 0f;
-                toggleLayout.minHeight = toggleLayout.preferredHeight = 24f;
-                toggleLayout.flexibleHeight = 0f;
+                element.ignoreLayout = true;
             }
             var skin = row.GetComponent<ScenarioEditorPlotRowSkin>() ??
                 row.gameObject.AddComponent<ScenarioEditorPlotRowSkin>();
             skin.Initialise(row, sprite, normal, selected);
         }
 
+        // BARRA SUPERIOR: Baldosas/Camara/Personajes/Niebla/Estilos.
+        // Medidas editables: gap, buttonWidth y rect.sizeDelta (altura 40).
         private void PlaceTopButtons(float canvasWidth)
         {
             var buttons = new[]
@@ -506,6 +875,7 @@ namespace UnderPressure.Editor
             {
                 var rect = button.transform as RectTransform;
                 if (rect == null) continue;
+                RememberRect(rect);
                 rect.SetParent(_root, false);
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
                 rect.pivot = new Vector2(0f, 1f);
@@ -517,11 +887,14 @@ namespace UnderPressure.Editor
             }
         }
 
+        // PESTANAS: Objetos abajo izquierda, Historial arriba derecha,
+        // Terreno abajo derecha. Todas comparten PanelWidth x BarHeight.
         private void PlaceCornerButton(Button button, bool right, bool top)
         {
             if (button == null) return;
             var rect = button.transform as RectTransform;
             if (rect == null) return;
+            RememberRect(rect);
             rect.SetParent(_root, false);
             if (right)
             {
@@ -533,9 +906,12 @@ namespace UnderPressure.Editor
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, top ? 1f : 0f);
                 rect.pivot = new Vector2(0f, top ? 1f : 0f);
             }
+            // Misma posicion original. SOLO se dibuja detras del panel;
+            // la parte no tapada conserva el clic mediante su raycaster.
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = new Vector2(PanelWidth, BarHeight);
             ApplyButtonStyle(button);
+            EnsureSortingCanvas(button.gameObject, 2750);
             button.transform.SetAsLastSibling();
         }
 
@@ -544,42 +920,81 @@ namespace UnderPressure.Editor
             var identity = _storage?.MapIdentityRoot;
             var rect = identity?.transform as RectTransform;
             if (rect == null || _leftTitle == null) return;
+            RememberRect(rect);
             rect.SetParent(_leftTitle.transform, false);
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(.5f, .5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.offsetMin = new Vector2(10f, 0f);
-            rect.offsetMax = new Vector2(-8f, 0f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
             var label = identity.GetComponentInChildren<Text>(true);
-            if (label != null) label.alignment = TextAnchor.MiddleLeft;
+            if (label != null) label.alignment = TextAnchor.MiddleCenter;
+            var tmp = identity.GetComponentInChildren<TMP_Text>(true);
+            if (tmp != null) tmp.alignment = TextAlignmentOptions.Center;
             rect.SetAsLastSibling();
         }
 
+        // PANEL OBJETOS: superficie PROPIA rectangular (UP Objects Panel).
+        // Se destruye el GameObject original de LandscapeObjectsMenu.
+        // TAMANO: PanelWidth, altura = hueco entre Parcelas y boton Objetos.
+        // POSICION: (0, BarHeight), anclado abajo a la izquierda.
         private void ApplyObjectsPanel(LandscapeObjectsMenu menu, bool force)
         {
-            if (menu == null || _canvasRect == null)
+            if (_canvasRect == null) return;
+            // El panel propio no desaparece al cerrar/desactivar un menu nativo.
+            if (menu == null)
             {
+                if (_objectsDockHost != null) return;
                 _objectsMenu = null;
                 _objectsPanelHeight = -1f;
                 return;
             }
-            var rect = menu.transform as RectTransform;
-            if (rect == null) return;
             var height = Mathf.Max(MinimumLowerHeight,
                 _canvasRect.rect.height - BarHeight * 2f - _leftUpperHeight);
-            if (!force && ReferenceEquals(_objectsMenu, menu) &&
+            var created = _objectsDockHost == null || !ReferenceEquals(_objectsHostOwner, menu);
+            if (created)
+            {
+                if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
+                var panel = new GameObject("UP Objects Panel", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                panel.transform.SetParent(_canvas.transform, false);
+                var host = (RectTransform)panel.transform;
+                ApplyPanelStyle(panel);
+                EnsureSortingCanvas(panel, 3100);
+                LandscapeObjectsMenu replacement;
+                // No basta con ocultar el prefab: hay que sustituir su entrada
+                // en HUD._createdMenus para que el juego cierre el panel NUEVO.
+                if (!ScenarioEditorObjectDock.ReplaceNativePanel(menu, host,
+                    _level != null ? _level.HUD : null, out replacement))
+                {
+                    Destroy(panel);
+                    _objectsDockHost = null;
+                    _objectsHostOwner = null;
+                    return;
+                }
+                _objectsDockHost = host;
+                _objectsMenu = replacement;
+                _objectsHostOwner = replacement;
+                _objectsOpen = true;
+                menu = replacement;
+                // NO vincular la vida visual del panel a OnDisable/OnDestroy
+                // del componente nativo: otros menus cambian el modo activo.
+            }
+            if (!force && !created && ReferenceEquals(_objectsMenu, menu) &&
                 Mathf.Abs(_objectsPanelHeight - height) < .1f) return;
             _objectsMenu = menu;
             _objectsPanelHeight = height;
-            rect.SetParent(_canvas.transform, false);
+            if (_objectsDockHost == null) return;
+            var rect = _objectsDockHost;
             rect.anchorMin = rect.anchorMax = Vector2.zero;
             rect.pivot = Vector2.zero;
             rect.anchoredPosition = new Vector2(0f, BarHeight);
             rect.sizeDelta = new Vector2(PanelWidth, height);
-            ApplyPanelStyle(menu.gameObject);
-            EnsureSortingCanvas(menu.gameObject, 2850);
-            ScenarioEditorObjectDock.Configure(menu, PanelWidth, height);
+            // Este panel permanece independiente del modo nativo. Su estado
+            // solo cambia mediante ToggleObjectsPanel().
+            rect.gameObject.SetActive(_objectsOpen);
+            ScenarioEditorObjectDock.Configure(menu, rect, PanelWidth, height);
         }
 
         private LandscapeObjectsMenu FindActiveObjectsMenu()
@@ -598,44 +1013,119 @@ namespace UnderPressure.Editor
         {
             if (panel == null) return;
             var image = panel.GetComponent<Image>() ?? panel.AddComponent<Image>();
-            if (_style.PanelSprite != null)
-            {
-                image.sprite = _style.PanelSprite;
-                image.type = Image.Type.Sliced;
-            }
+            // El panel de Objetos y las demas superficies tienen esquinas rectas.
+            image.overrideSprite = null;
+            image.sprite = null;
+            image.type = Image.Type.Simple;
             image.color = _style.PanelColor;
             image.raycastTarget = true;
         }
 
-        private static void EnsureSortingCanvas(GameObject root, int order)
+        private void EnsureSortingCanvas(GameObject root, int order)
         {
             if (root == null) return;
-            var canvas = root.GetComponent<Canvas>() ?? root.AddComponent<Canvas>();
+            var canvas = root.GetComponent<Canvas>();
+            if (canvas == null)
+            {
+                canvas = root.AddComponent<Canvas>();
+                _createdCanvases.Add(canvas);
+            }
             canvas.overrideSorting = true;
             canvas.sortingOrder = order;
             if (root.GetComponent<GraphicRaycaster>() == null)
-                root.AddComponent<GraphicRaycaster>();
+                _createdRaycasters.Add(root.AddComponent<GraphicRaycaster>());
         }
 
-        private void ApplyButtonStyle(Button button)
+        // ESTILO UNICO DE BOTONES: sprite, borde blanco, colores y sonido.
+        // Cambiar los RGB en WorkshopStyle, no en cada boton por separado.
+        private void ApplyButtonStyle(Button button, Color? tint = null)
         {
-            if (button == null) return;
-            if (button.image != null)
+            if (button == null || _style == null) return;
+            // La plantilla, el borde y el sonido se configuran una sola vez.
+            if (_styledButtons.Add(button))
             {
-                if (_style.ButtonSprite != null)
+                var animator = button.GetComponent<ButtonAnimator>();
+                if (animator != null) animator.enabled = false;
+                if (button.image != null)
                 {
+                    button.image.overrideSprite = null;
                     button.image.sprite = _style.ButtonSprite;
                     button.image.type = Image.Type.Sliced;
                 }
-                button.image.color = _style.ButtonColor;
+                button.transition = Selectable.Transition.None;
+                button.colors = _style.ButtonColors;
+                var border = button.GetComponent<Outline>();
+                if (border == null) border = button.gameObject.AddComponent<Outline>();
+                border.effectColor = Color.white;
+                border.effectDistance = new Vector2(1f, -1f);
+                border.useGraphicAlpha = true;
+                var label = button.GetComponentInChildren<TMP_Text>(true);
+                if (label != null) label.color = Color.white;
+                // CloneButton elimina los eventos runtime del prefab, incluido
+                // ButtonSFX. Recuperar uno y el MISMO sonido en todos.
+                StandardiseClickSound(button);
             }
-            button.colors = _style.ButtonColors;
+            if (button.image != null)
+            {
+                var desired = tint ?? _style.ButtonColor;
+                if (button.image.color != desired) button.image.color = desired;
+            }
+        }
+
+        // Solo botones PEQUENOS: misma altura de letra y centrado real.
+        // No tocar textos del menu, barra superior, ni pestañas de paneles.
+        // TEXTO SOLO EN BOTONES PEQUENOS (Anadir/Mover/Eliminar y
+        // Elevar/Bajar/Aplanar). FontSize, fuente y alineacion aqui.
+        private static void StyleCompactButtonText(Button button)
+        {
+            if (button == null) return;
+            var regular = button.transform.Find("UP Compact Label")?.GetComponent<Text>() ??
+                button.GetComponentInChildren<Text>(true);
+            if (regular == null)
+            {
+                // Los botones de parcela vienen con TMP; solo a esos tres
+                // se les asigna la misma fuente Arial que usa Terreno.
+                var tmp = button.GetComponentInChildren<TMP_Text>(true);
+                if (tmp == null) return;
+                var go = new GameObject("UP Compact Label", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Text));
+                go.transform.SetParent(button.transform, false);
+                regular = go.GetComponent<Text>();
+                regular.text = tmp.text;
+                tmp.enabled = false;
+            }
+            var rect = regular.rectTransform;
+            if (rect != null && rect != button.transform)
+            {
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.pivot = new Vector2(.5f, .5f);
+                rect.anchoredPosition = Vector2.zero;
+                rect.offsetMin = new Vector2(2f, 0f);
+                rect.offsetMax = new Vector2(-2f, 0f);
+            }
+            regular.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            regular.fontSize = 14;
+            regular.fontStyle = FontStyle.Bold;
+            regular.alignment = TextAnchor.MiddleCenter;
+            regular.horizontalOverflow = HorizontalWrapMode.Overflow;
+            regular.color = Color.white;
+            regular.raycastTarget = false;
+        }
+
+        private static void StandardiseClickSound(Button button)
+        {
+            if (button == null) return;
+            var sfx = button.GetComponent<ButtonSFX>();
+            if (sfx == null) sfx = button.gameObject.AddComponent<ButtonSFX>();
+            sfx.AudioEvent = ButtonSFX.ButtonAudioEvent.Default;
+            // Evitar listeners duplicados en el mismo boton.
+            sfx.UpdateListeners();
         }
 
         private void SetSelected(Button button, bool selected)
         {
-            if (button?.image == null) return;
-            button.image.color = selected ? _style.SelectedColor : _style.ButtonColor;
+            ApplyButtonStyle(button, selected ? _style.SelectedColor : _style.ButtonColor);
         }
 
         private Button CloneButton(Button source, Transform parent, string name,
@@ -725,66 +1215,117 @@ namespace UnderPressure.Editor
             rect.sizeDelta = size;
         }
 
-        private void OnDestroy()
+        private void OnDisable()
         {
+            if (!ScenarioEditorFlow.IsRunning) ReleaseUi();
+        }
+
+        private void OnDestroy() => ReleaseUi();
+
+        private void ReleaseUi()
+        {
+            if (_closing) return;
+            _closing = true;
+            // Ocultar los controles inmediatamente: Destroy se ejecuta al
+            // final del frame y no debe dejar restos en el menu principal.
+            if (_root != null) _root.gameObject.SetActive(false);
+            // Desregistrar la logica propia del HUD al salir del editor.
+            // _closing ya es true y permite que DestroyMenu se ejecute.
+            if (_objectsMenu != null && _level != null && _level.HUD != null)
+                _level.HUD.DestroyMenu(_objectsMenu);
+            // PANEL OBJETOS NUEVO: vive fuera de _root; destruirlo al salir.
+            if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
+            _objectsDockHost = null;
+            _objectsHostOwner = null;
+            foreach (var pair in _originalRects)
+            {
+                var rect = pair.Key;
+                var before = pair.Value;
+                if (rect == null || before.Parent == null) continue;
+                rect.SetParent(before.Parent, false);
+                rect.SetSiblingIndex(Mathf.Min(before.Sibling,
+                    Mathf.Max(0, before.Parent.childCount - 1)));
+                rect.anchorMin = before.AnchorMin;
+                rect.anchorMax = before.AnchorMax;
+                rect.pivot = before.Pivot;
+                rect.anchoredPosition = before.Position;
+                rect.sizeDelta = before.Size;
+                rect.localScale = before.Scale;
+            }
+            foreach (var pair in _originalLayouts)
+                if (pair.Key != null) pair.Key.ignoreLayout = pair.Value;
+            foreach (var raycaster in _createdRaycasters)
+                if (raycaster != null) Destroy(raycaster);
+            foreach (var canvas in _createdCanvases)
+                if (canvas != null) Destroy(canvas);
+            foreach (var layout in _createdLayouts)
+                if (layout != null) Destroy(layout);
+            if (_root != null) Destroy(_root.gameObject);
+            // Los botones nativos tambien se desmontan al salir; no conservar
+            // texturas procedurales entre sesiones del editor.
+            if (_style != null)
+            {
+                if (_style.ButtonSprite != null) Destroy(_style.ButtonSprite);
+                if (_style.ButtonTexture != null) Destroy(_style.ButtonTexture);
+            }
+            _originalRects.Clear();
+            _originalLayouts.Clear();
+            _styledButtons.Clear();
             if (ReferenceEquals(_active, this)) _active = null;
         }
 
+        // PALETA CENTRAL: edita aqui el azul del fondo de paneles,
+        // azul de botones normales y azul oscuro de los seleccionados.
         private sealed class WorkshopStyle
         {
-            internal Sprite PanelSprite;
+            internal Sprite PanelSprite = null;
+            internal Texture2D ButtonTexture;
             internal Sprite ButtonSprite;
-            internal Color PanelColor = new Color(.10f, .25f, .34f, 1f);
-            internal Color HeaderColor = new Color(.10f, .25f, .34f, 1f);
-            internal Color ButtonColor = new Color(.035f, .43f, .70f, 1f);
-            internal Color SelectedColor = new Color(.02f, .58f, .88f, 1f);
+            internal Color PanelColor = new Color(.045f, .38f, .64f, 1f);
+            internal Color HeaderColor = new Color(.045f, .38f, .64f, 1f);
+            // Referencia visual: celeste de los botones de la segunda imagen.
+            internal Color ButtonColor = new Color(.14f, .62f, .89f, 1f);
+            internal Color SelectedColor = new Color(.045f, .38f, .64f, 1f);
             internal ColorBlock ButtonColors = ColorBlock.defaultColorBlock;
 
-            internal static WorkshopStyle Read(Level level, Button fallback)
+            internal static WorkshopStyle Read(Button baldosa)
             {
-                var result = new WorkshopStyle();
-                if (fallback != null)
-                {
-                    result.ButtonColors = fallback.colors;
-                    if (fallback.image != null)
+                var style = new WorkshopStyle();
+                // Los sprites de los botones nativos tienen el centro gris oscuro:
+                // cualquier tintado azul quedaba oscuro, aun con color blanco.
+                // Crear UNA textura blanca 9-slice, usada por todos los botones;
+                // el tinte sera literalmente el color elegido, con el mismo marco.
+                const int size = 32;
+                style.ButtonTexture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                style.ButtonTexture.name = "UP Editor - Boton azul blanco";
+                style.ButtonTexture.wrapMode = TextureWrapMode.Clamp;
+                style.ButtonTexture.filterMode = FilterMode.Bilinear;
+                var pixels = new Color32[size * size];
+                for (int y = 0; y < size; ++y)
+                    for (int x = 0; x < size; ++x)
                     {
-                        result.ButtonSprite = fallback.image.sprite;
-                        result.ButtonColor = fallback.image.color;
+                        var dx = Mathf.Max(Mathf.Abs(x - 15.5f) - 9.5f, 0f);
+                        var dy = Mathf.Max(Mathf.Abs(y - 15.5f) - 9.5f, 0f);
+                        var distance = Mathf.Sqrt(dx * dx + dy * dy);
+                        var alpha = (byte)Mathf.RoundToInt(255f *
+                            Mathf.Clamp01(6.5f - distance));
+                        pixels[y * size + x] = new Color32(255, 255, 255, alpha);
                     }
-                }
-                try
-                {
-                    var prefab = level?.App?.ExtContentManager?.ExtContentUIManager?
-                        .Config?.WorkshopPublishUIScreenPrefab;
-                    if (prefab == null) return result;
-                    var nativeButton = prefab.GetComponentsInChildren<DynamicButton>(true)
-                        .FirstOrDefault(button => button.targetGraphic is Image);
-                    var buttonImage = nativeButton?.targetGraphic as Image;
-                    if (buttonImage != null)
-                    {
-                        result.ButtonSprite = buttonImage.sprite;
-                        result.ButtonColor = buttonImage.color;
-                        result.ButtonColors = nativeButton.colors;
-                    }
-                    var panel = prefab.GetComponentsInChildren<Image>(true)
-                        .Where(image => image.sprite != null &&
-                            image.GetComponentInParent<DynamicButton>() == null)
-                        .OrderByDescending(image =>
-                        {
-                            var rect = image.transform as RectTransform;
-                            return rect == null ? 0f : Mathf.Abs(rect.rect.width * rect.rect.height);
-                        }).FirstOrDefault();
-                    if (panel != null)
-                    {
-                        result.PanelSprite = panel.sprite;
-                    }
-                }
-                catch (Exception exception)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Editor UI: no se pudo leer el estilo Workshop: " + exception.Message);
-                }
-                return result;
+                style.ButtonTexture.SetPixels32(pixels);
+                style.ButtonTexture.Apply(false, false);
+                style.ButtonSprite = Sprite.Create(style.ButtonTexture,
+                    new Rect(0f, 0f, size, size), new Vector2(.5f, .5f), 100f,
+                    0, SpriteMeshType.FullRect, new Vector4(8f, 8f, 8f, 8f));
+                style.ButtonSprite.name = "UP Editor - Boton uniforme";
+                var colors = ColorBlock.defaultColorBlock;
+                colors.normalColor = Color.white;
+                colors.highlightedColor = Color.white;
+                colors.pressedColor = Color.white;
+                colors.selectedColor = Color.white;
+                colors.disabledColor = Color.white;
+                colors.colorMultiplier = 1f;
+                style.ButtonColors = colors;
+                return style;
             }
         }
     }
@@ -814,6 +1355,15 @@ namespace UnderPressure.Editor
     internal sealed class ScenarioEditorPlotRowSkin : MonoBehaviour
     {
         private Button _button;
+        private TMP_Text _label;
+        // COLORES EXACTOS DE CHECKS: Base(gris), Build(naranja),
+        // Unbuild(verde). Los tres botones de arriba usan estos RGB.
+        internal static readonly Color[] LayerColors =
+        {
+            new Color(.78f, .80f, .80f, 1f),
+            new Color(1f, .58f, .08f, 1f),
+            new Color(.48f, .72f, .25f, 1f)
+        };
         private Toggle[] _toggles;
         private Color[] _toggleColors;
         private Sprite _sprite;
@@ -832,6 +1382,8 @@ namespace UnderPressure.Editor
             {
                 _button = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
                     .GetValue(row) as Button;
+                _label = AccessTools.Field(typeof(PlotSelectionItem), "_text")?
+                    .GetValue(row) as TMP_Text;
                 var nativeSelected = AccessTools.Field(typeof(PlotSelectionItem), "_selectedColor")?
                     .GetValue(row);
                 if (_button?.targetGraphic != null && nativeSelected is Color)
@@ -860,6 +1412,13 @@ namespace UnderPressure.Editor
 
         private void Apply()
         {
+            // El evento nativo OnSelectHospitalPlot vuelve gris el nombre
+            // de las parcelas no seleccionadas: restaurarlo siempre a blanco.
+            if (_label != null)
+            {
+                _label.color = Color.white;
+                _label.alpha = 1f;
+            }
             if (_button?.targetGraphic is Image buttonImage)
             {
                 if (_sprite != null)
@@ -870,25 +1429,19 @@ namespace UnderPressure.Editor
                 var baseColor = _selected ? _selectedColor : _normal;
                 buttonImage.color = baseColor;
                 var colors = _button.colors;
-                colors.normalColor = baseColor;
-                colors.highlightedColor = Color.Lerp(baseColor, Color.white, .16f);
-                colors.pressedColor = Color.Lerp(baseColor, Color.black, .18f);
-                colors.selectedColor = baseColor;
+                colors.normalColor = Color.white;
+                colors.highlightedColor = Color.white;
+                colors.pressedColor = new Color(.95f, .95f, .95f, 1f);
+                colors.selectedColor = Color.white;
                 _button.colors = colors;
             }
             if (_toggles == null) return;
-            var layerColors = new[]
-            {
-                new Color(.78f, .80f, .80f, 1f),
-                new Color(1f, .58f, .08f, 1f),
-                new Color(.48f, .72f, .25f, 1f)
-            };
             for (var index = 0; index < _toggles.Length; ++index)
             {
                 var toggle = _toggles[index];
                 if (toggle?.targetGraphic is Image background)
-                    background.color = index >= 2 && index - 2 < layerColors.Length
-                        ? layerColors[index - 2]
+                    background.color = index >= 2 && index - 2 < LayerColors.Length
+                        ? LayerColors[index - 2]
                         : _toggleColors[index];
                 if (toggle?.graphic is Graphic mark) mark.color = Color.white;
             }
@@ -925,6 +1478,9 @@ namespace UnderPressure.Editor
         }
     }
 
+    // CATALOGO DE OBJETOS en el panel NUEVO: buscador, Ver todo,
+    // ScrollRect y miniaturas nativas trasladadas, sin duplicarlas.
+    // NO afecta a las miniaturas de texturas del pincel de Terreno.
     internal static class ScenarioEditorObjectDock
     {
         private static readonly System.Reflection.FieldInfo ContentField =
@@ -934,9 +1490,148 @@ namespace UnderPressure.Editor
         private static readonly System.Reflection.FieldInfo CreatingIconField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_creatingListIcon");
 
-        internal static void Configure(LandscapeObjectsMenu menu, float width, float height)
+        // DESTRUCCION REAL: el GameObject prefab LandscapeObjectsMenu desaparece.
+        // Se reemplaza su logica en el registro HUD por un componente nuevo,
+        // sin panel nativo. Los controles originales se TRASLADAN, no se duplican.
+        // El cierre con Escape llega al componente nuevo via HUD.DestroyMenu.
+        internal static bool ReplaceNativePanel(LandscapeObjectsMenu native,
+            RectTransform host, HUD hud, out LandscapeObjectsMenu replacement)
         {
-            if (menu == null) return;
+            replacement = null;
+            if (native == null || host == null || hud == null) return false;
+            var createdMenusField = AccessTools.Field(typeof(HUD), "_createdMenus");
+            var createdMenus = createdMenusField?.GetValue(hud) as System.Collections.IList;
+            var index = createdMenus == null ? -1 : createdMenus.IndexOf(native);
+            if (index < 0)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetos: el menu nativo no consta en HUD; no se puede sustituir.");
+                return false;
+            }
+            var contentObject = ContentField?.GetValue(native) as GameObject;
+            var scroll = contentObject?.GetComponentInParent<ScrollRect>();
+            var scrollRoot = scroll?.transform as RectTransform;
+            var search = SearchField?.GetValue(native) as TMP_InputField;
+            if (scrollRoot == null || search == null || native.transform.parent == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetos: no se encuentran la lista o el buscador del prefab.");
+                return false;
+            }
+
+            // Crear el propietario logico SIN los bordes, fondos ni hijos del
+            // panel nativo; el panel propio no necesita una segunda ventana.
+            var logic = new GameObject("UP Objects Logic", typeof(RectTransform));
+            logic.SetActive(false);
+            logic.transform.SetParent(native.transform.parent, false);
+            var next = logic.AddComponent<LandscapeObjectsMenu>();
+            try
+            {
+                CopyFields(typeof(MenuBase), native, next);
+                CopyFields(typeof(LandscapeObjectsMenu), native, next);
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Object.Destroy(logic);
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetos: no se pudo trasladar el estado del menu: " + ex);
+                return false;
+            }
+
+            // Trasladar todos los elementos FUNCIONALES al panel propio:
+            // ScrollRect+miniaturas, filtro, etiqueta, Ver todo y indicador.
+            scrollRoot.SetParent(host, false);
+            if (!search.transform.IsChildOf(scrollRoot))
+                search.transform.SetParent(host, false);
+            var label = native.transform.Find("UP_SearchLabel");
+            if (label != null) label.SetParent(host, false);
+            var show = native.transform.Find("UP Objects - Show All");
+            if (show != null) show.SetParent(host, false);
+            var creatingIcon = CreatingIconField?.GetValue(native) as Image;
+            if (creatingIcon != null && creatingIcon.transform.IsChildOf(native.transform))
+                creatingIcon.transform.SetParent(host, false);
+            var prefab = AccessTools.Field(typeof(LandscapeObjectsMenu), "_prefabListItem")?
+                .GetValue(native) as GameObject;
+            if (prefab != null && prefab.transform.IsChildOf(native.transform))
+                prefab.transform.SetParent(logic.transform, false);
+
+            // El listener del prefab captura el objeto antiguo: ya no debe
+            // escribir en el componente que se va a destruir.
+            var filterField = AccessTools.Field(typeof(LandscapeObjectsMenu), "_filter");
+            search.onValueChanged.RemoveAllListeners();
+            search.onValueChanged.AddListener(filter => filterField?.SetValue(next, filter));
+            filterField?.SetValue(next, search.text);
+            var showButton = show == null ? null : show.GetComponent<Button>();
+            if (showButton != null)
+            {
+                showButton.onClick.RemoveAllListeners();
+                showButton.onClick.AddListener(() => ScenarioEditorCatalogLoadGate.ShowAll(next));
+            }
+            ScenarioEditorCatalogLoadGate.Initialise(next, search);
+            ScenarioEditorCatalogLoadGate.ShowAll(next);
+
+            // MenuBase.Update() lee esta bandera para cerrar con Escape
+            // y boton derecho. Desactivarla UNA SOLA VEZ en la logica nueva.
+            // Las otras rutas de cierre nativo se interceptan mas abajo.
+            var allowEscapeField = AccessTools.Field(typeof(MenuBase),
+                "_allowEscapeCloseMenu2");
+            if (allowEscapeField == null)
+            {
+                UnityEngine.Object.Destroy(logic);
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetos: no se ha encontrado la bandera de cierre por Escape.");
+                return false;
+            }
+            allowEscapeField.SetValue(next, false);
+
+            // HUD identifica el menu por esta lista; se conserva registrado
+            // y protegido durante el editor para reutilizarlo entre modos.
+            createdMenus[index] = next;
+            var wasActive = native.gameObject.activeSelf;
+            native.enabled = false;
+            native.gameObject.SetActive(false);
+            logic.SetActive(wasActive);
+            UnityEngine.Object.Destroy(native.gameObject);
+            replacement = next;
+            return true;
+        }
+
+        private static void CopyFields(Type type, object source, object destination)
+        {
+            var fields = type.GetFields(System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.DeclaredOnly);
+            foreach (var field in fields)
+            {
+                if (field.IsStatic) continue;
+                if (field.IsInitOnly)
+                {
+                    // LandscapeObjectsMenu contiene dos listas readonly que
+                    // Unity inicializa. Copiar sus contenidos sin reemplazar
+                    // sus referencias preserva el catalogo ya generado.
+                    var oldList = field.GetValue(source) as System.Collections.IList;
+                    var newList = field.GetValue(destination) as System.Collections.IList;
+                    if (oldList == null || newList == null) continue;
+                    newList.Clear();
+                    foreach (var item in oldList) newList.Add(item);
+                }
+                else field.SetValue(destination, field.GetValue(source));
+            }
+            if (type == typeof(MenuBase))
+            {
+                // El botón de cerrar del prefab se destruye con él.
+                AccessTools.Field(typeof(MenuBase), "_closeMenuButton")?
+                    .SetValue(destination, null);
+                AccessTools.Field(typeof(MenuBase), "_isCloseButtonRegistered")?
+                    .SetValue(destination, false);
+            }
+        }
+
+        internal static void Configure(LandscapeObjectsMenu menu, RectTransform host,
+            float width, float height)
+        {
+            if (menu == null || host == null) return;
             var contentObject = ContentField?.GetValue(menu) as GameObject;
             var search = SearchField?.GetValue(menu) as TMP_InputField;
             var creatingIcon = CreatingIconField?.GetValue(menu) as Image;
@@ -974,20 +1669,23 @@ namespace UnderPressure.Editor
             grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
             grid.childAlignment = TextAnchor.UpperLeft;
-            grid.padding = new RectOffset(5, 9, 6, 8);
-            grid.spacing = new Vector2(6f, 6f);
+            grid.padding = new RectOffset(2, 0, 6, 8);
+            grid.spacing = new Vector2(3f, 6f);
             grid.cellSize = new Vector2(97f, 88f);
 
             var fitter = content.GetComponent<ContentSizeFitter>() ??
                 content.gameObject.AddComponent<ContentSizeFitter>();
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            fitter.enabled = true;
+            fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.enabled = false;
             content.anchorMin = new Vector2(0f, 1f);
             content.anchorMax = new Vector2(1f, 1f);
             content.pivot = new Vector2(.5f, 1f);
             content.anchoredPosition = Vector2.zero;
             content.sizeDelta = Vector2.zero;
+            var verticalSizer = content.GetComponent<ScenarioEditorCatalogVerticalSizer>() ??
+                content.gameObject.AddComponent<ScenarioEditorCatalogVerticalSizer>();
+            verticalSizer.Configure(content, grid);
 
             scroll.horizontal = false;
             scroll.vertical = true;
@@ -998,21 +1696,21 @@ namespace UnderPressure.Editor
             scrollRect.anchorMin = Vector2.zero;
             scrollRect.anchorMax = Vector2.one;
             scrollRect.pivot = new Vector2(.5f, .5f);
-            scrollRect.offsetMin = new Vector2(6f, 6f);
-            scrollRect.offsetMax = new Vector2(-6f, -43f);
+            scrollRect.offsetMin = new Vector2(1f, 6f);
+            scrollRect.offsetMax = new Vector2(-1f, -43f);
             if (scroll.viewport != null)
             {
                 scroll.viewport.anchorMin = Vector2.zero;
                 scroll.viewport.anchorMax = Vector2.one;
                 scroll.viewport.offsetMin = Vector2.zero;
-                scroll.viewport.offsetMax = new Vector2(-12f, 0f);
+                scroll.viewport.offsetMax = new Vector2(-10f, 0f);
                 var viewportImage = scroll.viewport.GetComponent<Image>() ??
                     scroll.viewport.gameObject.AddComponent<Image>();
                 if (viewportImage.sprite == null)
                     viewportImage.color = new Color(0f, 0f, 0f, .001f);
                 viewportImage.raycastTarget = true;
             }
-            EnsureVerticalScrollbar(menu.transform as RectTransform, scroll);
+            EnsureVerticalScrollbar(host, scroll);
 
             if (search != null)
             {
@@ -1021,7 +1719,7 @@ namespace UnderPressure.Editor
                 searchRect.pivot = new Vector2(0f, 1f);
                 searchRect.anchoredPosition = new Vector2(69f, -8f);
                 searchRect.sizeDelta = new Vector2(91f, 27f);
-                var label = menu.transform.Find("UP_SearchLabel") as RectTransform;
+                var label = host.Find("UP_SearchLabel") as RectTransform;
                 if (label != null)
                 {
                     label.anchorMin = label.anchorMax = new Vector2(0f, 1f);
@@ -1029,7 +1727,7 @@ namespace UnderPressure.Editor
                     label.anchoredPosition = new Vector2(7f, -8f);
                     label.sizeDelta = new Vector2(60f, 27f);
                 }
-                var show = menu.transform.Find("UP Objects - Show All") as RectTransform;
+                var show = host.Find("UP Objects - Show All") as RectTransform;
                 if (show != null)
                 {
                     show.anchorMin = show.anchorMax = new Vector2(0f, 1f);
@@ -1077,7 +1775,7 @@ namespace UnderPressure.Editor
             existing.anchorMax = new Vector2(1f, 1f);
             existing.pivot = new Vector2(1f, .5f);
             existing.anchoredPosition = Vector2.zero;
-            existing.offsetMin = new Vector2(-12f, 6f);
+            existing.offsetMin = new Vector2(-10f, 6f);
             existing.offsetMax = new Vector2(0f, -43f);
             existing.gameObject.SetActive(true);
             existing.SetAsLastSibling();
@@ -1087,14 +1785,255 @@ namespace UnderPressure.Editor
         }
     }
 
+    internal sealed class ScenarioEditorCatalogVerticalSizer : MonoBehaviour
+    {
+        private RectTransform _content;
+        private GridLayoutGroup _grid;
+        private int _lastVisible = -1;
+        private bool _dirty = true;
+        private string _lastFilter;
+        private int _lastItemCount = -1;
+
+        internal void MarkIfFilterChanged(LandscapeObjectsMenu menu)
+        {
+            if (menu == null) return;
+            var filter = AccessTools.Field(typeof(LandscapeObjectsMenu), "_filter")?
+                .GetValue(menu) as string ?? string.Empty;
+            var items = AccessTools.Field(typeof(LandscapeObjectsMenu), "_items")?
+                .GetValue(menu) as System.Collections.IList;
+            var count = items?.Count ?? 0;
+            if (string.Equals(filter, _lastFilter, StringComparison.Ordinal) &&
+                _lastItemCount == count) return;
+            _lastFilter = filter;
+            _lastItemCount = count;
+            _dirty = true;
+        }
+
+        internal void Configure(RectTransform content, GridLayoutGroup grid)
+        {
+            _content = content;
+            _grid = grid;
+            _lastVisible = -1;
+            _dirty = true;
+        }
+
+        internal void MarkDirty() => _dirty = true;
+        private void OnTransformChildrenChanged() => _dirty = true;
+
+        private void LateUpdate()
+        {
+            if (!_dirty || _content == null || _grid == null) return;
+            _dirty = false;
+            var count = 0;
+            for (int i = 0; i < _content.childCount; i++)
+                if (_content.GetChild(i).gameObject.activeSelf) count++;
+            if (_lastVisible == count) return;
+            _lastVisible = count;
+            var rows = (count + 1) / 2;
+            var height = _grid.padding.top + _grid.padding.bottom +
+                rows * _grid.cellSize.y + Mathf.Max(0, rows - 1) * _grid.spacing.y;
+            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                Mathf.Max(0f, height));
+        }
+    }
+
+    [HarmonyPatch(typeof(LandscapeObjectsMenu), "Filter")]
+    internal static class ScenarioEditorCatalogHeightPatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(LandscapeObjectsMenu __instance)
+        {
+            if (!ScenarioEditorFlow.IsRunning || __instance == null) return;
+            var content = AccessTools.Field(typeof(LandscapeObjectsMenu), "_listContent")?
+                .GetValue(__instance) as GameObject;
+            if (content != null)
+                content.GetComponent<ScenarioEditorCatalogVerticalSizer>()?
+                    .MarkIfFilterChanged(__instance);
+        }
+    }
+
+    // El EventSystem es lo que utiliza nuestro selector de objetos.
+    [HarmonyPatch]
+    internal static class ScenarioEditorDockPointerPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() =>
+            AccessTools.Method(typeof(EventSystem), "IsPointerOverGameObject", Type.EmptyTypes);
+        private static void Postfix(ref bool __result)
+        {
+            if (!__result && ScenarioEditorDockLayout.PointerOverDock())
+                __result = true;
+        }
+    }
+
+    // El InputManager nativo usa esta propiedad tanto para clics como para
+    // rueda/zoom, por lo que se bloquean los dos caminos simultaneamente.
+    [HarmonyPatch(typeof(InputManager), "get_IsMouseOverGui")]
+    internal static class ScenarioEditorDockNativeInputPatch
+    {
+        private static void Postfix(ref bool __result)
+        {
+            if (!__result && ScenarioEditorDockLayout.PointerOverDock())
+                __result = true;
+        }
+    }
+
+    // Corrige el doble tinte que hacia que BUILD se viera rojo oscuro.
+    [HarmonyPatch(typeof(ScenarioEditorStorageMenu), "RefreshLayerButtons")]
+    internal static class ScenarioEditorLayerButtonStylePatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ScenarioEditorStorageMenu __instance,
+            HospitalPlotLayer selected)
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorDockLayout.StyleLayerButtons(__instance, selected);
+        }
+    }
+
+    // El metodo original de EditorMaps.cs sigue gestionando atajos/cursores,
+    // pero ya no sobrescribe el azul del estilo unico en cada fotograma.
+    [HarmonyPatch(typeof(ScenarioEditorStorageMenu), "SetToolButtonSelected")]
+    internal static class ScenarioEditorUniformToolTintPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(Button button, bool selected)
+        {
+            if (!ScenarioEditorFlow.IsRunning) return true;
+            return !ScenarioEditorDockLayout.OverrideToolTint(button, selected);
+        }
+    }
+
+    // Recuperar el sonido del boton clonado despues de RemoveAllListeners().
+    [HarmonyPatch(typeof(ScenarioEditorStorageMenu), "CloneButton")]
+    internal static class ScenarioEditorButtonClickSoundPatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(Button __result)
+        {
+            if (!ScenarioEditorFlow.IsRunning || __result == null) return;
+            var sfx = __result.GetComponent<ButtonSFX>();
+            if (sfx == null) sfx = __result.gameObject.AddComponent<ButtonSFX>();
+            sfx.AudioEvent = ButtonSFX.ButtonAudioEvent.Default;
+            sfx.UpdateListeners();
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioEditorHistory), "RefreshHistoryUI")]
+    internal static class ScenarioEditorHistoryButtonStylePatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ScenarioEditorHistory __instance)
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorDockLayout.StyleHistoryButtons(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioEditorTerrainPainterBehaviour), "BuildUi")]
+    internal static class ScenarioEditorTerrainButtonStylePatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ScenarioEditorTerrainPainterBehaviour __instance)
+        {
+            if (ScenarioEditorFlow.IsRunning)
+            {
+                ScenarioEditorDockLayout.StyleTerrainButtons(__instance);
+                ScenarioEditorDockLayout.ArrangeTerrainTextureTiles(__instance);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioEditorTerrainPainterBehaviour), "RefreshTexts")]
+    internal static class ScenarioEditorTerrainRefreshStylePatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ScenarioEditorTerrainPainterBehaviour __instance)
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorDockLayout.StyleTerrainButtons(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioCharacterViewer), "RefreshToggleVisual")]
+    internal static class ScenarioEditorCharacterToggleStylePatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix()
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorDockLayout.StyleUtilityToggle(
+                    ScenarioCharacterViewer.ToggleButton, ScenarioCharacterViewer.IsOpen);
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioFogViewer), "RefreshToggleVisual")]
+    internal static class ScenarioEditorFogToggleStylePatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix()
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorDockLayout.StyleUtilityToggle(
+                    ScenarioFogViewer.ToggleButton, ScenarioFogViewer.IsOpen);
+        }
+    }
+
     [HarmonyPatch(typeof(LandscapeObjectsMenu), "Setup")]
     internal static class ScenarioEditorObjectDockPatch
     {
-        [HarmonyPriority(-100)]
+        // Debe ejecutarse DESPUES de la preparacion nativa del catalogo,
+        // para que el prefab ya tenga buscador, lista y controles completos.
+        [HarmonyPriority(-1000)]
         private static void Postfix(LandscapeObjectsMenu __instance)
         {
             if (ScenarioEditorFlow.IsRunning)
                 ScenarioEditorDockLayout.RegisterObjectsMenu(__instance);
         }
     }
+
+    // Mantiene las acciones y la geometria nativas del menu de pausa.
+    // Solo aplica el azul plano que ya usan los botones del editor.
+    [HarmonyPatch(typeof(PauseMenu), "Setup")]
+    internal static class ScenarioEditorPauseFlatButtonPatch
+    {
+        // El editor configura los eventos de Guardar/Abrir/Vaciar antes del sonido.
+        [HarmonyPriority(-1000)]
+        private static void Postfix(PauseMenu __instance)
+        {
+            ScenarioEditorDockLayout.StylePauseMenu(__instance);
+        }
+    }
+
+    // PROTECCION DE OBJETOS: MenuBase.Update intenta cerrar el menu con
+    // Escape, y otros menus o herramientas llaman a CloseMenu/DestroyMenu.
+    // Son RUTAS DISTINTAS: bloquear HandlePauseLogic no las detenía.
+    // No modifica el comportamiento de ninguna otra ventana del juego.
+    [HarmonyPatch(typeof(MenuBase), "CloseMenu")]
+    internal static class ScenarioEditorObjectsKeepOpenClosePatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(MenuBase __instance) =>
+            !ScenarioEditorDockLayout.ProtectObjectsMenu(__instance);
+    }
+
+    [HarmonyPatch(typeof(MenuBase), "CloseMenuImmediately")]
+    internal static class ScenarioEditorObjectsKeepOpenImmediatePatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(MenuBase __instance) =>
+            !ScenarioEditorDockLayout.ProtectObjectsMenu(__instance);
+    }
+
+    [HarmonyPatch]
+    internal static class ScenarioEditorObjectsKeepOpenDestroyPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() =>
+            AccessTools.Method(typeof(HUD), "DestroyMenu",
+                new[] { typeof(MenuBase) });
+
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(MenuBase menu) =>
+            !ScenarioEditorDockLayout.ProtectObjectsMenu(menu);
+    }
+
 }
