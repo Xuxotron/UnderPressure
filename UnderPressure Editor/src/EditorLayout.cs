@@ -526,9 +526,19 @@ namespace UnderPressure.Editor
             ApplyObjectsPanel(_objectsMenu, true);
             if (_leftDivider != null)
             {
-                SetTopLeft(_leftDivider, 0f,
-                    BarHeight + _leftUpperHeight - DividerHeight * .5f,
+                // La linea conserva su coordenada. El area de arrastre empieza
+                // en ella y crece solo hacia abajo, sin cubrir los tres botones.
+                SetTopLeft(_leftDivider, 0f, BarHeight + _leftUpperHeight,
                     PanelWidth, DividerHeight);
+                var handle = _leftDivider.Find("Tirador") as RectTransform;
+                if (handle != null)
+                {
+                    handle.anchorMin = new Vector2(0f, 1f);
+                    handle.anchorMax = new Vector2(1f, 1f);
+                    handle.pivot = new Vector2(.5f, .5f);
+                    handle.anchoredPosition = Vector2.zero;
+                    handle.sizeDelta = new Vector2(-8f, 6f);
+                }
                 _leftDivider.gameObject.SetActive(true);
                 _leftDivider.SetAsLastSibling();
             }
@@ -615,8 +625,9 @@ namespace UnderPressure.Editor
                 _plotViewport.sizeDelta = new Vector2(PanelWidth - 8f,
                     Mathf.Max(58f, _leftUpperHeight - 110f));
                 var plotScroll = _plotViewport.GetComponent<ScrollRect>();
-                InstallNativeVerticalScrollSlider(_plotPanel, plotScroll,
-                    "UP Plot Native Vertical Slider", 86f, 46f);
+                InstallNativeVerticalScrollbar(_plotPanel, plotScroll,
+                    "UP Plot Native Vertical Scrollbar", 86f, 46f);
+                ResizePlotScrollContent(plotScroll);
             }
             var layerRoot = _storage?.PlotLayerRoot as RectTransform;
             if (layerRoot != null)
@@ -681,130 +692,86 @@ namespace UnderPressure.Editor
             var content = scroll?.content;
             if (content != null)
             {
+                ResizePlotScrollContent(scroll);
                 LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-                var layout = content.GetComponent<VerticalLayoutGroup>();
-                var visible = 0;
-                var rowsHeight = 0f;
-                for (var index = 0; index < content.childCount; ++index)
-                {
-                    var child = content.GetChild(index) as RectTransform;
-                    if (child == null || !child.gameObject.activeSelf) continue;
-                    var element = child.GetComponent<LayoutElement>();
-                    var rowHeight = element != null && element.preferredHeight > 0f
-                        ? element.preferredHeight : child.rect.height;
-                    rowsHeight += Mathf.Max(0f, rowHeight);
-                    ++visible;
-                }
-                if (visible > 0)
-                {
-                    if (layout != null)
-                    {
-                        rowsHeight += layout.padding.top + layout.padding.bottom;
-                        rowsHeight += Mathf.Max(0, visible - 1) * layout.spacing;
-                    }
-                    // 110 px corresponden a cabecera, selector de capa,
-                    // botones inferiores y margenes reales del panel.
-                    return 110f + rowsHeight;
-                }
+                var preferred = LayoutUtility.GetPreferredHeight(content);
+                if (preferred > 1f) return 84f + preferred + 46f;
             }
             var count = Mathf.Max(1, _level?.WorldState?.HospitalPlots?.Count ?? 1);
-            return 139f + count * 36f;
+            return 163f + count * 36f;
         }
 
         private void RefreshPlotPanelForCount()
         {
             _resetPlotScroll = true;
+            ResizePlotScrollContent(_plotViewport?.GetComponent<ScrollRect>());
             ApplyLayout(true);
         }
 
-        // BARRAS VERTICALES: clonar el Slider real de Ajustes > Video y
-        // conectarlo al ScrollRect sin reconstruir su aspecto con imagenes propias.
-        internal static Slider InstallNativeVerticalScrollSlider(RectTransform host,
+        private static void ResizePlotScrollContent(ScrollRect scroll)
+        {
+            var content = scroll?.content;
+            if (content == null) return;
+            var sizer = content.GetComponent<ScenarioEditorPlotContentSizer>() ??
+                content.gameObject.AddComponent<ScenarioEditorPlotContentSizer>();
+            sizer.Recalculate(content);
+        }
+
+        // BARRAS VERTICALES: clonar el Scrollbar vertical real de Ajustes.
+        // No se reutiliza ni se gira ningun Slider de valores.
+        internal static Scrollbar InstallNativeVerticalScrollbar(RectTransform host,
             ScrollRect scroll, string name, float top, float bottom)
         {
             if (_active == null || host == null || scroll == null) return null;
-            var existing = host.Find(name)?.GetComponent<Slider>();
+            var existing = host.Find(name)?.GetComponent<Scrollbar>();
             if (existing == null)
             {
-                var source = Resources.FindObjectsOfTypeAll<Slider>()
-                    .FirstOrDefault(candidate => candidate != null &&
-                        candidate.name == "MaximumFPSSlider" &&
-                        !candidate.transform.IsChildOf(host));
+                Scrollbar source = null;
+                foreach (var screen in Resources.FindObjectsOfTypeAll<PreferencesScreen>())
+                {
+                    if (screen == null) continue;
+                    source = screen.GetComponentsInChildren<Scrollbar>(true)
+                        .Where(candidate => candidate != null &&
+                            !candidate.transform.IsChildOf(host) &&
+                            (candidate.direction == Scrollbar.Direction.BottomToTop ||
+                             candidate.direction == Scrollbar.Direction.TopToBottom))
+                        .OrderByDescending(candidate =>
+                            Mathf.Abs((candidate.transform as RectTransform)?.rect.height ?? 0f))
+                        .FirstOrDefault();
+                    if (source != null) break;
+                }
                 if (source == null)
                 {
                     UnderPressureEditorPlugin.Log?.LogError(
-                        "Interfaz: no se encontro el slider nativo MaximumFPSSlider.");
+                        "Interfaz: no se encontro el Scrollbar vertical nativo de Ajustes.");
                     return null;
                 }
                 existing = UnityEngine.Object.Instantiate(source, host, false);
                 existing.gameObject.name = name;
-                foreach (var localizer in existing.GetComponentsInChildren<MonoBehaviour>(true))
-                    if (localizer != null && localizer.GetType().FullName == "I2.Loc.Localize")
-                        localizer.enabled = false;
                 var layout = existing.GetComponent<LayoutElement>();
                 if (layout != null) layout.enabled = false;
+                existing.onValueChanged.RemoveAllListeners();
             }
 
             var oldScrollbar = scroll.verticalScrollbar;
             if (oldScrollbar != null && oldScrollbar.gameObject != existing.gameObject)
                 oldScrollbar.gameObject.SetActive(false);
-            scroll.verticalScrollbar = null;
 
             var rect = existing.transform as RectTransform;
             rect.anchorMin = new Vector2(1f, 0f);
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, .5f);
-            rect.offsetMin = new Vector2(-18f, bottom);
+            rect.offsetMin = new Vector2(-14f, bottom);
             rect.offsetMax = new Vector2(-2f, -top);
             rect.localScale = Vector3.one;
-            existing.direction = Slider.Direction.BottomToTop;
-            existing.minValue = 0f;
-            existing.maxValue = 1f;
-            existing.wholeNumbers = false;
+            existing.direction = Scrollbar.Direction.BottomToTop;
             existing.interactable = true;
-            ConfigureVerticalNativeSliderGeometry(existing);
-            var bridge = existing.GetComponent<ScenarioEditorNativeScrollSlider>() ??
-                existing.gameObject.AddComponent<ScenarioEditorNativeScrollSlider>();
-            bridge.Initialise(existing, scroll);
             existing.gameObject.SetActive(true);
             existing.transform.SetAsLastSibling();
+            scroll.verticalScrollbar = existing;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarSpacing = 0f;
             return existing;
-        }
-
-        private static void ConfigureVerticalNativeSliderGeometry(Slider slider)
-        {
-            if (slider == null) return;
-            var background = slider.transform.Find("Background") as RectTransform;
-            if (background != null)
-            {
-                background.anchorMin = new Vector2(.5f, 0f);
-                background.anchorMax = new Vector2(.5f, 1f);
-                background.pivot = new Vector2(.5f, .5f);
-                background.anchoredPosition = Vector2.zero;
-                background.sizeDelta = new Vector2(5f, 0f);
-            }
-            var fillArea = slider.fillRect?.parent as RectTransform;
-            if (fillArea != null)
-            {
-                fillArea.anchorMin = new Vector2(.5f, 0f);
-                fillArea.anchorMax = new Vector2(.5f, 1f);
-                fillArea.pivot = new Vector2(.5f, .5f);
-                fillArea.anchoredPosition = Vector2.zero;
-                fillArea.sizeDelta = new Vector2(5f, -14f);
-                slider.fillRect.offsetMin = Vector2.zero;
-                slider.fillRect.offsetMax = Vector2.zero;
-            }
-            var handleArea = slider.handleRect?.parent as RectTransform;
-            if (handleArea != null)
-            {
-                handleArea.anchorMin = new Vector2(.5f, 0f);
-                handleArea.anchorMax = new Vector2(.5f, 1f);
-                handleArea.pivot = new Vector2(.5f, .5f);
-                handleArea.anchoredPosition = Vector2.zero;
-                handleArea.sizeDelta = new Vector2(16f, -16f);
-            }
-            if (slider.handleRect != null)
-                slider.handleRect.sizeDelta = new Vector2(16f, 16f);
         }
 
         private void IgnoreParentLayout(RectTransform rect)
@@ -1464,45 +1431,44 @@ namespace UnderPressure.Editor
         }
     }
 
-    internal sealed class ScenarioEditorNativeScrollSlider : MonoBehaviour
+    internal sealed class ScenarioEditorPlotContentSizer : MonoBehaviour
     {
-        private Slider _slider;
-        private ScrollRect _scroll;
-        private bool _synchronising;
+        private RectTransform _content;
 
-        internal void Initialise(Slider slider, ScrollRect scroll)
+        internal void Recalculate(RectTransform content)
         {
-            if (_slider != null) _slider.onValueChanged.RemoveListener(OnSliderChanged);
-            if (_scroll != null) _scroll.onValueChanged.RemoveListener(OnScrollChanged);
-            _slider = slider;
-            _scroll = scroll;
-            if (_slider == null || _scroll == null) return;
-            _slider.onValueChanged.RemoveAllListeners();
-            _slider.SetValueWithoutNotify(_scroll.verticalNormalizedPosition);
-            _slider.onValueChanged.AddListener(OnSliderChanged);
-            _scroll.onValueChanged.AddListener(OnScrollChanged);
+            _content = content;
+            if (_content == null) return;
+            var fitter = _content.GetComponent<ContentSizeFitter>();
+            if (fitter != null)
+            {
+                fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+                fitter.enabled = false;
+            }
+            var layout = _content.GetComponent<VerticalLayoutGroup>();
+            var height = layout == null ? 0f : layout.padding.top + layout.padding.bottom;
+            var rows = 0;
+            for (var index = 0; index < _content.childCount; ++index)
+            {
+                var child = _content.GetChild(index) as RectTransform;
+                if (child == null || !child.gameObject.activeSelf) continue;
+                if (child.GetComponent<PlotSelectionItem>() == null &&
+                    child.name != "UP Landscape - Row") continue;
+                var element = child.GetComponent<LayoutElement>();
+                var childHeight = element != null && element.preferredHeight > 0f
+                    ? element.preferredHeight : child.rect.height;
+                height += Mathf.Max(0f, childHeight);
+                ++rows;
+            }
+            if (layout != null && rows > 1)
+                height += (rows - 1) * layout.spacing;
+            _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                Mathf.Max(0f, height));
         }
 
-        private void OnSliderChanged(float value)
+        private void OnTransformChildrenChanged()
         {
-            if (_synchronising || _scroll == null) return;
-            _synchronising = true;
-            _scroll.verticalNormalizedPosition = value;
-            _synchronising = false;
-        }
-
-        private void OnScrollChanged(Vector2 position)
-        {
-            if (_synchronising || _slider == null) return;
-            _synchronising = true;
-            _slider.SetValueWithoutNotify(position.y);
-            _synchronising = false;
-        }
-
-        private void OnDestroy()
-        {
-            if (_slider != null) _slider.onValueChanged.RemoveListener(OnSliderChanged);
-            if (_scroll != null) _scroll.onValueChanged.RemoveListener(OnScrollChanged);
+            if (_content != null) Recalculate(_content);
         }
     }
 
@@ -1897,8 +1863,8 @@ namespace UnderPressure.Editor
             if (host == null || scroll == null) return;
             var obsolete = host.Find("UP_Catalog_VerticalScrollbar");
             if (obsolete != null) UnityEngine.Object.Destroy(obsolete.gameObject);
-            ScenarioEditorDockLayout.InstallNativeVerticalScrollSlider(host, scroll,
-                "UP Objects Native Vertical Slider", 43f, 6f);
+            ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(host, scroll,
+                "UP Objects Native Vertical Scrollbar", 43f, 6f);
         }
     }
 
