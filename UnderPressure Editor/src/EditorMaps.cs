@@ -2083,6 +2083,7 @@ namespace UnderPressure.Editor
             }
             _templateWasActive = _template.gameObject.activeSelf;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            ApplyNativeLayerPalette();
             AddLayerButtons();
             AddStylesToolbarButton();
             AddPlotIsolationButton();
@@ -2390,7 +2391,32 @@ namespace UnderPressure.Editor
             var index = Mathf.Clamp((int)layer, 0, 2);
             if (_layerDropdown != null && _layerDropdown.value != index)
                 _layerDropdown.SetValueWithoutNotify(index);
+            ApplyNativeLayerFrameColor(index);
             RefreshLayerButtons((HospitalPlotLayer)index);
+        }
+
+        // El marco 3D nativo usa su propia matriz de colores. Se sustituye
+        // por la misma paleta de los botones y checks para que no conserve
+        // el azul original al seleccionar Build u otra capa.
+        private void ApplyNativeLayerPalette()
+        {
+            var colors = AccessTools.Field(typeof(EditHospitalMenu), "_editFrameColors")?
+                .GetValue(_menu) as Color[];
+            if (colors == null || colors.Length < ScenarioEditorPlotRowSkin.LayerColors.Length)
+                return;
+            for (var i = 0; i < ScenarioEditorPlotRowSkin.LayerColors.Length; ++i)
+                colors[i] = ScenarioEditorPlotRowSkin.LayerColors[i];
+            ApplyNativeLayerFrameColor(_layerDropdown == null ? 0 :
+                Mathf.Clamp(_layerDropdown.value, 0, 2));
+        }
+
+        private void ApplyNativeLayerFrameColor(int index)
+        {
+            var frame = AccessTools.Field(typeof(EditHospitalMenu), "_editFrame")?
+                .GetValue(_menu) as Graphic;
+            if (frame == null) return;
+            frame.color = ScenarioEditorPlotRowSkin.LayerColors[
+                Mathf.Clamp(index, 0, ScenarioEditorPlotRowSkin.LayerColors.Length - 1)];
         }
 
         private void SetLayerControlsVisible(bool visible)

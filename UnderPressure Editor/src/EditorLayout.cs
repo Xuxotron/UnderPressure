@@ -50,8 +50,8 @@ namespace UnderPressure.Editor
     {
         internal const float PanelWidth = 220f;
         internal const float BarHeight = 50f;
-        // El area interactiva coincide con los 6 px visibles de la linea.
-        // Asi no invade los botones situados inmediatamente encima.
+        // La linea visible conserva 6 px. El separador de Historial dispone,
+        // ademas, de otros 6 px invisibles de agarre solamente hacia arriba.
         private const float DividerHeight = 6f;
         private const float MinimumUpperHeight = 150f;
         private const float MinimumLowerHeight = 150f;
@@ -422,6 +422,7 @@ namespace UnderPressure.Editor
 
             _leftDivider = CreateDivider("UP Left Panel Divider", _root, SetLeftHeight);
             _rightDivider = CreateDivider("UP Right Panel Divider", _root, SetRightHeight);
+            AddUpperDividerGrabArea(_rightDivider, SetRightHeight);
         }
 
         private RectTransform CreateDivider(string name, Transform parent, Action<float> setter)
@@ -438,6 +439,21 @@ namespace UnderPressure.Editor
             var divider = go.AddComponent<ScenarioEditorDockDivider>();
             divider.Initialise(_root, setter);
             return (RectTransform)go.transform;
+        }
+
+        private void AddUpperDividerGrabArea(RectTransform divider, Action<float> setter)
+        {
+            if (divider == null) return;
+            var go = NewImage("Area superior de arrastre", divider, null,
+                new Color(0f, 0f, 0f, .01f), true);
+            var rect = (RectTransform)go.transform;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(.5f, 0f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(0f, DividerHeight);
+            var drag = go.AddComponent<ScenarioEditorDockDivider>();
+            drag.Initialise(_root, setter);
         }
 
         private void ToggleHistory()
@@ -549,15 +565,12 @@ namespace UnderPressure.Editor
             var rightContentHeight = height - BarHeight * 2f;
             float historyHeight;
             float terrainHeight;
-            if (_historyOpen && _terrainOpen)
+            if (_historyOpen)
             {
                 historyHeight = _rightUpperHeight;
-                terrainHeight = Mathf.Max(0f, rightContentHeight - historyHeight);
-            }
-            else if (_historyOpen)
-            {
-                historyHeight = rightContentHeight;
-                terrainHeight = 0f;
+                terrainHeight = _terrainOpen
+                    ? Mathf.Max(0f, rightContentHeight - historyHeight)
+                    : 0f;
             }
             else
             {
@@ -576,7 +589,7 @@ namespace UnderPressure.Editor
                 SetTopRight(_rightDivider, 0f,
                     BarHeight + historyHeight - DividerHeight * .5f,
                     PanelWidth, DividerHeight);
-                _rightDivider.gameObject.SetActive(_historyOpen && _terrainOpen);
+                _rightDivider.gameObject.SetActive(_historyOpen);
                 _rightDivider.SetAsLastSibling();
             }
             SetSelected(_historyToggle, _historyOpen);
@@ -962,7 +975,7 @@ namespace UnderPressure.Editor
                 rect.pivot = new Vector2(0f, 1f);
                 var buttonX = ReferenceEquals(button, _storage?.BuildButton)
                     ? PanelWidth : x;
-                rect.anchoredPosition = new Vector2(buttonX, -5f);
+                rect.anchoredPosition = new Vector2(buttonX, 0f);
                 rect.sizeDelta = new Vector2(buttonWidth, 40f);
                 ApplyButtonStyle(button);
                 button.transform.SetAsLastSibling();
@@ -1063,7 +1076,9 @@ namespace UnderPressure.Editor
                 panel.transform.SetParent(_canvas.transform, false);
                 var host = (RectTransform)panel.transform;
                 ApplyPanelStyle(panel);
-                EnsureSortingCanvas(panel, 3100);
+                // Objetos debe quedar por debajo de Parcelas (2850) y de su
+                // separador (3000), sin tapar ni el borde ni el agarre.
+                EnsureSortingCanvas(panel, 2800);
                 LandscapeObjectsMenu replacement;
                 // No basta con ocultar el prefab: hay que sustituir su entrada
                 // en HUD._createdMenus para que el juego cierre el panel NUEVO.
@@ -1499,11 +1514,11 @@ namespace UnderPressure.Editor
     {
         private Button _button;
         private TMP_Text _label;
-        // COLORES EXACTOS DE CHECKS: Base(gris), Build(naranja),
+        // COLORES EXACTOS DE CHECKS: Base(magenta), Build(naranja),
         // Unbuild(verde). Los tres botones de arriba usan estos RGB.
         internal static readonly Color[] LayerColors =
         {
-            new Color(.78f, .80f, .80f, 1f),
+            new Color(240f / 255f, 90f / 255f, 140f / 255f, 1f),
             new Color(1f, .58f, .08f, 1f),
             new Color(.48f, .72f, .25f, 1f)
         };
