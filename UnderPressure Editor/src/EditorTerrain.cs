@@ -41,7 +41,7 @@ namespace UnderPressure.Editor
         private static float _brushOpacity = 0.5f;
         private static TerrainLayerSlot _selectedSlot;
         private static ScenarioEditorTerrainPainterBehaviour _behaviour;
-        private static bool _dockVisible = true;
+        private static bool _dockVisible;
         private static float _dockWidth = ScenarioEditorDockLayout.PanelWidth;
         private static float _dockHeight = 535f;
         private static float _dockTop = ScenarioEditorDockLayout.BarHeight;
@@ -426,6 +426,7 @@ namespace UnderPressure.Editor
             var wasSelected = _brushEnabled && _sculptMode == SculptMode.Off;
             _sculptMode = SculptMode.Off;
             _brushEnabled = !wasSelected;
+            if (_brushEnabled) ScenarioEditorStorageMenu.DeactivateNativeTools();
             RefreshCursor();
             _behaviour?.RefreshTexts();
         }
@@ -562,6 +563,7 @@ namespace UnderPressure.Editor
                 _sculptMeshUnavailable = false;
                 _sculptMode = _sculptMode == mode ? SculptMode.Off : mode;
                 _brushEnabled = _sculptMode != SculptMode.Off;
+                if (_brushEnabled) ScenarioEditorStorageMenu.DeactivateNativeTools();
             }
             RefreshCursor();
             _behaviour?.RefreshTexts();
@@ -1631,9 +1633,9 @@ namespace UnderPressure.Editor
         private RectTransform _cursor;
         private RawImage _cursorImage;
         private Texture2D _cursorTexture;
-        private LineRenderer _worldRing;
-        private Material _worldRingMaterial;
-        private const int RingSegments = 64;
+        private RectTransform _brushRing;
+        private RawImage _brushRingImage;
+        private Texture2D _brushRingTexture;
         private RectTransform _content;
         private ScrollRect _scroll;
 
@@ -1728,24 +1730,28 @@ namespace UnderPressure.Editor
             if (_opacitySlider != null)
                 ((RectTransform)_opacitySlider.transform).sizeDelta = new Vector2(width - 24f, 9f);
 
-            var sculptWidth = (innerWidth - 10f) / 3f;
+            var sculptWidth = ScenarioEditorDockLayout.CompactTripleButtonWidth;
+            var sculptHeight = ScenarioEditorDockLayout.CompactTripleButtonHeight;
+            var sculptGap = ScenarioEditorDockLayout.CompactTripleButtonGap;
+            var sculptLeft = (width - (sculptWidth * 3f + sculptGap * 2f)) * .5f;
             if (_raiseButton != null)
             {
                 var rect = (RectTransform)_raiseButton.transform;
-                rect.anchoredPosition = new Vector2(9f, -191f);
-                rect.sizeDelta = new Vector2(sculptWidth, 28f);
+                rect.anchoredPosition = new Vector2(sculptLeft, -191f);
+                rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             if (_lowerButton != null)
             {
                 var rect = (RectTransform)_lowerButton.transform;
-                rect.anchoredPosition = new Vector2(14f + sculptWidth, -191f);
-                rect.sizeDelta = new Vector2(sculptWidth, 28f);
+                rect.anchoredPosition = new Vector2(sculptLeft + sculptWidth + sculptGap, -191f);
+                rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             if (_flattenButton != null)
             {
                 var rect = (RectTransform)_flattenButton.transform;
-                rect.anchoredPosition = new Vector2(19f + sculptWidth * 2f, -191f);
-                rect.sizeDelta = new Vector2(sculptWidth, 28f);
+                rect.anchoredPosition = new Vector2(sculptLeft +
+                    (sculptWidth + sculptGap) * 2f, -191f);
+                rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             var toolWidth = (innerWidth - 5f) * .5f;
             if (_brushButton != null)
@@ -2004,26 +2010,42 @@ namespace UnderPressure.Editor
                 _cursorImage.texture = fallback;
             }
             go.SetActive(false);
-            // Contorno vectorial situado en el MUNDO, no un círculo 2D en pantalla.
-            var world = new GameObject("UP_WorldBrushRing", typeof(LineRenderer));
-            _worldRing = world.GetComponent<LineRenderer>();
-            _worldRing.useWorldSpace = true;
-            _worldRing.loop = true;
-            _worldRing.positionCount = RingSegments;
-            _worldRing.startWidth = _worldRing.endWidth = 0.06f;
-            _worldRing.numCapVertices = 0;
-            _worldRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _worldRing.receiveShadows = false;
-            var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
-            if (shader != null)
-            {
-                _worldRingMaterial = new Material(shader);
-                _worldRingMaterial.hideFlags = HideFlags.DontSave;
-                _worldRing.material = _worldRingMaterial;
-            }
-            _worldRing.startColor = _worldRing.endColor =
-                new Color(0.94f, 0.99f, 1f, 0.74f);
-            world.SetActive(false);
+            // El aro comparte exactamente el mismo RectTransform de referencia
+            // que el cursor. Así su centro coincide con el punto real de pintura.
+            var ring = NewUi("UP_Brush_Ring", canvas.transform, typeof(RawImage));
+            _brushRing = (RectTransform)ring.transform;
+            _brushRing.anchorMin = _brushRing.anchorMax = new Vector2(.5f, .5f);
+            _brushRing.pivot = new Vector2(.5f, .5f);
+            _brushRingImage = ring.GetComponent<RawImage>();
+            _brushRingImage.raycastTarget = false;
+            _brushRingImage.color = new Color(0.94f, 0.99f, 1f, 0.74f);
+            _brushRingTexture = CreateRingTexture(128, 2.2f);
+            _brushRingImage.texture = _brushRingTexture;
+            ring.SetActive(false);
+            ring.transform.SetAsLastSibling();
+            go.transform.SetAsLastSibling();
+        }
+
+        private static Texture2D CreateRingTexture(int size, float thickness)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+            var pixels = new Color32[size * size];
+            var center = (size - 1f) * .5f;
+            var radius = center - thickness;
+            for (var y = 0; y < size; ++y)
+                for (var x = 0; x < size; ++x)
+                {
+                    var distance = Mathf.Sqrt((x - center) * (x - center) +
+                                              (y - center) * (y - center));
+                    var alpha = Mathf.Clamp01(1f - Mathf.Abs(distance - radius) / thickness);
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(alpha * 255f));
+                }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
         }
 
         internal void RefreshTexts()
@@ -2073,27 +2095,17 @@ namespace UnderPressure.Editor
             var positioned = root != null &&
                 RectTransformUtility.ScreenPointToLocalPointInRectangle(root,
                     Input.mousePosition, camera, out position);
-            if (_worldRing != null)
+            if (_brushRing != null)
             {
-                Vector3 center, normal;
-                bool showRing = ScenarioEditorTerrainPainter.TryGetBrushWorldPoint(
-                    out center, out normal);
-                if (_worldRing.gameObject.activeSelf != showRing)
-                    _worldRing.gameObject.SetActive(showRing);
+                float diameter = 0f;
+                bool showRing = positioned &&
+                    ScenarioEditorTerrainPainter.TryGetBrushScreenDiameter(out diameter);
+                if (_brushRing.gameObject.activeSelf != showRing)
+                    _brushRing.gameObject.SetActive(showRing);
                 if (showRing)
                 {
-                    // Dos vectores ortogonales en el plano tangente al suelo.
-                    var tangent = Vector3.ProjectOnPlane(Vector3.right, normal).normalized;
-                    if (tangent.sqrMagnitude < 0.01f)
-                        tangent = Vector3.ProjectOnPlane(Vector3.forward, normal).normalized;
-                    var bitangent = Vector3.Cross(normal, tangent).normalized;
-                    var radius = ScenarioEditorTerrainPainter.WorldBrushRadius;
-                    for (int i = 0; i < RingSegments; ++i)
-                    {
-                        var a = i * (Mathf.PI * 2f / RingSegments);
-                        _worldRing.SetPosition(i, center + normal * 0.12f +
-                            radius * (Mathf.Cos(a) * tangent + Mathf.Sin(a) * bitangent));
-                    }
+                    _brushRing.anchoredPosition = position;
+                    _brushRing.sizeDelta = new Vector2(diameter, diameter);
                 }
             }
             if (_cursor==null || _cursorImage==null) return;
@@ -2117,8 +2129,8 @@ namespace UnderPressure.Editor
             _previewCopies.Clear();
             if(_cursor!=null) UnityEngine.Object.Destroy(_cursor.gameObject);
             if(_cursorTexture!=null) UnityEngine.Object.Destroy(_cursorTexture);
-            if(_worldRing!=null) UnityEngine.Object.Destroy(_worldRing.gameObject);
-            if(_worldRingMaterial!=null) UnityEngine.Object.Destroy(_worldRingMaterial);
+            if(_brushRing!=null) UnityEngine.Object.Destroy(_brushRing.gameObject);
+            if(_brushRingTexture!=null) UnityEngine.Object.Destroy(_brushRingTexture);
         }
     }
 

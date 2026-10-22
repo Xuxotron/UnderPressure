@@ -2173,7 +2173,10 @@ namespace UnderPressure.Editor
                 {
                     if (owner != null && item != null)
                     {
-                        _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
+                        // El original centra la cámara si recibe otra vez la misma
+                        // parcela. Emitir el evento solo cuando la parcela cambia.
+                        if (!ReferenceEquals(owner, _selection))
+                            _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
                         _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke(ReadLayer(item));
                     }
                     SetSearch(GetObjectName(definition));

@@ -2178,18 +2178,7 @@ namespace UnderPressure.Editor
             if (_nativeObjectsButton != null)
             {
                 _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
-                    -330f, () =>
-                    {
-                        if (!ScenarioEditorDockLayout.ToggleObjectsPanel())
-                        {
-                            ActivateNativeTool(_nativeObjectsButton);
-                            return;
-                        }
-                        if (ScenarioEditorDockLayout.ObjectsPanelIsOpen())
-                            ActivateNativeTool(_nativeObjectsButton);
-                        else
-                            DeactivateNativeTools();
-                    });
+                    -330f, () => ScenarioEditorDockLayout.ToggleObjectsPanel());
                 _objectsButton.gameObject.name = "UP Objects Dock Toggle";
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
@@ -2221,6 +2210,25 @@ namespace UnderPressure.Editor
             cursor.PopMode<CursorEditHospitalItem>();
             cursor.PopMode<CursorEditHospitalBuild>();
             cursor.PopMode<CursorEditHospitalMovePlot>();
+        }
+
+        // La selección de objetos es el modo pasivo del editor. No depende de
+        // que el panel del catálogo esté abierto y vuelve al cerrar otra herramienta.
+        private void EnsureDefaultObjectSelection()
+        {
+            var cursor = _level?.CursorManager;
+            if (cursor == null || _nativeObjectsButton == null ||
+                !_nativeObjectsButton.interactable || _stylesDialogOpen ||
+                ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen ||
+                ScenarioEditorTerrainPainter.BrushEnabled || ScenarioLandscape.IsActive)
+                return;
+            var pause = _level.HUD?.FindMenu<PauseMenu>(true);
+            if (pause != null && pause.gameObject.activeInHierarchy) return;
+            if (cursor.IsModeActive<CursorEditHospitalBuild>() ||
+                cursor.IsModeActive<CursorEditHospitalMovePlot>() ||
+                cursor.IsModeActive<CursorRoomItem>() ||
+                cursor.IsModeActive<CursorEditHospitalItem>()) return;
+            _nativeObjectsButton.onClick.Invoke();
         }
 
         private Button AddTopButton(Transform parent, string label, float x, Action action)
@@ -2844,6 +2852,7 @@ rect.pivot = new Vector2(1f, 1f);
                 _movePlotButton.interactable = _nativeMoveButton.interactable;
             var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen;
             var cursor = _level.CursorManager;
+            EnsureDefaultObjectSelection();
             SetToolButtonSelected(_objectsButton,
                 ScenarioEditorDockLayout.ObjectsPanelIsOpen());
             SetToolButtonSelected(_buildButton, !customToolOpen && cursor != null &&
@@ -2966,7 +2975,11 @@ rect.pivot = new Vector2(1f, 1f);
                 Mathf.Abs(width - _lastPlotActionsWidth) < .01f) return;
             _lastPlotActionsOrigin = _plotViewportCorners[0];
             _lastPlotActionsWidth = width;
-            var buttonWidth = Mathf.Max(52f, (width - 8f) / 3f);
+            var buttonWidth = ScenarioEditorDockLayout.CompactTripleButtonWidth;
+            var buttonHeight = ScenarioEditorDockLayout.CompactTripleButtonHeight;
+            var gap = ScenarioEditorDockLayout.CompactTripleButtonGap;
+            var totalWidth = buttonWidth * 3f + gap * 2f;
+            var left = Mathf.Max(0f, (width - totalWidth) * .5f);
             var add = _addPlotButton.transform as RectTransform;
             var move = _movePlotButton.transform as RectTransform;
             var remove = _deletePlotButton.transform as RectTransform;
@@ -2975,16 +2988,16 @@ rect.pivot = new Vector2(1f, 1f);
             {
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
                 rect.pivot = new Vector2(0f, 1f);
-                rect.sizeDelta = new Vector2(buttonWidth, 31f);
+                rect.sizeDelta = new Vector2(buttonWidth, buttonHeight);
             }
             // Los tres botones terminan antes de la linea separadora. La linea
             // conserva exactamente su posicion y su punto de agarre originales.
-            var offset = parentRect.TransformVector(new Vector3(2f, 2f, 0f));
+            var offset = parentRect.TransformVector(new Vector3(left, 2f, 0f));
             add.position = _plotViewportCorners[0] + offset;
             move.position = _plotViewportCorners[0] + offset +
-                            parentRect.TransformVector(new Vector3(buttonWidth + 2f, 0f, 0f));
+                            parentRect.TransformVector(new Vector3(buttonWidth + gap, 0f, 0f));
             remove.position = _plotViewportCorners[0] + offset +
-                              parentRect.TransformVector(new Vector3((buttonWidth + 2f) * 2f, 0f, 0f));
+                              parentRect.TransformVector(new Vector3((buttonWidth + gap) * 2f, 0f, 0f));
         }
 
         private void RefreshPlotSizeText()
@@ -3781,7 +3794,8 @@ PriorVisibility.Clear();
             if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
             if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;
             var cursor = __instance?.CursorManager;
-            if (cursor != null && cursor.IsModeActive<CursorEditHospitalItem>())
+            if (cursor != null && cursor.IsModeActive<CursorEditHospitalItem>() &&
+                cursor.IsModeActive<CursorRoomItem>())
             {
                 cursor.PopMode<CursorEditHospitalItem>();
                 return false;

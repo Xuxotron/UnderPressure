@@ -61,7 +61,7 @@ namespace UnderPressure.Editor
         private ScrollRect _historyScroll;
         private Text _historyTitle;
         private Font _historyFont;
-        private static bool _dockVisible = true;
+        private static bool _dockVisible;
         private static float _dockWidth = ScenarioEditorDockLayout.PanelWidth;
         private static float _dockHeight = 320f;
         private static float _dockTop = ScenarioEditorDockLayout.BarHeight;

@@ -50,6 +50,9 @@ namespace UnderPressure.Editor
     {
         internal const float PanelWidth = 220f;
         internal const float BarHeight = 50f;
+        internal const float CompactTripleButtonWidth = 64f;
+        internal const float CompactTripleButtonHeight = 28f;
+        internal const float CompactTripleButtonGap = 5f;
         // La linea visible conserva 6 px. El separador de Historial dispone,
         // ademas, de otros 6 px invisibles de agarre solamente hacia arriba.
         private const float DividerHeight = 6f;
@@ -71,7 +74,7 @@ namespace UnderPressure.Editor
         // el panel de interfaz y sus controles viven en UP Objects Panel.
         private RectTransform _objectsDockHost;
         private LandscapeObjectsMenu _objectsHostOwner;
-        private bool _objectsOpen = true;
+        private bool _objectsOpen;
         private float _objectsPanelHeight = -1f;
         private Button _objectsToggle;
         private Button _historyToggle;
@@ -84,8 +87,8 @@ namespace UnderPressure.Editor
         private float _rightUpperHeight;
         private bool _leftHeightChosen;
         private bool _rightHeightChosen;
-        private bool _historyOpen = true;
-        private bool _terrainOpen = true;
+        private bool _historyOpen;
+        private bool _terrainOpen;
         private float _lastCanvasWidth = -1f;
         private float _lastCanvasHeight = -1f;
         private bool _resetPlotScroll;
@@ -191,7 +194,14 @@ namespace UnderPressure.Editor
             foreach (var name in fields)
             {
                 var button = AccessTools.Field(typeof(PauseMenu), name)?.GetValue(menu) as Button;
-                if (button != null) _active.ApplyButtonStyle(button);
+                if (button == null) continue;
+                _active.ApplyButtonStyle(button);
+                var border = button.GetComponent<Outline>() ??
+                    button.gameObject.AddComponent<Outline>();
+                border.enabled = true;
+                border.effectColor = Color.white;
+                border.effectDistance = new Vector2(2f, -2f);
+                border.useGraphicAlpha = true;
             }
         }
 
@@ -1116,7 +1126,6 @@ namespace UnderPressure.Editor
                 _objectsDockHost = host;
                 _objectsMenu = replacement;
                 _objectsHostOwner = replacement;
-                _objectsOpen = true;
                 menu = replacement;
                 // NO vincular la vida visual del panel a OnDisable/OnDestroy
                 // del componente nativo: otros menus cambian el modo activo.
