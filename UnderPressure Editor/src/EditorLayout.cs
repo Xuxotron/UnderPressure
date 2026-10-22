@@ -73,7 +73,6 @@ namespace UnderPressure.Editor
         // Un componente logico nuevo gestiona el catalogo, registrado en HUD;
         // el panel de interfaz y sus controles viven en UP Objects Panel.
         private RectTransform _objectsDockHost;
-        private LandscapeObjectsMenu _objectsHostOwner;
         private bool _objectsOpen;
         private float _objectsPanelHeight = -1f;
         private Button _objectsToggle;
@@ -624,7 +623,6 @@ namespace UnderPressure.Editor
             }
             SetSelected(_historyToggle, _historyOpen);
             SetSelected(_terrainToggle, _terrainOpen);
-            SetSelected(_objectsToggle, ObjectsPanelIsOpen());
         }
 
         // Fondos de Historial/Terreno y controles internos.
@@ -1086,66 +1084,34 @@ namespace UnderPressure.Editor
             rect.SetAsLastSibling();
         }
 
-        // PANEL OBJETOS: superficie PROPIA rectangular (UP Objects Panel).
-        // Se destruye el GameObject original de LandscapeObjectsMenu.
+        // PANEL OBJETOS: se conserva el LandscapeObjectsMenu nativo y solo se
+        // recoloca. Esta es la implementacion estable anterior al panel propio.
         // TAMANO: PanelWidth, altura = hueco entre Parcelas y boton Objetos.
         // POSICION: (0, BarHeight), anclado abajo a la izquierda.
         private void ApplyObjectsPanel(LandscapeObjectsMenu menu, bool force)
         {
-            if (_canvasRect == null) return;
-            // El panel propio no desaparece al cerrar/desactivar un menu nativo.
-            if (menu == null)
+            if (menu == null || _canvasRect == null)
             {
-                if (_objectsDockHost != null) return;
                 _objectsMenu = null;
                 _objectsPanelHeight = -1f;
                 return;
             }
+            var rect = menu.transform as RectTransform;
+            if (rect == null) return;
             var height = Mathf.Max(MinimumLowerHeight,
                 _canvasRect.rect.height - BarHeight * 2f - _leftUpperHeight);
-            var created = _objectsDockHost == null || !ReferenceEquals(_objectsHostOwner, menu);
-            if (created)
-            {
-                if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
-                var panel = new GameObject("UP Objects Panel", typeof(RectTransform),
-                    typeof(CanvasRenderer), typeof(Image));
-                panel.transform.SetParent(_canvas.transform, false);
-                var host = (RectTransform)panel.transform;
-                ApplyPanelStyle(panel);
-                // Objetos debe quedar por debajo de Parcelas (2850) y de su
-                // separador (3000), sin tapar ni el borde ni el agarre.
-                EnsureSortingCanvas(panel, 2800);
-                LandscapeObjectsMenu replacement;
-                // No basta con ocultar el prefab: hay que sustituir su entrada
-                // en HUD._createdMenus para que el juego cierre el panel NUEVO.
-                if (!ScenarioEditorObjectDock.ReplaceNativePanel(menu, host,
-                    _level != null ? _level.HUD : null, out replacement))
-                {
-                    Destroy(panel);
-                    _objectsDockHost = null;
-                    _objectsHostOwner = null;
-                    return;
-                }
-                _objectsDockHost = host;
-                _objectsMenu = replacement;
-                _objectsHostOwner = replacement;
-                menu = replacement;
-                // NO vincular la vida visual del panel a OnDisable/OnDestroy
-                // del componente nativo: otros menus cambian el modo activo.
-            }
-            if (!force && !created && ReferenceEquals(_objectsMenu, menu) &&
+            if (!force && ReferenceEquals(_objectsMenu, menu) &&
                 Mathf.Abs(_objectsPanelHeight - height) < .1f) return;
             _objectsMenu = menu;
             _objectsPanelHeight = height;
-            if (_objectsDockHost == null) return;
-            var rect = _objectsDockHost;
+            RememberRect(rect);
+            rect.SetParent(_canvas.transform, false);
             rect.anchorMin = rect.anchorMax = Vector2.zero;
             rect.pivot = Vector2.zero;
             rect.anchoredPosition = new Vector2(0f, BarHeight);
             rect.sizeDelta = new Vector2(PanelWidth, height);
-            // Este panel permanece independiente del modo nativo. Su estado
-            // solo cambia mediante ToggleObjectsPanel().
-            rect.gameObject.SetActive(_objectsOpen);
+            ApplyPanelStyle(menu.gameObject);
+            EnsureSortingCanvas(menu.gameObject, 2850);
             ScenarioEditorObjectDock.Configure(menu, rect, PanelWidth, height);
         }
 
@@ -1384,12 +1350,12 @@ namespace UnderPressure.Editor
             if (_root != null) _root.gameObject.SetActive(false);
             // Desregistrar la logica propia del HUD al salir del editor.
             // _closing ya es true y permite que DestroyMenu se ejecute.
-            if (_objectsMenu != null && _level != null && _level.HUD != null)
+            if (_objectsDockHost != null && _objectsMenu != null &&
+                _level != null && _level.HUD != null)
                 _level.HUD.DestroyMenu(_objectsMenu);
             // PANEL OBJETOS NUEVO: vive fuera de _root; destruirlo al salir.
             if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
             _objectsDockHost = null;
-            _objectsHostOwner = null;
             foreach (var pair in _originalRects)
             {
                 var rect = pair.Key;
@@ -1943,23 +1909,20 @@ namespace UnderPressure.Editor
             grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
             grid.childAlignment = TextAnchor.UpperLeft;
-            grid.padding = new RectOffset(2, 0, 6, 8);
-            grid.spacing = new Vector2(3f, 6f);
+            grid.padding = new RectOffset(5, 9, 6, 8);
+            grid.spacing = new Vector2(6f, 6f);
             grid.cellSize = new Vector2(97f, 88f);
 
             var fitter = content.GetComponent<ContentSizeFitter>() ??
                 content.gameObject.AddComponent<ContentSizeFitter>();
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
-            fitter.enabled = false;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.enabled = true;
             content.anchorMin = new Vector2(0f, 1f);
             content.anchorMax = new Vector2(1f, 1f);
             content.pivot = new Vector2(.5f, 1f);
             content.anchoredPosition = Vector2.zero;
             content.sizeDelta = Vector2.zero;
-            var verticalSizer = content.GetComponent<ScenarioEditorCatalogVerticalSizer>() ??
-                content.gameObject.AddComponent<ScenarioEditorCatalogVerticalSizer>();
-            verticalSizer.Configure(content, grid);
 
             scroll.horizontal = false;
             scroll.vertical = true;
@@ -1970,14 +1933,14 @@ namespace UnderPressure.Editor
             scrollRect.anchorMin = Vector2.zero;
             scrollRect.anchorMax = Vector2.one;
             scrollRect.pivot = new Vector2(.5f, .5f);
-            scrollRect.offsetMin = new Vector2(1f, 6f);
-            scrollRect.offsetMax = new Vector2(-1f, -43f);
+            scrollRect.offsetMin = new Vector2(6f, 6f);
+            scrollRect.offsetMax = new Vector2(-6f, -43f);
             if (scroll.viewport != null)
             {
                 scroll.viewport.anchorMin = Vector2.zero;
                 scroll.viewport.anchorMax = Vector2.one;
                 scroll.viewport.offsetMin = Vector2.zero;
-                scroll.viewport.offsetMax = new Vector2(-10f, 0f);
+                scroll.viewport.offsetMax = new Vector2(-12f, 0f);
                 var viewportImage = scroll.viewport.GetComponent<Image>() ??
                     scroll.viewport.gameObject.AddComponent<Image>();
                 if (viewportImage.sprite == null)
@@ -2015,10 +1978,47 @@ namespace UnderPressure.Editor
         private static void EnsureVerticalScrollbar(RectTransform host, ScrollRect scroll)
         {
             if (host == null || scroll == null) return;
-            var obsolete = host.Find("UP_Catalog_VerticalScrollbar");
-            if (obsolete != null) UnityEngine.Object.Destroy(obsolete.gameObject);
-            ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(host, scroll,
-                "UP Objects Native Vertical Scrollbar", 43f, 6f);
+            var existing = host.Find("UP_Catalog_VerticalScrollbar") as RectTransform;
+            if (existing == null)
+            {
+                var track = new GameObject("UP_Catalog_VerticalScrollbar", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
+                track.transform.SetParent(host, false);
+                existing = (RectTransform)track.transform;
+                track.GetComponent<Image>().color = new Color(.035f, .20f, .32f, .95f);
+                var area = new GameObject("Sliding Area", typeof(RectTransform));
+                area.transform.SetParent(track.transform, false);
+                var areaRect = (RectTransform)area.transform;
+                areaRect.anchorMin = Vector2.zero;
+                areaRect.anchorMax = Vector2.one;
+                areaRect.offsetMin = new Vector2(2f, 3f);
+                areaRect.offsetMax = new Vector2(-2f, -3f);
+                var handle = new GameObject("Handle", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                handle.transform.SetParent(area.transform, false);
+                var handleRect = (RectTransform)handle.transform;
+                handleRect.anchorMin = Vector2.zero;
+                handleRect.anchorMax = Vector2.one;
+                handleRect.offsetMin = Vector2.zero;
+                handleRect.offsetMax = Vector2.zero;
+                var handleImage = handle.GetComponent<Image>();
+                handleImage.color = new Color(.34f, .78f, .96f, 1f);
+                var bar = track.GetComponent<Scrollbar>();
+                bar.direction = Scrollbar.Direction.BottomToTop;
+                bar.targetGraphic = handleImage;
+                bar.handleRect = handleRect;
+            }
+            existing.anchorMin = new Vector2(1f, 0f);
+            existing.anchorMax = new Vector2(1f, 1f);
+            existing.pivot = new Vector2(1f, .5f);
+            existing.anchoredPosition = Vector2.zero;
+            existing.offsetMin = new Vector2(-12f, 6f);
+            existing.offsetMax = new Vector2(0f, -43f);
+            existing.gameObject.SetActive(true);
+            existing.SetAsLastSibling();
+            scroll.verticalScrollbar = existing.GetComponent<Scrollbar>();
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarSpacing = 2f;
         }
     }
 

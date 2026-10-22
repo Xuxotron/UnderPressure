@@ -2178,18 +2178,7 @@ namespace UnderPressure.Editor
             if (_nativeObjectsButton != null)
             {
                 _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
-                    -330f, () =>
-                    {
-                        if (!ScenarioEditorDockLayout.ToggleObjectsPanel())
-                        {
-                            ActivateNativeTool(_nativeObjectsButton);
-                            return;
-                        }
-                        if (ScenarioEditorDockLayout.ObjectsPanelIsOpen())
-                            ActivateNativeTool(_nativeObjectsButton);
-                        else
-                            DeactivateNativeTools();
-                    });
+                    -330f, () => ActivateNativeTool(_nativeObjectsButton));
                 _objectsButton.gameObject.name = "UP Objects Dock Toggle";
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
@@ -2844,8 +2833,8 @@ rect.pivot = new Vector2(1f, 1f);
                 _movePlotButton.interactable = _nativeMoveButton.interactable;
             var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen;
             var cursor = _level.CursorManager;
-            SetToolButtonSelected(_objectsButton,
-                ScenarioEditorDockLayout.ObjectsPanelIsOpen());
+            SetToolButtonSelected(_objectsButton, !customToolOpen && cursor != null &&
+                cursor.IsModeActive<CursorEditHospitalItem>());
             SetToolButtonSelected(_buildButton, !customToolOpen && cursor != null &&
                 cursor.IsModeActive<CursorEditHospitalBuild>());
             SetToolButtonSelected(_movePlotButton, !customToolOpen && cursor != null &&
