@@ -269,7 +269,19 @@ namespace UnderPressure.Editor
                 {
                     button.image.enabled = true;
                     button.image.raycastTarget = true;
-                    button.image.color = new Color(0f, 0f, 0f, .001f);
+                    if (button.interactable)
+                    {
+                        button.image.color = new Color(0f, 0f, 0f, .001f);
+                    }
+                    else
+                    {
+                        var selected = _active._style.PanelColor;
+                        selected.r *= .82f;
+                        selected.g *= .82f;
+                        selected.b *= .82f;
+                        selected.a = 1f;
+                        button.image.color = selected;
+                    }
                 }
                 // RefreshHistoryUI distingue las acciones deshechas en gris.
                 // No sobrescribir aquí ese estado visual.

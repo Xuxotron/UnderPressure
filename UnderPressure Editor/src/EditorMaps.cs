@@ -52,6 +52,22 @@ namespace UnderPressure.Editor
             return ReferenceEquals(_namedMapLevel, level) ? _namedMap ?? "" : "";
         }
 
+        // Los nombres automáticos antiguos se guardaban ya traducidos dentro
+        // del mapa. Reconocerlos evita que "Parcela" quede fijado al cambiar
+        // el juego a inglés, sin modificar los nombres personalizados.
+        private static string LocalisedPlotName(string storedName, int index)
+        {
+            var generated = EditorLocalization.Format("editor.plot.default_name", index + 1);
+            if (string.IsNullOrWhiteSpace(storedName)) return generated;
+            var trimmed = storedName.Trim();
+            var number = (index + 1).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (string.Equals(trimmed, "Plot " + number, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(trimmed, "Parcela " + number, StringComparison.OrdinalIgnoreCase))
+                return generated;
+            return storedName;
+        }
+
         internal static string CurrentMapFolder(Level level)
         {
             var name = NameForSave(level);
@@ -649,9 +665,7 @@ namespace UnderPressure.Editor
                 _currentCustomPlots = prepared;
                 PlotNames.Clear();
                 foreach (var entry in map.Plots)
-                    PlotNames.Add(string.IsNullOrWhiteSpace(entry.Data.name)
-                        ? EditorLocalization.Format("editor.plot.default_name", entry.Data.index + 1)
-                        : entry.Data.name);
+                    PlotNames.Add(LocalisedPlotName(entry.Data.name, entry.Data.index));
                 RefreshPlotButtons(level);
                 // La seleccion debe apuntar a la NUEVA instancia, nunca a una
                 // de las parcelas destruidas por ReplacePlots.

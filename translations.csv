@@ -160,6 +160,7 @@ scenario_editor.invalid_map,Invalid or incomplete map,Mapa incorrecto o incomple
 editor.objects.title,Objects,Objetos,,,,
 editor.objects.search,Search:,Buscar:,,,,
 editor.objects.show_all,Show all,Ver todo,,,,
+editor.objects.dropdown_arrow,▶,▶,,,,
 editor.layout.title,Map editor,Edición de mapa,,,,
 editor.history.button,History,Historial,,,,
 editor.history.title,Object history,Historial de objetos,,,,

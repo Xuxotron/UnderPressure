@@ -797,10 +797,11 @@ namespace UnderPressure.Editor
             var text = button.GetComponentInChildren<TMP_Text>(true);
             if (text != null)
             {
-                text.text = EditorLocalization.Get("editor.objects.show_all");
+                // Este control será la entrada de un menú desplegable.
+                text.text = EditorLocalization.Get("editor.objects.dropdown_arrow");
                 text.enableAutoSizing = true;
-                text.fontSizeMin = 10f;
-                text.fontSizeMax = 16f;
+                text.fontSizeMin = 14f;
+                text.fontSizeMax = 18f;
             }
             var rect = button.transform as RectTransform;
             if (rect != null)
