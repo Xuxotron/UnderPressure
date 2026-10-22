@@ -3717,9 +3717,11 @@ PriorVisibility.Clear();
             AccessTools.Field(typeof(PauseMenu), "_quickLoadButton");
         private static readonly FieldInfo RestartField =
             AccessTools.Field(typeof(PauseMenu), "_restartLevelButton");
+        private static readonly FieldInfo QuitToDesktopField =
+            AccessTools.Field(typeof(PauseMenu), "_quitToDesktopButton");
 
         [HarmonyPriority(Priority.Last)]
-        private static void Postfix(PauseMenu __instance)
+        private static void Postfix(PauseMenu __instance, App __0)
         {
             if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
                 __instance == null) return;
@@ -3730,6 +3732,14 @@ PriorVisibility.Clear();
                 "editor.map.open", ScenarioEditorStorageMenu.ShowLoadFromPause);
             Configure(RestartField?.GetValue(__instance) as Button,
                 "editor.map.empty", ScenarioEditorStorageMenu.ShowEmptyMapFromPause);
+            var quitToDesktop = QuitToDesktopField?.GetValue(__instance) as Button;
+            if (quitToDesktop != null && __0 != null)
+            {
+                quitToDesktop.onClick.RemoveAllListeners();
+                quitToDesktop.onClick.AddListener(__0.QuitGameDontSave);
+            }
+            if (__instance.GetComponent<ScenarioEditorPauseUiBlocker>() == null)
+                __instance.gameObject.AddComponent<ScenarioEditorPauseUiBlocker>();
         }
 
         private static void Configure(Button button, string key, Action action)
@@ -3750,6 +3760,42 @@ PriorVisibility.Clear();
             var ordinary = button.GetComponentInChildren<Text>(true);
             if (ordinary != null) ordinary.text = EditorLocalization.Get(key);
         }
+    }
+
+    // Mientras el menú de Escape está visible, ninguna UI situada detrás debe
+    // responder. Se conservan y restauran los estados originales al cerrarlo.
+    internal sealed class ScenarioEditorPauseUiBlocker : MonoBehaviour
+    {
+        private readonly Dictionary<Selectable, bool> _states =
+            new Dictionary<Selectable, bool>();
+
+        private void OnEnable()
+        {
+            _states.Clear();
+            foreach (var selectable in Resources.FindObjectsOfTypeAll<Selectable>())
+            {
+                if (selectable == null || !selectable.gameObject.scene.IsValid() ||
+                    !selectable.gameObject.activeInHierarchy ||
+                    selectable.transform.IsChildOf(transform)) continue;
+                _states[selectable] = selectable.interactable;
+                selectable.interactable = false;
+            }
+        }
+
+        private void LateUpdate()
+        {
+            foreach (var selectable in _states.Keys.ToArray())
+                if (selectable != null) selectable.interactable = false;
+        }
+
+        private void OnDisable()
+        {
+            foreach (var pair in _states)
+                if (pair.Key != null) pair.Key.interactable = pair.Value;
+            _states.Clear();
+        }
+
+        private void OnDestroy() => OnDisable();
     }
 
     // El primer Escape cierra el cuadro propio del editor. El siguiente vuelve

@@ -1792,6 +1792,8 @@ namespace UnderPressure.Editor
             content.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             _scroll.content = _content;
             _scroll.viewport = viewportRect;
+            ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(root, _scroll,
+                "UP Terrain Native Vertical Scrollbar", 264f, 8f, true);
             foreach (var slot in ScenarioEditorTerrainPainter.LayerSlots)
             {
                 if (slot.Texture == null) continue;

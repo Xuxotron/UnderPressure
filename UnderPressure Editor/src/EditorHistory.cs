@@ -844,6 +844,8 @@ namespace UnderPressure.Editor
             _historyContent.sizeDelta = Vector2.zero;
             _historyScroll.viewport = viewport;
             _historyScroll.content = _historyContent;
+            ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(_historyPanel,
+                _historyScroll, "UP History Native Vertical Scrollbar", 37f, 8f, true);
             ApplyDockRect();
             _historyUi.SetActive(_dockVisible);
         }

@@ -203,6 +203,16 @@ namespace UnderPressure.Editor
                 border.effectDistance = new Vector2(2f, -2f);
                 border.useGraphicAlpha = true;
             }
+
+            // El prefab agrupa los botones en una disposición vertical. Se conserva
+            // su geometría nativa y sólo se abre una separación mínima entre filas.
+            foreach (var layout in fields
+                .Select(name => AccessTools.Field(typeof(PauseMenu), name)?.GetValue(menu) as Button)
+                .Where(button => button != null)
+                .Select(button => button.GetComponentInParent<VerticalLayoutGroup>())
+                .Where(layout => layout != null)
+                .Distinct())
+                layout.spacing = Mathf.Max(2f, layout.spacing);
         }
 
         internal static void StyleUtilityToggle(Button button, bool selected)
@@ -307,8 +317,11 @@ namespace UnderPressure.Editor
             const float padding = 6f;
             const float spacing = 6f;
             var scrollRect = scroll.transform as RectTransform;
-            var width = scrollRect != null && scrollRect.rect.width > 40f
-                ? scrollRect.rect.width : PanelWidth - 16f;
+            var viewportRect = scroll.viewport;
+            var width = viewportRect != null && viewportRect.rect.width > 40f
+                ? viewportRect.rect.width
+                : scrollRect != null && scrollRect.rect.width > 40f
+                    ? scrollRect.rect.width - 12f : PanelWidth - 28f;
             var cell = Mathf.Max(24f, (width - padding * 2f - spacing) / 2f);
 
             var index = 0;
@@ -764,7 +777,7 @@ namespace UnderPressure.Editor
         // BARRAS VERTICALES: clonar el Scrollbar vertical real de Ajustes.
         // No se reutiliza ni se gira ningun Slider de valores.
         internal static Scrollbar InstallNativeVerticalScrollbar(RectTransform host,
-            ScrollRect scroll, string name, float top, float bottom)
+            ScrollRect scroll, string name, float top, float bottom, bool left = false)
         {
             if (_active == null || host == null || scroll == null) return null;
             var existing = host.Find(name)?.GetComponent<Scrollbar>();
@@ -802,11 +815,11 @@ namespace UnderPressure.Editor
                 oldScrollbar.gameObject.SetActive(false);
 
             var rect = existing.transform as RectTransform;
-            rect.anchorMin = new Vector2(1f, 0f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, .5f);
-            rect.offsetMin = new Vector2(-14f, bottom);
-            rect.offsetMax = new Vector2(-2f, -top);
+            rect.anchorMin = new Vector2(left ? 0f : 1f, 0f);
+            rect.anchorMax = new Vector2(left ? 0f : 1f, 1f);
+            rect.pivot = new Vector2(left ? 0f : 1f, .5f);
+            rect.offsetMin = new Vector2(left ? 2f : -14f, bottom);
+            rect.offsetMax = new Vector2(left ? 14f : -2f, -top);
             rect.localScale = Vector3.one;
             existing.direction = Scrollbar.Direction.BottomToTop;
             existing.interactable = true;
@@ -833,6 +846,17 @@ namespace UnderPressure.Editor
             scroll.verticalScrollbar = existing;
             scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             scroll.verticalScrollbarSpacing = 0f;
+            if (scroll.viewport != null)
+            {
+                var minimum = scroll.viewport.offsetMin;
+                var maximum = scroll.viewport.offsetMax;
+                if (left)
+                    minimum.x = 12f;
+                else
+                    maximum.x = -12f;
+                scroll.viewport.offsetMin = minimum;
+                scroll.viewport.offsetMax = maximum;
+            }
             return existing;
         }
 
@@ -1909,7 +1933,7 @@ namespace UnderPressure.Editor
             grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
             grid.childAlignment = TextAnchor.UpperLeft;
-            grid.padding = new RectOffset(8, 6, 6, 8);
+            grid.padding = new RectOffset(0, 0, 6, 8);
             grid.spacing = new Vector2(6f, 6f);
             grid.cellSize = new Vector2(97f, 88f);
 
@@ -1933,7 +1957,7 @@ namespace UnderPressure.Editor
             scrollRect.anchorMin = Vector2.zero;
             scrollRect.anchorMax = Vector2.one;
             scrollRect.pivot = new Vector2(.5f, .5f);
-            scrollRect.offsetMin = new Vector2(6f, 6f);
+            scrollRect.offsetMin = new Vector2(0f, 6f);
             scrollRect.offsetMax = new Vector2(-6f, -43f);
             if (scroll.viewport != null)
             {
