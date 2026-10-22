@@ -26,7 +26,6 @@ namespace UnderPressure.Editor
     internal static class ScenarioEditorStorage
     {
         private static ScenarioPlotRuntime.Collection _currentCustomPlots;
-        private static readonly List<string> PlotNames = new List<string>();
         // Nombre de la sesion actual: solo se actualiza despues de un guardado
         // o de una carga completos, nunca al abrir un cuadro de dialogo.
         private static Level _namedMapLevel;
@@ -50,22 +49,6 @@ namespace UnderPressure.Editor
         internal static string NameForSave(Level level)
         {
             return ReferenceEquals(_namedMapLevel, level) ? _namedMap ?? "" : "";
-        }
-
-        // Los nombres automáticos antiguos se guardaban ya traducidos dentro
-        // del mapa. Reconocerlos evita que "Parcela" quede fijado al cambiar
-        // el juego a inglés, sin modificar los nombres personalizados.
-        private static string LocalisedPlotName(string storedName, int index)
-        {
-            var generated = EditorLocalization.Format("editor.plot.default_name", index + 1);
-            if (string.IsNullOrWhiteSpace(storedName)) return generated;
-            var trimmed = storedName.Trim();
-            var number = (index + 1).ToString(
-                System.Globalization.CultureInfo.InvariantCulture);
-            if (string.Equals(trimmed, "Plot " + number, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(trimmed, "Parcela " + number, StringComparison.OrdinalIgnoreCase))
-                return generated;
-            return storedName;
         }
 
         internal static string CurrentMapFolder(Level level)
@@ -354,8 +337,6 @@ namespace UnderPressure.Editor
                 var plot = new ScenarioMapFormat.Plot
                 {
                     index = i,
-                    name = i < PlotNames.Count && !string.IsNullOrEmpty(PlotNames[i])
-                        ? PlotNames[i] : EditorLocalization.Format("editor.plot.default_name", i + 1),
                     nameTerm = definition.NameLocalised.Term,
                     cost = definition.Cost,
                     color = definition.Color,
@@ -390,7 +371,7 @@ namespace UnderPressure.Editor
                     throw new InvalidOperationException("PNG de parcela vacio: " + i);
                 refs.Add(new ScenarioMapFormat.PlotReference
                 {
-                    index = i, name = plot.name, dataFile = jsonName, imageFile = pngName
+                    index = i, dataFile = jsonName, imageFile = pngName
                 });
                 saved.Add(Tuple.Create(jsonName, plot, pngName, png));
             }
@@ -663,9 +644,6 @@ namespace UnderPressure.Editor
                 }
                 var previous = _currentCustomPlots;
                 _currentCustomPlots = prepared;
-                PlotNames.Clear();
-                foreach (var entry in map.Plots)
-                    PlotNames.Add(LocalisedPlotName(entry.Data.name, entry.Data.index));
                 RefreshPlotButtons(level);
                 // La seleccion debe apuntar a la NUEVA instancia, nunca a una
                 // de las parcelas destruidas por ReplacePlots.
@@ -893,7 +871,6 @@ namespace UnderPressure.Editor
             GameObject buttonObject = null;
             ScenarioPlotRuntime.Collection collection = null;
             bool createdCollection = false;
-            var previousNames = PlotNames.Count;
             try
             {
                 var pixels = new Color32[width * height];
@@ -953,12 +930,6 @@ namespace UnderPressure.Editor
                 if (isTileViewVisible is bool && (bool)isTileViewVisible &&
                     previews.TryGetValue(added, out var tilePreview) && tilePreview != null)
                     tilePreview.SetActive(added.IsVisible());
-                while (PlotNames.Count < originalPlots.Length)
-                    PlotNames.Add(EditorLocalization.Format(
-                        "editor.plot.default_name", PlotNames.Count + 1));
-                PlotNames.Add(EditorLocalization.Format(
-                    "editor.plot.default_name", originalPlots.Length + 1));
-
                 // IMPORTANTE: NO destruir/recrear los controles anteriores.
                 buttonObject = UnityEngine.Object.Instantiate(prefab, root, false);
                 var control = buttonObject.GetComponent<PlotSelectionItem>();
@@ -967,7 +938,9 @@ namespace UnderPressure.Editor
                 control.Setup(added, false, level.HospitalEditEvents, colors);
                 var label = AccessTools.Field(typeof(PlotSelectionItem),
                     "_text")?.GetValue(control) as TMP_Text;
-                if (label != null) label.text = PlotNames[originalPlots.Length];
+                if (label != null)
+                    label.text = EditorLocalization.Format(
+                        "editor.plot.default_name", originalPlots.Length + 1);
                 ScenarioEditorDockLayout.NotifyPlotListChanged();
 
                 if (_currentCustomPlots == null)
@@ -1011,7 +984,6 @@ namespace UnderPressure.Editor
                     if (createdCollection && collection.Definitions.Count == 0)
                         _currentCustomPlots = null;
                 }
-                while (PlotNames.Count > previousNames) PlotNames.RemoveAt(PlotNames.Count - 1);
                 UnityEngine.Object.Destroy(newTexture);
                 throw;
             }
@@ -1087,7 +1059,6 @@ namespace UnderPressure.Editor
             if (selected.HospitalMap != null) world.DestroyHospitalMap(selected.HospitalMap);
             selected.Destroy();
             plots.RemoveAt(index);
-            if (index < PlotNames.Count) PlotNames.RemoveAt(index);
             ScenarioEditorDockLayout.NotifyPlotListChanged();
             foreach (var remaining in plots)
             {
@@ -1136,15 +1107,33 @@ namespace UnderPressure.Editor
                 var obj = UnityEngine.Object.Instantiate(prefab, root, false);
                 var control = obj.GetComponent<PlotSelectionItem>();
                 control.Setup(level.WorldState.HospitalPlots[i], i == selectedIndex, level.HospitalEditEvents, colors);
-                if (i < PlotNames.Count)
-                {
-                    var label = AccessTools.Field(typeof(PlotSelectionItem), "_text")?.GetValue(control) as TMP_Text;
-                    if (label != null) label.text = PlotNames[i];
-                }
+                var label = AccessTools.Field(typeof(PlotSelectionItem),
+                    "_text")?.GetValue(control) as TMP_Text;
+                if (label != null)
+                    label.text = EditorLocalization.Format("editor.plot.default_name", i + 1);
             }
             if (level.WorldState.HospitalPlots.Count > 0)
                 level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(
                     level.WorldState.HospitalPlots[Mathf.Clamp(selectedIndex, 0, level.WorldState.HospitalPlots.Count - 1)]);
+        }
+
+        // El nombre visible se deriva siempre de la posición de la parcela y
+        // del idioma activo; nunca forma parte de los datos guardados del mapa.
+        internal static void RefreshLocalizedPlotLabels()
+        {
+            var menu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            if (menu == null) return;
+            var root = AccessTools.Field(typeof(EditHospitalMenu),
+                "_plotSelectionRoot")?.GetValue(menu) as Transform;
+            if (root == null) return;
+            var controls = root.GetComponentsInChildren<PlotSelectionItem>(true);
+            for (var i = 0; i < controls.Length; i++)
+            {
+                var label = AccessTools.Field(typeof(PlotSelectionItem),
+                    "_text")?.GetValue(controls[i]) as TMP_Text;
+                if (label != null)
+                    label.text = EditorLocalization.Format("editor.plot.default_name", i + 1);
+            }
         }
 
         private static void StopActiveEditorTools(Level level)
@@ -1162,7 +1151,6 @@ namespace UnderPressure.Editor
             // Ejecutar una vez cerrada la escena del editor.
             _currentCustomPlots?.DestroyAssets();
             _currentCustomPlots = null;
-            PlotNames.Clear();
             _namedMapLevel = null;
             _namedMap = null;
             _architectLevel = null;

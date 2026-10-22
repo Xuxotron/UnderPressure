@@ -154,6 +154,7 @@ namespace UnderPressure.Editor
                 if (replacements.TryGetValue(text.text, out var value) &&
                     !ambiguous.Contains(text.text)) text.text = value;
             }
+            ScenarioEditorStorage.RefreshLocalizedPlotLabels();
         }
 
         private static bool BelongsToEditor(Transform source)

@@ -56,7 +56,6 @@ namespace UnderPressure.Editor
         internal sealed class PlotReference
         {
             public int index;
-            public string name = "";
             public string dataFile = "";
             public string imageFile = "";
         }
@@ -65,7 +64,6 @@ namespace UnderPressure.Editor
         internal sealed class Plot
         {
             public int index;
-            public string name = "";
             public string nameTerm = "";
             public int cost;
             public Color color = Color.white;
