@@ -885,7 +885,9 @@ namespace UnderPressure.Editor
                 var image = go.GetComponent<Image>();
                 image.color = i == _position
                     ? new Color(.15f, .40f, .57f, 1f)
-                    : new Color(.12f, .16f, .21f, 1f);
+                    : i > _position
+                        ? new Color(.46f, .52f, .56f, 1f)
+                        : new Color(.12f, .16f, .21f, 1f);
                 var button = go.GetComponent<Button>();
                 button.targetGraphic = image;
                 button.interactable = i != _position;
@@ -951,9 +953,17 @@ namespace UnderPressure.Editor
                 LandscapeRoomItem item;
                 if (currentNative.TryGetValue(record.Id, out item))
                 {
+                    var oldPlot = item.FloorPlan?.HospitalMap?.Plot;
+                    var changed = item.FloorPlan != floor || item.Layer != record.Layer ||
+                        (item.WorldPosition - record.Position).sqrMagnitude > PositionEpsilonSquared ||
+                        Mathf.Abs(Mathf.DeltaAngle(item.Rotation, record.Rotation)) > RotationEpsilon;
+                    if (changed && oldPlot?.Definition != null)
+                    {
+                        oldPlot.Definition.RemoveItem(item);
+                        SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(oldPlot.Definition);
+                    }
                     if (item.FloorPlan != floor)
                     {
-                        var oldPlot = item.FloorPlan?.HospitalMap?.Plot;
                         if (oldPlot != null) touched.Add(oldPlot);
                         item.FloorPlan?.RemoveItem(item);
                         item.FloorPlan = floor;
@@ -976,6 +986,18 @@ namespace UnderPressure.Editor
                         touched.Add(plot);
                         ScenarioEditorScene.MarkPlotLayerModified(plot, record.Layer);
                     }
+                    if (changed && plot.Definition != null &&
+                        !plot.Definition.Contains(item, floor, record.Layer, default(Vector3)))
+                    {
+                        plot.Definition.AddItem(new HospitalPlotItem
+                        {
+                            Definition = SharedInstanceUtils.GetSharedInstance<RoomItemDefinition>(
+                                record.Definition),
+                            Position = item.LocalPosition,
+                            Rotation = item.Rotation
+                        }, record.Layer);
+                        SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(plot.Definition);
+                    }
                 }
                 else
                 {
@@ -984,6 +1006,18 @@ namespace UnderPressure.Editor
                     item.Rotation = record.Rotation;
                     floor.AddItem(item);
                     _nativeIds[item] = record.Id;
+                    if (plot.Definition != null &&
+                        !plot.Definition.Contains(item, floor, record.Layer, default(Vector3)))
+                    {
+                        plot.Definition.AddItem(new HospitalPlotItem
+                        {
+                            Definition = SharedInstanceUtils.GetSharedInstance<RoomItemDefinition>(
+                                record.Definition),
+                            Position = item.LocalPosition,
+                            Rotation = item.Rotation
+                        }, record.Layer);
+                        SharedInstanceUtils.MarkAsDirty<HospitalPlotDefinition>(plot.Definition);
+                    }
                     touched.Add(plot);
                     ScenarioEditorScene.MarkPlotLayerModified(plot, record.Layer);
                 }

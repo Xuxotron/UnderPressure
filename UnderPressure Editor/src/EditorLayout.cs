@@ -202,6 +202,16 @@ namespace UnderPressure.Editor
                 border.effectColor = new Color(1f, 1f, 1f, .98f);
                 border.effectDistance = new Vector2(2f, -2f);
                 border.useGraphicAlpha = true;
+                var rect = button.transform as RectTransform;
+                if (rect != null &&
+                    button.GetComponentInParent<VerticalLayoutGroup>() == null &&
+                    button.GetComponentInParent<DynamicLayoutGroup>() == null &&
+                    button.GetComponent<ScenarioEditorPauseSpacing>() == null)
+                {
+                    button.gameObject.AddComponent<ScenarioEditorPauseSpacing>();
+                    rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                        Mathf.Max(1f, rect.rect.height - 2f));
+                }
             }
 
             // El prefab agrupa los botones en una disposición vertical. Se conserva
@@ -213,6 +223,13 @@ namespace UnderPressure.Editor
                 .Where(layout => layout != null)
                 .Distinct())
                 layout.spacing = Mathf.Max(2f, layout.spacing);
+            foreach (var layout in fields
+                .Select(name => AccessTools.Field(typeof(PauseMenu), name)?.GetValue(menu) as Button)
+                .Where(button => button != null)
+                .Select(button => button.GetComponentInParent<DynamicLayoutGroup>())
+                .Where(layout => layout != null)
+                .Distinct())
+                layout.minimumSpacing = Mathf.Max(2f, layout.minimumSpacing);
         }
 
         internal static void StyleUtilityToggle(Button button, bool selected)
@@ -307,6 +324,8 @@ namespace UnderPressure.Editor
             if (content == null) return;
             var scroll = content.GetComponentInParent<ScrollRect>();
             if (scroll == null) return;
+            InstallNativeVerticalScrollbar(painter.transform as RectTransform, scroll,
+                "UP Terrain Native Vertical Scrollbar", 264f, 8f, true);
 
             // El contenido lo distribuimos manualmente: sin bucles por frame.
             var vertical = content.GetComponent<VerticalLayoutGroup>();
@@ -844,7 +863,7 @@ namespace UnderPressure.Editor
             existing.gameObject.SetActive(true);
             existing.transform.SetAsLastSibling();
             scroll.verticalScrollbar = existing;
-            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
             scroll.verticalScrollbarSpacing = 0f;
             if (scroll.viewport != null)
             {
@@ -859,6 +878,8 @@ namespace UnderPressure.Editor
             }
             return existing;
         }
+
+        private sealed class ScenarioEditorPauseSpacing : MonoBehaviour { }
 
         private void IgnoreParentLayout(RectTransform rect)
         {
