@@ -138,10 +138,21 @@ namespace UnderPressure.Editor
                     ? canvas.worldCamera : null, out local)) return false;
             var bounds = dock._canvasRect.rect;
             if (!bounds.Contains(local)) return false;
+            if (ScreenPointInside(_active._storage?.TileSelectionRoot,
+                Input.mousePosition, canvas)) return true;
             return local.x < bounds.xMin + PanelWidth ||
                    local.x > bounds.xMax - PanelWidth ||
                    local.y > bounds.yMax - BarHeight ||
                    local.y < bounds.yMin + BarHeight;
+        }
+
+        private static bool ScreenPointInside(RectTransform rect, Vector2 screenPoint,
+            Canvas canvas)
+        {
+            if (rect == null || !rect.gameObject.activeInHierarchy) return false;
+            var camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? canvas.worldCamera : null;
+            return RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint, camera);
         }
 
         // Referencia cromatica de Build.
@@ -233,28 +244,34 @@ namespace UnderPressure.Editor
             var lower = AccessTools.Field(kind, "_lowerButton")?.GetValue(painter) as Button;
             var flatten = AccessTools.Field(kind, "_flattenButton")?.GetValue(painter) as Button;
             var mode = ScenarioEditorTerrainPainter.CurrentSculptMode;
-            var wireText = AccessTools.Field(kind, "_wireText")?.GetValue(painter) as Text;
-            var wire = wireText == null ? null :
-                wireText.GetComponentInParent<Button>();
-            _active.ApplyButtonStyle(brush,
-                ScenarioEditorTerrainPainter.BrushEnabled &&
-                mode == ScenarioEditorTerrainPainter.SculptMode.Off
+            var wire = AccessTools.Field(kind, "_wireButton")?.GetValue(painter) as Button;
+            StyleCompactButtonGroup(
+                new[] { raise, lower, flatten, brush, wire },
+                new[]
+                {
+                    mode == ScenarioEditorTerrainPainter.SculptMode.Raise,
+                    mode == ScenarioEditorTerrainPainter.SculptMode.Lower,
+                    mode == ScenarioEditorTerrainPainter.SculptMode.Flatten,
+                    ScenarioEditorTerrainPainter.BrushEnabled &&
+                        mode == ScenarioEditorTerrainPainter.SculptMode.Off,
+                    ScenarioEditorTerrainPainter.WireframeEnabled
+                });
+        }
+
+        // Todos los botones compactos de un grupo comparten exactamente el
+        // mismo sprite, color de estado, tipografia y centrado.
+        private static void StyleCompactButtonGroup(Button[] buttons, bool[] selected)
+        {
+            if (_active == null || buttons == null || selected == null) return;
+            var count = Mathf.Min(buttons.Length, selected.Length);
+            for (var index = 0; index < count; ++index)
+            {
+                var button = buttons[index];
+                if (button == null) continue;
+                _active.ApplyButtonStyle(button, selected[index]
                     ? _active._style.SelectedColor : _active._style.ButtonColor);
-            _active.ApplyButtonStyle(raise,
-                mode == ScenarioEditorTerrainPainter.SculptMode.Raise
-                    ? _active._style.SelectedColor : _active._style.ButtonColor);
-            _active.ApplyButtonStyle(lower,
-                mode == ScenarioEditorTerrainPainter.SculptMode.Lower
-                    ? _active._style.SelectedColor : _active._style.ButtonColor);
-            _active.ApplyButtonStyle(flatten,
-                mode == ScenarioEditorTerrainPainter.SculptMode.Flatten
-                    ? _active._style.SelectedColor : _active._style.ButtonColor);
-            StyleCompactButtonText(raise);
-            StyleCompactButtonText(lower);
-            StyleCompactButtonText(flatten);
-            _active.ApplyButtonStyle(wire,
-                ScenarioEditorTerrainPainter.WireframeEnabled
-                    ? _active._style.SelectedColor : _active._style.ButtonColor);
+                StyleCompactButtonText(button);
+            }
         }
 
         // TEXTURAS DE TERRENO: dos columnas de miniaturas CUADRADAS.
@@ -994,9 +1011,15 @@ namespace UnderPressure.Editor
             menu.SetParent(_root, false);
             menu.anchorMin = menu.anchorMax = new Vector2(0f, 1f);
             menu.pivot = new Vector2(0f, 1f);
-            menu.anchoredPosition = new Vector2(PanelWidth, -BarHeight);
+            // El boton superior mide 40 px: el submenu comienza exactamente
+            // bajo el, sin el hueco anterior de 10 px.
+            menu.anchoredPosition = new Vector2(PanelWidth, -40f);
             menu.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
                 buttonRect.rect.width);
+            var blocker = menu.GetComponent<Image>() ?? menu.gameObject.AddComponent<Image>();
+            if (blocker.sprite == null) blocker.color = new Color(0f, 0f, 0f, .001f);
+            blocker.raycastTarget = true;
+            EnsureSortingCanvas(menu.gameObject, 3050);
             foreach (var button in menu.GetComponentsInChildren<Button>(true))
                 ApplyButtonStyle(button, _style.ButtonColor);
             menu.SetAsLastSibling();
@@ -1608,7 +1631,7 @@ namespace UnderPressure.Editor
                         : _toggleColors[index];
                 if (toggle?.graphic is Graphic mark) mark.color = Color.white;
             }
-            RefreshVisibilityMark(_visibilityToggle != null && _visibilityToggle.isOn);
+            RefreshVisibilityMark(_visibilityToggle != null && !_visibilityToggle.isOn);
         }
 
         private void CreateVisibilityMark()
@@ -1624,7 +1647,7 @@ namespace UnderPressure.Editor
             CreateVisibilityMarkStroke(root, 45f);
             CreateVisibilityMarkStroke(root, -45f);
             _visibilityMark.transform.SetAsLastSibling();
-            _visibilityToggle.onValueChanged.AddListener(RefreshVisibilityMark);
+            _visibilityToggle.onValueChanged.AddListener(RefreshVisibilityMarkFromToggle);
         }
 
         private static void CreateVisibilityMarkStroke(Transform parent, float angle)
@@ -1648,10 +1671,13 @@ namespace UnderPressure.Editor
             if (_visibilityMark != null) _visibilityMark.SetActive(active);
         }
 
+        private void RefreshVisibilityMarkFromToggle(bool visible) =>
+            RefreshVisibilityMark(!visible);
+
         private void OnDestroy()
         {
             if (_visibilityToggle != null)
-                _visibilityToggle.onValueChanged.RemoveListener(RefreshVisibilityMark);
+                _visibilityToggle.onValueChanged.RemoveListener(RefreshVisibilityMarkFromToggle);
         }
 
         private static float ColorDistance(Color first, Color second) =>
@@ -1759,6 +1785,7 @@ namespace UnderPressure.Editor
                 creatingIcon.transform.SetParent(host, false);
             var prefab = AccessTools.Field(typeof(LandscapeObjectsMenu), "_prefabListItem")?
                 .GetValue(native) as GameObject;
+            PrepareListItemPrefab(prefab, native);
             if (prefab != null && prefab.transform.IsChildOf(native.transform))
                 prefab.transform.SetParent(logic.transform, false);
 
@@ -1801,6 +1828,33 @@ namespace UnderPressure.Editor
             UnityEngine.Object.Destroy(native.gameObject);
             replacement = next;
             return true;
+        }
+
+        // El prefab nativo referencia un TooltipSpawner alojado fuera de la
+        // miniatura. Al destruir el panel original esa referencia queda nula y
+        // SetDefinition aborta antes de retirar el objeto de la cola. Se copia
+        // el mismo tooltip dentro del prefab para que cada clon sea autonomo.
+        private static void PrepareListItemPrefab(GameObject prefab,
+            LandscapeObjectsMenu native)
+        {
+            if (prefab == null) return;
+            var item = prefab.GetComponent<LandscapeObjectListItem>();
+            if (item == null) return;
+            var source = item.Tooltip;
+            if (source != null && source.transform.IsChildOf(prefab.transform)) return;
+            if (source == null && native != null)
+                source = native.GetComponentsInChildren<TooltipSpawner>(true)
+                    .FirstOrDefault(candidate => candidate != null && candidate.Prefab != null);
+            var local = prefab.GetComponent<TooltipSpawner>() ??
+                prefab.AddComponent<TooltipSpawner>();
+            if (source != null && !ReferenceEquals(source, local))
+            {
+                local.HoverTime = source.HoverTime;
+                local.Prefab = source.Prefab;
+                local.AnchorToMouse = source.AnchorToMouse;
+                local.AnchorOffset = source.AnchorOffset;
+            }
+            item.Tooltip = local;
         }
 
         private static void CopyFields(Type type, object source, object destination)
