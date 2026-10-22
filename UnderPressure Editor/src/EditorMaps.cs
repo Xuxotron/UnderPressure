@@ -2123,8 +2123,38 @@ namespace UnderPressure.Editor
                 button.gameObject.AddComponent<LayoutElement>();
             layout.minHeight = layout.preferredHeight = 31f;
             button.transform.SetAsFirstSibling();
+            TranslateTileSelectionButtons(root);
             native.gameObject.SetActive(false);
             _buttons.Add(button.gameObject);
+        }
+
+        private static void TranslateTileSelectionButtons(Transform root)
+        {
+            if (root == null) return;
+            var names = new[]
+            {
+                "Floor", "ArrivalPoint", "Driveway", "Path",
+                "Pillar", "Window", "Adjoining"
+            };
+            var keys = new[]
+            {
+                "editor.tile.floor", "editor.tile.arrival_point",
+                "editor.tile.driveway", "editor.tile.path",
+                "editor.tile.pillar", "editor.tile.window",
+                "editor.tile.adjoining"
+            };
+            foreach (var tileButton in root.GetComponentsInChildren<Button>(true))
+            {
+                if (tileButton == null || tileButton.gameObject.name == "UP View Tiles") continue;
+                var label = tileButton.GetComponentInChildren<TMP_Text>(true);
+                if (label == null) continue;
+                var index = Array.IndexOf(names, label.text);
+                if (index < 0) continue;
+                foreach (var component in tileButton.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                        component.enabled = false;
+                label.text = T(keys[index]);
+            }
         }
 
         private void AddTopEditorButtons()
@@ -2314,8 +2344,8 @@ namespace UnderPressure.Editor
 
             var border = root.AddComponent<Outline>();
             border.effectColor = Color.white;
-            border.effectDistance = new Vector2(1f, -1f);
-            border.useGraphicAlpha = true;
+            border.effectDistance = new Vector2(3f, -3f);
+            border.useGraphicAlpha = false;
             border.enabled = false;
 
             var labelRoot = AddUi("Text", root.transform);
@@ -2921,8 +2951,9 @@ rect.pivot = new Vector2(1f, 1f);
                 rect.pivot = new Vector2(0f, 1f);
                 rect.sizeDelta = new Vector2(buttonWidth, 31f);
             }
-            // El origen de cada boton es su esquina superior izquierda.
-            var offset = parentRect.TransformVector(new Vector3(2f, -4f, 0f));
+            // Los tres botones terminan antes de la linea separadora. La linea
+            // conserva exactamente su posicion y su punto de agarre originales.
+            var offset = parentRect.TransformVector(new Vector3(2f, 2f, 0f));
             add.position = _plotViewportCorners[0] + offset;
             move.position = _plotViewportCorners[0] + offset +
                             parentRect.TransformVector(new Vector3(buttonWidth + 2f, 0f, 0f));

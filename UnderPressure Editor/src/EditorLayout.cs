@@ -50,7 +50,9 @@ namespace UnderPressure.Editor
     {
         internal const float PanelWidth = 220f;
         internal const float BarHeight = 50f;
-        private const float DividerHeight = 20f;
+        // El area interactiva coincide con los 6 px visibles de la linea.
+        // Asi no invade los botones situados inmediatamente encima.
+        private const float DividerHeight = 6f;
         private const float MinimumUpperHeight = 150f;
         private const float MinimumLowerHeight = 150f;
 
@@ -526,15 +528,16 @@ namespace UnderPressure.Editor
             ApplyObjectsPanel(_objectsMenu, true);
             if (_leftDivider != null)
             {
-                // La linea conserva su coordenada. El area de arrastre empieza
-                // en ella y crece solo hacia abajo, sin cubrir los tres botones.
-                SetTopLeft(_leftDivider, 0f, BarHeight + _leftUpperHeight,
+                // La linea y su punto de agarre permanecen centrados en el
+                // limite original. Los botones se mantienen dentro del panel.
+                SetTopLeft(_leftDivider, 0f,
+                    BarHeight + _leftUpperHeight - DividerHeight * .5f,
                     PanelWidth, DividerHeight);
                 var handle = _leftDivider.Find("Tirador") as RectTransform;
                 if (handle != null)
                 {
-                    handle.anchorMin = new Vector2(0f, 1f);
-                    handle.anchorMax = new Vector2(1f, 1f);
+                    handle.anchorMin = new Vector2(0f, .5f);
+                    handle.anchorMax = new Vector2(1f, .5f);
                     handle.pivot = new Vector2(.5f, .5f);
                     handle.anchoredPosition = Vector2.zero;
                     handle.sizeDelta = new Vector2(-8f, 6f);
@@ -766,6 +769,24 @@ namespace UnderPressure.Editor
             rect.localScale = Vector3.one;
             existing.direction = Scrollbar.Direction.BottomToTop;
             existing.interactable = true;
+            var handleGraphic = existing.handleRect == null
+                ? null : existing.handleRect.GetComponent<Graphic>();
+            if (handleGraphic != null)
+            {
+                // El ScrollRect modifica el tamano del asa, no su aspecto.
+                // Conservar el sprite nativo y restaurar su tinte claro.
+                handleGraphic.enabled = true;
+                handleGraphic.color = Color.white;
+                existing.targetGraphic = handleGraphic;
+            }
+            var colors = existing.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.pressedColor = new Color(.82f, .82f, .82f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(.72f, .72f, .72f, 1f);
+            colors.colorMultiplier = 1f;
+            existing.colors = colors;
             existing.gameObject.SetActive(true);
             existing.transform.SetAsLastSibling();
             scroll.verticalScrollbar = existing;
@@ -963,6 +984,8 @@ namespace UnderPressure.Editor
             menu.anchoredPosition = new Vector2(PanelWidth, -BarHeight);
             menu.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
                 buttonRect.rect.width);
+            foreach (var button in menu.GetComponentsInChildren<Button>(true))
+                ApplyButtonStyle(button, _style.ButtonColor);
             menu.SetAsLastSibling();
         }
 
