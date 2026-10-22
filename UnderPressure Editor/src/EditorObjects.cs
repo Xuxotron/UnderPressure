@@ -1079,41 +1079,6 @@ namespace UnderPressure.Editor
         }
     }
 
-    [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
-    internal static class ScenarioEditorObjectPreviewAnglePatch
-    {
-        private static readonly FieldInfo CameraPitchField =
-            AccessTools.Field(typeof(LandscapeObjectListItem), "_cameraPitch");
-
-        private static void Prefix(LandscapeObjectListItem __instance)
-        {
-            if (ScenarioEditorFlow.IsRunning && __instance != null)
-                CameraPitchField?.SetValue(__instance, -45f);
-        }
-    }
-
-    [HarmonyPatch(typeof(LandscapeObjectListItem), "FrameCamera")]
-    internal static class ScenarioEditorObjectPreviewYawPatch
-    {
-        private static readonly FieldInfo CameraRotationField =
-            AccessTools.Field(typeof(LandscapeObjectListItem), "_rotation");
-
-        private static void Prefix(LandscapeObjectListItem __instance, out float __state)
-        {
-            __state = float.NaN;
-            if (!ScenarioEditorFlow.IsRunning || __instance == null || CameraRotationField == null)
-                return;
-            __state = (float)CameraRotationField.GetValue(__instance);
-            CameraRotationField.SetValue(__instance, __state - 20f);
-        }
-
-        private static void Postfix(LandscapeObjectListItem __instance, float __state)
-        {
-            if (!float.IsNaN(__state) && __instance != null)
-                CameraRotationField?.SetValue(__instance, __state);
-        }
-    }
-
     internal sealed class ScenarioEditorSearchBelowPlots : MonoBehaviour
     {
         private RectTransform _plotViewport;
@@ -1875,9 +1840,9 @@ namespace UnderPressure.Editor
             }
         }
 
-        // Ctrl cambia la parcela al pasar por encima de un objeto, SIN clic.
-        // Bloq Mayus desactiva solo este cambio automatico.
-        private void UpdateCtrlPlotHover()
+        // Ctrl conserva la parcela y la capa activas. Solo mantiene el
+        // resaltado del objeto situado bajo el cursor.
+        private void UpdateCtrlObjectHover()
         {
             if (!CtrlDown || _ctrlDragging || _nativeMulti.Count > 0 || _ctrlHoverLocked ||
                 Input.GetMouseButton(0) || OverUi() ||
@@ -1887,9 +1852,6 @@ namespace UnderPressure.Editor
             HospitalPlot owner;
             LandscapeRoomItem item;
             if (!TryPickNative(Input.mousePosition, out owner, out item) || owner == null) return;
-            if (!ScenarioEditorStorageMenu.PlotIsolationActive &&
-                !ReferenceEquals(owner, _selection))
-                _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
             if (_ctrlSelected.Count == 0 && _ctrlSceneSelected.Count == 0)
                 _level.HighlightManager.HighlightObject(item);
         }
@@ -2127,7 +2089,7 @@ namespace UnderPressure.Editor
             if (ScenarioLandscape.IsActive) return;
 
             if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
-            UpdateCtrlPlotHover();
+            UpdateCtrlObjectHover();
             if (_ctrlDragging || (CtrlDown && !OverUi())) UpdateCtrlRectangle();
             // Mayus clona y Alt roba, pero ambos deben mostrar siempre el
             // contorno del objeto alcanzado aunque pertenezca a otra parcela o capa.
@@ -2208,7 +2170,14 @@ namespace UnderPressure.Editor
                 if (Vector2.Distance(_rightDown, Input.mousePosition) <= 5f &&
                     TryPickForScene(out var scene, out var owner, out var item, out var definition) &&
                     definition != null)
+                {
+                    if (owner != null && item != null)
+                    {
+                        _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
+                        _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke(ReadLayer(item));
+                    }
                     SetSearch(GetObjectName(definition));
+                }
                 _rightClickPending = false;
             }
         }

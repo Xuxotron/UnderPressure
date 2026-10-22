@@ -1524,6 +1524,8 @@ namespace UnderPressure.Editor
         };
         private Toggle[] _toggles;
         private Color[] _toggleColors;
+        private Toggle _visibilityToggle;
+        private GameObject _visibilityMark;
         private Sprite _sprite;
         private Color _normal;
         private Color _selectedColor;
@@ -1557,6 +1559,9 @@ namespace UnderPressure.Editor
                     .Where(toggle => toggle != null).ToArray();
                 _toggleColors = _toggles.Select(toggle =>
                     toggle.targetGraphic == null ? Color.white : toggle.targetGraphic.color).ToArray();
+                _visibilityToggle = AccessTools.Field(typeof(PlotSelectionItem), "_toggleVisible")?
+                    .GetValue(row) as Toggle;
+                CreateVisibilityMark();
                 _initialised = true;
             }
             Apply();
@@ -1603,6 +1608,50 @@ namespace UnderPressure.Editor
                         : _toggleColors[index];
                 if (toggle?.graphic is Graphic mark) mark.color = Color.white;
             }
+            RefreshVisibilityMark(_visibilityToggle != null && _visibilityToggle.isOn);
+        }
+
+        private void CreateVisibilityMark()
+        {
+            if (_visibilityToggle == null || _visibilityMark != null) return;
+            _visibilityMark = new GameObject("UP Marca X de visibilidad", typeof(RectTransform));
+            _visibilityMark.transform.SetParent(_visibilityToggle.transform, false);
+            var root = (RectTransform)_visibilityMark.transform;
+            root.anchorMin = root.anchorMax = new Vector2(.5f, .5f);
+            root.pivot = new Vector2(.5f, .5f);
+            root.anchoredPosition = Vector2.zero;
+            root.sizeDelta = new Vector2(14f, 14f);
+            CreateVisibilityMarkStroke(root, 45f);
+            CreateVisibilityMarkStroke(root, -45f);
+            _visibilityMark.transform.SetAsLastSibling();
+            _visibilityToggle.onValueChanged.AddListener(RefreshVisibilityMark);
+        }
+
+        private static void CreateVisibilityMarkStroke(Transform parent, float angle)
+        {
+            var stroke = new GameObject("Trazo", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            stroke.transform.SetParent(parent, false);
+            var rect = (RectTransform)stroke.transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(.5f, .5f);
+            rect.pivot = new Vector2(.5f, .5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(3f, 15f);
+            rect.localRotation = Quaternion.Euler(0f, 0f, angle);
+            var image = stroke.GetComponent<Image>();
+            image.color = new Color(.03f, .20f, .31f, 1f);
+            image.raycastTarget = false;
+        }
+
+        private void RefreshVisibilityMark(bool active)
+        {
+            if (_visibilityMark != null) _visibilityMark.SetActive(active);
+        }
+
+        private void OnDestroy()
+        {
+            if (_visibilityToggle != null)
+                _visibilityToggle.onValueChanged.RemoveListener(RefreshVisibilityMark);
         }
 
         private static float ColorDistance(Color first, Color second) =>

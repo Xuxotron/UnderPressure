@@ -1619,6 +1619,7 @@ namespace UnderPressure.Editor
         private Button _raiseButton;
         private Button _lowerButton;
         private Button _flattenButton;
+        private Button _wireButton;
         private Text _sizeText;
         private Text _opacityText;
         private Slider _sizeSlider;
@@ -1643,20 +1644,20 @@ namespace UnderPressure.Editor
             var root = (RectTransform)transform;
             CreateText(root, "Title", T("editor.terrain.title"),
                 new Vector2(9, -9), new Vector2(162, 24), 16, TextAnchor.MiddleCenter);
-            _brushButton = CreateButton(root, new Vector2(9, -39), new Vector2(162, 32),
+            _brushButton = CreateButton(root, new Vector2(9, -226), new Vector2(78.5f, 30),
                 T("editor.terrain.brush"), () =>
                 ScenarioEditorTerrainPainter.ToggleBrush(), out _toggleText);
             CreateText(root, "Size", T("editor.terrain.size"),
                 new Vector2(9, -80), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
             _sizeText = CreateText(root, "SizeValue", "5", new Vector2(121, -80),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
-            _sizeSlider = CreateSlider(root, new Vector2(12, -108), new Vector2(156, 17), 1, 20, 5,
+            _sizeSlider = CreateSlider(root, new Vector2(12, -108), new Vector2(156, 9), 1, 20, 5,
                 value => ScenarioEditorTerrainPainter.SetBrushSize(value));
             CreateText(root, "Opacity", T("editor.terrain.opacity"),
                 new Vector2(9, -133), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
             _opacityText = CreateText(root, "OpacityValue", "50%", new Vector2(121, -133),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
-            _opacitySlider = CreateSlider(root, new Vector2(12, -162), new Vector2(156, 17), 0, 100, 50,
+            _opacitySlider = CreateSlider(root, new Vector2(12, -162), new Vector2(156, 9), 0, 100, 50,
                 value => ScenarioEditorTerrainPainter.SetBrushOpacity(value));
             _raiseButton = CreateButton(root, new Vector2(9, -191), new Vector2(51, 28),
                 T("editor.terrain.raise"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
@@ -1668,7 +1669,7 @@ namespace UnderPressure.Editor
                 T("editor.terrain.flatten"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
-            CreateButton(root, new Vector2(9, -226), new Vector2(162, 30),
+            _wireButton = CreateButton(root, new Vector2(92.5f, -226), new Vector2(78.5f, 30),
                 T("editor.terrain.wireframe"), () => ScenarioEditorTerrainPainter.ToggleWireframe(),
                 out _wireText);
             var scrollRoot = NewUi("Textures", root, typeof(Image), typeof(ScrollRect));
@@ -1722,12 +1723,10 @@ namespace UnderPressure.Editor
             var innerWidth = Mathf.Max(120f, width - 18f);
             var title = transform.Find("Title") as RectTransform;
             if (title != null) title.sizeDelta = new Vector2(innerWidth, 24f);
-            if (_brushButton != null)
-                ((RectTransform)_brushButton.transform).sizeDelta = new Vector2(innerWidth, 32f);
             if (_sizeSlider != null)
-                ((RectTransform)_sizeSlider.transform).sizeDelta = new Vector2(width - 24f, 17f);
+                ((RectTransform)_sizeSlider.transform).sizeDelta = new Vector2(width - 24f, 9f);
             if (_opacitySlider != null)
-                ((RectTransform)_opacitySlider.transform).sizeDelta = new Vector2(width - 24f, 17f);
+                ((RectTransform)_opacitySlider.transform).sizeDelta = new Vector2(width - 24f, 9f);
 
             var sculptWidth = (innerWidth - 10f) / 3f;
             if (_raiseButton != null)
@@ -1748,8 +1747,19 @@ namespace UnderPressure.Editor
                 rect.anchoredPosition = new Vector2(19f + sculptWidth * 2f, -191f);
                 rect.sizeDelta = new Vector2(sculptWidth, 28f);
             }
-            var wireButton = _wireText?.transform.parent as RectTransform;
-            if (wireButton != null) wireButton.sizeDelta = new Vector2(innerWidth, 30f);
+            var toolWidth = (innerWidth - 5f) * .5f;
+            if (_brushButton != null)
+            {
+                var rect = (RectTransform)_brushButton.transform;
+                rect.anchoredPosition = new Vector2(9f, -226f);
+                rect.sizeDelta = new Vector2(toolWidth, 30f);
+            }
+            if (_wireButton != null)
+            {
+                var rect = (RectTransform)_wireButton.transform;
+                rect.anchoredPosition = new Vector2(14f + toolWidth, -226f);
+                rect.sizeDelta = new Vector2(toolWidth, 30f);
+            }
             if (_scroll != null)
             {
                 var rect = _scroll.transform as RectTransform;
@@ -1813,15 +1823,15 @@ namespace UnderPressure.Editor
             var fillRect=(RectTransform)fill.transform;
             fillRect.anchorMin= new Vector2(0f,0f);
             fillRect.anchorMax= new Vector2(1f,1f);
-            fillRect.offsetMin= new Vector2(3f,3f);
-            fillRect.offsetMax= new Vector2(-3f,-3f);
+            fillRect.offsetMin= new Vector2(3f,2f);
+            fillRect.offsetMax= new Vector2(-3f,-2f);
             fill.GetComponent<Image>().color = new Color(.23f,.74f,.98f,1f);
             fill.GetComponent<Image>().raycastTarget = false;
             var handle = NewUi("Handle",go.transform,typeof(Image));
             var hr=(RectTransform)handle.transform;
             hr.anchorMin=new Vector2(.5f,.5f);
             hr.anchorMax=new Vector2(.5f,.5f);
-            hr.sizeDelta = new Vector2(13f,23f);
+            hr.sizeDelta = new Vector2(13f,17f);
             handle.GetComponent<Image>().color = new Color(.97f,.97f,.91f,1f);
             var slider=go.GetComponent<Slider>();
             slider.targetGraphic=handle.GetComponent<Image>();
@@ -2018,9 +2028,7 @@ namespace UnderPressure.Editor
 
         internal void RefreshTexts()
         {
-            if (_wireText != null) _wireText.text = T(
-                ScenarioEditorTerrainPainter.WireframeEnabled
-                    ? "editor.terrain.wireframe.on" : "editor.terrain.wireframe.off");
+            if (_wireText != null) _wireText.text = T("editor.terrain.wireframe");
             if (_toggleText != null) _toggleText.text = T("editor.terrain.brush");
             var mode = ScenarioEditorTerrainPainter.CurrentSculptMode;
             SetToolSelected(_brushButton, ScenarioEditorTerrainPainter.BrushEnabled &&
