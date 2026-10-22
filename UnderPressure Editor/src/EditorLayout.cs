@@ -1909,7 +1909,7 @@ namespace UnderPressure.Editor
             grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
             grid.childAlignment = TextAnchor.UpperLeft;
-            grid.padding = new RectOffset(5, 9, 6, 8);
+            grid.padding = new RectOffset(8, 6, 6, 8);
             grid.spacing = new Vector2(6f, 6f);
             grid.cellSize = new Vector2(97f, 88f);
 
@@ -1978,47 +1978,10 @@ namespace UnderPressure.Editor
         private static void EnsureVerticalScrollbar(RectTransform host, ScrollRect scroll)
         {
             if (host == null || scroll == null) return;
-            var existing = host.Find("UP_Catalog_VerticalScrollbar") as RectTransform;
-            if (existing == null)
-            {
-                var track = new GameObject("UP_Catalog_VerticalScrollbar", typeof(RectTransform),
-                    typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
-                track.transform.SetParent(host, false);
-                existing = (RectTransform)track.transform;
-                track.GetComponent<Image>().color = new Color(.035f, .20f, .32f, .95f);
-                var area = new GameObject("Sliding Area", typeof(RectTransform));
-                area.transform.SetParent(track.transform, false);
-                var areaRect = (RectTransform)area.transform;
-                areaRect.anchorMin = Vector2.zero;
-                areaRect.anchorMax = Vector2.one;
-                areaRect.offsetMin = new Vector2(2f, 3f);
-                areaRect.offsetMax = new Vector2(-2f, -3f);
-                var handle = new GameObject("Handle", typeof(RectTransform),
-                    typeof(CanvasRenderer), typeof(Image));
-                handle.transform.SetParent(area.transform, false);
-                var handleRect = (RectTransform)handle.transform;
-                handleRect.anchorMin = Vector2.zero;
-                handleRect.anchorMax = Vector2.one;
-                handleRect.offsetMin = Vector2.zero;
-                handleRect.offsetMax = Vector2.zero;
-                var handleImage = handle.GetComponent<Image>();
-                handleImage.color = new Color(.34f, .78f, .96f, 1f);
-                var bar = track.GetComponent<Scrollbar>();
-                bar.direction = Scrollbar.Direction.BottomToTop;
-                bar.targetGraphic = handleImage;
-                bar.handleRect = handleRect;
-            }
-            existing.anchorMin = new Vector2(1f, 0f);
-            existing.anchorMax = new Vector2(1f, 1f);
-            existing.pivot = new Vector2(1f, .5f);
-            existing.anchoredPosition = Vector2.zero;
-            existing.offsetMin = new Vector2(-12f, 6f);
-            existing.offsetMax = new Vector2(0f, -43f);
-            existing.gameObject.SetActive(true);
-            existing.SetAsLastSibling();
-            scroll.verticalScrollbar = existing.GetComponent<Scrollbar>();
-            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
-            scroll.verticalScrollbarSpacing = 2f;
+            var obsolete = host.Find("UP_Catalog_VerticalScrollbar");
+            if (obsolete != null) UnityEngine.Object.Destroy(obsolete.gameObject);
+            ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(host, scroll,
+                "UP Objects Native Vertical Scrollbar", 43f, 6f);
         }
     }
 

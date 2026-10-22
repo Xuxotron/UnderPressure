@@ -1079,6 +1079,41 @@ namespace UnderPressure.Editor
         }
     }
 
+    [HarmonyPatch(typeof(LandscapeObjectListItem), "SetDefinition")]
+    internal static class ScenarioEditorObjectPreviewAnglePatch
+    {
+        private static readonly FieldInfo CameraPitchField =
+            AccessTools.Field(typeof(LandscapeObjectListItem), "_cameraPitch");
+
+        private static void Prefix(LandscapeObjectListItem __instance)
+        {
+            if (ScenarioEditorFlow.IsRunning && __instance != null)
+                CameraPitchField?.SetValue(__instance, -45f);
+        }
+    }
+
+    [HarmonyPatch(typeof(LandscapeObjectListItem), "FrameCamera")]
+    internal static class ScenarioEditorObjectPreviewYawPatch
+    {
+        private static readonly FieldInfo CameraRotationField =
+            AccessTools.Field(typeof(LandscapeObjectListItem), "_rotation");
+
+        private static void Prefix(LandscapeObjectListItem __instance, out float __state)
+        {
+            __state = float.NaN;
+            if (!ScenarioEditorFlow.IsRunning || __instance == null || CameraRotationField == null)
+                return;
+            __state = (float)CameraRotationField.GetValue(__instance);
+            CameraRotationField.SetValue(__instance, __state - 20f);
+        }
+
+        private static void Postfix(LandscapeObjectListItem __instance, float __state)
+        {
+            if (!float.IsNaN(__state) && __instance != null)
+                CameraRotationField?.SetValue(__instance, __state);
+        }
+    }
+
     internal sealed class ScenarioEditorSearchBelowPlots : MonoBehaviour
     {
         private RectTransform _plotViewport;
