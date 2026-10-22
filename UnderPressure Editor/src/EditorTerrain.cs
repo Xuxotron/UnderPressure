@@ -33,6 +33,7 @@ namespace UnderPressure.Editor
         private static bool _reportedLargeTexture;
         private static bool _loggedFirstPaint;
         private static readonly RaycastHit[] GroundRayHits = new RaycastHit[128];
+        private static readonly float[] BrushRingGroundHeights = new float[16];
         private static GameObject _terrainRoot;
         private static Bounds _paintBounds;
         private static bool _initialized;
@@ -499,14 +500,40 @@ namespace UnderPressure.Editor
                     }
                 }
                 if (_crosshairCursor == null)
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Cursor del pincel no encontrado en config/UnderPressure ni plugins/UnderPressure/Assets.");
+                {
+                    _crosshairCursor = CreateCrosshairCursor();
+                    UnderPressureEditorPlugin.Log?.LogInfo(
+                        "Cursor del pincel generado al no encontrar cursor_icon_crosshair.png.");
+                }
             }
             if (_crosshairCursor == null) return;
             Cursor.SetCursor(_crosshairCursor,
                 new Vector2(_crosshairCursor.width * 0.5f, _crosshairCursor.height * 0.5f),
                 UnityEngine.CursorMode.Auto);
             _customCursorActive = true;
+        }
+
+        private static Texture2D CreateCrosshairCursor()
+        {
+            const int size = 33;
+            const int centre = size / 2;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.name = "UP_cursor_crosshair_generated";
+            texture.filterMode = FilterMode.Point;
+            var pixels = new Color32[size * size];
+            for (var y = 0; y < size; y++)
+                for (var x = 0; x < size; x++)
+                {
+                    var outline = (Mathf.Abs(x - centre) <= 2 && Mathf.Abs(y - centre) <= 13) ||
+                                  (Mathf.Abs(y - centre) <= 2 && Mathf.Abs(x - centre) <= 13);
+                    var inside = (x == centre && Mathf.Abs(y - centre) <= 12) ||
+                                 (y == centre && Mathf.Abs(x - centre) <= 12);
+                    pixels[y * size + x] = !outline ? new Color32(0, 0, 0, 0) :
+                        inside ? new Color32(255, 255, 255, 255) : new Color32(10, 10, 10, 255);
+                }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
         }
 
         internal static void SetSelectedSlot(TerrainLayerSlot slot)
@@ -842,6 +869,65 @@ namespace UnderPressure.Editor
                 normal = hit.normal.normalized;
             }
             return true;
+        }
+
+        // Construye el contorno en coordenadas del mundo. Cada punto se apoya
+        // sobre el collider del terreno cuando existe; nunca se sustituye por
+        // un círculo 2D pegado al cursor de pantalla.
+        internal static bool TryGetBrushWorldRing(Vector3[] points)
+        {
+            if (points == null || points.Length < 3) return false;
+            Vector3 center, ignoredNormal;
+            if (!TryGetBrushWorldPoint(out center, out ignoredNormal)) return false;
+            var radius = WorldBrushRadius;
+            // Dieciséis muestras de altura mantienen el contorno adherido al
+            // terreno sin ejecutar una consulta física por cada vértice visual.
+            var samples = BrushRingGroundHeights.Length;
+            for (var sample = 0; sample < samples; ++sample)
+            {
+                var angle = sample * (Mathf.PI * 2f / samples);
+                var point = center + new Vector3(
+                    Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+                BrushRingGroundHeights[sample] = FindTerrainHeight(point, center.y);
+            }
+            for (var i = 0; i < points.Length; ++i)
+            {
+                var angle = i * (Mathf.PI * 2f / points.Length);
+                var point = center + new Vector3(
+                    Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+                var samplePosition = i * samples / (float)points.Length;
+                var before = Mathf.FloorToInt(samplePosition) % samples;
+                var after = (before + 1) % samples;
+                point.y = Mathf.Lerp(BrushRingGroundHeights[before],
+                    BrushRingGroundHeights[after], samplePosition - Mathf.Floor(samplePosition)) + .12f;
+                points[i] = point;
+            }
+            return true;
+        }
+
+        private static float FindTerrainHeight(Vector3 point, float fallback)
+        {
+            if (_terrainRoot == null) return fallback;
+            var top = Mathf.Max(_paintBounds.max.y + 20f, fallback + 20f);
+            var ray = new Ray(new Vector3(point.x, top, point.z), Vector3.down);
+            var hitCount = Physics.RaycastNonAlloc(ray, GroundRayHits, 10000f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var nearest = float.PositiveInfinity;
+            var height = fallback;
+            for (var i = 0; i < hitCount; ++i)
+            {
+                var hit = GroundRayHits[i];
+                if (hit.collider == null) continue;
+                var transform = hit.collider.transform;
+                if (transform != _terrainRoot.transform &&
+                    !transform.IsChildOf(_terrainRoot.transform) &&
+                    hit.collider.gameObject.name.IndexOf("Terrain",
+                        StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (hit.distance >= nearest) continue;
+                nearest = hit.distance;
+                height = hit.point.y;
+            }
+            return height;
         }
 
         internal static bool TryGetBrushScreenDiameter(out float diameter)
@@ -1630,12 +1716,10 @@ namespace UnderPressure.Editor
         private readonly List<Button> _slots = new List<Button>();
         private readonly List<Texture2D> _previewCopies = new List<Texture2D>();
         private Text _wireText;
-        private RectTransform _cursor;
-        private RawImage _cursorImage;
-        private Texture2D _cursorTexture;
-        private RectTransform _brushRing;
-        private RawImage _brushRingImage;
-        private Texture2D _brushRingTexture;
+        private LineRenderer _worldRing;
+        private Material _worldRingMaterial;
+        private const int RingSegments = 64;
+        private readonly Vector3[] _worldRingPoints = new Vector3[RingSegments];
         private RectTransform _content;
         private ScrollRect _scroll;
 
@@ -1743,14 +1827,15 @@ namespace UnderPressure.Editor
             if (_lowerButton != null)
             {
                 var rect = (RectTransform)_lowerButton.transform;
-                rect.anchoredPosition = new Vector2(sculptLeft + sculptWidth + sculptGap, -191f);
+                rect.anchoredPosition = new Vector2(
+                    sculptLeft + sculptWidth + sculptGap, -191f);
                 rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             if (_flattenButton != null)
             {
                 var rect = (RectTransform)_flattenButton.transform;
-                rect.anchoredPosition = new Vector2(sculptLeft +
-                    (sculptWidth + sculptGap) * 2f, -191f);
+                rect.anchoredPosition = new Vector2(
+                    sculptLeft + (sculptWidth + sculptGap) * 2f, -191f);
                 rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             var toolWidth = (innerWidth - 5f) * .5f;
@@ -1960,92 +2045,26 @@ namespace UnderPressure.Editor
         private void CreateCursorOverlay(Canvas canvas)
         {
             if (canvas==null) return;
-            var go=NewUi("UP_Paint_Crosshair",canvas.transform,typeof(RawImage));
-            go.transform.SetAsLastSibling();
-            _cursor=(RectTransform)go.transform;
-            _cursor.anchorMin=_cursor.anchorMax=new Vector2(.5f,.5f);
-            _cursor.sizeDelta=new Vector2(40f,40f);
-            _cursorImage=go.GetComponent<RawImage>();
-            _cursorImage.raycastTarget=false;
-            _cursorImage.color=Color.white;
-            // If PNG is absent, show the normal pointer; no opaque square.
-            var paths=new []{
-                Path.Combine(Paths.ConfigPath,"UnderPressure","cursor_icon_crosshair.png"),
-                Path.Combine(Paths.PluginPath,"UnderPressure","Assets","cursor_icon_crosshair.png")};
-            foreach (var path in paths)
+            // Contorno vectorial situado en el MUNDO, no un círculo 2D en pantalla.
+            var world = new GameObject("UP_WorldBrushRing", typeof(LineRenderer));
+            _worldRing = world.GetComponent<LineRenderer>();
+            _worldRing.useWorldSpace = true;
+            _worldRing.loop = true;
+            _worldRing.positionCount = RingSegments;
+            _worldRing.startWidth = _worldRing.endWidth = 0.06f;
+            _worldRing.numCapVertices = 0;
+            _worldRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _worldRing.receiveShadows = false;
+            var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
+            if (shader != null)
             {
-                if (!File.Exists(path)) continue;
-                try
-                {
-                    var tmp=new Texture2D(2,2,TextureFormat.RGBA32,false);
-                    if (!ImageConversion.LoadImage(tmp,File.ReadAllBytes(path),false))
-                    {
-                        UnityEngine.Object.Destroy(tmp);
-                        continue;
-                    }
-                    _cursorTexture=tmp;
-                    _cursorImage.texture=tmp;
-                    break;
-                }
-                catch(Exception ex){UnderPressureEditorPlugin.Log?.LogWarning("Cursor: "+ex.Message);}
+                _worldRingMaterial = new Material(shader);
+                _worldRingMaterial.hideFlags = HideFlags.DontSave;
+                _worldRing.material = _worldRingMaterial;
             }
-            // Always display a cursor, even if the external PNG is missing.
-            if (_cursorTexture == null)
-            {
-                var fallback = new Texture2D(33, 33, TextureFormat.RGBA32, false);
-                var pixels = new Color32[33 * 33];
-                for (var y = 0; y < 33; y++)
-                    for (var x = 0; x < 33; x++)
-                    {
-                        var cross = (Mathf.Abs(x - 16) <= 2 && Mathf.Abs(y - 16) <= 13) ||
-                                    (Mathf.Abs(y - 16) <= 2 && Mathf.Abs(x - 16) <= 13);
-                        var inner = (x == 16 && Mathf.Abs(y - 16) <= 12) ||
-                                    (y == 16 && Mathf.Abs(x - 16) <= 12);
-                        pixels[y * 33 + x] = !cross ? new Color32(0,0,0,0) :
-                            inner ? new Color32(255,255,255,255) : new Color32(10,10,10,255);
-                    }
-                fallback.SetPixels32(pixels);
-                fallback.Apply(false, false);
-                _cursorTexture = fallback;
-                _cursorImage.texture = fallback;
-            }
-            go.SetActive(false);
-            // El aro comparte exactamente el mismo RectTransform de referencia
-            // que el cursor. Así su centro coincide con el punto real de pintura.
-            var ring = NewUi("UP_Brush_Ring", canvas.transform, typeof(RawImage));
-            _brushRing = (RectTransform)ring.transform;
-            _brushRing.anchorMin = _brushRing.anchorMax = new Vector2(.5f, .5f);
-            _brushRing.pivot = new Vector2(.5f, .5f);
-            _brushRingImage = ring.GetComponent<RawImage>();
-            _brushRingImage.raycastTarget = false;
-            _brushRingImage.color = new Color(0.94f, 0.99f, 1f, 0.74f);
-            _brushRingTexture = CreateRingTexture(128, 2.2f);
-            _brushRingImage.texture = _brushRingTexture;
-            ring.SetActive(false);
-            ring.transform.SetAsLastSibling();
-            go.transform.SetAsLastSibling();
-        }
-
-        private static Texture2D CreateRingTexture(int size, float thickness)
-        {
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            texture.wrapMode = TextureWrapMode.Clamp;
-            texture.filterMode = FilterMode.Bilinear;
-            var pixels = new Color32[size * size];
-            var center = (size - 1f) * .5f;
-            var radius = center - thickness;
-            for (var y = 0; y < size; ++y)
-                for (var x = 0; x < size; ++x)
-                {
-                    var distance = Mathf.Sqrt((x - center) * (x - center) +
-                                              (y - center) * (y - center));
-                    var alpha = Mathf.Clamp01(1f - Mathf.Abs(distance - radius) / thickness);
-                    pixels[y * size + x] = new Color32(255, 255, 255,
-                        (byte)Mathf.RoundToInt(alpha * 255f));
-                }
-            texture.SetPixels32(pixels);
-            texture.Apply(false, false);
-            return texture;
+            _worldRing.startColor = _worldRing.endColor =
+                new Color(0.94f, 0.99f, 1f, 0.74f);
+            world.SetActive(false);
         }
 
         internal void RefreshTexts()
@@ -2087,32 +2106,15 @@ namespace UnderPressure.Editor
         private void Update()
         {
             ScenarioEditorTerrainPainter.Update();
-            var canvas = GetComponentInParent<Canvas>();
-            var root = canvas != null ? canvas.transform as RectTransform : null;
-            var camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay
-                ? null : canvas.worldCamera;
-            Vector2 position = Vector2.zero;
-            var positioned = root != null &&
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(root,
-                    Input.mousePosition, camera, out position);
-            if (_brushRing != null)
+            if (_worldRing != null)
             {
-                float diameter = 0f;
-                bool showRing = positioned &&
-                    ScenarioEditorTerrainPainter.TryGetBrushScreenDiameter(out diameter);
-                if (_brushRing.gameObject.activeSelf != showRing)
-                    _brushRing.gameObject.SetActive(showRing);
+                bool showRing = ScenarioEditorTerrainPainter.TryGetBrushWorldRing(
+                    _worldRingPoints);
+                if (_worldRing.gameObject.activeSelf != showRing)
+                    _worldRing.gameObject.SetActive(showRing);
                 if (showRing)
-                {
-                    _brushRing.anchoredPosition = position;
-                    _brushRing.sizeDelta = new Vector2(diameter, diameter);
-                }
+                    _worldRing.SetPositions(_worldRingPoints);
             }
-            if (_cursor==null || _cursorImage==null) return;
-            bool visible=positioned && ScenarioEditorTerrainPainter.BrushEnabled && _cursorTexture!=null;
-            _cursor.gameObject.SetActive(visible);
-            if (!visible) return;
-            if (positioned) _cursor.anchoredPosition = position;
         }
 
         private void LateUpdate()
@@ -2127,10 +2129,8 @@ namespace UnderPressure.Editor
             foreach (var preview in _previewCopies)
                 if (preview != null) UnityEngine.Object.Destroy(preview);
             _previewCopies.Clear();
-            if(_cursor!=null) UnityEngine.Object.Destroy(_cursor.gameObject);
-            if(_cursorTexture!=null) UnityEngine.Object.Destroy(_cursorTexture);
-            if(_brushRing!=null) UnityEngine.Object.Destroy(_brushRing.gameObject);
-            if(_brushRingTexture!=null) UnityEngine.Object.Destroy(_brushRingTexture);
+            if(_worldRing!=null) UnityEngine.Object.Destroy(_worldRing.gameObject);
+            if(_worldRingMaterial!=null) UnityEngine.Object.Destroy(_worldRingMaterial);
         }
     }
 

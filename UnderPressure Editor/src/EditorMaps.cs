@@ -2178,7 +2178,18 @@ namespace UnderPressure.Editor
             if (_nativeObjectsButton != null)
             {
                 _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
-                    -330f, () => ScenarioEditorDockLayout.ToggleObjectsPanel());
+                    -330f, () =>
+                    {
+                        if (!ScenarioEditorDockLayout.ToggleObjectsPanel())
+                        {
+                            ActivateNativeTool(_nativeObjectsButton);
+                            return;
+                        }
+                        if (ScenarioEditorDockLayout.ObjectsPanelIsOpen())
+                            ActivateNativeTool(_nativeObjectsButton);
+                        else
+                            DeactivateNativeTools();
+                    });
                 _objectsButton.gameObject.name = "UP Objects Dock Toggle";
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
@@ -2210,25 +2221,6 @@ namespace UnderPressure.Editor
             cursor.PopMode<CursorEditHospitalItem>();
             cursor.PopMode<CursorEditHospitalBuild>();
             cursor.PopMode<CursorEditHospitalMovePlot>();
-        }
-
-        // La selección de objetos es el modo pasivo del editor. No depende de
-        // que el panel del catálogo esté abierto y vuelve al cerrar otra herramienta.
-        private void EnsureDefaultObjectSelection()
-        {
-            var cursor = _level?.CursorManager;
-            if (cursor == null || _nativeObjectsButton == null ||
-                !_nativeObjectsButton.interactable || _stylesDialogOpen ||
-                ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen ||
-                ScenarioEditorTerrainPainter.BrushEnabled || ScenarioLandscape.IsActive)
-                return;
-            var pause = _level.HUD?.FindMenu<PauseMenu>(true);
-            if (pause != null && pause.gameObject.activeInHierarchy) return;
-            if (cursor.IsModeActive<CursorEditHospitalBuild>() ||
-                cursor.IsModeActive<CursorEditHospitalMovePlot>() ||
-                cursor.IsModeActive<CursorRoomItem>() ||
-                cursor.IsModeActive<CursorEditHospitalItem>()) return;
-            _nativeObjectsButton.onClick.Invoke();
         }
 
         private Button AddTopButton(Transform parent, string label, float x, Action action)
@@ -2852,7 +2844,6 @@ rect.pivot = new Vector2(1f, 1f);
                 _movePlotButton.interactable = _nativeMoveButton.interactable;
             var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen;
             var cursor = _level.CursorManager;
-            EnsureDefaultObjectSelection();
             SetToolButtonSelected(_objectsButton,
                 ScenarioEditorDockLayout.ObjectsPanelIsOpen());
             SetToolButtonSelected(_buildButton, !customToolOpen && cursor != null &&
@@ -3794,12 +3785,6 @@ PriorVisibility.Clear();
             if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
             if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;
             var cursor = __instance?.CursorManager;
-            if (cursor != null && cursor.IsModeActive<CursorEditHospitalItem>() &&
-                cursor.IsModeActive<CursorRoomItem>())
-            {
-                cursor.PopMode<CursorEditHospitalItem>();
-                return false;
-            }
             if (cursor != null && cursor.IsModeActive<CursorEditHospitalBuild>())
             {
                 cursor.PopMode<CursorEditHospitalBuild>();

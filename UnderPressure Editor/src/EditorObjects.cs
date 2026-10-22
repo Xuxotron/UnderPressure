@@ -1402,7 +1402,9 @@ namespace UnderPressure.Editor
             LandscapeRoomItem item;
             if (!self.TryPickNative(Input.mousePosition, out owner, out item) ||
                 owner == null || CursorPlotField == null) return !alt;
-            if (!alt && !ReferenceEquals(owner, self._selection)) return true;
+            // El clic izquierdo no cambia de parcela. La parcela activa sólo
+            // cambia mediante el clic derecho gestionado más abajo.
+            if (!alt && !ReferenceEquals(owner, self._selection)) return false;
 
             var sourceLayer = ReadLayer(item);
             var records = owner.Definition?.GetItems(sourceLayer);
@@ -2173,8 +2175,6 @@ namespace UnderPressure.Editor
                 {
                     if (owner != null && item != null)
                     {
-                        // El original centra la cámara si recibe otra vez la misma
-                        // parcela. Emitir el evento solo cuando la parcela cambia.
                         if (!ReferenceEquals(owner, _selection))
                             _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(owner);
                         _level.HospitalEditEvents.OnSelectHospitalPlotLayer?.Invoke(ReadLayer(item));

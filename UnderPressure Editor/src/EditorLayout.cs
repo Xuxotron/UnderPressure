@@ -196,10 +196,11 @@ namespace UnderPressure.Editor
                 var button = AccessTools.Field(typeof(PauseMenu), name)?.GetValue(menu) as Button;
                 if (button == null) continue;
                 _active.ApplyButtonStyle(button);
-                var border = button.GetComponent<Outline>() ??
-                    button.gameObject.AddComponent<Outline>();
+                var borderRoot = button.image != null ? button.image.gameObject : button.gameObject;
+                var border = borderRoot.GetComponent<Outline>() ??
+                    borderRoot.AddComponent<Outline>();
                 border.enabled = true;
-                border.effectColor = Color.white;
+                border.effectColor = new Color(1f, 1f, 1f, .98f);
                 border.effectDistance = new Vector2(2f, -2f);
                 border.useGraphicAlpha = true;
             }
@@ -415,6 +416,8 @@ namespace UnderPressure.Editor
             }
 
             _objectsToggle = storage.ObjectsButton;
+            ScenarioEditorHistory.SetDockVisible(false);
+            ScenarioEditorTerrainPainter.SetDockVisible(false);
             // El panel y su boton deben permanecer por encima de los overlays
             // de Personajes, Niebla y del menu de pausa.
             EnsureSortingCanvas(_objectsToggle?.gameObject, 3101);
@@ -1203,8 +1206,9 @@ namespace UnderPressure.Editor
                 }
                 button.transition = Selectable.Transition.None;
                 button.colors = _style.ButtonColors;
-                var border = button.GetComponent<Outline>();
-                if (border == null) border = button.gameObject.AddComponent<Outline>();
+                var borderRoot = button.image != null ? button.image.gameObject : button.gameObject;
+                var border = borderRoot.GetComponent<Outline>();
+                if (border == null) border = borderRoot.AddComponent<Outline>();
                 border.effectColor = Color.white;
                 border.effectDistance = new Vector2(1f, -1f);
                 border.useGraphicAlpha = true;
