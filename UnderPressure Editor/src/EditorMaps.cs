@@ -2721,7 +2721,8 @@ rect.pivot = new Vector2(1f, 1f);
                 SetLayerControlsVisible(false);
                 var plotInfo = AccessTools.Field(typeof(EditHospitalMenu),
                     "_infoText")?.GetValue(_menu) as TMP_Text;
-                if (plotInfo != null) plotInfo.text = "Landscape";
+                if (plotInfo != null)
+                    plotInfo.text = T("editor.plot.landscape");
                 try { ScenarioLandscape.Activate(_level); }
                 catch (Exception ex)
                 {
@@ -2739,7 +2740,7 @@ rect.pivot = new Vector2(1f, 1f);
             text.fontStyle = FontStyle.Bold;
             text.alignment = TextAnchor.MiddleLeft;
             text.color = Color.white;
-            text.text = "   Landscape";
+            text.text = "   " + T("editor.plot.landscape");
             text.raycastTarget = false;
             AddLandscapeVisibilityCheck(row.transform);
             row.transform.SetAsFirstSibling();

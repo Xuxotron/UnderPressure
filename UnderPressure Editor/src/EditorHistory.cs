@@ -730,14 +730,22 @@ namespace UnderPressure.Editor
             moved += transfers;
             touched = placed + deleted + moved;
             var result = new List<string>();
-            if (moved > 0) result.Add(CountLabel(moved, "movido", "movidos"));
-            if (placed > 0) result.Add(CountLabel(placed, "colocado", "colocados"));
-            if (deleted > 0) result.Add(CountLabel(deleted, "eliminado", "eliminados"));
-            return result.Count == 0 ? "Objetos modificados" : string.Join(", ", result.ToArray());
+            if (moved > 0)
+                result.Add(CountLabel(moved, "editor.history.moved.one",
+                    "editor.history.moved.many"));
+            if (placed > 0)
+                result.Add(CountLabel(placed, "editor.history.placed.one",
+                    "editor.history.placed.many"));
+            if (deleted > 0)
+                result.Add(CountLabel(deleted, "editor.history.deleted.one",
+                    "editor.history.deleted.many"));
+            return result.Count == 0
+                ? T("editor.history.objects.modified")
+                : string.Join(", ", result.ToArray());
         }
 
-        private static string CountLabel(int n, string singular, string plural) =>
-            n + (n == 1 ? " objeto " + singular : " objetos " + plural);
+        private static string CountLabel(int count, string singularKey, string pluralKey) =>
+            count == 1 ? T(singularKey) : EditorLocalization.Format(pluralKey, count);
 
         private void JumpTo(int target)
         {
@@ -863,8 +871,7 @@ namespace UnderPressure.Editor
         {
             if (!IsValid()) return;
             EnsureHistoryUI();
-            _historyTitle.text = EditorLocalization.Format("editor.history.title",
-                _position, _changes.Count);
+            _historyTitle.text = T("editor.history.title");
             for (var j = _historyContent.childCount - 1; j >= 0; --j)
                 Destroy(_historyContent.GetChild(j).gameObject);
             const float rowHeight = 29f;
@@ -898,7 +905,10 @@ namespace UnderPressure.Editor
                 labelRect.anchorMax = Vector2.one;
                 labelRect.offsetMin = new Vector2(7f, 0f);
                 labelRect.offsetMax = new Vector2(-4f, 0f);
-                label.text = i + "  -  " + (i == 0 ? "Inicio" : _changes[i - 1].Name);
+                label.color = i > _position
+                    ? new Color(.72f, .78f, .82f, 1f)
+                    : Color.white;
+                label.text = i == 0 ? T("editor.history.start") : _changes[i - 1].Name;
             }
             if (_position == _changes.Count)
                 _historyScroll.verticalNormalizedPosition = 0f;

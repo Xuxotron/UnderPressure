@@ -210,7 +210,7 @@ namespace UnderPressure.Editor
                 {
                     button.gameObject.AddComponent<ScenarioEditorPauseSpacing>();
                     rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
-                        Mathf.Max(1f, rect.rect.height - 2f));
+                        Mathf.Max(1f, rect.rect.height - 4f));
                 }
             }
 
@@ -222,14 +222,14 @@ namespace UnderPressure.Editor
                 .Select(button => button.GetComponentInParent<VerticalLayoutGroup>())
                 .Where(layout => layout != null)
                 .Distinct())
-                layout.spacing = Mathf.Max(2f, layout.spacing);
+                layout.spacing = Mathf.Max(4f, layout.spacing);
             foreach (var layout in fields
                 .Select(name => AccessTools.Field(typeof(PauseMenu), name)?.GetValue(menu) as Button)
                 .Where(button => button != null)
                 .Select(button => button.GetComponentInParent<DynamicLayoutGroup>())
                 .Where(layout => layout != null)
                 .Distinct())
-                layout.minimumSpacing = Mathf.Max(2f, layout.minimumSpacing);
+                layout.minimumSpacing = Mathf.Max(4f, layout.minimumSpacing);
         }
 
         internal static void StyleUtilityToggle(Button button, bool selected)
@@ -263,9 +263,16 @@ namespace UnderPressure.Editor
             {
                 if (button == null || !button.gameObject.name.StartsWith("Paso ")) continue;
                 // El historial es texto, no una lista de botones coloreados.
-                if (button.image != null) button.image.enabled = false;
-                var label = button.GetComponentInChildren<Text>(true);
-                if (label != null) label.color = Color.white;
+                // La imagen permanece activa y transparente porque Button la
+                // necesita como objetivo de raycast para recibir el clic.
+                if (button.image != null)
+                {
+                    button.image.enabled = true;
+                    button.image.raycastTarget = true;
+                    button.image.color = new Color(0f, 0f, 0f, .001f);
+                }
+                // RefreshHistoryUI distingue las acciones deshechas en gris.
+                // No sobrescribir aquí ese estado visual.
             }
         }
 

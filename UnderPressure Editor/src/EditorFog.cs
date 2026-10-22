@@ -577,7 +577,8 @@ namespace UnderPressure.Editor
             if (_sizeText != null)
                 _sizeText.text = EditorLocalization.Format("editor.fog.size", _brushSize);
             if (_pressureText != null)
-                _pressureText.text = "Opacidad máxima: " + _brushMaxOpacity + "%";
+                _pressureText.text = EditorLocalization.Format(
+                    "editor.fog.max_opacity", _brushMaxOpacity);
         }
 
         // PINCEL UNIVERSAL: exactamente el mismo sello, perfil y
