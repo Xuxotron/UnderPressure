@@ -1780,6 +1780,12 @@ namespace UnderPressure.Editor
     internal static class ScenarioEditorObjectDock
     {
         private static LandscapeObjectsMenu _detachedMenu;
+        private static readonly FieldInfo BuildEventsLevelField =
+            AccessTools.Field(typeof(BuildEvents), "_level");
+        private static readonly FieldInfo CursorModeField =
+            AccessTools.Field(typeof(CursorManager), "_mode");
+        private static readonly FieldInfo CursorModeStackField =
+            AccessTools.Field(typeof(CursorManager), "_modeStack");
         private static readonly System.Reflection.FieldInfo ContentField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listContent");
         private static readonly System.Reflection.FieldInfo SearchField =
@@ -1832,6 +1838,7 @@ namespace UnderPressure.Editor
             {
                 showButton.onClick.RemoveAllListeners();
                 showButton.onClick.AddListener(ScenarioEditorDockLayout.ToggleObjectsExpanded);
+                ScenarioEditorDockLayout.StyleToolbarButton(showButton, false);
             }
             ScenarioEditorCatalogLoadGate.Initialise(native, search);
             ScenarioEditorCatalogLoadGate.ShowAll(native);
@@ -1893,6 +1900,47 @@ namespace UnderPressure.Editor
         {
             if (ScenarioEditorFlow.IsRunning && _detachedMenu != null) return;
             hud?.DestroyMenu<LandscapeObjectsMenu>();
+        }
+
+        // Las miniaturas nativas envian su seleccion a BuildEvents. Si el
+        // usuario tenia activa otra herramienta, primero debe existir el
+        // submodo de objetos del editor; de lo contrario el juego interpreta
+        // la seleccion como una compra normal y abre el Ribbon jugable.
+        internal static bool PrepareEditorPlacement(BuildEvents buildEvents)
+        {
+            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
+                _detachedMenu == null) return true;
+            if (buildEvents == null) return false;
+            var level = BuildEventsLevelField?.GetValue(buildEvents) as Level;
+            var cursor = level?.CursorManager;
+            if (level == null || cursor == null) return false;
+
+            level.GameTime.IsPausedByMenu = true;
+            if (ContainsMode(cursor, typeof(CursorEditHospitalItem))) return true;
+            if (!ContainsMode(cursor, typeof(CursorEditHospital)))
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetos: se rechazo una colocacion sin el cursor principal del editor.");
+                return false;
+            }
+            level.HospitalEditEvents.OnBeginItemPlacement?.Invoke();
+            var prepared = ContainsMode(cursor, typeof(CursorEditHospitalItem));
+            if (!prepared)
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetos: no se pudo activar el submodo de colocacion del editor.");
+            return prepared;
+        }
+
+        private static bool ContainsMode(CursorManager cursor, Type type)
+        {
+            if (cursor == null || type == null) return false;
+            var current = CursorModeField?.GetValue(cursor);
+            if (current != null && type.IsInstanceOfType(current)) return true;
+            var stack = CursorModeStackField?.GetValue(cursor) as System.Collections.IEnumerable;
+            if (stack == null) return false;
+            foreach (var mode in stack)
+                if (mode != null && type.IsInstanceOfType(mode)) return true;
+            return false;
         }
 
         internal static void Forget(LandscapeObjectsMenu menu)
@@ -2256,6 +2304,10 @@ namespace UnderPressure.Editor
             yield return AccessTools.Method(typeof(CursorEditHospitalItem), "Destroy");
             yield return AccessTools.Method(typeof(CursorEditHospital),
                 "RefreshLandscapeItemMenu");
+            // StartItemPlacement consulta el mismo menu para decidir si debe
+            // abrir el Ribbon jugable. Debe reconocer tambien el catalogo
+            // desacoplado del editor.
+            yield return AccessTools.Method(typeof(BuildEvents), "StartItemPlacement");
         }
 
         private static IEnumerable<CodeInstruction> Transpiler(
@@ -2291,6 +2343,14 @@ namespace UnderPressure.Editor
             var arguments = called.GetGenericArguments();
             return arguments.Length == 1 && arguments[0] == typeof(LandscapeObjectsMenu);
         }
+    }
+
+    [HarmonyPatch(typeof(BuildEvents), "StartItemPlacement")]
+    internal static class ScenarioEditorObjectPlacementModePatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(BuildEvents __instance) =>
+            ScenarioEditorObjectDock.PrepareEditorPlacement(__instance);
     }
 
     // Mantiene las acciones y la geometria nativas del menu de pausa.
