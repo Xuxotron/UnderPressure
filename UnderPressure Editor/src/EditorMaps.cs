@@ -2849,6 +2849,7 @@ rect.pivot = new Vector2(1f, 1f);
                 _movePlotButton.interactable = _nativeMoveButton.interactable;
             var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen;
             var cursor = _level.CursorManager;
+            ScenarioEditorObjectDock.EnsureDefaultSelection(_level);
             SetToolButtonSelected(_objectsButton,
                 ScenarioEditorDockLayout.ObjectsPanelIsOpen());
             SetToolButtonSelected(_buildButton, !customToolOpen && cursor != null &&

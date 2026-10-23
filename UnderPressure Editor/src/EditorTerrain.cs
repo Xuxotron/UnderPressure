@@ -51,7 +51,6 @@ namespace UnderPressure.Editor
         private static Texture2D _crosshairCursor;
         private static bool _cursorLoadAttempted;
         private static bool _customCursorActive;
-        private static float _nextCursorRefresh;
 
         internal enum SculptMode { Off, Raise, Lower, Flatten }
         private static SculptMode _sculptMode = SculptMode.Off;
@@ -381,7 +380,6 @@ namespace UnderPressure.Editor
             if (_crosshairCursor != null) UnityEngine.Object.Destroy(_crosshairCursor);
             _crosshairCursor = null;
             _cursorLoadAttempted = false;
-            _nextCursorRefresh = 0f;
             if (_behaviour != null) UnityEngine.Object.Destroy(_behaviour.gameObject);
             _behaviour = null;
             _canvas = null;
@@ -954,11 +952,6 @@ namespace UnderPressure.Editor
 
         internal static void Update()
         {
-            if (_brushEnabled && _crosshairCursor != null && Time.unscaledTime >= _nextCursorRefresh)
-            {
-                _nextCursorRefresh = Time.unscaledTime + 0.25f;
-                RefreshCursor();
-            }
             if (!_initialized || !_brushEnabled) return;
             if (_sculptMode != SculptMode.Off)
             {
@@ -2110,10 +2103,17 @@ namespace UnderPressure.Editor
             {
                 bool showRing = ScenarioEditorTerrainPainter.TryGetBrushWorldRing(
                     _worldRingPoints);
-                if (_worldRing.gameObject.activeSelf != showRing)
-                    _worldRing.gameObject.SetActive(showRing);
                 if (showRing)
+                {
                     _worldRing.SetPositions(_worldRingPoints);
+                    if (!_worldRing.gameObject.activeSelf)
+                        _worldRing.gameObject.SetActive(true);
+                }
+                else if (!ScenarioEditorTerrainPainter.BrushEnabled &&
+                         _worldRing.gameObject.activeSelf)
+                {
+                    _worldRing.gameObject.SetActive(false);
+                }
             }
         }
 

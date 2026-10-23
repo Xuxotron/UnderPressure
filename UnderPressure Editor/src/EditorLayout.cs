@@ -1931,6 +1931,26 @@ namespace UnderPressure.Editor
             return prepared;
         }
 
+        // La seleccion de objetos es el estado de reposo del editor, no una
+        // herramienta que el usuario tenga que volver a activar. Solo se crea
+        // cuando el cursor principal vuelve a ser realmente el modo superior;
+        // cualquier herramienta nativa presente o futura mantiene su propio
+        // modo arriba de la pila y queda respetada automaticamente.
+        internal static void EnsureDefaultSelection(Level level)
+        {
+            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
+                level == null || !ReferenceEquals(level, ScenarioEditorSession.Level) ||
+                ScenarioEditorTerrainPainter.BrushEnabled || ScenarioCharacterViewer.IsOpen ||
+                ScenarioFogViewer.IsOpen || ScenarioLandscape.IsActive) return;
+            var cursor = level.CursorManager;
+            if (cursor == null || ContainsMode(cursor, typeof(CursorEditHospitalItem))) return;
+            var current = CursorModeField?.GetValue(cursor);
+            if (current == null || current.GetType() != typeof(CursorEditHospital)) return;
+
+            level.GameTime.IsPausedByMenu = true;
+            level.HospitalEditEvents.OnBeginItemPlacement?.Invoke();
+        }
+
         private static bool ContainsMode(CursorManager cursor, Type type)
         {
             if (cursor == null || type == null) return false;
