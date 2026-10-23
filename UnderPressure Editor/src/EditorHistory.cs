@@ -108,10 +108,15 @@ namespace UnderPressure.Editor
                 Destroy(_active.gameObject);
                 _active = null;
             }
-            var go = new GameObject("UP Editor - Historial");
+            var go = new GameObject("UP Editor - Historial", typeof(RectTransform));
             var editorMenu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
             var canvas = editorMenu == null ? null : editorMenu.GetComponentInParent<Canvas>();
             ScenarioEditorUiHierarchy.Attach(go, canvas);
+            var rootRect = (RectTransform)go.transform;
+            rootRect.anchorMin = Vector2.zero;
+            rootRect.anchorMax = Vector2.one;
+            rootRect.offsetMin = Vector2.zero;
+            rootRect.offsetMax = Vector2.zero;
             var history = go.AddComponent<ScenarioEditorHistory>();
             history._level = level;
             _active = history;
@@ -810,7 +815,11 @@ namespace UnderPressure.Editor
 
             _historyUi = new GameObject("UP Historial Canvas", typeof(RectTransform),
                 typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            UiRect(_historyUi, transform);
+            var uiRect = UiRect(_historyUi, transform);
+            uiRect.anchorMin = Vector2.zero;
+            uiRect.anchorMax = Vector2.one;
+            uiRect.offsetMin = Vector2.zero;
+            uiRect.offsetMax = Vector2.zero;
             var canvas = _historyUi.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.overrideSorting = true;
