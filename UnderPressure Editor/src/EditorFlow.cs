@@ -27,6 +27,8 @@ namespace UnderPressure.Editor
     {
         private const string RootName = "UP Scenario Editor UI";
         private static RectTransform _root;
+        private static readonly List<RaycastResult> PointerHits =
+            new List<RaycastResult>();
 
         internal static Transform ParentFor(Canvas canvas)
         {
@@ -58,6 +60,26 @@ namespace UnderPressure.Editor
             var parent = ParentFor(canvas);
             if (parent != null && value.transform.parent != parent)
                 value.transform.SetParent(parent, false);
+        }
+
+        internal static bool IsPointerOverUi(Vector2 screenPosition)
+        {
+            var eventSystem = EventSystem.current;
+            if (_root == null || _root.gameObject == null ||
+                !_root.gameObject.activeInHierarchy || eventSystem == null) return false;
+            var pointer = new PointerEventData(eventSystem) { position = screenPosition };
+            PointerHits.Clear();
+            eventSystem.RaycastAll(pointer, PointerHits);
+            var result = false;
+            for (var index = 0; index < PointerHits.Count; ++index)
+            {
+                var hit = PointerHits[index].gameObject;
+                if (hit == null || !hit.transform.IsChildOf(_root)) continue;
+                result = true;
+                break;
+            }
+            PointerHits.Clear();
+            return result;
         }
 
         internal static void Hide()

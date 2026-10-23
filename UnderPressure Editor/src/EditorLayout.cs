@@ -2,6 +2,8 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using TH20;
 using TH20.ExtContent;
@@ -27,8 +29,8 @@ namespace UnderPressure.Editor
     // BOTONES DE ESQUINA (Objetos, Historial, Terreno):
     // PlaceCornerButton() (tamano); BuildChrome() (creacion).
     // PANEL OBJETOS PROPIO: ApplyObjectsPanel() y
-    // ScenarioEditorObjectDock.ReplaceNativePanel() (destruye el GameObject
-    // nativo; crea una nueva logica en HUD y mueve los controles).
+    // ScenarioEditorObjectDock.DetachFromNativeMenus() (retira el catalogo
+    // del ciclo de menus del HUD y mueve sus controles al panel propio).
     // BOTONES DE PARCELAS (Aislar, Anadir, Mover, Eliminar):
     // FitPlotPanel() + StyleCompactButtonText() (texto).
     // FILAS DE PARCELA Y SUS CHECKS: CompactPlotRow() (medidas),
@@ -69,10 +71,11 @@ namespace UnderPressure.Editor
         private RectTransform _plotPanel;
         private RectTransform _plotViewport;
         private LandscapeObjectsMenu _objectsMenu;
-        // PANEL OBJETOS: el GameObject nativo SE DESTRUYE al abrir la paleta.
-        // Un componente logico nuevo gestiona el catalogo, registrado en HUD;
-        // el panel de interfaz y sus controles viven en UP Objects Panel.
+        // PANEL OBJETOS: el catalogo conserva su cargador original, pero queda
+        // fuera del registro de menus del HUD. Su interfaz vive en el panel
+        // propio UP Objects Panel y no participa en cierres de menus.
         private RectTransform _objectsDockHost;
+        private LandscapeObjectsMenu _objectsHostOwner;
         private bool _objectsOpen;
         private bool _objectsExpanded;
         private float _objectsPanelHeight = -1f;
@@ -128,35 +131,9 @@ namespace UnderPressure.Editor
             });
         }
 
-        internal static bool PointerOverDock()
-        {
-            var dock = _active;
-            if (dock == null || dock._closing || dock._canvasRect == null ||
-                !ScenarioEditorFlow.IsRunning) return false;
-            var canvas = dock._canvas;
-            Vector2 local;
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                dock._canvasRect, Input.mousePosition,
-                canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
-                    ? canvas.worldCamera : null, out local)) return false;
-            var bounds = dock._canvasRect.rect;
-            if (!bounds.Contains(local)) return false;
-            if (ScreenPointInside(_active._storage?.TileSelectionRoot,
-                Input.mousePosition, canvas)) return true;
-            return local.x < bounds.xMin + PanelWidth ||
-                   local.x > bounds.xMax - PanelWidth ||
-                   local.y > bounds.yMax - BarHeight ||
-                   local.y < bounds.yMin + BarHeight;
-        }
-
-        private static bool ScreenPointInside(RectTransform rect, Vector2 screenPoint,
-            Canvas canvas)
-        {
-            if (rect == null || !rect.gameObject.activeInHierarchy) return false;
-            var camera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
-                ? canvas.worldCamera : null;
-            return RectTransformUtility.RectangleContainsScreenPoint(rect, screenPoint, camera);
-        }
+        internal static bool PointerOverEditorUi() =>
+            ScenarioEditorFlow.IsRunning &&
+            ScenarioEditorUiHierarchy.IsPointerOverUi(Input.mousePosition);
 
         // Referencia cromatica de Build.
         internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
@@ -424,14 +401,6 @@ namespace UnderPressure.Editor
             _active._objectsExpanded = !_active._objectsExpanded;
             _active.ApplyObjectsPanel(_active._objectsMenu, true);
         }
-
-        // Solo protege NUESTRO menu logico. El resto de menus nativos
-        // mantiene intactos sus cierres, incluidos Escape y las opciones.
-        internal static bool ProtectObjectsMenu(MenuBase menu) =>
-            ScenarioEditorFlow.IsRunning && ScenarioEditorSession.Active &&
-            _active != null && !_active._closing &&
-            menu != null && ReferenceEquals(menu, _active._objectsMenu) &&
-            _active._objectsDockHost != null;
 
         internal static void RegisterPlotRow(PlotSelectionItem row)
         {
@@ -1161,38 +1130,62 @@ namespace UnderPressure.Editor
             rect.SetAsLastSibling();
         }
 
-        // PANEL OBJETOS: se conserva el LandscapeObjectsMenu nativo y solo se
-        // recoloca. Esta es la implementacion estable anterior al panel propio.
+        // PANEL OBJETOS: superficie propia, fuera del ciclo de menus del HUD.
+        // El componente nativo conserva exclusivamente la carga del catalogo.
         // TAMANO: PanelWidth, altura = hueco entre Parcelas y boton Objetos.
         // POSICION: (0, BarHeight), anclado abajo a la izquierda.
         private void ApplyObjectsPanel(LandscapeObjectsMenu menu, bool force)
         {
-            if (menu == null || _canvasRect == null)
+            if (_canvasRect == null) return;
+            if (menu == null)
             {
+                if (_objectsDockHost != null) return;
                 _objectsMenu = null;
                 _objectsPanelHeight = -1f;
                 return;
             }
-            var rect = menu.transform as RectTransform;
-            if (rect == null) return;
             var height = Mathf.Max(MinimumLowerHeight,
                 _canvasRect.rect.height - BarHeight * 2f - _leftUpperHeight);
             var width = _objectsExpanded
                 ? Mathf.Max(PanelWidth, _canvasRect.rect.width - PanelWidth)
                 : PanelWidth;
-            if (!force && ReferenceEquals(_objectsMenu, menu) &&
-                Mathf.Abs(_objectsPanelHeight - height) < .1f) return;
-            _objectsMenu = menu;
+            var created = _objectsDockHost == null ||
+                !ReferenceEquals(_objectsHostOwner, menu);
+            if (created)
+            {
+                if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
+                var panel = new GameObject("UP Objects Panel", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                panel.transform.SetParent(_root, false);
+                var host = (RectTransform)panel.transform;
+                ApplyPanelStyle(panel);
+                EnsureSortingCanvas(panel, 2850);
+                if (!ScenarioEditorObjectDock.DetachFromNativeMenus(menu, host,
+                    _level != null ? _level.HUD : null, _root))
+                {
+                    Destroy(panel);
+                    _objectsDockHost = null;
+                    _objectsHostOwner = null;
+                    return;
+                }
+                _objectsDockHost = host;
+                _objectsMenu = menu;
+                _objectsHostOwner = menu;
+                _objectsOpen = true;
+            }
+            if (!force && !created && ReferenceEquals(_objectsMenu, menu) &&
+                Mathf.Abs(_objectsPanelHeight - height) < .1f &&
+                Mathf.Abs(_objectsDockHost.rect.width - width) < .1f) return;
             _objectsPanelHeight = height;
-            RememberRect(rect);
-            rect.SetParent(_root, false);
+            if (_objectsDockHost == null) return;
+            var rect = _objectsDockHost;
             rect.anchorMin = rect.anchorMax = Vector2.zero;
             rect.pivot = Vector2.zero;
             rect.anchoredPosition = new Vector2(0f, BarHeight);
             rect.sizeDelta = new Vector2(width, height);
-            ApplyPanelStyle(menu.gameObject);
-            EnsureSortingCanvas(menu.gameObject, 2850);
+            rect.gameObject.SetActive(_objectsOpen);
             ScenarioEditorObjectDock.Configure(menu, rect, width, height);
+            SetSelected(_objectsToggle, _objectsOpen);
         }
 
         private LandscapeObjectsMenu FindActiveObjectsMenu()
@@ -1438,14 +1431,15 @@ namespace UnderPressure.Editor
             // Ocultar los controles inmediatamente: Destroy se ejecuta al
             // final del frame y no debe dejar restos en el menu principal.
             if (_root != null) _root.gameObject.SetActive(false);
-            // Desregistrar la logica propia del HUD al salir del editor.
-            // _closing ya es true y permite que DestroyMenu se ejecute.
-            if (_objectsDockHost != null && _objectsMenu != null &&
-                _level != null && _level.HUD != null)
-                _level.HUD.DestroyMenu(_objectsMenu);
-            // PANEL OBJETOS NUEVO: vive fuera de _root; destruirlo al salir.
+            // El catalogo y su panel no pertenecen al registro de menus del HUD.
+            if (_objectsMenu != null)
+            {
+                ScenarioEditorObjectDock.Forget(_objectsMenu);
+                Destroy(_objectsMenu.gameObject);
+            }
             if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
             _objectsDockHost = null;
+            _objectsHostOwner = null;
             foreach (var pair in _originalRects)
             {
                 var rect = pair.Key;
@@ -1785,6 +1779,7 @@ namespace UnderPressure.Editor
     // NO afecta a las miniaturas de texturas del pincel de Terreno.
     internal static class ScenarioEditorObjectDock
     {
+        private static LandscapeObjectsMenu _detachedMenu;
         private static readonly System.Reflection.FieldInfo ContentField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_listContent");
         private static readonly System.Reflection.FieldInfo SearchField =
@@ -1792,22 +1787,21 @@ namespace UnderPressure.Editor
         private static readonly System.Reflection.FieldInfo CreatingIconField =
             AccessTools.Field(typeof(LandscapeObjectsMenu), "_creatingListIcon");
 
-        // DESTRUCCION REAL: el GameObject prefab LandscapeObjectsMenu desaparece.
-        // Se reemplaza su logica en el registro HUD por un componente nuevo,
-        // sin panel nativo. Los controles originales se TRASLADAN, no se duplican.
-        // El cierre con Escape llega al componente nuevo via HUD.DestroyMenu.
-        internal static bool ReplaceNativePanel(LandscapeObjectsMenu native,
-            RectTransform host, HUD hud, out LandscapeObjectsMenu replacement)
+        // El catalogo se retira del registro de menus del HUD. Desde ese momento
+        // ningun menu actual o futuro puede cerrarlo: el componente nativo queda
+        // activo solo como cargador y sus controles viven en el panel propio.
+        internal static bool DetachFromNativeMenus(LandscapeObjectsMenu native,
+            RectTransform host, HUD hud, RectTransform logicParent)
         {
-            replacement = null;
-            if (native == null || host == null || hud == null) return false;
+            if (native == null || host == null || hud == null || logicParent == null)
+                return false;
             var createdMenusField = AccessTools.Field(typeof(HUD), "_createdMenus");
             var createdMenus = createdMenusField?.GetValue(hud) as System.Collections.IList;
             var index = createdMenus == null ? -1 : createdMenus.IndexOf(native);
             if (index < 0)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Objetos: el menu nativo no consta en HUD; no se puede sustituir.");
+                    "Objetos: el menu nativo no consta en HUD; no se puede desacoplar.");
                 return false;
             }
             var contentObject = ContentField?.GetValue(native) as GameObject;
@@ -1821,27 +1815,8 @@ namespace UnderPressure.Editor
                 return false;
             }
 
-            // Crear el propietario logico SIN los bordes, fondos ni hijos del
-            // panel nativo; el panel propio no necesita una segunda ventana.
-            var logic = new GameObject("UP Objects Logic", typeof(RectTransform));
-            logic.SetActive(false);
-            logic.transform.SetParent(native.transform.parent, false);
-            var next = logic.AddComponent<LandscapeObjectsMenu>();
-            try
-            {
-                CopyFields(typeof(MenuBase), native, next);
-                CopyFields(typeof(LandscapeObjectsMenu), native, next);
-            }
-            catch (Exception ex)
-            {
-                UnityEngine.Object.Destroy(logic);
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Objetos: no se pudo trasladar el estado del menu: " + ex);
-                return false;
-            }
-
             // Trasladar todos los elementos FUNCIONALES al panel propio:
-            // ScrollRect+miniaturas, filtro, etiqueta, Ver todo y indicador.
+            // ScrollRect+miniaturas, filtro, etiqueta, flecha e indicador.
             scrollRoot.SetParent(host, false);
             if (!search.transform.IsChildOf(scrollRoot))
                 search.transform.SetParent(host, false);
@@ -1852,110 +1827,77 @@ namespace UnderPressure.Editor
             var creatingIcon = CreatingIconField?.GetValue(native) as Image;
             if (creatingIcon != null && creatingIcon.transform.IsChildOf(native.transform))
                 creatingIcon.transform.SetParent(host, false);
-            var prefab = AccessTools.Field(typeof(LandscapeObjectsMenu), "_prefabListItem")?
-                .GetValue(native) as GameObject;
-            PrepareListItemPrefab(prefab, native);
-            if (prefab != null && prefab.transform.IsChildOf(native.transform))
-                prefab.transform.SetParent(logic.transform, false);
-
-            // El listener del prefab captura el objeto antiguo: ya no debe
-            // escribir en el componente que se va a destruir.
-            var filterField = AccessTools.Field(typeof(LandscapeObjectsMenu), "_filter");
-            search.onValueChanged.RemoveAllListeners();
-            search.onValueChanged.AddListener(filter => filterField?.SetValue(next, filter));
-            filterField?.SetValue(next, search.text);
             var showButton = show == null ? null : show.GetComponent<Button>();
             if (showButton != null)
             {
                 showButton.onClick.RemoveAllListeners();
                 showButton.onClick.AddListener(ScenarioEditorDockLayout.ToggleObjectsExpanded);
             }
-            ScenarioEditorCatalogLoadGate.Initialise(next, search);
-            ScenarioEditorCatalogLoadGate.ShowAll(next);
+            ScenarioEditorCatalogLoadGate.Initialise(native, search);
+            ScenarioEditorCatalogLoadGate.ShowAll(native);
 
-            // MenuBase.Update() lee esta bandera para cerrar con Escape
-            // y boton derecho. Desactivarla UNA SOLA VEZ en la logica nueva.
-            // Las otras rutas de cierre nativo se interceptan mas abajo.
+            // El cargador ya no es un menu del HUD. Se anula tambien su cierre
+            // local para que Update se dedique exclusivamente al catalogo.
             var allowEscapeField = AccessTools.Field(typeof(MenuBase),
                 "_allowEscapeCloseMenu2");
             if (allowEscapeField == null)
             {
-                UnityEngine.Object.Destroy(logic);
                 UnderPressureEditorPlugin.Log?.LogError(
                     "Objetos: no se ha encontrado la bandera de cierre por Escape.");
                 return false;
             }
-            allowEscapeField.SetValue(next, false);
+            allowEscapeField.SetValue(native, false);
+            AccessTools.Field(typeof(MenuBase), "_closeMenuButton")?
+                .SetValue(native, null);
+            AccessTools.Field(typeof(MenuBase), "_isCloseButtonRegistered")?
+                .SetValue(native, false);
 
-            // HUD identifica el menu por esta lista; se conserva registrado
-            // y protegido durante el editor para reutilizarlo entre modos.
-            createdMenus[index] = next;
-            var wasActive = native.gameObject.activeSelf;
-            native.enabled = false;
-            native.gameObject.SetActive(false);
-            logic.SetActive(wasActive);
-            UnityEngine.Object.Destroy(native.gameObject);
-            replacement = next;
+            createdMenus.RemoveAt(index);
+            native.gameObject.name = "UP Objects Logic";
+            native.transform.SetParent(logicParent, false);
+            var logicRect = native.transform as RectTransform;
+            if (logicRect != null)
+            {
+                logicRect.anchorMin = logicRect.anchorMax = Vector2.zero;
+                logicRect.pivot = Vector2.zero;
+                logicRect.anchoredPosition = new Vector2(-10000f, -10000f);
+                logicRect.sizeDelta = Vector2.zero;
+            }
+            foreach (var graphic in native.GetComponents<Graphic>())
+                graphic.enabled = false;
+            native.gameObject.SetActive(true);
+            _detachedMenu = native;
             return true;
         }
 
-        // El prefab nativo referencia un TooltipSpawner alojado fuera de la
-        // miniatura. Al destruir el panel original esa referencia queda nula y
-        // SetDefinition aborta antes de retirar el objeto de la cola. Se copia
-        // el mismo tooltip dentro del prefab para que cada clon sea autonomo.
-        private static void PrepareListItemPrefab(GameObject prefab,
-            LandscapeObjectsMenu native)
+        // El cursor nativo necesita actualizar el FloorPlan del catalogo, pero
+        // ya no debe crear ni destruir su ventana. Estas tres entradas son el
+        // unico puente entre el cursor y el cargador persistente.
+        internal static LandscapeObjectsMenu ResolveForCursor(HUD hud,
+            bool includeInactive)
         {
-            if (prefab == null) return;
-            var item = prefab.GetComponent<LandscapeObjectListItem>();
-            if (item == null) return;
-            var source = item.Tooltip;
-            if (source != null && source.transform.IsChildOf(prefab.transform)) return;
-            if (source == null && native != null)
-                source = native.GetComponentsInChildren<TooltipSpawner>(true)
-                    .FirstOrDefault(candidate => candidate != null && candidate.Prefab != null);
-            var local = prefab.GetComponent<TooltipSpawner>() ??
-                prefab.AddComponent<TooltipSpawner>();
-            if (source != null && !ReferenceEquals(source, local))
-            {
-                local.HoverTime = source.HoverTime;
-                local.Prefab = source.Prefab;
-                local.AnchorToMouse = source.AnchorToMouse;
-                local.AnchorOffset = source.AnchorOffset;
-            }
-            item.Tooltip = local;
+            if (ScenarioEditorFlow.IsRunning && _detachedMenu != null)
+                return _detachedMenu;
+            return hud == null ? null : hud.CreateMenu<LandscapeObjectsMenu>(includeInactive);
         }
 
-        private static void CopyFields(Type type, object source, object destination)
+        internal static LandscapeObjectsMenu FindForCursor(HUD hud,
+            bool includeInactive)
         {
-            var fields = type.GetFields(System.Reflection.BindingFlags.Instance |
-                System.Reflection.BindingFlags.Public |
-                System.Reflection.BindingFlags.NonPublic |
-                System.Reflection.BindingFlags.DeclaredOnly);
-            foreach (var field in fields)
-            {
-                if (field.IsStatic) continue;
-                if (field.IsInitOnly)
-                {
-                    // LandscapeObjectsMenu contiene dos listas readonly que
-                    // Unity inicializa. Copiar sus contenidos sin reemplazar
-                    // sus referencias preserva el catalogo ya generado.
-                    var oldList = field.GetValue(source) as System.Collections.IList;
-                    var newList = field.GetValue(destination) as System.Collections.IList;
-                    if (oldList == null || newList == null) continue;
-                    newList.Clear();
-                    foreach (var item in oldList) newList.Add(item);
-                }
-                else field.SetValue(destination, field.GetValue(source));
-            }
-            if (type == typeof(MenuBase))
-            {
-                // El botón de cerrar del prefab se destruye con él.
-                AccessTools.Field(typeof(MenuBase), "_closeMenuButton")?
-                    .SetValue(destination, null);
-                AccessTools.Field(typeof(MenuBase), "_isCloseButtonRegistered")?
-                    .SetValue(destination, false);
-            }
+            if (ScenarioEditorFlow.IsRunning && _detachedMenu != null)
+                return _detachedMenu;
+            return hud == null ? null : hud.FindMenu<LandscapeObjectsMenu>(includeInactive);
+        }
+
+        internal static void ReleaseFromCursor(HUD hud)
+        {
+            if (ScenarioEditorFlow.IsRunning && _detachedMenu != null) return;
+            hud?.DestroyMenu<LandscapeObjectsMenu>();
+        }
+
+        internal static void Forget(LandscapeObjectsMenu menu)
+        {
+            if (ReferenceEquals(_detachedMenu, menu)) _detachedMenu = null;
         }
 
         internal static void Configure(LandscapeObjectsMenu menu, RectTransform host,
@@ -2144,7 +2086,8 @@ namespace UnderPressure.Editor
         }
     }
 
-    // El EventSystem es lo que utiliza nuestro selector de objetos.
+    // Una sola consulta cubre cualquier control presente o futuro que cuelgue
+    // de la jerarquia comun del editor.
     [HarmonyPatch]
     internal static class ScenarioEditorDockPointerPatch
     {
@@ -2152,7 +2095,7 @@ namespace UnderPressure.Editor
             AccessTools.Method(typeof(EventSystem), "IsPointerOverGameObject", Type.EmptyTypes);
         private static void Postfix(ref bool __result)
         {
-            if (!__result && ScenarioEditorDockLayout.PointerOverDock())
+            if (!__result && ScenarioEditorDockLayout.PointerOverEditorUi())
                 __result = true;
         }
     }
@@ -2164,7 +2107,7 @@ namespace UnderPressure.Editor
     {
         private static void Postfix(ref bool __result)
         {
-            if (!__result && ScenarioEditorDockLayout.PointerOverDock())
+            if (!__result && ScenarioEditorDockLayout.PointerOverEditorUi())
                 __result = true;
         }
     }
@@ -2270,6 +2213,86 @@ namespace UnderPressure.Editor
         }
     }
 
+    // CursorEditHospitalItem presupone que el catalogo es una ventana del HUD.
+    // Sustituimos exclusivamente esas llamadas de propiedad por el puente
+    // anterior; el resto de la logica nativa del cursor permanece intacta.
+    [HarmonyPatch]
+    internal static class ScenarioEditorObjectsCursorOwnershipPatch
+    {
+        private static readonly MethodInfo HudCreateDefinition = typeof(HUD)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic)
+            .Single(method => method.Name == "CreateMenu" &&
+                method.IsGenericMethodDefinition &&
+                method.GetParameters().Length == 1 &&
+                method.GetParameters()[0].ParameterType == typeof(bool));
+        private static readonly MethodInfo HudFindDefinition = typeof(HUD)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic)
+            .Single(method => method.Name == "FindMenu" &&
+                method.IsGenericMethodDefinition &&
+                method.GetParameters().Length == 1 &&
+                method.GetParameters()[0].ParameterType == typeof(bool));
+        private static readonly MethodInfo HudDestroyDefinition = typeof(HUD)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic)
+            .Single(method => method.Name == "DestroyMenu" &&
+                method.IsGenericMethodDefinition &&
+                method.GetParameters().Length == 0);
+        private static readonly MethodInfo ResolveMethod = AccessTools.Method(
+            typeof(ScenarioEditorObjectDock), nameof(ScenarioEditorObjectDock.ResolveForCursor));
+        private static readonly MethodInfo FindMethod = AccessTools.Method(
+            typeof(ScenarioEditorObjectDock), nameof(ScenarioEditorObjectDock.FindForCursor));
+        private static readonly MethodInfo ReleaseMethod = AccessTools.Method(
+            typeof(ScenarioEditorObjectDock), nameof(ScenarioEditorObjectDock.ReleaseFromCursor));
+
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Constructor(typeof(CursorEditHospitalItem),
+                new[] { typeof(CursorManager), typeof(Level), typeof(HospitalPlot),
+                    typeof(HospitalPlotLayer) });
+            yield return AccessTools.Method(typeof(CursorEditHospitalItem),
+                "OnSelectHospitalPlot");
+            yield return AccessTools.Method(typeof(CursorEditHospitalItem), "Destroy");
+            yield return AccessTools.Method(typeof(CursorEditHospital),
+                "RefreshLandscapeItemMenu");
+        }
+
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                var called = instruction.operand as MethodInfo;
+                if (IsLandscapeGeneric(called, HudCreateDefinition))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = ResolveMethod;
+                }
+                else if (IsLandscapeGeneric(called, HudFindDefinition))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = FindMethod;
+                }
+                else if (IsLandscapeGeneric(called, HudDestroyDefinition))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = ReleaseMethod;
+                }
+                yield return instruction;
+            }
+        }
+
+        private static bool IsLandscapeGeneric(MethodInfo called,
+            MethodInfo definition)
+        {
+            if (called == null || !called.IsGenericMethod ||
+                called.GetGenericMethodDefinition() != definition) return false;
+            var arguments = called.GetGenericArguments();
+            return arguments.Length == 1 && arguments[0] == typeof(LandscapeObjectsMenu);
+        }
+    }
+
     // Mantiene las acciones y la geometria nativas del menu de pausa.
     // Solo aplica el azul plano que ya usan los botones del editor.
     [HarmonyPatch(typeof(PauseMenu), "Setup")]
@@ -2281,38 +2304,6 @@ namespace UnderPressure.Editor
         {
             ScenarioEditorDockLayout.StylePauseMenu(__instance);
         }
-    }
-
-    // PROTECCION DE OBJETOS: MenuBase.Update intenta cerrar el menu con
-    // Escape, y otros menus o herramientas llaman a CloseMenu/DestroyMenu.
-    // Son RUTAS DISTINTAS: bloquear HandlePauseLogic no las detenía.
-    // No modifica el comportamiento de ninguna otra ventana del juego.
-    [HarmonyPatch(typeof(MenuBase), "CloseMenu")]
-    internal static class ScenarioEditorObjectsKeepOpenClosePatch
-    {
-        [HarmonyPriority(Priority.First)]
-        private static bool Prefix(MenuBase __instance) =>
-            !ScenarioEditorDockLayout.ProtectObjectsMenu(__instance);
-    }
-
-    [HarmonyPatch(typeof(MenuBase), "CloseMenuImmediately")]
-    internal static class ScenarioEditorObjectsKeepOpenImmediatePatch
-    {
-        [HarmonyPriority(Priority.First)]
-        private static bool Prefix(MenuBase __instance) =>
-            !ScenarioEditorDockLayout.ProtectObjectsMenu(__instance);
-    }
-
-    [HarmonyPatch]
-    internal static class ScenarioEditorObjectsKeepOpenDestroyPatch
-    {
-        private static System.Reflection.MethodBase TargetMethod() =>
-            AccessTools.Method(typeof(HUD), "DestroyMenu",
-                new[] { typeof(MenuBase) });
-
-        [HarmonyPriority(Priority.First)]
-        private static bool Prefix(MenuBase menu) =>
-            !ScenarioEditorDockLayout.ProtectObjectsMenu(menu);
     }
 
 }
