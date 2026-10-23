@@ -792,7 +792,7 @@ namespace UnderPressure.Editor
                 if (component != null && component.GetType().FullName == "I2.Loc.Localize")
                     component.enabled = false;
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => ScenarioEditorCatalogLoadGate.ShowAll(menu));
+            button.onClick.AddListener(ScenarioEditorDockLayout.ToggleObjectsExpanded);
             button.interactable = true;
             var text = button.GetComponentInChildren<TMP_Text>(true);
             if (text != null)
@@ -1179,6 +1179,7 @@ namespace UnderPressure.Editor
             var gate = menu.GetComponent<ScenarioEditorCatalogLoadGate>() ??
                        menu.gameObject.AddComponent<ScenarioEditorCatalogLoadGate>();
             gate._search = search;
+            gate._showAll = true;
         }
 
         internal static void ShowAll(LandscapeObjectsMenu menu)

@@ -1728,39 +1728,37 @@ namespace UnderPressure.Editor
         internal void BuildUi()
         {
             var root = (RectTransform)transform;
-            CreateText(root, "Title", T("editor.terrain.title"),
-                new Vector2(9, -9), new Vector2(162, 24), 16, TextAnchor.MiddleCenter);
-            _brushButton = CreateButton(root, new Vector2(9, -226), new Vector2(78.5f, 30),
+            _brushButton = CreateButton(root, new Vector2(9, -155), new Vector2(78.5f, 30),
                 T("editor.terrain.brush"), () =>
                 ScenarioEditorTerrainPainter.ToggleBrush(), out _toggleText);
             CreateText(root, "Size", T("editor.terrain.size"),
-                new Vector2(9, -80), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
-            _sizeText = CreateText(root, "SizeValue", "5", new Vector2(121, -80),
+                new Vector2(9, -9), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
+            _sizeText = CreateText(root, "SizeValue", "5", new Vector2(121, -9),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
-            _sizeSlider = CreateSlider(root, new Vector2(12, -108), new Vector2(156, 9), 1, 20, 5,
+            _sizeSlider = CreateSlider(root, new Vector2(12, -37), new Vector2(156, 9), 1, 20, 5,
                 value => ScenarioEditorTerrainPainter.SetBrushSize(value));
             CreateText(root, "Opacity", T("editor.terrain.opacity"),
-                new Vector2(9, -133), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
-            _opacityText = CreateText(root, "OpacityValue", "50%", new Vector2(121, -133),
+                new Vector2(9, -62), new Vector2(104, 19), 12, TextAnchor.MiddleLeft);
+            _opacityText = CreateText(root, "OpacityValue", "50%", new Vector2(121, -62),
                 new Vector2(50, 19), 12, TextAnchor.MiddleRight);
-            _opacitySlider = CreateSlider(root, new Vector2(12, -162), new Vector2(156, 9), 0, 100, 50,
+            _opacitySlider = CreateSlider(root, new Vector2(12, -91), new Vector2(156, 9), 0, 100, 50,
                 value => ScenarioEditorTerrainPainter.SetBrushOpacity(value));
-            _raiseButton = CreateButton(root, new Vector2(9, -191), new Vector2(51, 28),
+            _raiseButton = CreateButton(root, new Vector2(9, -120), new Vector2(51, 28),
                 T("editor.terrain.raise"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Raise), out _);
-            _lowerButton = CreateButton(root, new Vector2(65, -191), new Vector2(51, 28),
+            _lowerButton = CreateButton(root, new Vector2(65, -120), new Vector2(51, 28),
                 T("editor.terrain.lower"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Lower), out _);
-            _flattenButton = CreateButton(root, new Vector2(121, -191), new Vector2(51, 28),
+            _flattenButton = CreateButton(root, new Vector2(121, -120), new Vector2(51, 28),
                 T("editor.terrain.flatten"), () => ScenarioEditorTerrainPainter.SelectSculptMode(
                     ScenarioEditorTerrainPainter.SculptMode.Flatten), out _);
 
-            _wireButton = CreateButton(root, new Vector2(92.5f, -226), new Vector2(78.5f, 30),
+            _wireButton = CreateButton(root, new Vector2(92.5f, -155), new Vector2(78.5f, 30),
                 T("editor.terrain.wireframe"), () => ScenarioEditorTerrainPainter.ToggleWireframe(),
                 out _wireText);
             var scrollRoot = NewUi("Textures", root, typeof(Image), typeof(ScrollRect));
             var scrollRect = (RectTransform)scrollRoot.transform;
-            Place(scrollRect, new Vector2(8, -264), new Vector2(164, 262));
+            Place(scrollRect, new Vector2(8, -193), new Vector2(164, 262));
             scrollRoot.GetComponent<Image>().color = new Color(0f,0f,0f,0.18f);
             _scroll = scrollRoot.GetComponent<ScrollRect>();
             _scroll.vertical = true;
@@ -1793,7 +1791,7 @@ namespace UnderPressure.Editor
             _scroll.content = _content;
             _scroll.viewport = viewportRect;
             ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(root, _scroll,
-                "UP Terrain Native Vertical Scrollbar", 264f, 8f, true);
+                "UP Terrain Native Vertical Scrollbar", 193f, 8f, true);
             foreach (var slot in ScenarioEditorTerrainPainter.LayerSlots)
             {
                 if (slot.Texture == null) continue;
@@ -1809,8 +1807,6 @@ namespace UnderPressure.Editor
         internal void ApplyDockSize(float width, float height)
         {
             var innerWidth = Mathf.Max(120f, width - 18f);
-            var title = transform.Find("Title") as RectTransform;
-            if (title != null) title.sizeDelta = new Vector2(innerWidth, 24f);
             if (_sizeSlider != null)
                 ((RectTransform)_sizeSlider.transform).sizeDelta = new Vector2(width - 24f, 9f);
             if (_opacitySlider != null)
@@ -1823,41 +1819,41 @@ namespace UnderPressure.Editor
             if (_raiseButton != null)
             {
                 var rect = (RectTransform)_raiseButton.transform;
-                rect.anchoredPosition = new Vector2(sculptLeft, -191f);
+                rect.anchoredPosition = new Vector2(sculptLeft, -120f);
                 rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             if (_lowerButton != null)
             {
                 var rect = (RectTransform)_lowerButton.transform;
                 rect.anchoredPosition = new Vector2(
-                    sculptLeft + sculptWidth + sculptGap, -191f);
+                    sculptLeft + sculptWidth + sculptGap, -120f);
                 rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             if (_flattenButton != null)
             {
                 var rect = (RectTransform)_flattenButton.transform;
                 rect.anchoredPosition = new Vector2(
-                    sculptLeft + (sculptWidth + sculptGap) * 2f, -191f);
+                    sculptLeft + (sculptWidth + sculptGap) * 2f, -120f);
                 rect.sizeDelta = new Vector2(sculptWidth, sculptHeight);
             }
             var toolWidth = (innerWidth - 5f) * .5f;
             if (_brushButton != null)
             {
                 var rect = (RectTransform)_brushButton.transform;
-                rect.anchoredPosition = new Vector2(9f, -226f);
+                rect.anchoredPosition = new Vector2(9f, -155f);
                 rect.sizeDelta = new Vector2(toolWidth, 30f);
             }
             if (_wireButton != null)
             {
                 var rect = (RectTransform)_wireButton.transform;
-                rect.anchoredPosition = new Vector2(14f + toolWidth, -226f);
+                rect.anchoredPosition = new Vector2(14f + toolWidth, -155f);
                 rect.sizeDelta = new Vector2(toolWidth, 30f);
             }
             if (_scroll != null)
             {
                 var rect = _scroll.transform as RectTransform;
                 if (rect != null)
-                    rect.sizeDelta = new Vector2(width - 16f, Mathf.Max(40f, height - 272f));
+                    rect.sizeDelta = new Vector2(width - 16f, Mathf.Max(40f, height - 201f));
             }
         }
 
@@ -2101,7 +2097,9 @@ namespace UnderPressure.Editor
             for(int i=0;i<_slots.Count;i++)
             {
                 var image=_slots[i].GetComponent<Image>();
-                image.color=slots[i]==selected?new Color(.96f,.73f,.17f,1f):new Color(.19f,.31f,.39f,1f);
+                image.color=slots[i]==selected
+                    ? new Color32(255, 255, 255, 255)
+                    : new Color32(48, 79, 99, 255);
             }
         }
 

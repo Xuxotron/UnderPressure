@@ -74,6 +74,7 @@ namespace UnderPressure.Editor
         // el panel de interfaz y sus controles viven en UP Objects Panel.
         private RectTransform _objectsDockHost;
         private bool _objectsOpen;
+        private bool _objectsExpanded;
         private float _objectsPanelHeight = -1f;
         private Button _objectsToggle;
         private Button _historyToggle;
@@ -417,6 +418,13 @@ namespace UnderPressure.Editor
             return true;
         }
 
+        internal static void ToggleObjectsExpanded()
+        {
+            if (_active == null || _active._closing || _active._objectsMenu == null) return;
+            _active._objectsExpanded = !_active._objectsExpanded;
+            _active.ApplyObjectsPanel(_active._objectsMenu, true);
+        }
+
         // Solo protege NUESTRO menu logico. El resto de menus nativos
         // mantiene intactos sus cierres, incluidos Escape y las opciones.
         internal static bool ProtectObjectsMenu(MenuBase menu) =>
@@ -603,8 +611,11 @@ namespace UnderPressure.Editor
             if (!_rightHeightChosen) _rightUpperHeight = Mathf.Min(430f, available * .48f);
             _leftUpperHeight = Mathf.Clamp(_leftUpperHeight, MinimumUpperHeight,
                 Mathf.Max(MinimumUpperHeight, available - MinimumLowerHeight));
+            var rightMaximum = _terrainOpen
+                ? available - MinimumLowerHeight
+                : available;
             _rightUpperHeight = Mathf.Clamp(_rightUpperHeight, MinimumUpperHeight,
-                Mathf.Max(MinimumUpperHeight, available - MinimumLowerHeight));
+                Mathf.Max(MinimumUpperHeight, rightMaximum));
 
             RememberRect(_plotPanel);
             // PARCELAS: subir 20 px la parte superior SIN cambiar el borde
@@ -716,14 +727,14 @@ namespace UnderPressure.Editor
                 IgnoreParentLayout(_plotViewport);
                 _plotViewport.anchorMin = _plotViewport.anchorMax = new Vector2(0f, 1f);
                 _plotViewport.pivot = new Vector2(0f, 1f);
-                _plotViewport.anchoredPosition = new Vector2(4f, -84f);
+                _plotViewport.anchoredPosition = new Vector2(4f, -70f);
                 // Mayor altura visible: las parcelas aprovechan el espacio
                 // recuperado bajo el nombre del hospital.
                 _plotViewport.sizeDelta = new Vector2(PanelWidth - 8f,
-                    Mathf.Max(58f, _leftUpperHeight - 110f));
+                    Mathf.Max(58f, _leftUpperHeight - 96f));
                 var plotScroll = _plotViewport.GetComponent<ScrollRect>();
                 InstallNativeVerticalScrollbar(_plotPanel, plotScroll,
-                    "UP Plot Native Vertical Scrollbar", 86f, 46f);
+                    "UP Plot Native Vertical Scrollbar", 72f, 46f);
                 ResizePlotScrollContent(plotScroll);
             }
             var layerRoot = _storage?.PlotLayerRoot as RectTransform;
@@ -733,7 +744,7 @@ namespace UnderPressure.Editor
                 IgnoreParentLayout(layerRoot);
                 layerRoot.anchorMin = layerRoot.anchorMax = new Vector2(0f, 1f);
                 layerRoot.pivot = new Vector2(0f, 1f);
-                layerRoot.anchoredPosition = new Vector2(5f, -48f);
+                layerRoot.anchoredPosition = new Vector2(5f, -34f);
                 layerRoot.sizeDelta = new Vector2(PanelWidth - 10f, 30f);
             }
             var plotButtons = _storage?.PlotChromeButtons ?? new Button[0];
@@ -1166,6 +1177,9 @@ namespace UnderPressure.Editor
             if (rect == null) return;
             var height = Mathf.Max(MinimumLowerHeight,
                 _canvasRect.rect.height - BarHeight * 2f - _leftUpperHeight);
+            var width = _objectsExpanded
+                ? Mathf.Max(PanelWidth, _canvasRect.rect.width - PanelWidth)
+                : PanelWidth;
             if (!force && ReferenceEquals(_objectsMenu, menu) &&
                 Mathf.Abs(_objectsPanelHeight - height) < .1f) return;
             _objectsMenu = menu;
@@ -1175,10 +1189,10 @@ namespace UnderPressure.Editor
             rect.anchorMin = rect.anchorMax = Vector2.zero;
             rect.pivot = Vector2.zero;
             rect.anchoredPosition = new Vector2(0f, BarHeight);
-            rect.sizeDelta = new Vector2(PanelWidth, height);
+            rect.sizeDelta = new Vector2(width, height);
             ApplyPanelStyle(menu.gameObject);
             EnsureSortingCanvas(menu.gameObject, 2850);
-            ScenarioEditorObjectDock.Configure(menu, rect, PanelWidth, height);
+            ScenarioEditorObjectDock.Configure(menu, rect, width, height);
         }
 
         private LandscapeObjectsMenu FindActiveObjectsMenu()
@@ -1476,11 +1490,11 @@ namespace UnderPressure.Editor
             internal Sprite PanelSprite = null;
             internal Texture2D ButtonTexture;
             internal Sprite ButtonSprite;
-            internal Color PanelColor = new Color(.045f, .38f, .64f, 1f);
+            internal Color PanelColor = new Color32(10, 110, 170, 255);
             internal Color HeaderColor = new Color(.045f, .38f, .64f, 1f);
             // Referencia visual: celeste de los botones de la segunda imagen.
             internal Color ButtonColor = new Color(.14f, .62f, .89f, 1f);
-            internal Color SelectedColor = new Color(.045f, .38f, .64f, 1f);
+            internal Color SelectedColor = new Color32(10, 110, 170, 255);
             internal ColorBlock ButtonColors = ColorBlock.defaultColorBlock;
 
             internal static WorkshopStyle Read(Button baldosa)
@@ -1854,7 +1868,7 @@ namespace UnderPressure.Editor
             if (showButton != null)
             {
                 showButton.onClick.RemoveAllListeners();
-                showButton.onClick.AddListener(() => ScenarioEditorCatalogLoadGate.ShowAll(next));
+                showButton.onClick.AddListener(ScenarioEditorDockLayout.ToggleObjectsExpanded);
             }
             ScenarioEditorCatalogLoadGate.Initialise(next, search);
             ScenarioEditorCatalogLoadGate.ShowAll(next);
@@ -1981,13 +1995,15 @@ namespace UnderPressure.Editor
                 content.gameObject.AddComponent<GridLayoutGroup>();
             grid.enabled = true;
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = 2;
             grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
             grid.childAlignment = TextAnchor.UpperLeft;
             grid.padding = new RectOffset(0, 0, 6, 8);
             grid.spacing = new Vector2(6f, 6f);
             grid.cellSize = new Vector2(97f, 88f);
+            grid.constraintCount = Mathf.Max(2,
+                Mathf.FloorToInt((width - 18f + grid.spacing.x) /
+                    (grid.cellSize.x + grid.spacing.x)));
 
             var fitter = content.GetComponent<ContentSizeFitter>() ??
                 content.gameObject.AddComponent<ContentSizeFitter>();

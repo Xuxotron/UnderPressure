@@ -31,6 +31,10 @@ namespace UnderPressure.Editor
         internal static Transform ParentFor(Canvas canvas)
         {
             if (canvas == null) return null;
+            // Algunos controles se recolocan bajo un Canvas de ordenacion propio.
+            // La jerarquia comun siempre pertenece al Canvas raiz del HUD; usar
+            // el Canvas intermedio destruiria por error toda la UI ya creada.
+            canvas = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
             if (_root != null && _root.gameObject != null &&
                 _root.GetComponentInParent<Canvas>() == canvas)
                 return _root;
