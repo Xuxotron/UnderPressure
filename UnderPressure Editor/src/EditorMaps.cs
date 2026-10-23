@@ -2068,6 +2068,13 @@ namespace UnderPressure.Editor
         internal static void ShowEmptyMapFromPause() => _active?.ShowEmptyMapConfirmation();
         internal static void DeactivateNativeTools() => _active?.StopNativeTools();
 
+        internal static void Shutdown()
+        {
+            if (_active == null) return;
+            _active.CloseDialog();
+            if (_active._menu != null) _active._menu.gameObject.SetActive(false);
+        }
+
         internal void Initialise(EditHospitalMenu menu, Level level)
         {
             if (_menu != null) return;
@@ -2164,6 +2171,7 @@ namespace UnderPressure.Editor
         {
             var canvas = _menu.GetComponentInParent<Canvas>();
             if (canvas == null) return;
+            var parent = ScenarioEditorUiHierarchy.ParentFor(canvas);
             _nativeObjectsButton = AccessTools.Field(typeof(EditHospitalMenu), "_objectsButton")?
                 .GetValue(_menu) as Button;
             _nativeBuildButton = AccessTools.Field(typeof(EditHospitalMenu), "_buildButton")?
@@ -2172,21 +2180,21 @@ namespace UnderPressure.Editor
                 .GetValue(_menu) as Button;
             if (_nativeBuildButton != null)
             {
-                _buildButton = AddTopButton(canvas.transform, T("editor.toolbar.edit_plot"),
+                _buildButton = AddTopButton(parent, T("editor.toolbar.edit_plot"),
                     -550f, () => ActivateNativeTool(_nativeBuildButton));
                 _buildButton.gameObject.name = "UP Tiles Toolbar Button";
                 _nativeBuildButton.gameObject.SetActive(false);
             }
             if (_nativeObjectsButton != null)
             {
-                _objectsButton = AddTopButton(canvas.transform, T("editor.objects.title"),
+                _objectsButton = AddTopButton(parent, T("editor.objects.title"),
                     -330f, () => ActivateNativeTool(_nativeObjectsButton));
                 _objectsButton.gameObject.name = "UP Objects Dock Toggle";
                 _nativeObjectsButton.gameObject.SetActive(false);
             }
             if (_nativeCameraButton != null)
             {
-                _cameraButton = AddTopButton(canvas.transform, "", -110f, () =>
+                _cameraButton = AddTopButton(parent, "", -110f, () =>
                 {
                     _nativeCameraButton.onClick.Invoke();
                     RefreshCameraButton();
@@ -2536,7 +2544,8 @@ rect.pivot = new Vector2(1f, 1f);
         {
             var canvas = _menu.GetComponentInParent<Canvas>();
             if (canvas == null) return;
-            _stylesButton = AddTopButton(canvas.transform, T("editor.toolbar.styles"),
+            _stylesButton = AddTopButton(ScenarioEditorUiHierarchy.ParentFor(canvas),
+                T("editor.toolbar.styles"),
                 550f, ShowStyles);
             _stylesButton.gameObject.name = "UP Styles Toolbar Button";
         }
@@ -3330,7 +3339,8 @@ rect.pivot = new Vector2(1f, 1f);
                 UnderPressureEditorPlugin.Log?.LogError("No se encontro el Canvas del editor.");
                 return;
             }
-            var backdrop = AddUi("UP Map Dialog Background", canvas.transform);
+            var backdrop = AddUi("UP Map Dialog Background",
+                ScenarioEditorUiHierarchy.ParentFor(canvas));
             Stretch(backdrop.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
             backdrop.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.68f);
             backdrop.transform.SetAsLastSibling();
@@ -3609,7 +3619,6 @@ rect.pivot = new Vector2(1f, 1f);
             AccessTools.Field(typeof(HospitalPlotFootprintPerimeter), "_root");
         private static readonly Dictionary<Transform, bool> PriorVisibility =
             new Dictionary<Transform, bool>();
-
         internal static void Hide(HospitalPlotFootprintPerimeter perimeter)
         {
             if (!ScenarioEditorFlow.IsRunning || perimeter == null || RootField == null) return;
@@ -3720,6 +3729,10 @@ PriorVisibility.Clear();
             AccessTools.Field(typeof(PauseMenu), "_quickLoadButton");
         private static readonly FieldInfo RestartField =
             AccessTools.Field(typeof(PauseMenu), "_restartLevelButton");
+        private static readonly FieldInfo QuitToMapField =
+            AccessTools.Field(typeof(PauseMenu), "_quitToMapButton");
+        private static readonly FieldInfo QuitToMenuField =
+            AccessTools.Field(typeof(PauseMenu), "_quitToMenuButton");
         private static readonly FieldInfo QuitToDesktopField =
             AccessTools.Field(typeof(PauseMenu), "_quitToDesktopButton");
 
@@ -3735,6 +3748,22 @@ PriorVisibility.Clear();
                 "editor.map.open", ScenarioEditorStorageMenu.ShowLoadFromPause);
             Configure(RestartField?.GetValue(__instance) as Button,
                 "editor.map.empty", ScenarioEditorStorageMenu.ShowEmptyMapFromPause);
+            var quitToMap = QuitToMapField?.GetValue(__instance) as Button;
+            if (quitToMap != null)
+            {
+                quitToMap.onClick.RemoveAllListeners();
+                quitToMap.onClick.AddListener(ScenarioEditorFlow.ExitToWorldMap);
+            }
+            var quitToMenu = QuitToMenuField?.GetValue(__instance) as Button;
+            if (quitToMenu != null && __0 != null)
+            {
+                quitToMenu.onClick.RemoveAllListeners();
+                quitToMenu.onClick.AddListener(() =>
+                {
+                    ScenarioEditorFlow.FinishEditorSession();
+                    __0.QuitToMenuDontSave();
+                });
+            }
             var quitToDesktop = QuitToDesktopField?.GetValue(__instance) as Button;
             if (quitToDesktop != null && __0 != null)
             {

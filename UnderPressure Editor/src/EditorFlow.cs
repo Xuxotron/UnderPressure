@@ -20,6 +20,61 @@ using UnityEngine;
 // Abre el editor nativo sobre un nivel original sin crear ni cargar partidas Sandbox.
 namespace UnderPressure.Editor
 {
+    // Todos los elementos visuales creados por el editor cuelgan de una sola
+    // raiz. Al abandonar el editor se oculta en el mismo frame y se destruye,
+    // sin esperar a que el HUD nativo termine su transicion al menu principal.
+    internal static class ScenarioEditorUiHierarchy
+    {
+        private const string RootName = "UP Scenario Editor UI";
+        private static RectTransform _root;
+
+        internal static Transform ParentFor(Canvas canvas)
+        {
+            if (canvas == null) return null;
+            if (_root != null && _root.gameObject != null &&
+                _root.GetComponentInParent<Canvas>() == canvas)
+                return _root;
+
+            Destroy();
+            var rootObject = new GameObject(RootName, typeof(RectTransform));
+            rootObject.transform.SetParent(canvas.transform, false);
+            _root = (RectTransform)rootObject.transform;
+            _root.anchorMin = Vector2.zero;
+            _root.anchorMax = Vector2.one;
+            _root.pivot = new Vector2(.5f, .5f);
+            _root.anchoredPosition = Vector2.zero;
+            _root.sizeDelta = Vector2.zero;
+            _root.SetAsLastSibling();
+            return _root;
+        }
+
+        internal static void Attach(GameObject value, Canvas canvas)
+        {
+            if (value == null || canvas == null) return;
+            var parent = ParentFor(canvas);
+            if (parent != null && value.transform.parent != parent)
+                value.transform.SetParent(parent, false);
+        }
+
+        internal static void Hide()
+        {
+            if (_root != null && _root.gameObject != null)
+                _root.gameObject.SetActive(false);
+        }
+
+        internal static void Destroy()
+        {
+            if (_root == null || _root.gameObject == null)
+            {
+                _root = null;
+                return;
+            }
+            _root.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(_root.gameObject);
+            _root = null;
+        }
+    }
+
     internal static class ScenarioEditorFlow
     {
         private enum FlowState
@@ -131,6 +186,7 @@ namespace UnderPressure.Editor
         internal static void OpenNativeEditor(Level level)
         {
             if (_state != FlowState.Loading || level == null) return;
+            CleanupEditorUi();
             _level = level;
             _state = FlowState.Editing;
             try
@@ -145,6 +201,7 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogError(
                     "El editor nativo no pudo iniciarse: " + exception);
                 _state = FlowState.Exiting;
+                CleanupEditorUi();
                 level.App.QuitToMenuDontSave();
             }
         }
@@ -170,6 +227,7 @@ namespace UnderPressure.Editor
 
         internal static void ResetAtOpeningScreen()
         {
+            FinishEditorSession();
             DestroySelector();
             _openingScreen = null;
             _selectedLevel = null;
@@ -305,18 +363,60 @@ namespace UnderPressure.Editor
         {
             if (_state != FlowState.Editing || _level == null) return;
             var level = _level;
+            FinishEditorSession();
+            level.App.QuitToMenuDontSave();
+        }
+
+        internal static void ExitToWorldMap()
+        {
+            if (_state != FlowState.Editing || _level?.App?.MetagameMap == null) return;
+            var map = _level.App.MetagameMap;
+            FinishEditorSession();
+            map.Open();
+        }
+
+        internal static void FinishEditorSession()
+        {
+            if (_state != FlowState.Editing && _state != FlowState.Exiting &&
+                !ScenarioEditorSession.Active)
+            {
+                CleanupEditorUi();
+                return;
+            }
+
+            var level = _level ?? ScenarioEditorSession.Level;
             _state = FlowState.Exiting;
+            CleanupEditorUi();
             try
             {
-                level.HospitalEditEvents.OnEnd?.Invoke();
+                level?.HospitalEditEvents?.OnEnd?.Invoke();
             }
             catch (Exception exception)
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
                     "El editor nativo produjo un error al cerrarse: " + exception.Message);
             }
+            finally
+            {
+                if (ScenarioEditorSession.Active) ScenarioEditorSession.Restore();
+            }
+            ScenarioEditorMapPicker.ClearPendingMap();
+            _openingScreen = null;
+            _selectedLevel = null;
+            _level = null;
+            _state = FlowState.None;
+        }
 
-            level.App.QuitToMenuDontSave();
+        private static void CleanupEditorUi()
+        {
+            ScenarioEditorUiHierarchy.Hide();
+            ScenarioEditorStorageMenu.Shutdown();
+            ScenarioEditorDockLayout.Shutdown();
+            ScenarioCharacterViewer.Detach();
+            ScenarioFogViewer.Detach();
+            ScenarioEditorTerrainPainter.Cleanup();
+            ScenarioEditorHistory.StopHistory();
+            ScenarioEditorUiHierarchy.Destroy();
         }
 
         private static void ConfigureButton(DynamicButton button, string text, Action action)
@@ -373,6 +473,42 @@ namespace UnderPressure.Editor
     internal static class ScenarioEditorOpeningScreenPatch
     {
         private static void Prefix() => ScenarioEditorFlow.ResetAtOpeningScreen();
+    }
+
+    // Las salidas del menu de pausa no pasan por el boton inferior del editor.
+    // Cerramos la sesion antes de que empiece cualquier transicion nativa para
+    // que su UI no sobreviva durante la carga ni sobre el mapamundi.
+    [HarmonyPatch(typeof(MetagameMap), "Open")]
+    internal static class ScenarioEditorWorldMapExitPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix()
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorFlow.FinishEditorSession();
+        }
+    }
+
+    [HarmonyPatch(typeof(App), "QuitToMenu")]
+    internal static class ScenarioEditorQuitToMenuExitPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix()
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorFlow.FinishEditorSession();
+        }
+    }
+
+    [HarmonyPatch(typeof(App), "QuitToMenuDontSave")]
+    internal static class ScenarioEditorQuitToMenuDontSaveExitPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix()
+        {
+            if (ScenarioEditorFlow.IsRunning)
+                ScenarioEditorFlow.FinishEditorSession();
+        }
     }
 
     [HarmonyPatch(typeof(MetagameStateBase), "Enter")]

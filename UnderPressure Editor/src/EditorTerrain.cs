@@ -313,7 +313,7 @@ namespace UnderPressure.Editor
 
             var go = new GameObject("UP_TerrainPainterUI",
                 typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(ScenarioEditorTerrainPainterBehaviour));
-            go.transform.SetParent(_canvas.transform, false);
+            go.transform.SetParent(ScenarioEditorUiHierarchy.ParentFor(_canvas), false);
             var rect = (RectTransform)go.transform;
             rect.anchorMin = rect.anchorMax = Vector2.one;
             rect.pivot = Vector2.one;
@@ -2005,7 +2005,7 @@ namespace UnderPressure.Editor
             ScenarioEditorTerrainPainter.DisableTools();
             var canvas=GetComponentInParent<Canvas>();
             if (canvas==null) return;
-            _dialog=NewUi("UP_Clear_Confirm",canvas.transform,typeof(Image));
+            _dialog=NewUi("UP_Clear_Confirm",ScenarioEditorUiHierarchy.ParentFor(canvas),typeof(Image));
             var rect=(RectTransform)_dialog.transform;
             rect.anchorMin=Vector2.zero;
             rect.anchorMax=Vector2.one;

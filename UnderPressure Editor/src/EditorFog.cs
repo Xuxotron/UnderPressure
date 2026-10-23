@@ -92,7 +92,8 @@ namespace UnderPressure.Editor
             var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
                 .GetValue(menu) as Button;
             if (template == null) return;
-            var button = UnityEngine.Object.Instantiate(template, canvas.transform, false);
+            var button = UnityEngine.Object.Instantiate(template,
+                ScenarioEditorUiHierarchy.ParentFor(canvas), false);
             button.gameObject.name = "UP_FogViewerToggle";
             foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
                 if (component != null && component.GetType().FullName == "I2.Loc.Localize")
@@ -329,7 +330,8 @@ namespace UnderPressure.Editor
                     }
                 }
 
-                _overlay = Ui("UP_FogViewerOverlay", canvas.transform, typeof(Image));
+                _overlay = Ui("UP_FogViewerOverlay",
+                    ScenarioEditorUiHierarchy.ParentFor(canvas), typeof(Image));
                 Stretch((RectTransform)_overlay.transform);
                 _overlay.GetComponent<Image>().color = new Color(0.01f, 0.02f, 0.035f, 0.64f);
                 _overlay.GetComponent<Image>().raycastTarget = true;

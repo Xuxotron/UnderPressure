@@ -454,7 +454,7 @@ namespace UnderPressure.Editor
             if (_root == null)
             {
                 var rootObject = new GameObject("UP Editor Dock Layout", typeof(RectTransform));
-                rootObject.transform.SetParent(_canvas.transform, false);
+                rootObject.transform.SetParent(ScenarioEditorUiHierarchy.ParentFor(_canvas), false);
                 _root = (RectTransform)rootObject.transform;
                 Stretch(_root);
                 var overlay = rootObject.AddComponent<Canvas>();
@@ -698,6 +698,8 @@ namespace UnderPressure.Editor
         private void FitPlotPanel()
         {
             if (_plotPanel == null) return;
+            RememberRect(_plotPanel);
+            if (_plotPanel.parent != _root) _plotPanel.SetParent(_root, false);
             ApplyPanelStyle(_plotPanel.gameObject);
             var panelImage = _plotPanel.GetComponent<Image>();
             if (panelImage != null)
@@ -1169,7 +1171,7 @@ namespace UnderPressure.Editor
             _objectsMenu = menu;
             _objectsPanelHeight = height;
             RememberRect(rect);
-            rect.SetParent(_canvas.transform, false);
+            rect.SetParent(_root, false);
             rect.anchorMin = rect.anchorMax = Vector2.zero;
             rect.pivot = Vector2.zero;
             rect.anchoredPosition = new Vector2(0f, BarHeight);
@@ -1404,6 +1406,16 @@ namespace UnderPressure.Editor
         }
 
         private void OnDestroy() => ReleaseUi();
+
+        internal static void Shutdown()
+        {
+            var active = _active;
+            if (active == null) return;
+            // ReleaseUi devuelve algunos controles nativos a su padre original.
+            // Ocultar antes el menu evita que reaparezcan durante ese frame.
+            if (active._menu != null) active._menu.gameObject.SetActive(false);
+            active.ReleaseUi();
+        }
 
         private void ReleaseUi()
         {

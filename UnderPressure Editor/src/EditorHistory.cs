@@ -109,6 +109,9 @@ namespace UnderPressure.Editor
                 _active = null;
             }
             var go = new GameObject("UP Editor - Historial");
+            var editorMenu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var canvas = editorMenu == null ? null : editorMenu.GetComponentInParent<Canvas>();
+            ScenarioEditorUiHierarchy.Attach(go, canvas);
             var history = go.AddComponent<ScenarioEditorHistory>();
             history._level = level;
             _active = history;
@@ -138,6 +141,15 @@ namespace UnderPressure.Editor
         internal static void ResetAfterMapLoad()
         {
             if (_active != null) _active.ResetHistory();
+        }
+
+        internal static void StopHistory()
+        {
+            var active = _active;
+            _active = null;
+            if (active == null || active.gameObject == null) return;
+            active.gameObject.SetActive(false);
+            Destroy(active.gameObject);
         }
 
         private void ResetHistory()
