@@ -1264,6 +1264,7 @@ namespace UnderPressure.Editor
         private HospitalPlot _selection;
         private Vector2 _rightDown;
         private bool _rightClickPending;
+        private bool _consumeRightClickRelease;
         private static readonly FieldInfo CursorPlotField =
             AccessTools.Field(typeof(CursorEditHospitalItem), "_hospitalPlot");
         private static readonly FieldInfo CursorLayerField =
@@ -1271,8 +1272,6 @@ namespace UnderPressure.Editor
         private static readonly MethodInfo SetCursorFloorPlan =
             AccessTools.Method(typeof(CursorRoomItem), "SetFloorPlanEditing",
                 new[] { typeof(FloorPlan), typeof(RoomFloorPlanVisual) });
-        private static readonly FieldInfo CursorItemEditModeField =
-            AccessTools.Field(typeof(CursorRoomItem), "_editMode");
         private static readonly FieldInfo LandscapeLayerField =
             AccessTools.Field(typeof(LandscapeRoomItem), "_layer");
 
@@ -1379,6 +1378,7 @@ namespace UnderPressure.Editor
             _activeAlt = null;
             _level = null;
             _rightClickPending = false;
+            _consumeRightClickRelease = false;
             if (ReferenceEquals(_active, this)) _active = null;
         }
 
@@ -1540,33 +1540,24 @@ namespace UnderPressure.Editor
         {
             var self = _active;
             if (!requestedByUser || self == null) return true;
+            // Este clic pertenece al objeto que esta agarrado. No puede usarse
+            // tambien para seleccionar el objeto situado detras al soltarlo.
+            self._consumeRightClickRelease = true;
+            self._rightClickPending = false;
+
             if (self._activeAlt != null && ReferenceEquals(self._activeAlt.Cursor, cursor))
             {
                 var transfer = self._activeAlt;
                 self._activeAlt = null;
-                self.RestoreAltTransfer(transfer, true);
-                return false;
+                // El registro ya se retiro al comenzar el movimiento. Dejar que
+                // CancelItem destruya la instancia mantiene la misma eliminacion
+                // persistente que Suprimir, tambien para traslados entre parcelas.
+                ScenarioEditorScene.MarkPlotLayerModified(transfer.Source,
+                    transfer.SourceLayer);
+                self._level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(
+                    transfer.Source);
             }
-
-            // Al cancelar con el boton derecho un objeto existente, el juego
-            // destruye solo la instancia del cursor. No emite OnRoomItemDestroy
-            // y por eso la definicion de la parcela conserva el objeto. En el
-            // editor debe recorrer exactamente la misma eliminacion que Suprimir.
-            if (!self.Ready || cursor?.RoomItem is not LandscapeRoomItem item ||
-                CursorItemEditModeField == null ||
-                Convert.ToInt32(CursorItemEditModeField.GetValue(cursor)) == 0)
-                return true;
-
-            var owner = item.FloorPlan?.HospitalMap?.Plot;
-            var layer = ReadLayer(item);
-            self._level.BuildEvents.OnRoomItemCancel?.Invoke(item, true);
-            self._level.BuildEvents.OnRoomItemDestroy?.Invoke(item);
-            if (owner != null)
-            {
-                ScenarioEditorScene.MarkPlotLayerModified(owner, layer);
-                self._level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(owner);
-            }
-            return false;
+            return true;
         }
 
         internal static void AfterAltPlace(CursorRoomItem cursor, bool placed)
@@ -2219,6 +2210,12 @@ namespace UnderPressure.Editor
                                 new object[] { renderers });
                     }
                 }
+            }
+            if (_consumeRightClickRelease)
+            {
+                _rightClickPending = false;
+                if (Input.GetMouseButtonUp(1)) _consumeRightClickRelease = false;
+                return;
             }
             if (Input.GetMouseButtonDown(1))
             {
