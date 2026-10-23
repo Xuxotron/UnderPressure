@@ -1271,6 +1271,8 @@ namespace UnderPressure.Editor
         private static readonly MethodInfo SetCursorFloorPlan =
             AccessTools.Method(typeof(CursorRoomItem), "SetFloorPlanEditing",
                 new[] { typeof(FloorPlan), typeof(RoomFloorPlanVisual) });
+        private static readonly FieldInfo CursorItemEditModeField =
+            AccessTools.Field(typeof(CursorRoomItem), "_editMode");
         private static readonly FieldInfo LandscapeLayerField =
             AccessTools.Field(typeof(LandscapeRoomItem), "_layer");
 
@@ -1537,11 +1539,33 @@ namespace UnderPressure.Editor
         internal static bool BeforeAltCancel(CursorRoomItem cursor, bool requestedByUser)
         {
             var self = _active;
-            if (!requestedByUser || self?._activeAlt == null ||
-                !ReferenceEquals(self._activeAlt.Cursor, cursor)) return true;
-            var transfer = self._activeAlt;
-            self._activeAlt = null;
-            self.RestoreAltTransfer(transfer, true);
+            if (!requestedByUser || self == null) return true;
+            if (self._activeAlt != null && ReferenceEquals(self._activeAlt.Cursor, cursor))
+            {
+                var transfer = self._activeAlt;
+                self._activeAlt = null;
+                self.RestoreAltTransfer(transfer, true);
+                return false;
+            }
+
+            // Al cancelar con el boton derecho un objeto existente, el juego
+            // destruye solo la instancia del cursor. No emite OnRoomItemDestroy
+            // y por eso la definicion de la parcela conserva el objeto. En el
+            // editor debe recorrer exactamente la misma eliminacion que Suprimir.
+            if (!self.Ready || cursor?.RoomItem is not LandscapeRoomItem item ||
+                CursorItemEditModeField == null ||
+                Convert.ToInt32(CursorItemEditModeField.GetValue(cursor)) == 0)
+                return true;
+
+            var owner = item.FloorPlan?.HospitalMap?.Plot;
+            var layer = ReadLayer(item);
+            self._level.BuildEvents.OnRoomItemCancel?.Invoke(item, true);
+            self._level.BuildEvents.OnRoomItemDestroy?.Invoke(item);
+            if (owner != null)
+            {
+                ScenarioEditorScene.MarkPlotLayerModified(owner, layer);
+                self._level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(owner);
+            }
             return false;
         }
 
