@@ -1,973 +1,554 @@
 {
-  "_document": {
-    "purpose": "Mapa de prueba documentado para decidir la configuracion editable del editor. El cargador futuro solo consumira value y descartara el resto de metadatos.",
-    "sourceMap": "Hogsport Plus",
-    "nativeBaseLevel": "901",
-    "metadataIsTemporary": true,
-    "unknownOrInheritedValues": "null significa que el mapa no fuerza un valor y hereda el del hospital base. No se han inventado valores ausentes en los assets exportados."
-  },
-  "formato_e_identidad": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "formatVersion",
-        "description": "Version del contrato de config.json. Permite migrar mapas cuando cambie el formato.",
-        "options": "Entero positivo. La primera version del nuevo formato sera 1.",
-        "value": 1
-      },
-      {
-        "key": "mapId",
-        "description": "Identificador tecnico unico del mapa, independiente del nombre visible y estable entre traducciones.",
-        "options": "Texto ASCII unico. Letras minusculas, numeros, guion y guion bajo.",
-        "value": "xuxotron.hogsport_plus"
-      },
-      {
-        "key": "displayName",
-        "description": "Nombre visible del mapa personalizado.",
-        "options": "Texto o clave de localizacion propia del mapa.",
-        "value": "Hogsport Plus"
-      },
-      {
-        "key": "baseHospitalId",
-        "description": "Hospital nativo del que se heredan las configuraciones no redefinidas.",
-        "options": "UniqueId estable de un LevelConfig nativo disponible; 901 corresponde a Hogsport.",
-        "value": "901"
-      },
-      {
-        "key": "description",
-        "description": "Descripcion visible del mapa.",
-        "options": "Texto o clave de localizacion propia del mapa.",
-        "value": "Hogsport Plus"
-      }
+  "identidad_y_presentacion": {
+    "ALTA": [
+      { "key": "DisplayName", "description": "Nombre visible del hospital.", "options": "Texto libre localizado por el editor.", "value": "Hogsport Plus" },
+      { "key": "DescriptionPerStar", "description": "Descripciones visibles del nivel y de su progreso por estrellas.", "options": "Lista de textos, uno por estado o estrella disponible.", "value": ["Hogsport Plus"] },
+      { "key": "author", "description": "Autor visible del mapa personalizado.", "options": "Texto libre corto.", "value": "Xuxotron" },
+      { "key": "baseHospitalId", "description": "Hospital nativo del que se heredan los valores no modificados.", "options": "UniqueId de un LevelConfig nativo instalado.", "value": "901" }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "author",
-        "description": "Autor o creador bajo el que se agrupa el mapa.",
-        "options": "Texto libre corto.",
-        "value": "Xuxotron"
-      },
-      {
-        "key": "loadingDescription",
-        "description": "Texto mostrado durante la carga del nivel.",
-        "options": "Texto, clave de localizacion o null para heredar la descripcion principal.",
-        "value": null
-      },
-      {
-        "key": "loadingImageFile",
-        "description": "Imagen propia mostrada durante la carga.",
-        "options": "Ruta relativa segura dentro del mapa o null para usar la del hospital base.",
-        "value": "map.jpg"
-      },
-      {
-        "key": "requiredDlcId",
-        "description": "DLC necesario para jugar este mapa.",
-        "options": "Identificador estable de DLC nativo o null si no requiere ninguno.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "DisplayNameLocalised", "description": "Clave de traducción del nombre visible.", "options": "Clave de localización o null para que el editor la genere.", "value": null },
+      { "key": "DescriptionPerStarLocalised", "description": "Claves de traducción de las descripciones por estrella.", "options": "Lista de claves o null para que el editor las genere.", "value": null },
+      { "key": "_loadingDescription", "description": "Texto mostrado durante la carga.", "options": "Clave de localización o null para reutilizar la descripción principal.", "value": null },
+      { "key": "_loadingBackground", "description": "Imagen nativa mostrada durante la carga.", "options": "Identificador de sprite disponible o null para heredar.", "value": null },
+      { "key": "DesiredStartingRadioTrackID", "description": "Pista de radio solicitada al entrar en el nivel.", "options": "Identificador de pista o cadena vacía para selección normal.", "value": "" },
+      { "key": "_dlcPackRequired", "description": "Expansión que debe poseer el jugador para abrir el mapa.", "options": "Identificador de DLC o null si el mapa no exige ninguno.", "value": null },
+      { "key": "_levelVisiblePrerequisites", "description": "Condiciones necesarias para que el hospital aparezca en el mapa de carrera.", "options": "Lista de prerrequisitos nativos; puede incluir desbloqueo inicial o niveles completados.", "value": [{ "$type": "TH20.LevelProgressUnlockedInitially" }] },
+      { "key": "_levelPlayablePrerequisites", "description": "Condiciones necesarias para poder jugar el hospital.", "options": "Lista de prerrequisitos nativos; puede incluir desbloqueo inicial o niveles completados.", "value": [{ "$type": "TH20.LevelProgressUnlockedInitially" }] },
+      { "key": "IsDebugLevel", "description": "Marca el hospital como nivel de depuración.", "options": "true o false.", "value": false },
+      { "key": "IsRemixLevel", "description": "Indica que esta configuración es una variante Remix.", "options": "true o false.", "value": false },
+      { "key": "_isVisibleOverrideTag", "description": "Etiqueta externa que fuerza la visibilidad del nivel.", "options": "Texto o null.", "value": null },
+      { "key": "_isPlayableOverrideTag", "description": "Etiqueta externa que fuerza que el nivel sea jugable.", "options": "Texto o null.", "value": null }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "isDebugLevel",
-        "description": "Marca interna usada por el juego para niveles de depuracion.",
-        "options": "true o false.",
-        "value": false
-      },
-      {
-        "key": "issueSharesOnStart",
-        "description": "Indica si el nivel entrega acciones de la empresa al comenzar.",
-        "options": "true o false.",
-        "value": false
-      },
-      {
-        "key": "desiredStartingRadioTrackId",
-        "description": "Pista de radio solicitada al iniciar el mapa.",
-        "options": "Identificador de pista nativa, cadena vacia o null para eleccion normal.",
-        "value": ""
-      }
-    ]
-  },
-  "archivos_del_mapa": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "plots",
-        "description": "Parcelas del mapa. El nombre visible se genera como Parcela/Plot mas el indice; no se guarda un nombre por parcela.",
-        "options": "Lista ordenada con index consecutivo, dataFile JSON e imageFile PNG.",
-        "value": [
-          { "index": 0, "dataFile": "plot_00.json", "imageFile": "plot_00.png" },
-          { "index": 1, "dataFile": "plot_01.json", "imageFile": "plot_01.png" },
-          { "index": 2, "dataFile": "plot_02.json", "imageFile": "plot_02.png" },
-          { "index": 3, "dataFile": "plot_03.json", "imageFile": "plot_03.png" },
-          { "index": 4, "dataFile": "plot_04.json", "imageFile": "plot_04.png" },
-          { "index": 5, "dataFile": "plot_05.json", "imageFile": "plot_05.png" },
-          { "index": 6, "dataFile": "plot_06.json", "imageFile": "plot_06.png" }
-        ]
-      },
-      {
-        "key": "landscapeFile",
-        "description": "Objetos de paisaje que no pertenecen a una parcela.",
-        "options": "Ruta relativa a un JSON dentro del mapa.",
-        "value": "landscape.json"
-      },
-      {
-        "key": "terrainMeshFile",
-        "description": "Malla y alturas editadas del terreno.",
-        "options": "Ruta relativa a un binario de terreno dentro del mapa.",
-        "value": "terrain_mesh.bin"
-      },
-      {
-        "key": "terrainAlphaFiles",
-        "description": "Mapas de mezcla que distribuyen las texturas del terreno.",
-        "options": "Lista ordenada de PNG relativos dentro del mapa.",
-        "value": ["alpha_0.png", "alpha_1.png", "alpha_2.png"]
-      }
+    "BAJA": [
+      { "key": "UniqueId", "description": "Identificador nativo estable. No editable: lo genera el editor.", "value": null },
+      { "key": "SceneName", "description": "Nombre de la escena Unity asociada. No editable: lo determina el mapa empaquetado.", "value": null },
+      { "key": "BaseConfig", "description": "Referencia nativa a la configuración base. No editable: se deriva de baseHospitalId.", "value": null },
+      { "key": "RemixLevelConfig", "description": "Referencia al LevelConfig Remix relacionado. No editable sin un asset nativo válido.", "value": null },
+      { "key": "HospitalScenario", "description": "Referencia nativa al escenario del hospital. No editable sin un asset nativo válido.", "value": null }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "fogOfWarFile",
-        "description": "Mascara que define el terreno inicialmente visible y oculto.",
-        "options": "Ruta relativa a PNG o null para heredar la niebla nativa.",
-        "value": "fog_of_war.png"
-      },
-      {
-        "key": "fogTileSize",
-        "description": "Resolucion logica de la mascara de niebla.",
-        "options": "Objeto width/height con enteros positivos.",
-        "value": { "width": 128, "height": 128 }
-      },
-      {
-        "key": "fogAnchor",
-        "description": "Origen de la mascara de niebla en la cuadricula del mundo.",
-        "options": "Objeto x/y con enteros.",
-        "value": { "x": -32, "y": -32 }
-      },
-      {
-        "key": "fogMaxDistance",
-        "description": "Distancia maxima cubierta por la definicion de niebla.",
-        "options": "Entero positivo.",
-        "value": 32
-      },
-      {
-        "key": "terrainTextures",
-        "description": "Orden de las texturas asociado a los canales de los alpha maps.",
-        "options": "Lista de identificadores estables de texturas nativas; el orden determina pass y canal RGBA.",
-        "value": [
-          "T_LS_Grass_Standard_Light_V1_DIFF",
-          "T_LS_Earth_Heavy_V1_DIFF",
-          "T_LS_Earth_Standard_V1_DIFF",
-          "T_LS_Pebbles_V1_DIFF",
-          "T_LS_Grass_Mown_V1_DIFF",
-          "T_LS_Grass_Standard_Light_V1_DIFF",
-          "T_LS_Boulders_V1_DIFF",
-          "T_LS_Grass_Dark_V1_DIFF",
-          "T_LS_Grass_Dark_V1_DIFF",
-          "T_LS_FlagStones_V1_DIFF",
-          "T_LS_Foundation_Stone_V1_DIFF"
-        ]
-      }
-    ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "sceneFile",
-        "description": "Archivo reservado para objetos globales de escena. El formato actual conserva estos objetos en landscape.json y en las parcelas.",
-        "options": "Ruta relativa a JSON, cadena vacia o null.",
-        "value": null
-      },
-      {
-        "key": "fogUseCameraBoundingBoxExtents",
-        "description": "Hace que la extension de niebla use los limites de la camara en vez de los limites guardados.",
-        "options": "true o false.",
-        "value": false
-      }
+    "DLC": [
+      { "key": "CharactersCanWearWinterClothes", "dlc": "Bigfoot", "description": "Permite al personal usar ropa de invierno.", "options": "true o false.", "value": false },
+      { "key": "CharactersCanWearSummerClothes", "dlc": "Pebberley Island", "description": "Permite al personal usar ropa de verano.", "options": "true o false.", "value": true }
     ]
   },
   "economia": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "initialBalance",
-        "description": "Dinero disponible al comenzar una partida nueva.",
-        "options": "Entero; normalmente igual o mayor que 0. Hogsport nativo usa 200000.",
-        "value": 200000
-      },
-      {
-        "key": "failStateBalanceWarning",
-        "description": "Saldo a partir del que se muestra el aviso de bancarrota.",
-        "options": "Entero negativo. Debe ser mayor que failStateBalanceGameOver.",
-        "value": -150000
-      },
-      {
-        "key": "failStateBalanceGameOver",
-        "description": "Saldo que provoca la derrota economica.",
-        "options": "Entero negativo inferior al umbral de aviso.",
-        "value": -300000
-      }
+    "ALTA": [
+      { "key": "InitialBalance", "description": "Dinero inicial del hospital.", "options": "Número entero.", "value": 200000 },
+      { "key": "FailStateBalanceWarning", "description": "Saldo que activa el aviso de bancarrota.", "options": "Número entero negativo superior al umbral de derrota.", "value": -150000 },
+      { "key": "FailStateBalanceGameOver", "description": "Saldo que provoca la derrota económica.", "options": "Número entero negativo.", "value": -300000 }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "localMarketRateModifier",
-        "description": "Multiplicador general del coste de mercado del nivel.",
-        "options": "Decimal positivo; 1.0 mantiene los precios base.",
-        "value": 1.0
-      },
-      {
-        "key": "silverUnlockCost",
-        "description": "Coste en Kudosh para desbloquear el nivel en el mapa de carrera. No es dinero del hospital.",
-        "options": "Entero igual o mayor que 0.",
-        "value": 0
-      },
-      {
-        "key": "priceControls",
-        "description": "Limites y pasos permitidos al modificar precios de diagnostico, tratamiento y categorias adicionales.",
-        "options": "Objeto con diagnosis/treatment y lista de categorias; cada una usa percentageDelta, percentageMin y percentageMax. null hereda la configuracion base.",
-        "value": null
-      },
-      {
-        "key": "loans",
-        "description": "Ofertas de prestamo disponibles y sus requisitos.",
-        "options": "Lista de ofertas con id, minAmount, maxAmount, defaultAmount, interestRate, repaymentPeriod y requisitos opcionales de valor, nivel, saldo y reputacion. null hereda la configuracion base.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "LocalMarketRateModifier", "description": "Multiplicador local aplicado a costes y mercado.", "options": "Decimal positivo; 1 mantiene los valores base.", "value": 1.0 },
+      { "key": "_silverCost", "description": "Coste de desbloqueo del nivel en Kudosh.", "options": "Entero igual o mayor que 0.", "value": 0 },
+      { "key": "IssueSharesOnStart", "description": "Entrega acciones corporativas al comenzar.", "options": "true o false.", "value": false }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "issueSharesOnStart",
-        "description": "Entrega acciones corporativas al iniciar el nivel; normalmente se deja como en el hospital base.",
-        "options": "true o false.",
-        "value": false
-      }
-    ]
+    "BAJA": [
+      { "key": "FinanceManagerConfig", "description": "Referencia al asset financiero construido con estos valores. No editable directamente.", "value": null },
+      { "key": "LoanManagerConfig", "description": "Referencia a préstamos. El tutorial no incluye su asset; no editable en esta plantilla.", "value": null },
+      { "key": "PriceModifiablesConfig", "description": "Referencia a límites de precios. El tutorial no incluye su asset; no editable en esta plantilla.", "value": null }
+    ],
+    "DLC": []
   },
   "pacientes_y_enfermedades": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "maxPatients",
-        "description": "Numero maximo de pacientes simultaneos permitido por el nivel.",
-        "options": "Entero positivo. El tutorial nativo usa 250.",
-        "value": 250
-      },
-      {
-        "key": "patientSpawnRate",
-        "description": "Ritmo base con el que llegan pacientes.",
-        "options": "Decimal positivo; el tutorial nativo usa 48.0.",
-        "value": 48.0
-      },
-      {
-        "key": "illnesses",
-        "description": "Enfermedades disponibles y ponderacion de aparicion. No duplica el asset nativo: definitionId es una referencia estable.",
-        "options": "Lista con definitionId, unlocked, minWeight, maxWeight, minStarRating y minPatientsSpawned. null hereda exactamente la lista del hospital base.",
-        "value": null
-      },
-      {
-        "key": "neverSpawnPatients",
-        "description": "Impide por completo la llegada automatica de pacientes.",
-        "options": "true o false.",
-        "value": false
-      }
+    "ALTA": [
+      { "key": "_maxPatients", "description": "Máximo de pacientes simultáneos.", "options": "Entero positivo.", "value": 250 },
+      { "key": "_patientSpawnRate", "description": "Ritmo base de aparición de pacientes.", "options": "Decimal positivo.", "value": 48.0 },
+      { "key": "_weightedIllnesses", "description": "Enfermedades disponibles y su progresión de aparición.", "options": "Lista con Definition, Deprecated, Unlocked, MinWeight, MaxWeight, MinStarRating y MinPatientsSpawned.", "value": [] },
+      { "key": "NeverSpawnPatients", "description": "Impide toda aparición automática de pacientes.", "options": "true o false.", "value": false }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "reputationArrivalRateMultiplierMin",
-        "description": "Multiplicador minimo que aplica la reputacion al ritmo de llegadas.",
-        "options": "Decimal no negativo.",
-        "value": 0.8
-      },
-      {
-        "key": "reputationArrivalRateMultiplierMax",
-        "description": "Multiplicador maximo que aplica la reputacion al ritmo de llegadas.",
-        "options": "Decimal igual o mayor que el minimo.",
-        "value": 1.2
-      },
-      {
-        "key": "arrivalRandomFactor",
-        "description": "Variacion aleatoria aplicada al intervalo de llegada de pacientes.",
-        "options": "Decimal igual o mayor que 0.",
-        "value": 10.0
-      },
-      {
-        "key": "usePatientSelector",
-        "description": "Activa el selector ponderado de enfermedades del nivel.",
-        "options": "true o false.",
-        "value": true
-      },
-      {
-        "key": "patientSelectionRandomJitter",
-        "description": "Aleatoriedad aplicada por el selector de pacientes para evitar secuencias demasiado uniformes.",
-        "options": "Decimal entre 0 y 1.",
-        "value": 0.35
-      },
-      {
-        "key": "arrivalMethods",
-        "description": "Metodos alternativos de llegada y su peso, por ejemplo caminar, helicoptero o transporte especial.",
-        "options": "Lista con definitionId y weight; null hereda el hospital base.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "_reputationArrivalRateMultiplierMin", "description": "Multiplicador mínimo de llegadas por reputación.", "options": "Decimal no negativo.", "value": 0.8 },
+      { "key": "_reputationArrivalRateMultiplierMax", "description": "Multiplicador máximo de llegadas por reputación.", "options": "Decimal igual o mayor que el mínimo.", "value": 1.2 },
+      { "key": "_arrivalRandomFactor", "description": "Variación aleatoria del intervalo de llegadas.", "options": "Decimal igual o mayor que 0.", "value": 10.0 },
+      { "key": "_usePatientSelector", "description": "Activa el selector ponderado de enfermedades.", "options": "true o false.", "value": true },
+      { "key": "_patientSelectionRandomJitter", "description": "Aleatoriedad añadida a la selección ponderada.", "options": "Decimal entre 0 y 1.", "value": 0.35 },
+      { "key": "ChanceOfLowHygieneEffect", "description": "Probabilidad de aplicar efectos por baja higiene.", "options": "Entero de 0 a 100.", "value": 50 },
+      { "key": "LowHygieneChanceCheckInterval", "description": "Intervalo entre comprobaciones de baja higiene.", "options": "Segundos, decimal positivo.", "value": 4.0 },
+      { "key": "LowHygieneStatusEffects", "description": "Efectos aplicables por baja higiene.", "options": "Lista de identificadores de CharacterStatusEffectDefinition.", "value": [] },
+      { "key": "DefaultArrivalMethod", "description": "Método de llegada predeterminado.", "options": "Identificador de ArrivalMethodDefinition o null.", "value": null },
+      { "key": "RandomArrivalMethods", "description": "Métodos de llegada alternativos ponderados.", "options": "Lista con Definition y Weight.", "value": [] },
+      { "key": "OverrideArrivalMethod", "description": "Método de llegada forzado para enfermedades concretas.", "options": "Diccionario illnessId -> arrivalMethodId.", "value": {} }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "chanceOfLowHygieneEffect",
-        "description": "Probabilidad de aplicar efectos relacionados con baja higiene.",
-        "options": "Porcentaje entero de 0 a 100.",
-        "value": 50
-      },
-      {
-        "key": "lowHygieneChanceCheckInterval",
-        "description": "Intervalo entre comprobaciones de efectos de baja higiene.",
-        "options": "Segundos en decimal, mayor que 0.",
-        "value": 4.0
-      },
-      {
-        "key": "lowHygieneStatusEffects",
-        "description": "Efectos nativos que pueden aplicarse por baja higiene.",
-        "options": "Lista de identificadores estables de efectos; null hereda el hospital base.",
-        "value": null
-      },
-      {
-        "key": "timePortalSpawnRate",
-        "description": "Ritmo de llegada mediante portales temporales cuando esa mecanica esta disponible.",
-        "options": "Decimal no negativo.",
-        "value": 1.0
-      },
-      {
-        "key": "timePortalSpawnReductionPerInstance",
-        "description": "Reduccion del ritmo por cada portal temporal adicional.",
-        "options": "Decimal entre 0 y 1.",
-        "value": 0.1
-      },
-      {
-        "key": "timePortalIllnesses",
-        "description": "Lista ponderada exclusiva de enfermedades para pacientes llegados por portales.",
-        "options": "Misma estructura que illnesses; null hereda y [] desactiva la lista especial.",
-        "value": []
-      }
+    "BAJA": [
+      { "key": "_patientDefinition", "description": "Clase base nativa de paciente. No editable sin sustituir el sistema de personajes.", "value": null },
+      { "key": "_ghostDefinition", "description": "Clase base nativa de fantasma. No editable sin sustituir el sistema de personajes.", "value": null },
+      { "key": "_patientBehaviour", "description": "Árbol de comportamiento del paciente. No editable sin un asset nativo válido.", "value": null },
+      { "key": "LevelEffectComponents", "description": "Componentes que modifican pacientes para este nivel.", "options": "Lista polimórfica; el tutorial Remix usa _movementSpeedModifier con Priority, LocoGraphs, MaxSpeedMultiplier, WalkAnimMultiplier, AccelerationMultiplier y _showInTooltip.", "value": [] },
+      { "key": "CharacterManagerConfig", "description": "Referencia al asset de personajes generado con estos valores. No editable directamente.", "value": null }
+    ],
+    "DLC": [
+      { "key": "_aliensManagerConfig", "dlc": "Close Encounters", "description": "Configuración del sistema de alienígenas.", "options": "Identificador de AliensManager.Config o null.", "value": null },
+      { "key": "_anachronisticManagerConfig", "dlc": "A Stitch in Time", "description": "Configuración de eras y personajes anacrónicos.", "options": "Identificador de AnachronisticManager.EraConfig o null.", "value": null },
+      { "key": "_patientTimePortalSpawnRate", "dlc": "A Stitch in Time", "description": "Velocidad base de aparición de pacientes mediante portales temporales.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "_patientTimePortalSpawnReductionPerInstance", "dlc": "A Stitch in Time", "description": "Reducción de la velocidad por cada portal activo.", "options": "Decimal no negativo.", "value": 0.1 },
+      { "key": "_weightedIllnessesTimePortal", "dlc": "A Stitch in Time", "description": "Enfermedades exclusivas que pueden llegar por portales.", "options": "Lista con la misma estructura que _weightedIllnesses.", "value": [] }
     ]
   },
   "personal_y_contratacion": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "maxStaff",
-        "description": "Numero maximo de empleados simultaneos permitido.",
-        "options": "Entero positivo. El tutorial nativo usa 512.",
-        "value": 512
-      },
-      {
-        "key": "staffHappinessModifier",
-        "description": "Modificador global aplicado a la felicidad del personal en este nivel.",
-        "options": "Decimal; 0 no modifica y el tutorial nativo usa 10.",
-        "value": 10.0
-      },
-      {
-        "key": "applicantPools",
-        "description": "Reglas de generacion de candidatos para medicos, enfermeros, conserjes y asistentes.",
-        "options": "Objeto por tipo de personal con initialPercentageToFill, min/max time, removalTime, marketingBoostMultiplier, rankWeights, minSlots y emptyTrainingSlotChance. null hereda el hospital base.",
-        "value": null
-      }
+    "ALTA": [
+      { "key": "_maxStaff", "description": "Máximo de empleados simultáneos.", "options": "Entero positivo.", "value": 512 },
+      { "key": "StaffHappinessModifier", "description": "Modificador inicial de felicidad del personal.", "options": "Decimal; 0 no modifica el valor base.", "value": 10.0 }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "recruitmentFeePercentages",
-        "description": "Porcentajes de tarifa de contratacion segun el rango o nivel del candidato.",
-        "options": "Lista de decimales no negativos; null hereda el hospital base.",
-        "value": null
-      },
-      {
-        "key": "guestTrainerUpfrontCostMultiplier",
-        "description": "Multiplicador del coste fijo de contratar a un profesor invitado.",
-        "options": "Decimal no negativo; 1.0 conserva el coste base.",
-        "value": 1.0
-      },
-      {
-        "key": "guestTrainerCostPerTraineeMultiplier",
-        "description": "Multiplicador del coste por alumno de un profesor invitado.",
-        "options": "Decimal no negativo; 1.0 conserva el coste base.",
-        "value": 1.0
-      },
-      {
-        "key": "guestTrainers",
-        "description": "Profesores invitados que pueden aparecer en este nivel.",
-        "options": "Lista de identificadores nativos estables o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "workLifeBalance",
-        "description": "Categorias de personal y reglas de equilibrio trabajo-descanso.",
-        "options": "Objeto con categorias nativas y objetivo de dimision; null hereda el hospital base.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "GuestTrainerUpfrontCostMultiplier", "description": "Multiplicador del coste inicial del formador invitado.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "GuestTrainerCostPerTraineeMultiplier", "description": "Multiplicador del coste por alumno del formador invitado.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "DoctorConfig", "description": "Generación de candidatos médicos.", "options": "Objeto con ChanceOfEmptyTrainingSlot, InitialPercentageToFill, MarketingBoostMultiplier, MinJobApplicantSlots, RankWeights, TimeUntilNextApplicant, TimeUntilNextApplicantMax y TimeUntilRemoveApplicant.", "value": null },
+      { "key": "NurseConfig", "description": "Generación de candidatos de enfermería.", "options": "Misma estructura que DoctorConfig.", "value": null },
+      { "key": "JanitorConfig", "description": "Generación de candidatos de mantenimiento.", "options": "Misma estructura que DoctorConfig.", "value": null },
+      { "key": "AssistantConfig", "description": "Generación de candidatos de recepción.", "options": "Misma estructura que DoctorConfig.", "value": null },
+      { "key": "RecruitmentFeePercentage", "description": "Porcentajes de coste de contratación por rango.", "options": "Lista de decimales no negativos.", "value": [] }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "charactersCanWearWinterClothes",
-        "description": "Permite ropa de invierno a los personajes.",
-        "options": "true o false.",
-        "value": false
-      },
-      {
-        "key": "charactersCanWearSummerClothes",
-        "description": "Permite ropa de verano a los personajes.",
-        "options": "true o false.",
-        "value": true
-      }
+    "BAJA": [
+      { "key": "StaffDatabase", "description": "Base nativa de plantillas de personal. No editable sin un asset nativo válido.", "value": null },
+      { "key": "Qualifications", "description": "Lista nativa de cualificaciones. No editable sin un asset nativo válido.", "value": null },
+      { "key": "JobApplicantManagerConfig", "description": "Referencia al asset de contratación generado. No editable directamente.", "value": null },
+      { "key": "SandboxJobApplicantManagerConfig", "description": "Referencia alternativa de contratación para Sandbox. No editable directamente.", "value": null },
+      { "key": "GuestTrainersConfig", "description": "Referencia nativa de formadores invitados. El tutorial no incluye su asset.", "value": null },
+      { "key": "SandboxGuestTrainersConfig", "description": "Referencia Sandbox de formadores invitados. El tutorial no incluye su asset.", "value": null },
+      { "key": "WorkLifeBalanceConfig", "description": "Referencia nativa al equilibrio vida-trabajo. El tutorial no incluye su asset.", "value": null }
+    ],
+    "DLC": []
+  },
+  "objetivos_y_recompensas": {
+    "ALTA": [
+      { "key": "LevelObjectiveScript", "description": "Árbol que organiza los objetivos y estrellas del nivel.", "options": "Identificador de ExternalBehavior u objetivo declarativo generado por el editor.", "value": null },
+      { "key": "NameLocalised", "description": "Nombre localizado de una definición de objetivo.", "options": "Clave de localización.", "value": null },
+      { "key": "DescriptionLocalised", "description": "Descripción localizada de una definición de objetivo.", "options": "Clave de localización.", "value": null },
+      { "key": "SubGoalDefinitions", "description": "Condiciones que forman un objetivo.", "options": "Lista polimórfica. Cada entrada puede usar $type, AdviceText, CureCount, DiagnoseCount, DisplayOnHUD, HiScoreWeight, Illness, IncludeExisting, Item, ItemCount, ItemList, ItemListLocString, MovementType, OnceCompleteStayComplete, PrestigeTarget, RequiredCount, Room, RoomDefinition, Staff, StaffCount, StaffDefinition, StaffText, Target, TargetAmount, TargetValue, Threshold o Wave.", "value": [] },
+      { "key": "CompletionRewards", "description": "Recompensas al completar el objetivo.", "options": "Lista con $type y, cuando corresponda, _amount, _definition y _star.", "value": [] }
+    ],
+    "MEDIA": [
+      { "key": "ScoreType", "description": "Tipo de puntuación usado por el objetivo.", "options": "Valor del enum nativo de puntuación.", "value": 0 },
+      { "key": "RequiredHighScore", "description": "Puntuación necesaria para completar el objetivo.", "options": "Número entero.", "value": 0 },
+      { "key": "TimeLength", "description": "Duración disponible para objetivos temporizados.", "options": "Decimal en unidades temporales nativas.", "value": 0 },
+      { "key": "EvaluateOnTimeElapse", "description": "Evalúa el objetivo al agotarse el tiempo.", "options": "true o false.", "value": false },
+      { "key": "DisplayOnHUD", "description": "Muestra el desafío en el HUD.", "options": "true o false.", "value": true },
+      { "key": "NotDismissable", "description": "Impide descartar manualmente el objetivo.", "options": "true o false.", "value": false },
+      { "key": "AbandonRewards", "description": "Consecuencias o recompensas al abandonar.", "options": "Lista de definiciones de recompensa.", "value": [] },
+      { "key": "FailRewards", "description": "Consecuencias o recompensas al fallar.", "options": "Lista de definiciones de recompensa.", "value": [] },
+      { "key": "SuccessMessage", "description": "Mensaje mostrado al completar el objetivo.", "options": "Definición de notificación con textos, opciones, tiempo, audio y vídeo.", "value": null },
+      { "key": "FailMessage", "description": "Mensaje mostrado al fallar el objetivo.", "options": "Definición de notificación con textos, opciones, tiempo, audio y vídeo.", "value": null },
+      { "key": "AdvisorMessageFail", "description": "Texto del asesor al fallar.", "options": "Clave de localización.", "value": null },
+      { "key": "AdvisorMessageSuccess", "description": "Texto del asesor al completar.", "options": "Clave de localización.", "value": null }
+    ],
+    "BAJA": [
+      { "key": "OverrideObjectivePrefab", "description": "Prefab visual alternativo del objetivo. No editable sin un asset nativo válido.", "value": null },
+      { "key": "AdvisorIconFail", "description": "Icono nativo del asesor al fallar. No editable sin un asset válido.", "value": null },
+      { "key": "AdvisorIconSuccess", "description": "Icono nativo del asesor al completar. No editable sin un asset válido.", "value": null },
+      { "key": "LevelScriptConfig", "description": "Referencia al asset que contiene LevelObjectiveScript y OnlineChallenges. No editable directamente.", "value": null },
+      { "key": "OnlineChallenges", "description": "Desafíos en línea asociados al guion del nivel.", "options": "Lista de identificadores nativos.", "value": [] },
+      { "key": "HospitalAwardsConfig", "description": "Referencia a premios anuales. El tutorial la hereda y no incluye su asset.", "value": null },
+      { "key": "YearlyTargetsManagerConfig", "description": "Referencia a objetivos anuales. El tutorial no incluye su asset.", "value": null },
+      { "key": "PrestigeConfig", "description": "Referencia a niveles de prestigio. El tutorial no incluye su asset.", "value": null }
+    ],
+    "DLC": []
+  },
+  "desafios_y_emergencias": {
+    "ALTA": [
+      { "key": "Schedules", "description": "Calendarios de desafíos y VIP.", "options": "Lista con Deprecated, Name, IsEnabledOnStart, StartWithCooldown, MinCooldownInDays, MaxCooldownInDays, Prerequisites, Challenges y Subtitles.", "value": [] },
+      { "key": "MinimumGenerationTimeInSeconds", "description": "Tiempo mínimo entre desafíos de personal.", "options": "Segundos, decimal no negativo.", "value": 300.0 },
+      { "key": "MaximumGenerationTimeInSeconds", "description": "Tiempo máximo entre desafíos de personal.", "options": "Segundos, decimal igual o mayor que el mínimo.", "value": 600.0 },
+      { "key": "MaximumActiveStaffChallenges", "description": "Máximo de desafíos de personal activos.", "options": "Entero igual o mayor que 0; 0 los desactiva.", "value": 0 }
+    ],
+    "MEDIA": [
+      { "key": "MinimumDifficultyRating", "description": "Dificultad mínima de desafíos de personal.", "options": "Entero.", "value": 0 },
+      { "key": "MaximumDifficultyRating", "description": "Dificultad máxima de desafíos de personal.", "options": "Entero igual o mayor que el mínimo.", "value": 10 },
+      { "key": "Challenges", "description": "Lista nativa de desafíos de personal disponibles.", "options": "Identificador de StaffChallengeManager.ChallengeList o null.", "value": null },
+      { "key": "IntroMessage", "description": "Notificación de inicio de un desafío de personal.", "options": "Definición completa de notificación.", "value": null },
+      { "key": "SuccessMessage", "description": "Notificación de éxito de un desafío de personal.", "options": "Definición completa de notificación.", "value": null },
+      { "key": "FailureMessage", "description": "Notificación de fracaso de un desafío de personal.", "options": "Definición completa de notificación.", "value": null },
+      { "key": "MaintenanceChallengeGroups", "description": "Agrupaciones internas de desafíos de mantenimiento.", "options": "Diccionario de texto a texto o null.", "value": null }
+    ],
+    "BAJA": [
+      { "key": "ChallengeManagerConfig", "description": "Referencia al asset de desafíos generado. No editable directamente.", "value": null },
+      { "key": "StaffChallengeManagerConfig", "description": "Referencia al asset de desafíos de personal generado. No editable directamente.", "value": null }
+    ],
+    "DLC": [
+      { "key": "UseAmbulanceDepartments", "dlc": "Speedy Recovery", "description": "Activa los departamentos de ambulancias.", "options": "true o false.", "value": false },
+      { "key": "PlayerAmbulanceDepartmentDefinition", "dlc": "Speedy Recovery", "description": "Departamento de ambulancias del jugador.", "options": "Identificador nativo o null.", "value": null },
+      { "key": "RivalAmbulanceDepartmentDefinitions", "dlc": "Speedy Recovery", "description": "Departamentos de ambulancias rivales.", "options": "Lista de identificadores nativos.", "value": [] },
+      { "key": "RescueDeathPenaltyMultiplier", "dlc": "Speedy Recovery", "description": "Multiplicador de penalización por muerte durante rescates.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "IgnoredSceneDeathPenaltyMultiplier", "dlc": "Speedy Recovery", "description": "Multiplicador de penalización por muertes ignoradas en escena.", "options": "Decimal no negativo.", "value": 0.0 }
     ]
   },
-  "objetivos_y_estrellas": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "starObjectives",
-        "description": "Objetivos principales de una, dos y tres estrellas. Cada objetivo combina subobjetivos y recompensas; las referencias a objetos o salas usan identificadores nativos estables.",
-        "options": "Lista ordenada. scoreType admite Standard y los tipos nativos disponibles; timeLength 0 significa sin limite; subgoals usa tipos soportados por el juego; rewards admite Star, Money, Kudosh, Room, Item y otras recompensas nativas.",
-        "value": [
-          {
-            "star": 1,
-            "scoreType": "Standard",
-            "requiredHighScore": -1,
-            "timeLength": 0,
-            "evaluateOnTimeElapse": false,
-            "notDismissable": false,
-            "subgoals": [
-              { "type": "CurePatients", "count": 3, "illnessId": null, "roomId": null, "staffType": null }
-            ],
-            "rewards": [
-              { "type": "Star", "value": 1 },
-              { "type": "Money", "value": 10000 },
-              { "type": "Kudosh", "value": 100 },
-              { "type": "RoomItem", "definitionId": null }
-            ]
-          },
-          {
-            "star": 2,
-            "scoreType": "Standard",
-            "requiredHighScore": -1,
-            "timeLength": 0,
-            "evaluateOnTimeElapse": false,
-            "notDismissable": false,
-            "subgoals": [
-              { "type": "CurePatients", "count": 25, "illnessId": null, "roomId": null, "staffType": null },
-              { "type": "EarnMoney", "amount": 200000 },
-              { "type": "HospitalPrestige", "level": 6 }
-            ],
-            "rewards": [
-              { "type": "Star", "value": 2 },
-              { "type": "Money", "value": 20000 },
-              { "type": "Kudosh", "value": 150 },
-              { "type": "RoomItem", "definitionId": null }
-            ]
-          },
-          {
-            "star": 3,
-            "scoreType": "Standard",
-            "requiredHighScore": -1,
-            "timeLength": 0,
-            "evaluateOnTimeElapse": false,
-            "notDismissable": false,
-            "subgoals": [
-              { "type": "CurePatients", "count": 30, "illnessId": null, "roomId": null, "staffType": null },
-              { "type": "EarnMoney", "amount": 400000 },
-              { "type": "HospitalValue", "amount": 750000 }
-            ],
-            "rewards": [
-              { "type": "Star", "value": 3 },
-              { "type": "Money", "value": 30000 },
-              { "type": "Kudosh", "value": 200 },
-              { "type": "RoomItem", "definitionId": null }
-            ]
-          }
-        ]
-      },
-      {
-        "key": "availableSubgoalTypes",
-        "description": "Catalogo de tipos de subobjetivo que el editor podra crear. Es documentacion del contrato, no una copia de assets nativos.",
-        "options": "La lista se ampliara solo con tipos nativos verificados por el cargador.",
-        "value": [
-          "CurePatients", "DiagnosePatients", "EarnMoney", "HospitalValue", "HospitalPrestige",
-          "HospitalLevel", "Reputation", "StaffMorale", "PatientHappiness", "StaffHappiness",
-          "BuildRoom", "OwnRoom", "TrainStaff", "PromoteStaff", "HireStaff", "CureIllness",
-          "UpgradeMachine", "CaptureGhosts", "CompleteResearch", "WinAwards", "CompleteChallenges"
-        ]
-      }
+  "desafio_horda_remix": {
+    "ALTA": [
+      { "key": "Waves", "description": "Oleadas del desafío Horda.", "options": "Lista con BossWave, IncomeMultiplier, NumPatients, SpawnDurationInDays y TargetCureRate.", "value": [] },
+      { "key": "WaveCountdownInDays", "description": "Días de cuenta atrás entre oleadas.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "FirstWaveCountdownInDays", "description": "Días de cuenta atrás antes de la primera oleada.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "UseSeparateStartCountdown", "description": "Usa una cuenta atrás distinta para la primera oleada.", "options": "true o false.", "value": false }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "introObjectives",
-        "description": "Objetivos intermedios o tutoriales activados antes de las estrellas.",
-        "options": "Lista con la misma estructura basica que starObjectives, sin campo star. [] significa ninguno.",
-        "value": []
-      },
-      {
-        "key": "objectiveBranching",
-        "description": "Orden y condiciones para activar objetivos, desbloqueos y mensajes. Sustituye la parte util del Behavior Tree nativo por una secuencia declarativa.",
-        "options": "Lista de pasos con trigger, conditions y actions. null conserva el guion del hospital base hasta que exista soporte completo.",
-        "value": null
-      },
-      {
-        "key": "yearlyTargets",
-        "description": "Tipos de objetivos anuales y sus recompensas maximas.",
-        "options": "Lista con targetType, maxTargetValue, maxMoneyAward, maxKudoshAward y maxReputationAward; null hereda.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "CureStreak", "description": "Número de curaciones consecutivas para activar la bonificación.", "options": "Entero positivo.", "value": 0 },
+      { "key": "CureStreakMoneyMultiplier", "description": "Multiplicador monetario de la racha de curaciones.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "ConstructionSequenceName", "description": "Secuencia de construcción usada por el desafío.", "options": "Texto o null.", "value": null },
+      { "key": "Prerequisites", "description": "Condiciones previas del desafío.", "options": "Lista de prerrequisitos nativos.", "value": [] },
+      { "key": "IssueChallengeNotice", "description": "Muestra el aviso de desafío.", "options": "true o false.", "value": false },
+      { "key": "DaysUntilChallengeStart", "description": "Días entre el aviso y el inicio.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "PlayerCanRejectChallengeNotice", "description": "Permite rechazar el desafío.", "options": "true o false.", "value": false },
+      { "key": "WaitForNoticeResponseBeforeStartingChallenge", "description": "Espera la respuesta al aviso antes de comenzar.", "options": "true o false.", "value": false },
+      { "key": "IssueDebrief", "description": "Muestra un informe al terminar.", "options": "true o false.", "value": false },
+      { "key": "DaysUntilIssuingDebrief", "description": "Días hasta mostrar el informe.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "WaitForDebriefResponseBeforeIssuingReward", "description": "Espera la respuesta al informe antes de entregar recompensas.", "options": "true o false.", "value": false },
+      { "key": "RewardSuccessScore", "description": "Puntuación mínima para la recompensa de éxito.", "options": "Número entero.", "value": 0 },
+      { "key": "ChanceOfLineInjection", "description": "Probabilidad de insertar líneas narrativas.", "options": "Decimal de 0 a 1.", "value": 0.0 }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "objectiveHudDefaults",
-        "description": "Valores por defecto de presentacion de subobjetivos.",
-        "options": "Objeto con displayOnHud, onceCompleteStayComplete y hiScoreWeight.",
-        "value": { "displayOnHud": true, "onceCompleteStayComplete": false, "hiScoreWeight": 1.0 }
-      }
+    "BAJA": [
+      { "key": "WaveStartAudioEvent", "description": "Evento de audio al iniciar una oleada. No editable sin un evento nativo válido.", "value": null },
+      { "key": "BossWaveStartAudioEvent", "description": "Evento de audio al iniciar una oleada jefe. No editable sin un evento válido.", "value": null },
+      { "key": "CureStreakAudioEvent", "description": "Evento de audio de racha. No editable sin un evento válido.", "value": null },
+      { "key": "WaveStartAdvisorMessage", "description": "Mensaje localizado del asesor al empezar una oleada.", "options": "Clave de localización.", "value": null },
+      { "key": "WaveFailedAdvisorMessage", "description": "Mensaje localizado del asesor al fallar una oleada.", "options": "Clave de localización.", "value": null },
+      { "key": "AdvisorMessageOnIssue", "description": "Mensaje al emitir el desafío.", "options": "Clave de localización.", "value": null },
+      { "key": "AdvisorIconOnIssue", "description": "Icono al emitir el desafío. No editable sin asset nativo.", "value": null },
+      { "key": "AdvisorMessageOnArrivalLocalised", "description": "Mensaje al llegar el desafío.", "options": "Clave de localización.", "value": null },
+      { "key": "AdvisorIconOnArrival", "description": "Icono al llegar el desafío. No editable sin asset nativo.", "value": null },
+      { "key": "NoticeDef", "description": "Definición completa del aviso: textos, botones, icono, tiempo y elección predeterminada.", "options": "Objeto de notificación nativo.", "value": null },
+      { "key": "Reward", "description": "Opciones de recompensa del desafío.", "options": "Objeto con _rewardOptions.", "value": null },
+      { "key": "LineInjectionsOnCompletion", "description": "Líneas narrativas inyectables al completar. No aparecieron serializadas en el tutorial.", "value": null },
+      { "key": "TannoyOnStart", "description": "Anuncios de megafonía al comenzar.", "options": "Lista de identificadores nativos.", "value": [] },
+      { "key": "TannoyOnFailed", "description": "Anuncios de megafonía al fallar.", "options": "Lista de identificadores nativos.", "value": [] },
+      { "key": "TannoyOnSuccess", "description": "Anuncios de megafonía al completar.", "options": "Lista de identificadores nativos.", "value": [] },
+      { "key": "$type", "description": "Tipo .NET concreto del desafío. No editable: lo genera el editor.", "value": "TH20.HordeChallengeDefinition" }
+    ],
+    "DLC": []
+  },
+  "mundo_y_construccion": {
+    "ALTA": [
+      { "key": "initialTemperature", "description": "Temperatura ambiental inicial.", "options": "Decimal en la escala interna del juego.", "value": 0.0 },
+      { "key": "initialAttractiveness", "description": "Atractivo ambiental inicial.", "options": "Decimal.", "value": 0.0 },
+      { "key": "initialHygiene", "description": "Higiene ambiental inicial.", "options": "Decimal entre 0 y 1.", "value": 1.0 },
+      { "key": "_availableRooms", "description": "Salas disponibles al comenzar.", "options": "Lista de identificadores de RoomDefinition.", "value": [] },
+      { "key": "RequiredUnlockableItems", "description": "Objetos que deben estar disponibles en el nivel.", "options": "Lista de identificadores de RoomItemDefinition o null.", "value": null }
+    ],
+    "MEDIA": [
+      { "key": "_roomBuiltDefinition", "description": "Estilo visual de parcela construida.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "_roomBuildingDefinition", "description": "Estilo visual de parcela en construcción.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "_roomUnbuiltDefinition", "description": "Estilo visual de parcela sin construir.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "MainEntranceDefinition", "description": "Definición de entrada principal.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "SideEntranceDefinition", "description": "Definición de entrada lateral.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "InternalEntranceDefinition", "description": "Definición de entrada interior.", "options": "Identificador de RoomItemDefinition o null.", "value": null },
+      { "key": "WindowDefinition", "description": "Definición de ventana predeterminada.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "CorridorWallDefinition", "description": "Muro usado en pasillos.", "options": "Identificador de RoomWallDefinition o null.", "value": null },
+      { "key": "createBaseLandscapeItems", "description": "Crea la decoración base del paisaje.", "options": "true o false.", "value": false },
+      { "key": "PerimeterPrefabs", "description": "Prefabs usados para cerrar el perímetro.", "options": "Lista de identificadores de prefab o null.", "value": null },
+      { "key": "PerimeterOffset", "description": "Separación del perímetro respecto a la parcela.", "options": "Decimal.", "value": 0.75 },
+      { "key": "PerimeterNoRotation", "description": "Impide rotar automáticamente las piezas del perímetro.", "options": "true o false.", "value": false }
+    ],
+    "BAJA": [
+      { "key": "HospitalPlots", "description": "Referencias a parcelas nativas. No editable aquí: las genera el editor de parcelas.", "value": null },
+      { "key": "FogOfWarDefinition", "description": "Definición nativa de niebla. No editable aquí: la genera el editor de niebla.", "value": null },
+      { "key": "PostProcessingRendererData", "description": "Postprocesado nativo del mundo. No editable sin un asset válido.", "value": null },
+      { "key": "WorldStateConfig", "description": "Referencia al asset del mundo generado con estos valores. No editable directamente.", "value": null }
+    ],
+    "DLC": []
+  },
+  "parcelas": {
+    "ALTA": [
+      { "key": "Cost", "description": "Precio de compra de la parcela.", "options": "Entero igual o mayor que 0.", "value": 0 },
+      { "key": "InitiallyOpen", "description": "La parcela está disponible desde el inicio.", "options": "true o false.", "value": true },
+      { "key": "Built", "description": "La parcela comienza construida.", "options": "true o false.", "value": true },
+      { "key": "InstaBuild", "description": "La construcción termina instantáneamente.", "options": "true o false.", "value": true },
+      { "key": "HideUntilAvailable", "description": "Oculta la parcela hasta cumplir sus requisitos.", "options": "true o false.", "value": false },
+      { "key": "NotHiddenInSandbox", "description": "Mantiene visible la parcela en Sandbox.", "options": "true o false.", "value": false },
+      { "key": "TimeToBuild", "description": "Tiempo necesario para construir la parcela.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "Prerequisites", "description": "Condiciones para desbloquear la parcela.", "options": "Lista de HospitalPlotPrerequisite.", "value": [] }
+    ],
+    "MEDIA": [
+      { "key": "IncludePerimiterInNavMesh", "description": "Incluye el perímetro en la malla de navegación.", "options": "true o false.", "value": true },
+      { "key": "Color", "description": "Color identificativo nativo de la parcela.", "options": "Color32 con r, g, b y a entre 0 y 255.", "value": { "r": 255, "g": 255, "b": 255, "a": 255 } },
+      { "key": "FootprintYOffset", "description": "Desplazamiento vertical de la huella visual.", "options": "Decimal en unidades del mundo.", "value": 0.0 },
+      { "key": "BuiltRoomDefinition", "description": "Estilo de suelo y muros cuando está construida.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "BuildingRoomDefinition", "description": "Estilo durante la construcción.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "UnbuiltRoomDefinition", "description": "Estilo antes de construir.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "MainEntranceDefinition", "description": "Entrada principal específica de la parcela.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "SideEntranceDefinition", "description": "Entrada lateral específica de la parcela.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "InternalEntranceDefinition", "description": "Entrada interior específica de la parcela.", "options": "Identificador de RoomItemDefinition o null.", "value": null },
+      { "key": "WindowDefinition", "description": "Ventana específica de la parcela.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "BuildObjectiveAutoStart", "description": "Inicia automáticamente el objetivo de construcción.", "options": "true o false.", "value": false },
+      { "key": "BuildObjectiveStartOnPrereqsMet", "description": "Inicia el objetivo al cumplir los requisitos.", "options": "true o false.", "value": false },
+      { "key": "BuildObjective", "description": "Objetivo asociado a construir la parcela.", "options": "Identificador de ObjectiveDefinition o null.", "value": null },
+      { "key": "MergeInto", "description": "Parcela con la que se fusiona al comprarse.", "options": "Índice de parcela o null.", "value": null }
+    ],
+    "BAJA": [
+      { "key": "NameLocalised", "description": "Nombre nativo de parcela. No editable: el editor muestra Parcela/Plot más su índice.", "value": null },
+      { "key": "FloorImage", "description": "Textura que define la huella. No editable aquí: la genera el editor de parcelas.", "value": null },
+      { "key": "DemolishParticleSystemOverride", "description": "Partículas al demoler la parcela. No editable sin un asset válido.", "value": null },
+      { "key": "Items", "description": "Objetos de la capa Base con Definition, Position y Rotation. No editable aquí: los genera el editor visual.", "value": null },
+      { "key": "BuiltItems", "description": "Objetos de la capa Build con Definition, Position y Rotation. No editable aquí: los genera el editor visual.", "value": null },
+      { "key": "UnbuiltItems", "description": "Objetos de la capa Unbuilt con Definition, Position y Rotation. No editable aquí: los genera el editor visual.", "value": null }
+    ],
+    "DLC": [
+      { "key": "UseEnergyUI", "dlc": "Off the Grid", "description": "Muestra la producción energética de la parcela.", "options": "true o false.", "value": false },
+      { "key": "EnergyUnitsGenerated", "dlc": "Off the Grid", "description": "Unidades de energía producidas por la parcela.", "options": "Entero.", "value": 0 },
+      { "key": "AmbulanceBayEntranceSide", "dlc": "Speedy Recovery", "description": "Lado de la parcela donde se conecta la bahía de ambulancias.", "options": "Dirección de cuadrícula nativa.", "value": 0 }
     ]
   },
-  "emergencias_y_desafios": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "challengeSchedules",
-        "description": "Calendarios que controlan que emergencias o desafios aparecen y con que frecuencia.",
-        "options": "Lista con id, enabledOnStart, startWithCooldown, minCooldownDays, maxCooldownDays, prerequisites y challenges; cada challenge usa definitionId y weight. null hereda el hospital base.",
-        "value": null
-      },
-      {
-        "key": "enabledChallengeTypes",
-        "description": "Tipos de desafio nativos que el editor debe poder configurar.",
-        "options": "Lista formada por tipos soportados; no instancia desafios por si sola.",
-        "value": [
-          "AmbulanceEmergency", "Budget", "Earthquake", "EarthquakePatients", "Eco",
-          "Electricity", "Epidemic", "Ghosts", "Horde", "Objective", "RacoonAttack",
-          "SpecialPatient", "VIP", "WaveObjectivesHorde"
-        ]
-      }
+  "politicas_del_hospital": {
+    "ALTA": [
+      { "key": "DiagnosisCertaintyDefault", "description": "Certeza de diagnóstico predeterminada.", "options": "Porcentaje entre el mínimo y el máximo.", "value": 80.0 },
+      { "key": "QueueWarningDefault", "description": "Longitud de cola que activa el aviso por defecto.", "options": "Entero entre el mínimo y el máximo.", "value": 4 },
+      { "key": "AutoSendForTreatment", "description": "Envía automáticamente a tratamiento al alcanzar la certeza requerida.", "options": "true o false.", "value": true }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "useAmbulanceDepartments",
-        "description": "Activa el sistema de departamentos y ambulancias del DLC correspondiente.",
-        "options": "true o false. Requiere que las referencias de ambulancias y el DLC esten disponibles.",
-        "value": false
-      },
-      {
-        "key": "playerAmbulanceDepartmentId",
-        "description": "Departamento de ambulancias controlado por el jugador.",
-        "options": "Identificador nativo estable o null.",
-        "value": null
-      },
-      {
-        "key": "rivalAmbulanceDepartmentIds",
-        "description": "Departamentos rivales disponibles en el nivel.",
-        "options": "Lista de identificadores nativos estables o null.",
-        "value": null
-      },
-      {
-        "key": "rescueDeathPenaltyMultiplier",
-        "description": "Multiplicador de penalizacion por muertes durante rescates.",
-        "options": "Decimal no negativo.",
-        "value": 0.0
-      },
-      {
-        "key": "ignoredSceneDeathPenaltyMultiplier",
-        "description": "Multiplicador aplicado a muertes de escenas ignoradas por la logica normal.",
-        "options": "Decimal no negativo.",
-        "value": 0.0
-      },
-      {
-        "key": "staffChallenges",
-        "description": "Generacion de peticiones y desafios del personal.",
-        "options": "Objeto con min/max generationSeconds, maxActive, min/max difficulty y challengeListId; null hereda. maxActive 0 los desactiva.",
-        "value": {
-          "minimumGenerationSeconds": 300.0,
-          "maximumGenerationSeconds": 600.0,
-          "maximumActive": 0,
-          "minimumDifficulty": 0,
-          "maximumDifficulty": 10,
-          "challengeListId": null
-        }
-      }
+    "MEDIA": [
+      { "key": "DiagnosisCertaintyMin", "description": "Certeza mínima permitida en la política.", "options": "Porcentaje de 0 a 100.", "value": 40.0 },
+      { "key": "DiagnosisCertaintyMax", "description": "Certeza máxima permitida en la política.", "options": "Porcentaje de 0 a 100.", "value": 100.0 },
+      { "key": "QueueWarningMin", "description": "Aviso de cola mínimo permitido.", "options": "Entero positivo.", "value": 1 },
+      { "key": "QueueWarningMax", "description": "Aviso de cola máximo permitido.", "options": "Entero igual o mayor que el mínimo.", "value": 35 },
+      { "key": "StaffLeaveRooms", "description": "Permite al personal abandonar salas sin trabajo.", "options": "true o false.", "value": true },
+      { "key": "StaffTrainingRequests", "description": "Permite solicitudes de formación.", "options": "true o false.", "value": true },
+      { "key": "StaffPromotion", "description": "Activa solicitudes de promoción.", "options": "true o false.", "value": false }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "maintenanceChallengeGroups",
-        "description": "Grupos de desafios de mantenimiento usados por niveles concretos.",
-        "options": "Lista de identificadores nativos estables o null para heredar.",
-        "value": null
-      }
-    ]
+    "BAJA": [
+      { "key": "HospitalPolicyConfig", "description": "Referencia al asset de políticas generado con estos valores. No editable directamente.", "value": null }
+    ],
+    "DLC": []
   },
-  "desbloqueos_y_contenido": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "availableRooms",
-        "description": "Salas disponibles al comenzar o permitidas por el nivel.",
-        "options": "Lista de identificadores estables de RoomDefinition. null hereda; [] fuerza ninguna sala inicial.",
-        "value": null
-      },
-      {
-        "key": "requiredUnlockableItems",
-        "description": "Objetos que deben poder desbloquearse durante el nivel.",
-        "options": "Lista de identificadores estables de RoomItemDefinition o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "roomWhitelist",
-        "description": "Si se define, limita las salas utilizables a esta lista.",
-        "options": "Lista de identificadores estables o null para no aplicar lista blanca.",
-        "value": null
-      },
-      {
-        "key": "roomBlacklist",
-        "description": "Salas prohibidas especificamente en el nivel.",
-        "options": "Lista de identificadores estables o null.",
-        "value": null
-      },
-      {
-        "key": "itemWhitelist",
-        "description": "Si se define, limita los objetos utilizables a esta lista.",
-        "options": "Lista de identificadores estables o null.",
-        "value": null
-      },
-      {
-        "key": "itemBlacklist",
-        "description": "Objetos prohibidos especificamente en el nivel.",
-        "options": "Lista de identificadores estables o null.",
-        "value": null
-      }
+  "iluminacion": {
+    "ALTA": [
+      { "key": "EnableHeightFog", "description": "Activa la niebla dependiente de altura.", "options": "true o false.", "value": false },
+      { "key": "FogSettings", "description": "Ajustes de la niebla de altura.", "options": "Objeto con FogFadeOutHeight, FogFadeInHeight y FogColor expresado como Color32.", "value": { "FogFadeOutHeight": 0.0, "FogFadeInHeight": 0.0, "FogColor": { "r": 0, "g": 0, "b": 0, "a": 0 } } }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "researchProjects",
-        "description": "Proyectos de investigacion disponibles.",
-        "options": "Lista de identificadores estables de ResearchProjectDefinition o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "marketingCampaigns",
-        "description": "Campanas generales y de contratacion disponibles.",
-        "options": "Objeto con generalCampaignIds y recruitmentCampaignIds; null hereda.",
-        "value": null
-      },
-      {
-        "key": "itemSpawnLimits",
-        "description": "Limites de aparicion o colocacion por categorias de objetos.",
-        "options": "Lista de referencias estables a categorias nativas con sus limites, o null para heredar.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "ShadowPlaneHeight", "description": "Altura del plano receptor de sombras.", "options": "Decimal en unidades del mundo.", "value": -5.0 },
+      { "key": "ShadowPlaneFadeDistance", "description": "Distancia de desvanecimiento del plano de sombras.", "options": "Decimal no negativo.", "value": 0.1 },
+      { "key": "RoomLightBaseBias", "description": "Sobrescritura del sesgo base de luz interior.", "options": "Objeto con UseOverride y Value.", "value": { "UseOverride": false, "Value": 0.0 } },
+      { "key": "RoomLightHeight", "description": "Sobrescritura de la altura de luces interiores.", "options": "Objeto con UseOverride y Value.", "value": { "UseOverride": false, "Value": 0.0 } },
+      { "key": "OutOfBoundsLightDistance", "description": "Sobrescritura de distancia de luz fuera de límites.", "options": "Objeto con UseOverride y Value entero.", "value": { "UseOverride": false, "Value": 0 } },
+      { "key": "TopDownCameraFarClipPlane", "description": "Sobrescritura del plano lejano de la cámara.", "options": "Objeto con UseOverride y Value.", "value": { "UseOverride": false, "Value": 0.0 } },
+      { "key": "UseUnderneathLight", "description": "Activa la iluminación inferior del mapa.", "options": "true o false.", "value": false },
+      { "key": "Caustics", "description": "Volumen de cáusticas.", "options": "Objeto con Enabled, CausticsVolumePosition y CausticsVolumeScale.", "value": { "Enabled": false, "CausticsVolumePosition": { "x": 0.0, "y": 0.0, "z": 0.0 }, "CausticsVolumeScale": { "x": 0.0, "y": 0.0, "z": 0.0 } } }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "roomVisualOverrides",
-        "description": "Sustituciones visuales de salas para tematicas especiales.",
-        "options": "Identificador estable de una base nativa o null para heredar.",
-        "value": null
-      }
-    ]
+    "BAJA": [
+      { "key": "OutdoorLightMaterialOverride", "description": "Material exterior nativo. No editable sin un asset válido.", "value": null },
+      { "key": "OutdoorCubemapOverride", "description": "Cubemap exterior nativo. No editable sin un asset válido.", "value": null },
+      { "key": "LevelLightingConfig", "description": "Referencia al asset de iluminación generado con estos valores. No editable directamente.", "value": null }
+    ],
+    "DLC": []
   },
-  "parcelas_y_construccion": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "plotPerimeterMode",
-        "description": "Origen de los elementos decorativos del perimetro de parcelas.",
-        "options": "None, Original o Custom.",
-        "value": "None"
-      },
-      {
-        "key": "builtRoomStyleId",
-        "description": "Definicion visual usada para zonas construidas.",
-        "options": "Identificador estable de RoomDefinition o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "buildingRoomStyleId",
-        "description": "Definicion visual usada durante la construccion de parcelas.",
-        "options": "Identificador estable de RoomDefinition o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "unbuiltRoomStyleId",
-        "description": "Definicion visual usada en parcelas sin construir.",
-        "options": "Identificador estable de RoomDefinition o null para heredar.",
-        "value": "Room_Hospital_Unbuilt_NoWalls"
-      }
+  "notificaciones": {
+    "ALTA": [
+      { "key": "LocalisedTitle", "description": "Clave localizada del título de una notificación.", "options": "Clave de localización.", "value": null },
+      { "key": "LocalisedText", "description": "Clave localizada del cuerpo de una notificación.", "options": "Clave de localización.", "value": null },
+      { "key": "Choices", "description": "Respuestas localizadas disponibles.", "options": "Lista de claves de localización.", "value": [] }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "perimeterPrefabIds",
-        "description": "Elementos nativos usados cuando el modo de perimetro es Custom.",
-        "options": "Lista de identificadores estables; [] no coloca elementos personalizados.",
-        "value": []
-      },
-      {
-        "key": "perimeterOffset",
-        "description": "Separacion del perimetro respecto al borde de la parcela.",
-        "options": "Decimal en unidades del mundo. El tutorial nativo usa 0.75.",
-        "value": 0.75
-      },
-      {
-        "key": "perimeterNoRotation",
-        "description": "Evita que los prefabs de perimetro roten para seguir el borde.",
-        "options": "true o false.",
-        "value": false
-      },
-      {
-        "key": "createBaseLandscapeItems",
-        "description": "Permite al WorldState recrear objetos base del paisaje nativo.",
-        "options": "true o false. En mapas personalizados normalmente false para evitar duplicados.",
-        "value": false
-      }
+    "MEDIA": [
+      { "key": "_showImmediately", "description": "Muestra la notificación inmediatamente.", "options": "true o false.", "value": false },
+      { "key": "_title", "description": "Título literal de respaldo.", "options": "Texto o null.", "value": null },
+      { "key": "_text", "description": "Texto literal de respaldo.", "options": "Texto o null.", "value": null },
+      { "key": "_choices", "description": "Respuestas literales de respaldo.", "options": "Lista de textos.", "value": [] },
+      { "key": "ChoicesAlt", "description": "Respuestas alternativas localizadas.", "options": "Lista de claves.", "value": [] },
+      { "key": "DefaultChoice", "description": "Índice de la respuesta predeterminada.", "options": "Entero dentro de Choices.", "value": 0 },
+      { "key": "TimeoutInSeconds", "description": "Tiempo antes de resolver o cerrar automáticamente.", "options": "Segundos; 0 desactiva el límite cuando el tipo lo permite.", "value": 120 },
+      { "key": "UseScaledTime", "description": "El temporizador usa tiempo escalado del juego.", "options": "true o false.", "value": false },
+      { "key": "CanBeDismissed", "description": "Permite cerrar la notificación.", "options": "true o false.", "value": true },
+      { "key": "CanBeIgnored", "description": "Permite ignorar la notificación.", "options": "true o false.", "value": true },
+      { "key": "CanArchiveDefinition", "description": "Permite archivar la definición.", "options": "true o false.", "value": false },
+      { "key": "NotificationAudioExclusiveMode", "description": "Reproduce el audio en modo exclusivo.", "options": "true o false.", "value": false }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "corridorWallDefinitionId",
-        "description": "Pared especial de pasillos usada por determinados niveles.",
-        "options": "Identificador estable de definicion nativa o null.",
-        "value": null
-      },
-      {
-        "key": "hospitalPlotFootprintConfigId",
-        "description": "Configuracion visual nativa de las huellas de parcelas.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      }
-    ]
+    "BAJA": [
+      { "key": "_icon", "description": "Icono nativo de la notificación. No editable sin un asset válido.", "value": null },
+      { "key": "DialogPrefab", "description": "Prefab de diálogo. No editable sin un asset válido.", "value": null },
+      { "key": "VideoToPlayAfterMessage", "description": "Vídeo posterior. No editable sin un asset válido.", "value": null },
+      { "key": "AudioToPlayAfterMessage", "description": "Audio posterior. No editable sin un evento válido.", "value": null },
+      { "key": "NotificationMessagesConfig", "description": "Referencia al catálogo global de mensajes. No editable directamente.", "value": null },
+      { "key": "DialogueMessageManagerConfig", "description": "Referencia al presentador de diálogos. No editable directamente.", "value": null },
+      { "key": "AdvisorConfig", "description": "Referencia a la configuración del asesor. No editable directamente.", "value": null }
+    ],
+    "DLC": []
   },
-  "reputacion_prestigio_y_politicas": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "reputationModel",
-        "description": "Pesos, ritmos, limites, exponentes y decaimiento usados para calcular reputacion medica, de pacientes, precios, personal y eventos especiales.",
-        "options": "Objeto con medical, patient, prices, staff, special y overall; null hereda todos los coeficientes del hospital base.",
-        "value": null
-      },
-      {
-        "key": "prestigeLevels",
-        "description": "Umbrales y efectos de cada nivel de prestigio del hospital.",
-        "options": "Lista de niveles nativos normalizados o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "hospitalPolicies",
-        "description": "Valores iniciales y limites de las politicas del hospital.",
-        "options": "Objeto con diagnosisCertaintyMin/Max/Default, queueWarningMin/Max/Default, autoSendForTreatment, staffLeaveRooms, staffTrainingRequests y staffPromotion; null hereda.",
-        "value": null
-      }
+  "tutorial": {
+    "ALTA": [
+      { "key": "StaffType", "description": "Tipo de empleado requerido por un paso de tutorial.", "options": "Doctor, Nurse, Janitor o Assistant.", "value": null },
+      { "key": "RoomDefinition", "description": "Sala requerida por un paso de tutorial.", "options": "Identificador de RoomDefinition.", "value": null },
+      { "key": "RoomItemDefinition", "description": "Objeto requerido por un paso de tutorial.", "options": "Identificador de RoomItemDefinition.", "value": null },
+      { "key": "SecondsBeforeClosingSatNav", "description": "Tiempo durante el que permanece abierto el tutorial de navegación.", "options": "Segundos, decimal no negativo.", "value": 0.0 }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "awards",
-        "description": "Premios anuales disponibles, hoja de puntuacion y reglas por categoria.",
-        "options": "Objeto con scoreSheetId y awardData o null para heredar.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "ShowHubMenuArrow", "description": "Muestra una flecha hacia el menú principal correspondiente.", "options": "true o false.", "value": false },
+      { "key": "ShowSubMenuArrow", "description": "Muestra una flecha hacia el submenú correspondiente.", "options": "true o false.", "value": false },
+      { "key": "DebugName", "description": "Nombre legible del paso de tutorial.", "options": "Texto corto.", "value": null },
+      { "key": "HiresPing", "description": "Animación de énfasis para contrataciones.", "options": "Objeto con $type, ScaleAmount, ScaleSpeed, WobbleAmount y WobbleSpeed.", "value": null },
+      { "key": "StaffTabPing", "description": "Animación de énfasis para la pestaña de personal.", "options": "Misma estructura que HiresPing.", "value": null },
+      { "key": "HireButtonPing", "description": "Animación de énfasis del botón Contratar.", "options": "Objeto con $type, FlashSpeed, PrefabOverlay, ScaleAmount, ScaleSpeed, StartColor, TargetColor, WobbleAmount y WobbleSpeed.", "value": null },
+      { "key": "RoomsPing", "description": "Animación de énfasis para Salas.", "options": "Objeto de ping nativo.", "value": null },
+      { "key": "RoomSubMenuPing", "description": "Animación de énfasis para el submenú de sala.", "options": "Objeto de ping nativo.", "value": null },
+      { "key": "RoomBuildAcceptPing", "description": "Animación de énfasis para aceptar una sala.", "options": "Objeto de ping nativo.", "value": null },
+      { "key": "ItemsPing", "description": "Animación de énfasis para Objetos.", "options": "Objeto de ping nativo.", "value": null },
+      { "key": "RoomItemPing", "description": "Animación de énfasis para un objeto concreto.", "options": "Objeto de ping nativo.", "value": null }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "leaderboardConfigId",
-        "description": "Configuracion de marcadores en linea del nivel.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      }
-    ]
+    "BAJA": [
+      { "key": "VideoReference", "description": "Referencia de vídeo del tutorial. No editable sin un asset válido.", "value": null },
+      { "key": "VideoBlueprint", "description": "Blueprint de vídeo del tutorial. No editable sin un asset válido.", "value": null },
+      { "key": "VideoClip", "description": "Clip de vídeo del tutorial. No editable sin un asset válido.", "value": null },
+      { "key": "$type", "description": "Tipo .NET del paso de tutorial. No editable: lo genera el editor según la acción.", "value": null }
+    ],
+    "DLC": []
   },
-  "tiempo_y_camara": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "initialCameraOffset",
-        "description": "Desplazamiento inicial aplicado a la camara al entrar en el nivel.",
-        "options": "Decimal en unidades del mundo.",
-        "value": 10.0
-      },
-      {
-        "key": "initialCameraRotation",
-        "description": "Angulo horizontal inicial de la camara.",
-        "options": "Grados de 0 a 359 o null para heredar la camara base.",
-        "value": 45.0
-      },
-      {
-        "key": "initialCameraPitch",
-        "description": "Inclinacion inicial de la camara.",
-        "options": "Grados dentro de pitchMinAngle y pitchMaxAngle o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "initialCameraZoom",
-        "description": "Zoom inicial del mapa.",
-        "options": "Decimal entre 0 y maxZoomScalar o null para heredar.",
-        "value": null
-      }
+  "campos_anidados_nativos": {
+    "ALTA": [
+      { "key": "Definition", "description": "Definición nativa usada por enfermedades, objetos, métodos de llegada y recompensas.", "options": "Identificador de la definición correspondiente al tipo de lista.", "value": null },
+      { "key": "Unlocked", "description": "Indica si una enfermedad ponderada está disponible desde el inicio.", "options": "true o false.", "value": true },
+      { "key": "MinWeight", "description": "Peso mínimo de aparición de una enfermedad.", "options": "Entero no negativo.", "value": 100 },
+      { "key": "MaxWeight", "description": "Peso máximo de aparición de una enfermedad.", "options": "Entero igual o mayor que MinWeight.", "value": 200 },
+      { "key": "MinStarRating", "description": "Número mínimo de estrellas requerido para una enfermedad.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "MinPatientsSpawned", "description": "Pacientes mínimos generados antes de habilitar una enfermedad.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "NumPatients", "description": "Número de pacientes incluidos en una oleada.", "options": "Entero positivo.", "value": 10 },
+      { "key": "SpawnDurationInDays", "description": "Días durante los que se genera una oleada.", "options": "Entero positivo.", "value": 5 },
+      { "key": "TargetCureRate", "description": "Porcentaje de curación exigido en una oleada.", "options": "Entero de 0 a 100.", "value": 70 },
+      { "key": "IncomeMultiplier", "description": "Multiplicador económico aplicado a una oleada.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "BossWave", "description": "Marca una oleada como oleada de jefe.", "options": "true o false.", "value": false },
+      { "key": "CureCount", "description": "Número de pacientes que debe curar un subobjetivo.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "DiagnoseCount", "description": "Número de pacientes que debe diagnosticar un subobjetivo.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "RequiredCount", "description": "Cantidad requerida por un subobjetivo genérico.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "TargetAmount", "description": "Cantidad objetivo de un subobjetivo.", "options": "Número según el tipo concreto de subobjetivo.", "value": 0 },
+      { "key": "TargetValue", "description": "Valor objetivo de un subobjetivo.", "options": "Número según el tipo concreto de subobjetivo.", "value": 0 },
+      { "key": "Threshold", "description": "Umbral que debe alcanzar un subobjetivo.", "options": "Número según el tipo concreto de subobjetivo.", "value": 0 },
+      { "key": "StaffCount", "description": "Cantidad de empleados exigida por un subobjetivo.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "ItemCount", "description": "Cantidad de objetos exigida por un subobjetivo.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "PrestigeTarget", "description": "Prestigio que debe alcanzar el hospital.", "options": "Número no negativo.", "value": 0 }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "gameTime",
-        "description": "Relacion entre tiempo real y tiempo del juego, velocidades disponibles y velocidad inicial.",
-        "options": "Objeto con realTimeToGameTimeMultiplier, defaultTimeScaleIndex, timeScales y releaseMaxTimeScaleIndex; null hereda.",
-        "value": null
-      },
-      {
-        "key": "cameraLimits",
-        "description": "Limites funcionales de zoom, giro e inclinacion relevantes para el mapa.",
-        "options": "Objeto con pitchMinAngle, pitchMaxAngle, maxZoomScalar, heightAtFurthestZoom, constrainRotationAngles, softConstraintLimit y hardConstraintLimit; null hereda.",
-        "value": null
-      },
-      {
-        "key": "cameraFocalPoint",
-        "description": "Punto del mundo al que mira inicialmente la camara.",
-        "options": "Objeto x/y/z o null para que se determine desde el mapa.",
-        "value": null
-      }
+    "MEDIA": [
+      { "key": "InitialCameraOffset", "description": "Desplazamiento inicial de la cámara al entrar en el nivel.", "options": "Decimal en unidades del mundo.", "value": 10.0 },
+      { "key": "Deprecated", "description": "Marca una entrada nativa como obsoleta sin eliminarla.", "options": "true o false.", "value": false },
+      { "key": "Weight", "description": "Peso relativo de selección de una entrada.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "ChanceOfEmptyTrainingSlot", "description": "Probabilidad de que un candidato tenga un hueco de formación libre.", "options": "Decimal de 0 a 1.", "value": 0.0 },
+      { "key": "InitialPercentageToFill", "description": "Porcentaje inicial de plazas de candidatos que se rellenan.", "options": "Porcentaje de 0 a 100.", "value": 100.0 },
+      { "key": "MarketingBoostMultiplier", "description": "Multiplicador de contratación aportado por marketing.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "MinJobApplicantSlots", "description": "Número mínimo de candidatos disponibles.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "RankWeights", "description": "Pesos de generación de candidatos por rango.", "options": "Lista de números no negativos.", "value": [] },
+      { "key": "TimeUntilNextApplicant", "description": "Tiempo mínimo hasta el siguiente candidato.", "options": "Decimal no negativo en unidades temporales nativas.", "value": 0.0 },
+      { "key": "TimeUntilNextApplicantMax", "description": "Tiempo máximo hasta el siguiente candidato.", "options": "Decimal igual o mayor que TimeUntilNextApplicant.", "value": 0.0 },
+      { "key": "TimeUntilRemoveApplicant", "description": "Tiempo que permanece disponible un candidato.", "options": "Decimal no negativo en unidades temporales nativas.", "value": 0.0 },
+      { "key": "AdviceText", "description": "Texto de consejo asociado a un subobjetivo.", "options": "Clave de localización o null.", "value": null },
+      { "key": "HiScoreWeight", "description": "Peso del subobjetivo en la puntuación total.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "IncludeExisting", "description": "Cuenta elementos que ya existían al iniciar el objetivo.", "options": "true o false.", "value": false },
+      { "key": "OnceCompleteStayComplete", "description": "Impide que un subobjetivo vuelva a quedar incompleto.", "options": "true o false.", "value": false },
+      { "key": "MovementType", "description": "Tipo de movimiento exigido por un objetivo de cámara.", "options": "Valor del enum nativo.", "value": 0 },
+      { "key": "ItemList", "description": "Lista de objetos admitidos por un subobjetivo.", "options": "Lista de identificadores de objetos.", "value": [] },
+      { "key": "ItemListLocString", "description": "Texto localizado que describe una lista de objetos.", "options": "Clave de localización o null.", "value": null },
+      { "key": "Room", "description": "Sala concreta usada por un subobjetivo.", "options": "Identificador de sala o null.", "value": null },
+      { "key": "Staff", "description": "Empleado concreto usado por un subobjetivo.", "options": "Identificador de empleado o null.", "value": null },
+      { "key": "StaffDefinition", "description": "Tipo de empleado usado por un subobjetivo.", "options": "Identificador de CharacterDefinition o null.", "value": null },
+      { "key": "StaffText", "description": "Texto localizado que describe al personal objetivo.", "options": "Clave de localización o null.", "value": null },
+      { "key": "Illness", "description": "Enfermedad concreta usada por un subobjetivo.", "options": "Identificador de IllnessDefinition o null.", "value": null },
+      { "key": "Item", "description": "Objeto concreto usado por un subobjetivo.", "options": "Identificador de RoomItemDefinition o null.", "value": null },
+      { "key": "Target", "description": "Destino o entidad objetivo de un subobjetivo.", "options": "Identificador o valor según el tipo de subobjetivo.", "value": null },
+      { "key": "Wave", "description": "Índice de oleada exigido por un subobjetivo.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "IsEnabledOnStart", "description": "Activa un calendario de desafíos al iniciar el nivel.", "options": "true o false.", "value": true },
+      { "key": "StartWithCooldown", "description": "Hace que un calendario comience respetando su espera inicial.", "options": "true o false.", "value": false },
+      { "key": "MinCooldownInDays", "description": "Días mínimos entre desafíos de un calendario.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "MaxCooldownInDays", "description": "Días máximos entre desafíos de un calendario.", "options": "Decimal igual o mayor que MinCooldownInDays.", "value": 0.0 },
+      { "key": "Subtitles", "description": "Subtítulos o etiquetas secundarias de un calendario.", "options": "Lista de claves de localización.", "value": [] },
+      { "key": "Name", "description": "Nombre interno de una entrada nativa editable.", "options": "Texto corto.", "value": null },
+      { "key": "_numDays", "description": "Número de días exigido por un prerrequisito.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "_levels", "description": "Niveles exigidos por un prerrequisito de progreso.", "options": "Lista de UniqueId de LevelConfig.", "value": [] },
+      { "key": "_amount", "description": "Cantidad entregada por una recompensa.", "options": "Número según el tipo de recompensa.", "value": 0 },
+      { "key": "_definition", "description": "Definición utilizada por una recompensa.", "options": "Identificador de definición o null.", "value": null },
+      { "key": "_star", "description": "Estrella desbloqueada por una recompensa.", "options": "Entero no negativo.", "value": 0 },
+      { "key": "_rewardOptions", "description": "Opciones concretas de una recompensa de desafío.", "options": "Lista polimórfica de recompensas nativas.", "value": [] },
+      { "key": "_showInTooltip", "description": "Muestra un modificador de nivel en la ayuda emergente.", "options": "true o false.", "value": false },
+      { "key": "Priority", "description": "Prioridad de aplicación de un modificador.", "options": "Entero; los valores mayores se aplican con mayor prioridad.", "value": 0 },
+      { "key": "LocoGraphs", "description": "Locomociones afectadas por un modificador de velocidad.", "options": "Lista de identificadores de LocoGraph.", "value": [] },
+      { "key": "MaxSpeedMultiplier", "description": "Multiplicador de velocidad máxima.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "WalkAnimMultiplier", "description": "Multiplicador de velocidad de la animación al caminar.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "AccelerationMultiplier", "description": "Multiplicador de aceleración.", "options": "Decimal no negativo.", "value": 1.0 },
+      { "key": "TitleLocalised", "description": "Título localizado de un aviso de desafío.", "options": "Clave de localización o null.", "value": null },
+      { "key": "MainBodyLocalised", "description": "Cuerpo localizado de un aviso de desafío.", "options": "Clave de localización o null.", "value": null },
+      { "key": "MainBodyAlternativesLocalised", "description": "Cuerpos alternativos localizados de un aviso.", "options": "Lista de claves de localización.", "value": [] },
+      { "key": "ButtonAcceptTextLocalised", "description": "Texto localizado del botón de aceptar.", "options": "Clave de localización o null.", "value": null },
+      { "key": "ButtonDeclineTextLocalised", "description": "Texto localizado del botón de rechazar.", "options": "Clave de localización o null.", "value": null },
+      { "key": "ShowImmediately", "description": "Muestra un aviso de desafío inmediatamente.", "options": "true o false.", "value": false },
+      { "key": "TimeOutSeconds", "description": "Tiempo límite de un aviso de desafío.", "options": "Segundos; 0 desactiva el límite.", "value": 0.0 },
+      { "key": "ScaleAmount", "description": "Escala aplicada por una animación de énfasis del tutorial.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "ScaleSpeed", "description": "Velocidad de la escala de una animación de énfasis.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "WobbleAmount", "description": "Amplitud de oscilación de una animación de énfasis.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "WobbleSpeed", "description": "Velocidad de oscilación de una animación de énfasis.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "FlashSpeed", "description": "Velocidad de parpadeo de una animación de énfasis.", "options": "Decimal no negativo.", "value": 0.0 },
+      { "key": "StartColor", "description": "Color inicial de una animación de énfasis.", "options": "Color32 con r, g, b y a entre 0 y 255.", "value": { "r": 255, "g": 255, "b": 255, "a": 255 } },
+      { "key": "TargetColor", "description": "Color final de una animación de énfasis.", "options": "Color32 con r, g, b y a entre 0 y 255.", "value": { "r": 255, "g": 255, "b": 255, "a": 255 } },
+      { "key": "r", "description": "Canal rojo de un Color32 nativo.", "options": "Entero de 0 a 255.", "value": 255 },
+      { "key": "g", "description": "Canal verde de un Color32 nativo.", "options": "Entero de 0 a 255.", "value": 255 },
+      { "key": "b", "description": "Canal azul de un Color32 nativo.", "options": "Entero de 0 a 255.", "value": 255 },
+      { "key": "a", "description": "Canal alfa de un Color32 nativo.", "options": "Entero de 0 a 255.", "value": 255 },
+      { "key": "x", "description": "Componente X de un vector nativo.", "options": "Decimal.", "value": 0.0 },
+      { "key": "y", "description": "Componente Y de un vector nativo.", "options": "Decimal.", "value": 0.0 },
+      { "key": "z", "description": "Componente Z de un vector nativo.", "options": "Decimal.", "value": 0.0 }
     ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "cameraMotion",
-        "description": "Velocidades y suavizados de paneo, zoom y rotacion.",
-        "options": "Objeto con panSpeed, panSpeedZoomMultiplier, zoomSpeed, keyboardRotateSpeed, mouseRotateSpeed y smoothTimes; null hereda.",
-        "value": null
-      },
-      {
-        "key": "cameraDepthOfField",
-        "description": "Configuracion de profundidad de campo automatica.",
-        "options": "Objeto con enabled, targetPlaneHeight, closeDistance, farDistance y lerpCurve; null hereda.",
-        "value": null
-      }
-    ]
+    "BAJA": [
+      { "key": "_term", "description": "Término interno de localización. No editable: se genera desde el texto localizado." },
+      { "key": "_movementSpeedModifier", "description": "Contenedor polimórfico del modificador de movimiento. No editable: lo genera el editor al crear el modificador." },
+      { "key": "MovementSpeedModifierSettings", "description": "Contenedor de multiplicadores de movimiento. No editable como referencia independiente." },
+      { "key": "Config", "description": "Referencia interna a la configuración de un desafío programado. No editable sin el asset nativo correspondiente." },
+      { "key": "Icon", "description": "Icono nativo de un aviso. No editable sin un asset válido." },
+      { "key": "PrefabOverlay", "description": "Prefab superpuesto por una animación de tutorial. No editable sin un asset válido." },
+      { "key": "Position", "description": "Posición de un objeto de parcela. No editable aquí: la genera el editor visual." },
+      { "key": "Rotation", "description": "Rotación de un objeto de parcela. No editable aquí: la genera el editor visual." }
+    ],
+    "DLC": []
   },
-  "ambiente_e_iluminacion": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "initialTemperature",
-        "description": "Temperatura ambiental inicial del nivel.",
-        "options": "Decimal en la escala interna del juego; 0 usa el punto neutro del tutorial.",
-        "value": 0.0
-      },
-      {
-        "key": "initialAttractiveness",
-        "description": "Atractivo ambiental inicial aplicado al mundo.",
-        "options": "Decimal; el tutorial nativo usa 0.",
-        "value": 0.0
-      },
-      {
-        "key": "initialHygiene",
-        "description": "Higiene ambiental inicial.",
-        "options": "Decimal entre 0 y 1.",
-        "value": 1.0
-      }
+  "envoltura_nativa_unity": {
+    "ALTA": [],
+    "MEDIA": [],
+    "BAJA": [
+      { "key": "m_ObjectHideFlags", "description": "Banderas de ocultación de Unity. No editable." },
+      { "key": "m_CorrespondingSourceObject", "description": "Referencia Unity al objeto fuente. No editable." },
+      { "key": "m_PrefabInstance", "description": "Referencia Unity a la instancia de prefab. No editable." },
+      { "key": "m_PrefabAsset", "description": "Referencia Unity al prefab. No editable." },
+      { "key": "m_GameObject", "description": "Referencia Unity al GameObject propietario. No editable." },
+      { "key": "m_Enabled", "description": "Estado serializado del componente Unity. No editable desde la configuración del mapa." },
+      { "key": "m_EditorHideFlags", "description": "Banderas internas del editor Unity. No editable." },
+      { "key": "m_Script", "description": "Referencia al script MonoBehaviour nativo. No editable." },
+      { "key": "m_Name", "description": "Nombre interno del asset Unity. No editable: lo genera el empaquetador." },
+      { "key": "m_EditorClassIdentifier", "description": "Identificador interno de clase Unity. No editable." },
+      { "key": "_objectReferences", "description": "Tabla de referencias de objetos usada por la serialización nativa. No editable." },
+      { "key": "_serializedStateKeys", "description": "Claves del estado serializado nativo. No editable." },
+      { "key": "_serializedStateValues", "description": "Valores JSON del estado serializado nativo. No editable directamente." },
+      { "key": "_id", "description": "Identificador interno de un ScriptableObject nativo. No editable." },
+      { "key": "h264", "description": "Referencia nativa al vídeo H.264 de un tutorial. No editable sin un asset válido." }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "lighting",
-        "description": "Ajustes propios de iluminacion y niebla de altura del nivel.",
-        "options": "Objeto con shadowPlaneHeight, shadowPlaneFadeDistance, enableHeightFog, fogFadeOutHeight, fogFadeInHeight, fogColor y useUnderneathLight.",
-        "value": {
-          "shadowPlaneHeight": -5.0,
-          "shadowPlaneFadeDistance": 0.1,
-          "enableHeightFog": false,
-          "fogFadeOutHeight": 0.0,
-          "fogFadeInHeight": 0.0,
-          "fogColor": { "r": 0.0, "g": 0.0, "b": 0.0, "a": 0.0 },
-          "useUnderneathLight": false
-        }
-      },
-      {
-        "key": "lightingOverrides",
-        "description": "Sobrescrituras opcionales de luz de salas, altura, distancia exterior y plano lejano de camara.",
-        "options": "Cada entrada usa enabled y value; null hereda.",
-        "value": null
-      }
-    ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "outdoorLightMaterialId",
-        "description": "Material nativo de iluminacion exterior.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "outdoorCubemapId",
-        "description": "Cubemap nativo usado por la iluminacion exterior.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "caustics",
-        "description": "Volumen de causticas usado por mapas con agua o efectos especiales.",
-        "options": "Objeto con enabled, position y scale.",
-        "value": {
-          "enabled": false,
-          "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
-          "scale": { "x": 0.0, "y": 0.0, "z": 0.0 }
-        }
-      }
-    ]
+    "DLC": []
   },
-  "sistemas_especiales": {
-    "PRIORIDAD_ALTA": [
-      {
-        "key": "levelScriptMode",
-        "description": "Determina como se ejecuta la progresion: configuracion declarativa propia o guion nativo heredado.",
-        "options": "Declarative para usar objetivos/desbloqueos de config.json; NativeInherited para conservar el LevelScript del hospital base durante la transicion.",
-        "value": "NativeInherited"
-      }
+  "referencias_nativas": {
+    "ALTA": [],
+    "MEDIA": [],
+    "BAJA": [
+      { "key": "GameTimeConfig", "description": "Referencia a la configuración global del tiempo. No editable: se hereda del hospital base." },
+      { "key": "TopDownCameraLogicConfig", "description": "Referencia a la cámara global. No editable: se hereda del hospital base." },
+      { "key": "BuildingLogicConfig", "description": "Referencia a la lógica de construcción. No editable: se hereda del hospital base." },
+      { "key": "CursorManagerConfig", "description": "Referencia al gestor de cursor. No editable: se hereda del hospital base." },
+      { "key": "HUDConfig", "description": "Referencia al HUD. No editable: se hereda del hospital base." },
+      { "key": "VisualManagerConfig", "description": "Referencia al gestor visual. No editable: se hereda del hospital base." },
+      { "key": "AudioListenerManagerConfig", "description": "Referencia al oyente de audio. No editable: se hereda del hospital base." },
+      { "key": "AudioAmbienceManagerConfig", "description": "Referencia al ambiente sonoro. No editable: se hereda del hospital base." },
+      { "key": "SFXManagerConfig", "description": "Referencia a efectos de sonido. No editable: se hereda del hospital base." },
+      { "key": "HospitalAudioMixerManagerConfig", "description": "Referencia al mezclador del hospital. No editable: se hereda del hospital base." },
+      { "key": "CursorRoomBuildConfig", "description": "Referencia al cursor de construcción. No editable: se hereda del hospital base." },
+      { "key": "CursorEditHospitalConfig", "description": "Referencia al cursor de edición. No editable: se hereda del hospital base." },
+      { "key": "CharacterNameGenerator", "description": "Referencia al generador de nombres. No editable: se hereda del hospital base." },
+      { "key": "TannoyManagerConfig", "description": "Referencia al sistema de megafonía. No editable: se hereda del hospital base." },
+      { "key": "DataViewsManagerConfig", "description": "Referencia a las vistas de datos. No editable: se hereda del hospital base." },
+      { "key": "StatusIconManagerConfig", "description": "Referencia a iconos de estado. No editable: se hereda del hospital base." },
+      { "key": "ResearchManagerConfig", "description": "Referencia al sistema de investigación. El tutorial no incluye su asset." },
+      { "key": "ReputationTrackerConfig", "description": "Referencia al sistema de reputación. El tutorial no incluye su asset." },
+      { "key": "LeaderboardConfig", "description": "Referencia a marcadores en línea. El tutorial no incluye su asset." },
+      { "key": "MarketingConfig", "description": "Referencia al sistema de marketing. El tutorial no incluye su asset." },
+      { "key": "CharacterTraitsConfig", "description": "Referencia a rasgos de personajes. El tutorial no incluye su asset." },
+      { "key": "LevelDebugConfig", "description": "Referencia de depuración. El tutorial no incluye su asset." },
+      { "key": "HospitalEventLogConfig", "description": "Referencia al registro de eventos. El tutorial no incluye su asset." },
+      { "key": "DemolishLandscapeItemEffectConfig", "description": "Referencia al efecto de demolición. El tutorial no incluye su asset." },
+      { "key": "MonoBeastManagerConfig", "description": "Referencia al gestor de monobestias. El tutorial no incluye su asset." },
+      { "key": "HospitalPlotFootprintConfig", "description": "Referencia visual de huellas de parcela. No editable sin un asset nativo válido." },
+      { "key": "ItemSpawnLimitsConfig", "description": "Referencia a límites de aparición de objetos. El tutorial no incluye su asset." },
+      { "key": "RoomVisualOverridesDatabase", "description": "Referencia a sustituciones visuales de salas. El tutorial no incluye su asset." },
+      { "key": "LevelRoomBlacklist", "description": "Lista negra nativa de salas. El tutorial no incluye su asset." },
+      { "key": "LevelRoomWhitelist", "description": "Lista blanca nativa de salas. El tutorial no incluye su asset." },
+      { "key": "LevelItemBlacklist", "description": "Lista negra nativa de objetos. El tutorial no incluye su asset." },
+      { "key": "LevelItemWhitelist", "description": "Lista blanca nativa de objetos. El tutorial no incluye su asset." }
     ],
-    "PRIORIDAD_MEDIA": [
-      {
-        "key": "monobeasts",
-        "description": "Configuracion de generacion y comportamiento de monobestias.",
-        "options": "Identificador/configuracion normalizada o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "characterTraits",
-        "description": "Conjunto y ponderacion de rasgos que pueden recibir los personajes.",
-        "options": "Configuracion normalizada o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "onlineChallenges",
-        "description": "Desafios en linea asociados al nivel.",
-        "options": "Lista de identificadores estables; [] significa ninguno.",
-        "value": []
-      }
-    ],
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "hospitalEventLogConfigId",
-        "description": "Configuracion nativa del registro de eventos del hospital.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "demolishLandscapeEffectConfigId",
-        "description": "Efecto nativo usado al demoler elementos del paisaje.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "advisorConfigId",
-        "description": "Coleccion nativa de consejos y reglas del asesor.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      },
-      {
-        "key": "notificationConfigId",
-        "description": "Coleccion nativa de mensajes y notificaciones generales.",
-        "options": "Identificador estable o null para heredar.",
-        "value": null
-      }
-    ]
-  },
-  "referencias_nativas_predefinidas": {
-    "PRIORIDAD_BAJA": [
-      {
-        "key": "patientDefinition",
-        "description": "Clase base nativa de paciente. Se obtiene siempre del hospital base y no se serializa ni se edita porque sustituirla rompe el sistema de personajes.",
-        "value": "INHERIT_FROM_BASE"
-      },
-      {
-        "key": "ghostDefinition",
-        "description": "Clase base nativa de fantasma. Se obtiene siempre del hospital base y no se serializa ni se edita.",
-        "value": "INHERIT_FROM_BASE"
-      },
-      {
-        "key": "nativeUiPrefabs",
-        "description": "Prefabs, sprites, materiales, cursores, HUD, audio y animaciones de interfaz permanecen predefinidos por el juego; config.json no copia ni modifica esos objetos nativos.",
-        "value": "INHERIT_FROM_BASE"
-      },
-      {
-        "key": "nativeManagersWithoutMapOverrides",
-        "description": "DataViews, StatusIcons, Tannoy, Audio, SFX, DialoguePresenter y bases visuales se heredan para evitar duplicar configuraciones globales compartidas.",
-        "value": "INHERIT_FROM_BASE"
-      }
+    "DLC": [
+      { "key": "EmergencyUIConfig", "dlc": "Speedy Recovery", "description": "Referencia a la interfaz de despacho de ambulancias. No editable sin un asset válido." }
     ]
   }
 }
