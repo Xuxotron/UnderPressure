@@ -857,13 +857,13 @@ namespace UnderPressure.Editor
                 }
                 image.color = tint;
             }
-            foreach (var outline in root.GetComponentsInChildren<Outline>(true))
+            foreach (var shadow in root.GetComponentsInChildren<Shadow>(true))
             {
-                if (outline == null || !IsSettingsInterior(outline.transform) ||
-                    outline.GetComponentInParent<InputField>() != null ||
-                    outline.GetComponentInParent<TMP_InputField>() != null ||
-                    IsWorkshopSettingsField(outline.transform)) continue;
-                outline.effectColor = _style.ButtonColor;
+                if (shadow == null || !IsSettingsInterior(shadow.transform) ||
+                    shadow.GetComponentInParent<InputField>() != null ||
+                    shadow.GetComponentInParent<TMP_InputField>() != null ||
+                    IsWorkshopSettingsField(shadow.transform)) continue;
+                shadow.effectColor = _style.ButtonColor;
             }
         }
 
@@ -962,8 +962,8 @@ namespace UnderPressure.Editor
             viewportObject.transform.SetParent(editorObject.transform, false);
             var viewportRect = (RectTransform)viewportObject.transform;
             Stretch(viewportRect);
-            viewportRect.offsetMin = new Vector2(10f, 4f);
-            viewportRect.offsetMax = new Vector2(-10f, -4f);
+            viewportRect.offsetMin = new Vector2(10f, 1f);
+            viewportRect.offsetMax = new Vector2(-10f, -1f);
 
             var textObject = new GameObject("Text", typeof(RectTransform),
                 typeof(TextMeshProUGUI));
@@ -973,11 +973,12 @@ namespace UnderPressure.Editor
             textRect.offsetMin = Vector2.zero;
             textRect.offsetMax = Vector2.zero;
             var text = textObject.GetComponent<TextMeshProUGUI>();
-            text.fontSize = 19f;
+            text.fontSize = 18f;
             text.color = _style.HeaderColor;
             text.alignment = multiline
                 ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft;
             text.enableWordWrapping = multiline;
+            text.extraPadding = true;
 
             var input = editorObject.GetComponent<TMP_InputField>();
             input.targetGraphic = hitArea;
