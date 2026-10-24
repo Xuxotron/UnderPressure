@@ -942,14 +942,6 @@ namespace UnderPressure.Editor
             if (nativeBehaviour != null) nativeBehaviour.enabled = false;
             var fieldObject = nativeInput.gameObject;
             fieldObject.SetActive(true);
-            var background = fieldObject.GetComponent<Image>();
-            if (background == null)
-            {
-                Destroy(row);
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Ajustes del escenario: el campo Workshop no contiene su fondo nativo.");
-                return null;
-            }
 
             SetWorkshopFieldLabel(row.transform, fieldObject.transform,
                 EditorLocalization.Get(labelKey));
