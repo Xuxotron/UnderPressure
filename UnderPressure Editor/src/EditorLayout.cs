@@ -25,7 +25,7 @@ namespace UnderPressure.Editor
     // MARCO Y SONIDO: ApplyButtonStyle / StandardiseClickSound.
     // ANCHO DE PANELES: PanelWidth. ALTO DE BARRAS: BarHeight.
     // BOTONES SUPERIORES (Baldosas, Camara libre, Personajes,
-    // Niebla, Estilos): PlaceTopButtons() (ancho y separacion).
+    // Niebla, Estilos, Ajustes): PlaceTopButtons() (ancho y separacion).
     // BOTONES DE ESQUINA (Objetos, Historial, Terreno):
     // PlaceCornerButton() (tamano); BuildChrome() (creacion).
     // PANEL OBJETOS PROPIO: ApplyObjectsPanel() y
@@ -82,6 +82,11 @@ namespace UnderPressure.Editor
         private Button _objectsToggle;
         private Button _historyToggle;
         private Button _terrainToggle;
+        private Button _settingsToggle;
+        private GameObject _settingsOverlay;
+        private Button[] _settingsTabButtons;
+        private GameObject[] _settingsPages;
+        private int _activeSettingsTab;
         private RectTransform _leftDivider;
         private RectTransform _rightDivider;
         private GameObject _topBackground;
@@ -134,6 +139,14 @@ namespace UnderPressure.Editor
         internal static bool PointerOverEditorUi() =>
             ScenarioEditorFlow.IsRunning &&
             ScenarioEditorUiHierarchy.IsPointerOverUi(Input.mousePosition);
+
+        internal static bool CloseSettingsPanelIfOpen()
+        {
+            if (_active == null || _active._settingsOverlay == null ||
+                !_active._settingsOverlay.activeSelf) return false;
+            _active.CloseSettingsPanel();
+            return true;
+        }
 
         // Referencia cromatica de Build.
         internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
@@ -476,10 +489,140 @@ namespace UnderPressure.Editor
                 EditorLocalization.Get("editor.history.button"), ToggleHistory);
             _terrainToggle = CloneButton(template, _root, "UP Terrain Dock Toggle",
                 EditorLocalization.Get("editor.terrain.toggle"), ToggleTerrain);
+            _settingsToggle = CloneButton(template, _root, "UP Settings Toolbar Button",
+                EditorLocalization.Get("editor.toolbar.settings"), ToggleSettingsPanel);
 
             _leftDivider = CreateDivider("UP Left Panel Divider", _root, SetLeftHeight);
             _rightDivider = CreateDivider("UP Right Panel Divider", _root, SetRightHeight);
             AddUpperDividerGrabArea(_rightDivider, SetRightHeight);
+        }
+
+        private void ToggleSettingsPanel()
+        {
+            if (_settingsOverlay != null && _settingsOverlay.activeSelf)
+            {
+                CloseSettingsPanel();
+                return;
+            }
+            ScenarioEditorStorageMenu.CloseOpenDialog();
+            if (_settingsOverlay == null) BuildSettingsPanel();
+            if (_settingsOverlay == null) return;
+            SetSettingsTab(0);
+            _settingsOverlay.SetActive(true);
+            _settingsOverlay.transform.SetAsLastSibling();
+            SetSelected(_settingsToggle, true);
+        }
+
+        private void CloseSettingsPanel()
+        {
+            if (_settingsOverlay != null) _settingsOverlay.SetActive(false);
+            SetSelected(_settingsToggle, false);
+        }
+
+        // AJUSTES DEL ESCENARIO: reproduce el sistema nativo de una sola pestana
+        // activa, pero emplea exclusivamente la paleta y los botones del editor.
+        private void BuildSettingsPanel()
+        {
+            if (_root == null || _storage == null) return;
+            var template = _storage.BuildButton;
+            if (template == null) return;
+
+            _settingsOverlay = NewImage("UP Scenario Settings Overlay", _root, null,
+                new Color32(0, 0, 0, 150), true);
+            Stretch((RectTransform)_settingsOverlay.transform);
+
+            var panel = NewImage("Panel", _settingsOverlay.transform, _style.PanelSprite,
+                _style.PanelColor, true);
+            var panelRect = (RectTransform)panel.transform;
+            panelRect.anchorMin = panelRect.anchorMax = new Vector2(.5f, .5f);
+            panelRect.pivot = new Vector2(.5f, .5f);
+            panelRect.anchoredPosition = Vector2.zero;
+            panelRect.sizeDelta = new Vector2(920f, 590f);
+            var outline = panel.AddComponent<Outline>();
+            outline.effectColor = new Color32(255, 255, 255, 245);
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = true;
+
+            var header = NewImage("Cabecera", panel.transform, _style.PanelSprite,
+                _style.HeaderColor, false);
+            SetTopLeft((RectTransform)header.transform, 0f, 0f, 920f, 62f);
+            CreateSettingsLabel(header.transform,
+                EditorLocalization.Get("editor.scenario_settings.title"), 28f,
+                TextAlignmentOptions.Center);
+
+            var tabKeys = new[]
+            {
+                "editor.scenario_settings.tab.general",
+                "editor.scenario_settings.tab.diseases",
+                "editor.scenario_settings.tab.objectives",
+                "editor.scenario_settings.tab.plots"
+            };
+            _settingsTabButtons = new Button[tabKeys.Length];
+            _settingsPages = new GameObject[tabKeys.Length];
+            for (var index = 0; index < tabKeys.Length; ++index)
+            {
+                var tabIndex = index;
+                var title = EditorLocalization.Get(tabKeys[index]);
+                var button = CloneButton(template, panel.transform,
+                    "Pestana " + index, title, () => SetSettingsTab(tabIndex));
+                var buttonRect = (RectTransform)button.transform;
+                SetTopLeft(buttonRect, 18f, 82f + index * 62f, 220f, 52f);
+                _settingsTabButtons[index] = button;
+
+                var page = NewImage("Contenido " + index, panel.transform,
+                    _style.PanelSprite, _style.HeaderColor, true);
+                var pageRect = (RectTransform)page.transform;
+                SetTopLeft(pageRect, 252f, 82f, 650f, 438f);
+                var pageOutline = page.AddComponent<Outline>();
+                pageOutline.effectColor = new Color32(255, 255, 255, 210);
+                pageOutline.effectDistance = new Vector2(1f, -1f);
+                pageOutline.useGraphicAlpha = true;
+                CreateSettingsLabel(page.transform, title, 24f,
+                    TextAlignmentOptions.TopLeft, new Vector2(24f, -20f));
+                _settingsPages[index] = page;
+            }
+
+            var close = CloneButton(template, panel.transform, "Cerrar",
+                EditorLocalization.Get("editor.map.close"), CloseSettingsPanel);
+            SetTopLeft((RectTransform)close.transform, 742f, 536f, 160f, 38f);
+            SetSettingsTab(0);
+            _settingsOverlay.SetActive(false);
+        }
+
+        private void SetSettingsTab(int selectedIndex)
+        {
+            if (_settingsTabButtons == null || _settingsPages == null) return;
+            _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
+                Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
+            for (var index = 0; index < _settingsTabButtons.Length; ++index)
+            {
+                var selected = index == _activeSettingsTab;
+                SetSelected(_settingsTabButtons[index], selected);
+                if (_settingsPages[index] != null)
+                    _settingsPages[index].SetActive(selected);
+            }
+            // El original eleva la carpeta activa para que su borde quede encima.
+            _settingsTabButtons[_activeSettingsTab]?.transform.SetAsLastSibling();
+            _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
+        }
+
+        private static void CreateSettingsLabel(Transform parent, string value, float size,
+            TextAlignmentOptions alignment, Vector2? inset = null)
+        {
+            var go = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var rect = (RectTransform)go.transform;
+            Stretch(rect);
+            var offset = inset ?? new Vector2(12f, 0f);
+            rect.offsetMin = new Vector2(offset.x, 0f);
+            rect.offsetMax = new Vector2(-offset.x, offset.y);
+            var text = go.GetComponent<TextMeshProUGUI>();
+            text.text = value;
+            text.fontSize = size;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = alignment;
+            text.color = Color.white;
+            text.raycastTarget = false;
         }
 
         private RectTransform CreateDivider(string name, Transform parent, Action<float> setter)
@@ -1020,7 +1163,7 @@ namespace UnderPressure.Editor
             skin.Initialise(row, sprite, normal, selected);
         }
 
-        // BARRA SUPERIOR: Baldosas/Camara/Personajes/Niebla/Estilos.
+        // BARRA SUPERIOR: Baldosas/Camara/Personajes/Niebla/Estilos/Ajustes.
         // Medidas editables: gap, buttonWidth y rect.sizeDelta (altura 40).
         private void PlaceTopButtons(float canvasWidth)
         {
@@ -1030,7 +1173,8 @@ namespace UnderPressure.Editor
                 _storage?.CameraButton,
                 ScenarioCharacterViewer.ToggleButton,
                 ScenarioFogViewer.ToggleButton,
-                _storage?.StylesButton
+                _storage?.StylesButton,
+                _settingsToggle
             }.Where(button => button != null).ToArray();
             if (buttons.Length == 0) return;
             var centralWidth = Mathf.Max(1f, canvasWidth - PanelWidth * 2f);

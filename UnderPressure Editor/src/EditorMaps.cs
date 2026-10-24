@@ -3854,6 +3854,7 @@ PriorVisibility.Clear();
                 ScenarioFogViewer.Close();
                 return false;
             }
+            if (ScenarioEditorDockLayout.CloseSettingsPanelIfOpen()) return false;
             if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
             if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;
             var cursor = __instance?.CursorManager;
