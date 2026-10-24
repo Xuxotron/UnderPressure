@@ -90,11 +90,11 @@ namespace UnderPressure.Editor
         private Transform[] _settingsTabRoots;
         private Transform[] _settingsTabFolderBackgrounds;
         private GameObject[] _settingsPages;
-        private InputField _settingsDisplayName;
-        private InputField _settingsDescriptionPerStar;
-        private InputField _settingsInitialBalance;
-        private InputField _settingsFailWarning;
-        private InputField _settingsFailGameOver;
+        private TMP_InputField _settingsDisplayName;
+        private TMP_InputField _settingsDescriptionPerStar;
+        private TMP_InputField _settingsInitialBalance;
+        private TMP_InputField _settingsFailWarning;
+        private TMP_InputField _settingsFailGameOver;
         private int _activeSettingsTab;
         private RectTransform _leftDivider;
         private RectTransform _rightDivider;
@@ -896,7 +896,7 @@ namespace UnderPressure.Editor
             RefreshScenarioSettingsFields();
         }
 
-        private InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
+        private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
             float top, float height, bool multiline, bool integer = false)
         {
             var labelObject = new GameObject("Label " + labelKey, typeof(RectTransform),
@@ -914,69 +914,96 @@ namespace UnderPressure.Editor
             label.color = Color.white;
             label.raycastTarget = false;
 
-            var template = GetWorkshopInputTemplate(multiline);
-            if (template == null)
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Ajustes del escenario: no se encontro el campo nativo del creador de Workshop.");
-                return null;
-            }
-            var fieldObject = Instantiate(template.gameObject, parent, false);
-            fieldObject.name = "Field " + labelKey;
-            fieldObject.SetActive(true);
+            var fieldObject = new GameObject("Field " + labelKey, typeof(RectTransform),
+                typeof(LayoutElement), typeof(Image), typeof(TMP_InputField));
+            fieldObject.transform.SetParent(parent, false);
             var fieldRect = (RectTransform)fieldObject.transform;
             SetRect(fieldRect, new Vector2(.47f, 1f), new Vector2(.98f, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
-            var layout = fieldObject.GetComponent<LayoutElement>() ??
-                fieldObject.AddComponent<LayoutElement>();
-            layout.ignoreLayout = true;
-            DisableLocalisers(fieldObject.transform);
-            var input = fieldObject.GetComponent<InputField>();
-            // La version de Unity del juego no expone los setters de estos
-            // eventos con la misma firma que la DLL de referencia. El prefab
-            // los registra en ejecucion, asi que basta vaciar las instancias.
-            input.onValueChanged.RemoveAllListeners();
-            input.onEndEdit.RemoveAllListeners();
-            input.interactable = true;
-            input.readOnly = false;
+            var background = fieldObject.GetComponent<Image>();
+            fieldObject.GetComponent<LayoutElement>().ignoreLayout = true;
+            ApplyWorkshopInputVisual(background, multiline);
+
+            var viewportObject = new GameObject("Text Area", typeof(RectTransform),
+                typeof(RectMask2D));
+            viewportObject.transform.SetParent(fieldObject.transform, false);
+            var viewportRect = (RectTransform)viewportObject.transform;
+            Stretch(viewportRect);
+            viewportRect.offsetMin = new Vector2(10f, 4f);
+            viewportRect.offsetMax = new Vector2(-10f, -4f);
+
+            var textObject = new GameObject("Text", typeof(RectTransform),
+                typeof(TextMeshProUGUI));
+            textObject.transform.SetParent(viewportObject.transform, false);
+            var textRect = (RectTransform)textObject.transform;
+            Stretch(textRect);
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+            var text = textObject.GetComponent<TextMeshProUGUI>();
+            text.fontSize = 19f;
+            text.color = _style.HeaderColor;
+            text.alignment = multiline
+                ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft;
+            text.enableWordWrapping = multiline;
+
+            var input = fieldObject.GetComponent<TMP_InputField>();
+            input.targetGraphic = background;
+            input.textViewport = viewportRect;
+            input.textComponent = text;
             input.lineType = multiline
-                ? InputField.LineType.MultiLineNewline : InputField.LineType.SingleLine;
+                ? TMP_InputField.LineType.MultiLineNewline : TMP_InputField.LineType.SingleLine;
             input.contentType = integer
-                ? InputField.ContentType.IntegerNumber : InputField.ContentType.Standard;
+                ? TMP_InputField.ContentType.IntegerNumber : TMP_InputField.ContentType.Standard;
             input.characterLimit = multiline ? 1000 : 120;
-            input.text = "";
-            if (input.placeholder != null)
-            {
-                input.placeholder.gameObject.SetActive(false);
-            }
-            input.ForceLabelUpdate();
+            input.caretColor = _style.HeaderColor;
+            var selection = _style.ButtonColor;
+            selection.a = .35f;
+            input.selectionColor = selection;
             return input;
         }
 
-        private static InputField GetWorkshopInputTemplate(bool multiline)
+        private static void ApplyWorkshopInputVisual(Image target, bool multiline)
         {
+            if (target == null) return;
             var manager = ExtContentUtils.ExtContentManager;
             var prefab = manager?.ExtContentUIManager?.Config?.GameItemUIScreenPrefab;
             var screen = prefab?.GetComponent<ExtContentGameItemUIScreen>();
-            if (screen == null) return null;
+            if (screen == null)
+            {
+                target.color = Color.white;
+                return;
+            }
             var fieldName = multiline ? "_inputDescription" : "_inputTitle";
-            return AccessTools.Field(typeof(ExtContentGameItemUIScreen), fieldName)
-                ?.GetValue(screen) as InputField;
+            var nativeComponent = AccessTools.Field(typeof(ExtContentGameItemUIScreen), fieldName)
+                ?.GetValue(screen) as Component;
+            var nativeImage = nativeComponent?.GetComponent<Image>();
+            if (nativeImage == null)
+            {
+                target.color = Color.white;
+                return;
+            }
+            target.sprite = nativeImage.sprite;
+            target.overrideSprite = nativeImage.overrideSprite;
+            target.type = nativeImage.type;
+            target.preserveAspect = nativeImage.preserveAspect;
+            target.fillCenter = nativeImage.fillCenter;
+            target.color = nativeImage.color;
+            target.material = nativeImage.material;
         }
 
         private void RefreshScenarioSettingsFields()
         {
             if (_level == null || _settingsDisplayName == null) return;
             var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
-            _settingsDisplayName.text = settings.DisplayName ?? "";
-            _settingsDescriptionPerStar.text = string.Join("\n",
-                settings.DescriptionPerStar ?? new string[0]);
-            _settingsInitialBalance.text =
-                settings.InitialBalance.ToString(CultureInfo.InvariantCulture);
-            _settingsFailWarning.text =
-                settings.FailStateBalanceWarning.ToString(CultureInfo.InvariantCulture);
-            _settingsFailGameOver.text =
-                settings.FailStateBalanceGameOver.ToString(CultureInfo.InvariantCulture);
+            _settingsDisplayName.SetTextWithoutNotify(settings.DisplayName ?? "");
+            _settingsDescriptionPerStar.SetTextWithoutNotify(string.Join("\n",
+                settings.DescriptionPerStar ?? new string[0]));
+            _settingsInitialBalance.SetTextWithoutNotify(
+                settings.InitialBalance.ToString(CultureInfo.InvariantCulture));
+            _settingsFailWarning.SetTextWithoutNotify(
+                settings.FailStateBalanceWarning.ToString(CultureInfo.InvariantCulture));
+            _settingsFailGameOver.SetTextWithoutNotify(
+                settings.FailStateBalanceGameOver.ToString(CultureInfo.InvariantCulture));
         }
 
         private void AcceptScenarioSettings()
@@ -997,7 +1024,7 @@ namespace UnderPressure.Editor
             CloseSettingsPanel();
         }
 
-        private static bool TryReadScenarioInteger(InputField input, out int value)
+        private static bool TryReadScenarioInteger(TMP_InputField input, out int value)
         {
             value = 0;
             if (input != null && int.TryParse(input.text, NumberStyles.Integer,
