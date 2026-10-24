@@ -84,7 +84,10 @@ namespace UnderPressure.Editor
         private Button _terrainToggle;
         private Button _settingsToggle;
         private GameObject _settingsOverlay;
-        private Button[] _settingsTabButtons;
+        private DynamicButton[] _settingsTabButtons;
+        private ButtonAnimator[] _settingsTabAnimators;
+        private Transform[] _settingsTabRoots;
+        private Transform[] _settingsTabFolderBackgrounds;
         private GameObject[] _settingsPages;
         private int _activeSettingsTab;
         private RectTransform _leftDivider;
@@ -519,36 +522,72 @@ namespace UnderPressure.Editor
             SetSelected(_settingsToggle, false);
         }
 
-        // AJUSTES DEL ESCENARIO: reproduce el sistema nativo de una sola pestana
-        // activa, pero emplea exclusivamente la paleta y los botones del editor.
+        // AJUSTES DEL ESCENARIO: se clona PreferencesScreen y se conservan su
+        // marco, carpetas horizontales, contenido desplazable y boton inferior.
+        // Solo se sustituyen sus grupos y la paleta gris por la del editor.
         private void BuildSettingsPanel()
         {
-            if (_root == null || _storage == null) return;
-            var template = _storage.BuildButton;
-            if (template == null) return;
+            if (_root == null) return;
+            var native = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
+                .FirstOrDefault(candidate => candidate != null &&
+                    !candidate.transform.IsChildOf(_root) &&
+                    GetPreferencesField<Transform>(candidate, "_videoTab") != null &&
+                    GetPreferencesField<Transform>(candidate, "_videoTabContents") != null);
+            if (native == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Ajustes del escenario: no se encontro PreferencesScreen nativo.");
+                return;
+            }
 
             _settingsOverlay = NewImage("UP Scenario Settings Overlay", _root, null,
                 new Color32(0, 0, 0, 150), true);
             Stretch((RectTransform)_settingsOverlay.transform);
+            _settingsOverlay.SetActive(false);
 
-            var panel = NewImage("Panel", _settingsOverlay.transform, _style.PanelSprite,
-                _style.PanelColor, true);
-            var panelRect = (RectTransform)panel.transform;
-            panelRect.anchorMin = panelRect.anchorMax = new Vector2(.5f, .5f);
-            panelRect.pivot = new Vector2(.5f, .5f);
-            panelRect.anchoredPosition = Vector2.zero;
-            panelRect.sizeDelta = new Vector2(920f, 590f);
-            var outline = panel.AddComponent<Outline>();
-            outline.effectColor = new Color32(255, 255, 255, 245);
-            outline.effectDistance = new Vector2(2f, -2f);
-            outline.useGraphicAlpha = true;
+            var clone = Instantiate(native.gameObject, _settingsOverlay.transform, false);
+            clone.name = "UP Native Scenario Settings";
+            var cloneRect = clone.transform as RectTransform;
+            if (cloneRect != null)
+            {
+                Stretch(cloneRect);
+                cloneRect.localScale = Vector3.one;
+            }
+            foreach (var nestedCanvas in clone.GetComponentsInChildren<Canvas>(true))
+                nestedCanvas.overrideSorting = false;
+            var clonedScreen = clone.GetComponent<PreferencesScreen>();
+            if (clonedScreen == null)
+            {
+                Destroy(_settingsOverlay);
+                _settingsOverlay = null;
+                return;
+            }
+            clonedScreen.enabled = false;
+            foreach (var behaviour in clone.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (behaviour == null) continue;
+                var typeName = behaviour.GetType().FullName;
+                if (typeName == "UnderPressure.ModSettingsTab") behaviour.enabled = false;
+                if (typeName != null && typeName.StartsWith("I2.Loc.", StringComparison.Ordinal))
+                    behaviour.enabled = false;
+            }
 
-            var header = NewImage("Cabecera", panel.transform, _style.PanelSprite,
-                _style.HeaderColor, false);
-            SetTopLeft((RectTransform)header.transform, 0f, 0f, 920f, 62f);
-            CreateSettingsLabel(header.transform,
-                EditorLocalization.Get("editor.scenario_settings.title"), 28f,
-                TextAlignmentOptions.Center);
+            HideSettingsObject(clone.transform.Find("UnderPressureTabButton"));
+            HideSettingsObject(clone.transform.Find("UnderPressureMasterToggle"));
+            HideSettingsObjectsByName(clone.transform, "UnderPressureTabButton");
+            HideSettingsObjectsByName(clone.transform, "UnderPressureMasterToggle");
+            var credits = GetPreferencesField<Button>(clonedScreen, "_creditsButton");
+            if (credits != null) credits.gameObject.SetActive(false);
+
+            var titleText = clone.GetComponentsInChildren<TMP_Text>(true)
+                .Where(text => text != null && text.GetComponentInParent<Selectable>() == null)
+                .OrderByDescending(text => text.fontSize)
+                .FirstOrDefault();
+            if (titleText != null)
+            {
+                DisableLocalisers(titleText.transform);
+                titleText.text = EditorLocalization.Get("editor.scenario_settings.title");
+            }
 
             var tabKeys = new[]
             {
@@ -557,35 +596,95 @@ namespace UnderPressure.Editor
                 "editor.scenario_settings.tab.objectives",
                 "editor.scenario_settings.tab.plots"
             };
-            _settingsTabButtons = new Button[tabKeys.Length];
+            var tabNames = new[] { "_videoTab", "_audioTab", "_controlsTab", "_gameTab" };
+            var buttonNames = new[]
+            {
+                "_videoTabButton", "_audioTabButton", "_controlsTabButton", "_gameTabButton"
+            };
+            var animatorNames = new[]
+            {
+                "_videoTabButtonAnimator", "_audioTabButtonAnimator",
+                "_controlsTabButtonAnimator", "_gameTabButtonAnimator"
+            };
+            var folderNames = new[]
+            {
+                "_videoTabFolderBackground", "_audioTabFolderBackground",
+                "_controlsTabFolderBackground", "_gameTabFolderBackground"
+            };
+            var contentsNames = new[]
+            {
+                "_videoTabContents", "_audioTabContents",
+                "_controlsTabContents", "_gameTabContents"
+            };
+            _settingsTabButtons = new DynamicButton[tabKeys.Length];
+            _settingsTabAnimators = new ButtonAnimator[tabKeys.Length];
+            _settingsTabRoots = new Transform[tabKeys.Length];
+            _settingsTabFolderBackgrounds = new Transform[tabKeys.Length];
             _settingsPages = new GameObject[tabKeys.Length];
+            var nativeVideoContents = GetPreferencesField<Transform>(clonedScreen,
+                "_videoTabContents");
+            if (nativeVideoContents == null)
+            {
+                Destroy(_settingsOverlay);
+                _settingsOverlay = null;
+                return;
+            }
+            for (var index = 0; index < contentsNames.Length; ++index)
+            {
+                var originalContents = GetPreferencesField<Transform>(clonedScreen,
+                    contentsNames[index]);
+                if (index > 0) HideSettingsObject(originalContents);
+                var page = index == 0
+                    ? nativeVideoContents
+                    : Instantiate(nativeVideoContents, nativeVideoContents.parent, false);
+                page.name = "UP Scenario Settings Contents " + index;
+                _settingsPages[index] = page.gameObject;
+            }
             for (var index = 0; index < tabKeys.Length; ++index)
             {
                 var tabIndex = index;
                 var title = EditorLocalization.Get(tabKeys[index]);
-                var button = CloneButton(template, panel.transform,
-                    "Pestana " + index, title, () => SetSettingsTab(tabIndex));
-                var buttonRect = (RectTransform)button.transform;
-                SetTopLeft(buttonRect, 18f, 82f + index * 62f, 220f, 52f);
+                var root = GetPreferencesField<Transform>(clonedScreen, tabNames[index]);
+                var button = GetPreferencesField<DynamicButton>(clonedScreen, buttonNames[index]);
+                var animator = GetPreferencesField<ButtonAnimator>(clonedScreen,
+                    animatorNames[index]);
+                var folder = GetPreferencesField<Transform>(clonedScreen, folderNames[index]);
+                var contents = _settingsPages[index]?.transform;
+                if (root == null || button == null || contents == null) continue;
+                DisableLocalisers(root);
+                button.onPrimaryDown.RemoveAllListeners();
+                button.onSecondaryDown.RemoveAllListeners();
+                button.onPrimaryDownFailed.RemoveAllListeners();
+                button.onPrimaryDown.AddListener(() => SetSettingsTab(tabIndex));
+                button.SetTMPText(title);
                 _settingsTabButtons[index] = button;
-
-                var page = NewImage("Contenido " + index, panel.transform,
-                    _style.PanelSprite, _style.HeaderColor, true);
-                var pageRect = (RectTransform)page.transform;
-                SetTopLeft(pageRect, 252f, 82f, 650f, 438f);
-                var pageOutline = page.AddComponent<Outline>();
-                pageOutline.effectColor = new Color32(255, 255, 255, 210);
-                pageOutline.effectDistance = new Vector2(1f, -1f);
-                pageOutline.useGraphicAlpha = true;
-                CreateSettingsLabel(page.transform, title, 24f,
-                    TextAlignmentOptions.TopLeft, new Vector2(24f, -20f));
-                _settingsPages[index] = page;
+                _settingsTabAnimators[index] = animator;
+                _settingsTabRoots[index] = root;
+                _settingsTabFolderBackgrounds[index] = folder;
+                ClearNativeSettingsContents(contents, title);
             }
 
-            var close = CloneButton(template, panel.transform, "Cerrar",
-                EditorLocalization.Get("editor.map.close"), CloseSettingsPanel);
-            SetTopLeft((RectTransform)close.transform, 742f, 536f, 160f, 38f);
+            var languageTab = GetPreferencesField<Transform>(clonedScreen, "_languageTab");
+            var languageContents = GetPreferencesField<Transform>(clonedScreen,
+                "_languageTabContents");
+            HideSettingsObject(languageTab);
+            HideSettingsObject(languageContents);
+            RedistributeNativeSettingsTabs(clonedScreen);
+
+            var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
+            if (close != null)
+            {
+                DisableLocalisers(close.transform);
+                close.onClick.RemoveAllListeners();
+                close.onClick.AddListener(CloseSettingsPanel);
+                var closeLabel = close.GetComponentInChildren<TMP_Text>(true);
+                if (closeLabel != null)
+                    closeLabel.text = EditorLocalization.Get("editor.scenario_settings.accept");
+                ApplyButtonStyle(close);
+            }
+            ApplyNativeSettingsPalette(clone.transform);
             SetSettingsTab(0);
+            clone.SetActive(true);
             _settingsOverlay.SetActive(false);
         }
 
@@ -597,13 +696,126 @@ namespace UnderPressure.Editor
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
                 var selected = index == _activeSettingsTab;
-                SetSelected(_settingsTabButtons[index], selected);
+                var button = _settingsTabButtons[index];
+                var animator = _settingsTabAnimators[index];
+                var folder = _settingsTabFolderBackgrounds[index];
+                if (animator != null)
+                {
+                    animator.CurrentState = selected
+                        ? (ButtonAnimator.State)1 : (ButtonAnimator.State)0;
+                    animator.enabled = false;
+                }
+                if (folder != null) folder.gameObject.SetActive(selected);
+                TintNativeSettingsTab(button, folder, selected);
                 if (_settingsPages[index] != null)
                     _settingsPages[index].SetActive(selected);
             }
-            // El original eleva la carpeta activa para que su borde quede encima.
-            _settingsTabButtons[_activeSettingsTab]?.transform.SetAsLastSibling();
+            // PreferencesScreen eleva la carpeta activa para que su borde quede encima.
+            _settingsTabRoots[_activeSettingsTab]?.SetAsLastSibling();
             _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
+        }
+
+        private static T GetPreferencesField<T>(PreferencesScreen screen, string name)
+            where T : class
+        {
+            return AccessTools.Field(typeof(PreferencesScreen), name)?.GetValue(screen) as T;
+        }
+
+        private static void HideSettingsObject(Component value)
+        {
+            if (value != null) value.gameObject.SetActive(false);
+        }
+
+        private static void HideSettingsObjectsByName(Transform root, string name)
+        {
+            if (root == null) return;
+            foreach (var child in root.GetComponentsInChildren<Transform>(true))
+                if (child != null && child.name == name) child.gameObject.SetActive(false);
+        }
+
+        private static void DisableLocalisers(Transform root)
+        {
+            if (root == null) return;
+            foreach (var component in root.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName != null &&
+                    component.GetType().FullName.StartsWith("I2.Loc.", StringComparison.Ordinal))
+                    component.enabled = false;
+        }
+
+        private static void ClearNativeSettingsContents(Transform contents, string title)
+        {
+            if (contents == null) return;
+            DisableLocalisers(contents);
+            var content = contents.Find("Scroll View/Viewport/Content");
+            if (content == null) return;
+            for (var index = content.childCount - 1; index >= 0; --index)
+            {
+                var child = content.GetChild(index);
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+            var contentRect = content as RectTransform;
+            if (contentRect != null)
+                contentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 90f);
+            CreateSettingsLabel(content, title, 26f, TextAlignmentOptions.TopLeft,
+                new Vector2(22f, -18f));
+        }
+
+        private void RedistributeNativeSettingsTabs(PreferencesScreen screen)
+        {
+            if (_settingsTabRoots == null || _settingsTabRoots.Length == 0) return;
+            var language = GetPreferencesField<Transform>(screen, "_languageTab") as RectTransform;
+            var first = _settingsTabRoots[0] as RectTransform;
+            if (first == null || language == null) return;
+            var start = first.anchoredPosition;
+            var end = language.anchoredPosition;
+            for (var index = 0; index < _settingsTabRoots.Length; ++index)
+            {
+                var rect = _settingsTabRoots[index] as RectTransform;
+                if (rect == null) continue;
+                rect.anchoredPosition = Vector2.Lerp(start, end,
+                    index / (float)(_settingsTabRoots.Length - 1));
+            }
+        }
+
+        private void ApplyNativeSettingsPalette(Transform root)
+        {
+            if (root == null) return;
+            foreach (var image in root.GetComponentsInChildren<Image>(true))
+            {
+                if (image == null || image.GetComponentInParent<Selectable>() != null) continue;
+                var color = image.color;
+                var maximum = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
+                var minimum = Mathf.Min(color.r, Mathf.Min(color.g, color.b));
+                if (color.a < .85f || maximum - minimum > .08f || maximum > .86f) continue;
+                var rect = image.rectTransform.rect;
+                if (rect.width < 400f || rect.height < 150f) continue;
+                var tint = _style.PanelColor;
+                tint.a = color.a;
+                image.color = tint;
+            }
+        }
+
+        private void TintNativeSettingsTab(DynamicButton button, Transform folder, bool selected)
+        {
+            var tint = selected ? _style.SelectedColor : _style.ButtonColor;
+            if (button != null)
+            {
+                button.transition = Selectable.Transition.None;
+                var image = button.targetGraphic as Image;
+                if (image != null) image.color = tint;
+                var borderRoot = image != null ? image.gameObject : button.gameObject;
+                var outline = borderRoot.GetComponent<Outline>() ??
+                    borderRoot.AddComponent<Outline>();
+                outline.effectColor = new Color32(255, 255, 255, 255);
+                outline.effectDistance = new Vector2(1f, -1f);
+                outline.useGraphicAlpha = true;
+                var label = button.GetComponentInChildren<TMP_Text>(true);
+                if (label != null) label.color = Color.white;
+            }
+            if (folder == null) return;
+            foreach (var image in folder.GetComponentsInChildren<Image>(true))
+                if (image != null) image.color = tint;
         }
 
         private static void CreateSettingsLabel(Transform parent, string value, float size,
