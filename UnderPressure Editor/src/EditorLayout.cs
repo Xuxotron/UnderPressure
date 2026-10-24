@@ -825,7 +825,8 @@ namespace UnderPressure.Editor
             foreach (var image in root.GetComponentsInChildren<Image>(true))
             {
                 if (image == null || image.GetComponentInParent<InputField>() != null ||
-                    image.GetComponentInParent<TMP_InputField>() != null) continue;
+                    image.GetComponentInParent<TMP_InputField>() != null ||
+                    IsWorkshopSettingsField(image.transform)) continue;
                 var interior = IsSettingsInterior(image.transform);
                 if (interior)
                 {
@@ -860,9 +861,18 @@ namespace UnderPressure.Editor
             {
                 if (outline == null || !IsSettingsInterior(outline.transform) ||
                     outline.GetComponentInParent<InputField>() != null ||
-                    outline.GetComponentInParent<TMP_InputField>() != null) continue;
+                    outline.GetComponentInParent<TMP_InputField>() != null ||
+                    IsWorkshopSettingsField(outline.transform)) continue;
                 outline.effectColor = _style.ButtonColor;
             }
+        }
+
+        private static bool IsWorkshopSettingsField(Transform value)
+        {
+            for (var current = value; current != null; current = current.parent)
+                if (current.name.StartsWith("UP Workshop Settings Field ",
+                        StringComparison.Ordinal)) return true;
+            return false;
         }
 
         private bool IsSettingsInterior(Transform value)
@@ -884,49 +894,80 @@ namespace UnderPressure.Editor
             if (content == null) return;
 
             _settingsDisplayName = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.display_name", 20f, 42f, false);
+                "editor.scenario_settings.field.display_name", 16f, 48f, false);
             _settingsDescriptionPerStar = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.description_per_star", 74f, 96f, true);
+                "editor.scenario_settings.field.description_per_star", 70f, 118f, true);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.initial_balance", 182f, 42f, false, true);
+                "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.fail_warning", 236f, 42f, false, true);
+                "editor.scenario_settings.field.fail_warning", 264f, 48f, false, true);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.fail_game_over", 290f, 42f, false, true);
+                "editor.scenario_settings.field.fail_game_over", 326f, 48f, false, true);
             RefreshScenarioSettingsFields();
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
             float top, float height, bool multiline, bool integer = false)
         {
-            var labelObject = new GameObject("Label " + labelKey, typeof(RectTransform),
-                typeof(LayoutElement), typeof(TextMeshProUGUI));
-            labelObject.transform.SetParent(parent, false);
-            var labelRect = (RectTransform)labelObject.transform;
-            SetRect(labelRect, new Vector2(.02f, 1f), new Vector2(.45f, 1f),
-                new Vector2(0f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
-            var label = labelObject.GetComponent<TextMeshProUGUI>();
-            labelObject.GetComponent<LayoutElement>().ignoreLayout = true;
-            label.text = EditorLocalization.Get(labelKey);
-            label.fontSize = 20f;
-            label.fontStyle = FontStyles.Bold;
-            label.alignment = TextAlignmentOptions.MidlineLeft;
-            label.color = Color.white;
-            label.raycastTarget = false;
+            GameObject panelTemplate;
+            Component nativeInputTemplate;
+            if (!TryGetWorkshopFieldTemplate(multiline, out panelTemplate,
+                    out nativeInputTemplate))
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Ajustes del escenario: no se encontro el panel de escritura nativo del Workshop.");
+                return null;
+            }
 
-            var fieldObject = new GameObject("Field " + labelKey, typeof(RectTransform),
-                typeof(LayoutElement), typeof(Image), typeof(TMP_InputField));
-            fieldObject.transform.SetParent(parent, false);
-            var fieldRect = (RectTransform)fieldObject.transform;
-            SetRect(fieldRect, new Vector2(.47f, 1f), new Vector2(.98f, 1f),
+            var row = Instantiate(panelTemplate, parent, false);
+            row.name = "UP Workshop Settings Field " + labelKey;
+            row.SetActive(true);
+            var rowRect = row.transform as RectTransform;
+            SetRect(rowRect, new Vector2(.02f, 1f), new Vector2(.98f, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            var layout = row.GetComponent<LayoutElement>() ?? row.AddComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+            DisableLocalisers(row.transform);
+
+            var nativeInput = row.GetComponentsInChildren(nativeInputTemplate.GetType(), true)
+                .OfType<Component>().FirstOrDefault();
+            if (nativeInput == null)
+            {
+                Destroy(row);
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Ajustes del escenario: el panel Workshop no contiene su campo de escritura.");
+                return null;
+            }
+            var nativeBehaviour = nativeInput as Behaviour;
+            if (nativeBehaviour != null) nativeBehaviour.enabled = false;
+            var fieldObject = nativeInput.gameObject;
+            fieldObject.SetActive(true);
             var background = fieldObject.GetComponent<Image>();
-            fieldObject.GetComponent<LayoutElement>().ignoreLayout = true;
-            ApplyWorkshopInputVisual(background, multiline);
+            if (background == null)
+            {
+                Destroy(row);
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Ajustes del escenario: el campo Workshop no contiene su fondo nativo.");
+                return null;
+            }
+
+            SetWorkshopFieldLabel(row.transform, fieldObject.transform,
+                EditorLocalization.Get(labelKey));
+            foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
+                oldText.gameObject.SetActive(false);
+
+            var editorObject = new GameObject("UP Editor Input", typeof(RectTransform),
+                typeof(Image), typeof(TMP_InputField));
+            editorObject.transform.SetParent(fieldObject.transform, false);
+            var editorRect = (RectTransform)editorObject.transform;
+            Stretch(editorRect);
+            var hitArea = editorObject.GetComponent<Image>();
+            hitArea.color = new Color(1f, 1f, 1f, 0f);
+            hitArea.raycastTarget = true;
 
             var viewportObject = new GameObject("Text Area", typeof(RectTransform),
                 typeof(RectMask2D));
-            viewportObject.transform.SetParent(fieldObject.transform, false);
+            viewportObject.transform.SetParent(editorObject.transform, false);
             var viewportRect = (RectTransform)viewportObject.transform;
             Stretch(viewportRect);
             viewportRect.offsetMin = new Vector2(10f, 4f);
@@ -946,8 +987,8 @@ namespace UnderPressure.Editor
                 ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft;
             text.enableWordWrapping = multiline;
 
-            var input = fieldObject.GetComponent<TMP_InputField>();
-            input.targetGraphic = background;
+            var input = editorObject.GetComponent<TMP_InputField>();
+            input.targetGraphic = hitArea;
             input.textViewport = viewportRect;
             input.textComponent = text;
             input.lineType = multiline
@@ -962,33 +1003,45 @@ namespace UnderPressure.Editor
             return input;
         }
 
-        private static void ApplyWorkshopInputVisual(Image target, bool multiline)
+        private static bool TryGetWorkshopFieldTemplate(bool multiline,
+            out GameObject panel, out Component input)
         {
-            if (target == null) return;
+            panel = null;
+            input = null;
             var manager = ExtContentUtils.ExtContentManager;
             var prefab = manager?.ExtContentUIManager?.Config?.GameItemUIScreenPrefab;
             var screen = prefab?.GetComponent<ExtContentGameItemUIScreen>();
-            if (screen == null)
-            {
-                target.color = Color.white;
-                return;
-            }
+            if (screen == null) return false;
+            var panelName = multiline
+                ? "_gameObjectItemDescriptionPanel" : "_gameObjectItemTitlePanel";
             var fieldName = multiline ? "_inputDescription" : "_inputTitle";
-            var nativeComponent = AccessTools.Field(typeof(ExtContentGameItemUIScreen), fieldName)
+            panel = AccessTools.Field(typeof(ExtContentGameItemUIScreen), panelName)
+                ?.GetValue(screen) as GameObject;
+            input = AccessTools.Field(typeof(ExtContentGameItemUIScreen), fieldName)
                 ?.GetValue(screen) as Component;
-            var nativeImage = nativeComponent?.GetComponent<Image>();
-            if (nativeImage == null)
+            return panel != null && input != null;
+        }
+
+        private static void SetWorkshopFieldLabel(Transform row, Transform inputRoot,
+            string value)
+        {
+            var tmpLabel = row.GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault(text => text != null &&
+                    !text.transform.IsChildOf(inputRoot));
+            if (tmpLabel != null)
             {
-                target.color = Color.white;
+                tmpLabel.text = value;
+                tmpLabel.color = Color.white;
                 return;
             }
-            target.sprite = nativeImage.sprite;
-            target.overrideSprite = nativeImage.overrideSprite;
-            target.type = nativeImage.type;
-            target.preserveAspect = nativeImage.preserveAspect;
-            target.fillCenter = nativeImage.fillCenter;
-            target.color = nativeImage.color;
-            target.material = nativeImage.material;
+            var regularLabel = row.GetComponentsInChildren<Text>(true)
+                .FirstOrDefault(text => text != null &&
+                    !text.transform.IsChildOf(inputRoot));
+            if (regularLabel != null)
+            {
+                regularLabel.text = value;
+                regularLabel.color = Color.white;
+            }
         }
 
         private void RefreshScenarioSettingsFields()
