@@ -706,6 +706,7 @@ namespace UnderPressure.Editor
                 }
             }
             ApplyNativeSettingsPalette(clone.transform);
+            ApplySettingsContentFrameColor();
             SetSettingsTab(0);
             clone.SetActive(true);
             _settingsOverlay.SetActive(false);
@@ -879,12 +880,27 @@ namespace UnderPressure.Editor
         {
             if (value == null) return false;
             if (_settingsPages != null && _settingsPages.Any(page =>
-                    page != null && (value == page.transform.parent ||
-                        value == page.transform || value.IsChildOf(page.transform))))
+                    page != null && (value == page.transform || value.IsChildOf(page.transform))))
                 return true;
             return _settingsTabFolderBackgrounds != null &&
                 _settingsTabFolderBackgrounds.Any(folder => folder != null &&
                     (value == folder || value.IsChildOf(folder)));
+        }
+
+        private void ApplySettingsContentFrameColor()
+        {
+            if (_settingsPages == null) return;
+            // Es el azul que ya usa el exterior de las filas nativas del Workshop.
+            var frameColor = new Color32(56, 161, 223, 255);
+            foreach (var page in _settingsPages)
+            {
+                var frame = page != null ? page.GetComponent<Image>() : null;
+                if (frame == null) continue;
+                frame.overrideSprite = null;
+                frame.sprite = null;
+                frame.type = Image.Type.Simple;
+                frame.color = frameColor;
+            }
         }
 
         private void BuildGeneralSettingsContents()
