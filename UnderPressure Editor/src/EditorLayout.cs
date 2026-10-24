@@ -932,9 +932,11 @@ namespace UnderPressure.Editor
             layout.ignoreLayout = true;
             DisableLocalisers(fieldObject.transform);
             var input = fieldObject.GetComponent<InputField>();
-            input.onValueChanged = new InputField.OnChangeEvent();
-            input.onEndEdit = new InputField.SubmitEvent();
-            input.onValidateInput = null;
+            // La version de Unity del juego no expone los setters de estos
+            // eventos con la misma firma que la DLL de referencia. El prefab
+            // los registra en ejecucion, asi que basta vaciar las instancias.
+            input.onValueChanged.RemoveAllListeners();
+            input.onEndEdit.RemoveAllListeners();
             input.interactable = true;
             input.readOnly = false;
             input.lineType = multiline
@@ -946,7 +948,6 @@ namespace UnderPressure.Editor
             if (input.placeholder != null)
             {
                 input.placeholder.gameObject.SetActive(false);
-                input.placeholder = null;
             }
             input.ForceLabelUpdate();
             return input;
@@ -967,15 +968,15 @@ namespace UnderPressure.Editor
         {
             if (_level == null || _settingsDisplayName == null) return;
             var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
-            _settingsDisplayName.SetTextWithoutNotify(settings.DisplayName ?? "");
-            _settingsDescriptionPerStar.SetTextWithoutNotify(string.Join("\n",
-                settings.DescriptionPerStar ?? new string[0]));
-            _settingsInitialBalance.SetTextWithoutNotify(
-                settings.InitialBalance.ToString(CultureInfo.InvariantCulture));
-            _settingsFailWarning.SetTextWithoutNotify(
-                settings.FailStateBalanceWarning.ToString(CultureInfo.InvariantCulture));
-            _settingsFailGameOver.SetTextWithoutNotify(
-                settings.FailStateBalanceGameOver.ToString(CultureInfo.InvariantCulture));
+            _settingsDisplayName.text = settings.DisplayName ?? "";
+            _settingsDescriptionPerStar.text = string.Join("\n",
+                settings.DescriptionPerStar ?? new string[0]);
+            _settingsInitialBalance.text =
+                settings.InitialBalance.ToString(CultureInfo.InvariantCulture);
+            _settingsFailWarning.text =
+                settings.FailStateBalanceWarning.ToString(CultureInfo.InvariantCulture);
+            _settingsFailGameOver.text =
+                settings.FailStateBalanceGameOver.ToString(CultureInfo.InvariantCulture);
         }
 
         private void AcceptScenarioSettings()
