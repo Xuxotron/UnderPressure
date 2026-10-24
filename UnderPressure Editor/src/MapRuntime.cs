@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - MapRuntime: cargador ingame, parcelas y decoracion Base del UPMap.
+// Updated: 2026-10-24 - Cargador ingame de config.json, parcelas y decoracion Base.
 // Traslado estructural desde CareerMaps.cs, sin modificaciones funcionales.
 using System;
 using System.Collections.Generic;
@@ -67,7 +67,8 @@ namespace UnderPressure.Editor
             var folder = Path.GetFullPath(ScenarioEditorStorage.Folder).TrimEnd(Path.DirectorySeparatorChar) +
                          Path.DirectorySeparatorChar;
             if (!full.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ||
-                !full.EndsWith(".upmap", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(Path.GetFileName(full), ScenarioMapFormat.ConfigFileName,
+                    StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("El mapa no esta en la carpeta maps.");
             var read = ScenarioMapFormat.Read(full);
             if (!string.Equals(read.Header.baseHospitalId, level.UniqueId, StringComparison.Ordinal))
@@ -273,7 +274,7 @@ namespace UnderPressure.Editor
                 // RoomFloorPlanVisual no crea los VISUALES de la capa Base
                 // cuando este flag es false (valor nativo de muchos hospitales).
                 // La escena original los contiene precocinados para el juego base,
-                // pero el UPMap debe mostrar sus propias modificaciones.
+                // pero el mapa personalizado debe mostrar sus propias modificaciones.
                 cloned.createBaseLandscapeItems = true;
                 if (!string.IsNullOrEmpty(_map.Header.fogOfWarFile))
                 {
@@ -365,7 +366,7 @@ namespace UnderPressure.Editor
                 }
                 else EnsureTerrainRetry(level);
                 UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Carrera: terreno .upmap aplicado: " + _path);
+                    "Carrera: terreno de config.json aplicado: " + _path);
             }
             catch (Exception ex)
             {
@@ -418,7 +419,7 @@ namespace UnderPressure.Editor
                 {
                     _loggedMissingBaseVisuals = true;
                     UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Carrera: esperando visuales Base del UPMap antes de ocultar Unity.");
+                        "Carrera: esperando visuales Base del mapa antes de ocultar Unity.");
                 }
                 EnsureTerrainRetry(level);
                 return;
@@ -449,7 +450,7 @@ namespace UnderPressure.Editor
 
             _originalLandscapeSuppressed = true;
             UnderPressureEditorPlugin.Log?.LogInfo(
-                "Carrera: Base del UPMap visible (" + baseVisuals + "/" + baseObjects +
+                "Carrera: Base del mapa visible (" + baseVisuals + "/" + baseObjects +
                 " objetos). Escena original LandscapeItems_Base oculta: " +
                 hiddenRenderers + " renderizadores y " + hiddenColliders +
                 " colliders. Resto del escenario Unity conservado.");
@@ -622,13 +623,13 @@ namespace UnderPressure.Editor
             ScenarioCareerMapLoader.StartPreparingForLoad(__instance?.Metagame);
             ScenarioCareerMapLoader.ApplyScenarioSettings(ref __0);
             // GetSaveForLevel(baseId) devuelve tambien partidas del hospital
-            // ORIGINAL. Esas partidas sustituyen las parcelas del .upmap al
+            // ORIGINAL. Esas partidas sustituyen las parcelas de config.json al
             // deserializarse. Hasta que haya identificacion propia del mapa
             // no se admite recuperarlas como si fueran de este escenario.
             __1 = null;
             __2 = true;
             UnderPressureEditorPlugin.Log?.LogInfo(
-                "Carrera: iniciando el .upmap como escenario nuevo, sin save del hospital base.");
+                "Carrera: iniciando config.json como escenario nuevo, sin save del hospital base.");
         }
     }
 

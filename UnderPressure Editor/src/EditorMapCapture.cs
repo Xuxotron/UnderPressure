@@ -192,7 +192,7 @@ namespace UnderPressure.Editor
                     imagen.Apply(false, false);
 
                     // El directorio de capturas es independiente de los recursos
-                    // editables: el JPG acompana al mapa, pero no altera UPMap,
+                    // editables: el JPG acompana al mapa, pero no altera config.json,
                     // parcelas ni texturas de Fog.
                     var archivo = GetMapImagePath(_level);
                     if (string.IsNullOrEmpty(archivo))

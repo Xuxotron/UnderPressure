@@ -382,7 +382,7 @@ namespace UnderPressure
             bool loadRequestFailed = false;
             try
             {
-                // App.Load conserva el reconocimiento de guardados UPMap.
+                // App.Load conserva el reconocimiento de guardados de mapas personalizados.
                 app.Load(header);
             }
             catch (Exception error)
@@ -750,7 +750,7 @@ namespace UnderPressure
             bool requestFailed = false;
             try
             {
-                // El editor siempre abre el nivel ORIGINAL. El .upmap pendiente
+                // El editor siempre abre el nivel ORIGINAL. El config.json pendiente
                 // se aplica despues mediante ScenarioEditorMapPicker.OnEditorOpened.
                 // El patch ScenarioEditorIgnoreExistingLevelSavePatch permanece
                 // operativo; no se invoca App.Load con saves de otras partidas.
@@ -807,7 +807,7 @@ namespace UnderPressure
             StartupDirectHospital.HideFrontendAndMetagameVisuals(app);
             UnderPressurePlugin.Log?.LogInfo(
                 "Editor directo: nivel " + selected.UniqueId +
-                " abierto sin cargar Carrera. El .upmap lo administra el editor.");
+                " abierto sin cargar Carrera. El config.json lo administra el editor.");
             _claimed = false;
         }
     }

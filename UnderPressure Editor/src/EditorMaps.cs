@@ -19,7 +19,7 @@ using UnityEngine;
 // Fix: cerrar dialogo siempre y guardar identidad de prefab.
 // Crear parcelas desde subcursores y guardar capas JSON vacias sin perder objetos.
 // Alta de parcelas no destructiva: mantiene originales y registra controles nativos.
-// Mapas .upmap JSON + archivos plot_XX.json y plot_XX.png por parcela.
+// Mapas config.json + archivos plot_XX.json y plot_XX.png por parcela.
 // Sin lectura de los formatos antiguos de prueba.
 namespace UnderPressure.Editor
 {
@@ -79,7 +79,7 @@ namespace UnderPressure.Editor
             var name = NameForSave(level);
             if (string.IsNullOrWhiteSpace(name)) return false;
             var folder = Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
-            var main = Path.Combine(folder, SafeName(name) + ".upmap");
+            var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
             if (!File.Exists(main)) return false;
             try
             {
@@ -278,7 +278,7 @@ namespace UnderPressure.Editor
                 try
                 {
                     Directory.CreateDirectory(target);
-                    // El juego crea maps/<hospital>/<mapa>/<mapa>.upmap.
+                    // El juego crea maps/<hospital>/<mapa>/config.json.
                     // No se copia ni borra jamas un mapa que ya exista en destino.
                     foreach (var hospital in Directory.GetDirectories(old))
                     {
@@ -326,9 +326,10 @@ namespace UnderPressure.Editor
         {
             var result = new List<MapInfo>();
             if (!Directory.Exists(Folder)) return result;
-            foreach (var path in Directory.GetFiles(Folder, "*.upmap", SearchOption.AllDirectories))
+            foreach (var path in Directory.GetFiles(Folder,
+                         ScenarioMapFormat.ConfigFileName, SearchOption.AllDirectories))
                 result.Add(ReadInfo(path));
-            // La fecha real del .upmap cambia al volver a guardar, sin cambiar el JSON.
+            // La fecha real de config.json cambia al volver a guardar.
             result.Sort((left, right) =>
             {
                 var cmp = right.ModifiedUtc.CompareTo(left.ModifiedUtc);
@@ -382,7 +383,7 @@ namespace UnderPressure.Editor
             var baseName = level.Config.GetLocalisedDisplayName();
             var folder = Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
             Directory.CreateDirectory(folder);
-            var main = Path.Combine(folder, SafeName(name) + ".upmap");
+            var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
             var originalDescription = name;
             if (File.Exists(main))
             {
@@ -508,7 +509,7 @@ namespace UnderPressure.Editor
                 VerifySavedItems(entry.Item2.builtItems, check.builtItems, entry.Item1, "Built");
                 VerifySavedItems(entry.Item2.unbuiltItems, check.unbuiltItems, entry.Item1, "Unbuilt");
             }
-            // Guardar .upmap al final: nunca publicarlo antes de escribir los datos referenciados.
+            // Guardar config.json al final: nunca publicarlo antes de los datos referenciados.
             ScenarioMapFormat.WriteJson(main, header);
             var verified = ScenarioMapFormat.Read(main);
             if (verified.Plots.Count != saved.Count)
@@ -673,7 +674,8 @@ namespace UnderPressure.Editor
             var allowed = Path.GetFullPath(Folder).TrimEnd(Path.DirectorySeparatorChar) +
                           Path.DirectorySeparatorChar;
             if (!full.StartsWith(allowed, StringComparison.OrdinalIgnoreCase) ||
-                !full.EndsWith(".upmap", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(Path.GetFileName(full), ScenarioMapFormat.ConfigFileName,
+                    StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Solo se pueden abrir mapas de la carpeta maps.");
             var map = ScenarioMapFormat.Read(full);
             if (!string.Equals(map.Header.baseHospitalId, level.Config.UniqueId, StringComparison.Ordinal))
@@ -755,7 +757,7 @@ namespace UnderPressure.Editor
 
         // Una parcela Unbuilt crea las vallas nativas durante su constructor.
         // En el Editor construimos su representacion directamente como Built,
-        // sin tocar el estado guardado en .json / .upmap. El propio cursor nativo
+        // sin tocar el estado guardado en los JSON. El propio cursor nativo
         // se encargara despues de BuyAndBuildImmediately() y Close().
         private static HospitalPlot CreateEditorPlotWithoutUnbuiltFences(
             HospitalPlotDefinition definition, WorldState world, Level level)
@@ -3305,7 +3307,7 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void ShowLoad()
         {
-            BuildDialog(T("editor.map.open") + " .upmap");
+            BuildDialog(T("editor.map.open") + " config.json");
             if (_dialog == null) return;
             var list = ScenarioEditorStorage.ListSaved();
             if (list.Count == 0)

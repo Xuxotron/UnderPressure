@@ -15,7 +15,7 @@ using UnityEngine.EventSystems;
 
 namespace UnderPressure.Editor
 {
-    // La misma estructura que las parcelas: el .upmap enlaza un archivo de datos.
+    // La misma estructura que las parcelas: config.json enlaza un archivo de datos.
     // La captura no crea objetos; documenta los elementos fijos de la escena que
     // no pertenecen a LandscapeItems_Base. Los cambios visuales se habilitaran
     // cuando hayamos validado el inventario en los hospitales originales.

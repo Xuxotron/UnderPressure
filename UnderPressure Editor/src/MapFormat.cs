@@ -1,5 +1,5 @@
 // Updated: 2026-10-15 - Reparado guardado Landscape: arrays objects y added escritos y verificados individualmente.
-// Mantiene el contrato del mapa .upmap, sus PNG y las capas Base/Built/Unbuilt.
+// Mantiene el contrato config.json del mapa, sus PNG y las capas Base/Built/Unbuilt.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +12,7 @@ namespace UnderPressure.Editor
     internal static class ScenarioMapFormat
     {
         internal const int Version = 2;
+        internal const string ConfigFileName = "config.json";
         internal const string PerimeterNone = "None";
         internal const string PerimeterOriginal = "Original";
         internal const string PerimeterCustom = "Custom";
@@ -181,7 +182,7 @@ namespace UnderPressure.Editor
                 HasInvalidStyleId(header.sceneFile) ||
                 HasInvalidStyleId(header.fogOfWarFile) ||
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
-                throw new InvalidDataException("Cabecera .upmap incorrecta o version incompatible.");
+                throw new InvalidDataException("config.json incorrecto o version incompatible.");
             return header;
         }
 

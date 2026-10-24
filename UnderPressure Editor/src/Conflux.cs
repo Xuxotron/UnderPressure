@@ -151,7 +151,8 @@ namespace UnderPressure.Editor
                     Name = creatorName,
                     Folder = creatorFolder
                 };
-                foreach (var path in Directory.GetFiles(creatorFolder, "*.upmap",
+                foreach (var path in Directory.GetFiles(creatorFolder,
+                             ScenarioMapFormat.ConfigFileName,
                              SearchOption.AllDirectories))
                 {
                     try

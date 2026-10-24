@@ -673,9 +673,15 @@ namespace UnderPressure.Editor
             BuildGeneralSettingsContents();
 
             var languageTab = GetPreferencesField<Transform>(clonedScreen, "_languageTab");
+            var languageButton = GetPreferencesField<DynamicButton>(clonedScreen,
+                "_languageTabButton");
+            var languageFolder = GetPreferencesField<Transform>(clonedScreen,
+                "_languageTabFolderBackground");
             var languageContents = GetPreferencesField<Transform>(clonedScreen,
                 "_languageTabContents");
             HideSettingsObject(languageTab);
+            HideSettingsObject(languageButton);
+            HideSettingsObject(languageFolder);
             HideSettingsObject(languageContents);
             RedistributeNativeSettingsTabs(clonedScreen);
 
@@ -711,7 +717,7 @@ namespace UnderPressure.Editor
                 {
                     animator.CurrentState = selected
                         ? (ButtonAnimator.State)1 : (ButtonAnimator.State)0;
-                    animator.enabled = true;
+                    animator.enabled = false;
                 }
                 if (folder != null) folder.gameObject.SetActive(selected);
                 if (_settingsPages[index] != null)
@@ -785,7 +791,11 @@ namespace UnderPressure.Editor
         private void RedistributeNativeSettingsTabs(PreferencesScreen screen)
         {
             if (_settingsTabRoots == null || _settingsTabRoots.Length == 0) return;
-            var language = GetPreferencesField<Transform>(screen, "_languageTab") as RectTransform;
+            var languageButton = GetPreferencesField<DynamicButton>(screen,
+                "_languageTabButton");
+            var language = languageButton != null
+                ? languageButton.transform as RectTransform
+                : GetPreferencesField<Transform>(screen, "_languageTab") as RectTransform;
             var first = _settingsTabRoots[0] as RectTransform;
             if (first == null || language == null) return;
             var start = first.anchoredPosition;
@@ -804,15 +814,25 @@ namespace UnderPressure.Editor
             if (root == null) return;
             foreach (var image in root.GetComponentsInChildren<Image>(true))
             {
-                if (image == null || image.GetComponentInParent<Selectable>() != null) continue;
+                if (image == null || image.GetComponent<TMP_InputField>() != null ||
+                    image.GetComponentInParent<TMP_InputField>() != null ||
+                    image.GetComponent<Selectable>() != null ||
+                    image.GetComponentInParent<Selectable>() != null) continue;
                 var color = image.color;
                 var maximum = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
                 var minimum = Mathf.Min(color.r, Mathf.Min(color.g, color.b));
                 if (color.a < .85f || maximum - minimum > .08f || maximum > .92f) continue;
                 var interior = _settingsPages != null && _settingsPages.Any(page =>
                     page != null && image.transform.IsChildOf(page.transform));
-                var tint = interior ? _style.PanelColor : _style.HeaderColor;
+                var tint = interior ? _style.ButtonColor : _style.HeaderColor;
                 tint.a = color.a;
+                var rect = image.rectTransform.rect;
+                if (rect.width >= 400f && rect.height >= 150f)
+                {
+                    image.overrideSprite = null;
+                    image.sprite = null;
+                    image.type = Image.Type.Simple;
+                }
                 image.color = tint;
             }
         }
@@ -841,12 +861,13 @@ namespace UnderPressure.Editor
             float top, float height, bool multiline, bool integer = false)
         {
             var labelObject = new GameObject("Label " + labelKey, typeof(RectTransform),
-                typeof(TextMeshProUGUI));
+                typeof(LayoutElement), typeof(TextMeshProUGUI));
             labelObject.transform.SetParent(parent, false);
             var labelRect = (RectTransform)labelObject.transform;
             SetRect(labelRect, new Vector2(.02f, 1f), new Vector2(.45f, 1f),
                 new Vector2(0f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
             var label = labelObject.GetComponent<TextMeshProUGUI>();
+            labelObject.GetComponent<LayoutElement>().ignoreLayout = true;
             label.text = EditorLocalization.Get(labelKey);
             label.fontSize = 20f;
             label.fontStyle = FontStyles.Bold;
@@ -855,21 +876,30 @@ namespace UnderPressure.Editor
             label.raycastTarget = false;
 
             var fieldObject = new GameObject("Field " + labelKey, typeof(RectTransform),
-                typeof(Image), typeof(TMP_InputField));
+                typeof(LayoutElement), typeof(Image), typeof(TMP_InputField));
             fieldObject.transform.SetParent(parent, false);
             var fieldRect = (RectTransform)fieldObject.transform;
             SetRect(fieldRect, new Vector2(.47f, 1f), new Vector2(.98f, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
             var background = fieldObject.GetComponent<Image>();
+            fieldObject.GetComponent<LayoutElement>().ignoreLayout = true;
             background.color = Color.white;
+
+            var viewportObject = new GameObject("Text Area", typeof(RectTransform),
+                typeof(RectMask2D));
+            viewportObject.transform.SetParent(fieldObject.transform, false);
+            var viewportRect = (RectTransform)viewportObject.transform;
+            Stretch(viewportRect);
+            viewportRect.offsetMin = new Vector2(10f, 4f);
+            viewportRect.offsetMax = new Vector2(-10f, -4f);
 
             var textObject = new GameObject("Text", typeof(RectTransform),
                 typeof(TextMeshProUGUI));
-            textObject.transform.SetParent(fieldObject.transform, false);
+            textObject.transform.SetParent(viewportObject.transform, false);
             var textRect = (RectTransform)textObject.transform;
             Stretch(textRect);
-            textRect.offsetMin = new Vector2(12f, 5f);
-            textRect.offsetMax = new Vector2(-12f, -5f);
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
             var text = textObject.GetComponent<TextMeshProUGUI>();
             text.fontSize = 19f;
             text.color = _style.HeaderColor;
@@ -879,7 +909,7 @@ namespace UnderPressure.Editor
 
             var input = fieldObject.GetComponent<TMP_InputField>();
             input.targetGraphic = background;
-            input.textViewport = fieldRect;
+            input.textViewport = viewportRect;
             input.textComponent = text;
             input.lineType = multiline
                 ? TMP_InputField.LineType.MultiLineNewline : TMP_InputField.LineType.SingleLine;

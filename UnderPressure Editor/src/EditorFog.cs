@@ -121,7 +121,7 @@ namespace UnderPressure.Editor
         }
 
         // Abrir el PNG directamente desde la carpeta del mapa actual.
-        // No depender del lector completo (.upmap + parcelas) ni de que la
+        // No depender del lector completo (config.json + parcelas) ni de que la
         // cabecera tenga fogOfWarFile: el archivo RGBA es la fuente de verdad.
         private static bool TryReadSavedFog(out ScenarioMapFormat.Map header, out byte[] png)
         {
@@ -142,12 +142,15 @@ namespace UnderPressure.Editor
                 var root = ScenarioEditorStorage.Folder;
                 var folder = Path.Combine(root, SafeName(architect), safe);
                 var pngPath = Path.Combine(folder, "fog_of_war.png");
-                var main = Path.Combine(folder, safe + ".upmap");
-                // Migraciones antiguas: buscar unicamente el mapa homonimo.
+                var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
+                // Buscar unicamente el config.json de este mapa.
                 if (!File.Exists(pngPath) && Directory.Exists(root))
                 {
-                    var matches = Directory.GetFiles(root, safe + ".upmap",
-                        SearchOption.AllDirectories);
+                    var matches = Directory.GetFiles(root, ScenarioMapFormat.ConfigFileName,
+                            SearchOption.AllDirectories)
+                        .Where(path => string.Equals(Path.GetFileName(
+                                Path.GetDirectoryName(path)), safe,
+                            StringComparison.OrdinalIgnoreCase)).ToArray();
                     if (matches.Length == 1)
                     {
                         main = matches[0];

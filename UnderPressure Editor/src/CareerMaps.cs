@@ -18,7 +18,7 @@ using UnityEngine.UI;
 // Updated: 2026-10-13
 // Selector de mapas CARRERA: marco y botonera copiados de la UI nativa de TPH.
 // Nombre, descripcion, informacion y Comenzar siguen dentro de SelectedHospitalMenu (UI nativa).
-// No reutiliza la interfaz del editor ni modifica el cargador .upmap.
+// No reutiliza la interfaz del editor ni modifica el cargador de config.json.
 namespace UnderPressure.Editor
 {
     internal sealed class ScenarioCareerMapMenu : MonoBehaviour
@@ -125,7 +125,8 @@ namespace UnderPressure.Editor
             _choices.Clear();
             var root = ScenarioEditorStorage.Folder;
             if (!Directory.Exists(root)) return;
-            foreach (var path in Directory.GetFiles(root, "*.upmap", SearchOption.AllDirectories))
+            foreach (var path in Directory.GetFiles(root,
+                         ScenarioMapFormat.ConfigFileName, SearchOption.AllDirectories))
             {
                 try
                 {
@@ -1463,7 +1464,8 @@ namespace UnderPressure.Editor
                 Path.DirectorySeparatorChar;
             var full = Path.GetFullPath(Path.Combine(root, path));
             if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
-                !full.EndsWith(".upmap", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(Path.GetFileName(full), ScenarioMapFormat.ConfigFileName,
+                    StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(full))
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(

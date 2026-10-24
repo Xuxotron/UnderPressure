@@ -403,7 +403,7 @@ namespace UnderPressure.Editor
     }
 
     // Se cambia exclusivamente la reconstruccion iniciada por la herramienta de
-    // pintura. Las cargas, aperturas de .upmap y movimientos conservan Build.
+    // pintura. Las cargas, aperturas de config.json y movimientos conservan Build.
     [HarmonyPatch(typeof(CursorEditHospitalBuild), nameof(CursorEditHospitalBuild.CursorUpdate))]
     internal static class ScenarioEditorPaintRefreshPatch
     {
@@ -606,7 +606,7 @@ namespace UnderPressure.Editor
 // ===== END ORIGINAL: ScenarioEditorSession.cs =====
 
 // ===== BEGIN ORIGINAL: ScenarioHospitalStyles.cs =====
-// Catalogo de estilos originales de parcelas y aplicacion de su configuracion .upmap.
+// Catalogo de estilos originales de parcelas y aplicacion de config.json.
 namespace UnderPressure.Editor
 {
     internal static class ScenarioHospitalStyles

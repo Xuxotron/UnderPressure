@@ -896,7 +896,8 @@ namespace UnderPressure.Editor
             var result = new List<MapChoice>();
             var folder = ScenarioEditorStorage.FolderForArchitect(architect);
             if (!Directory.Exists(folder)) return result;
-            foreach (var file in Directory.GetFiles(folder, "*.upmap", SearchOption.AllDirectories))
+            foreach (var file in Directory.GetFiles(folder,
+                         ScenarioMapFormat.ConfigFileName, SearchOption.AllDirectories))
             {
                 try
                 {

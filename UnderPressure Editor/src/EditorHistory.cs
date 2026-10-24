@@ -14,7 +14,7 @@ using UnityEngine.UI;
 namespace UnderPressure.Editor
 {
     // Historial exclusivo del editor de escenarios. No afecta al juego normal
-    // ni modifica los archivos .upmap hasta que el usuario elige Guardar.
+    // ni modifica config.json hasta que el usuario elige Guardar.
     internal sealed class ScenarioEditorHistory : MonoBehaviour
     {
         private const int MaxChanges = 40;
@@ -273,7 +273,7 @@ namespace UnderPressure.Editor
                 if (_level != null && !ScenarioEditorFlow.IsRunning) Destroy(gameObject);
                 return;
             }
-            // OnEditorOpened aplica el .upmap en otro Postfix: esperar a que
+            // OnEditorOpened aplica config.json en otro Postfix: esperar a que
             // termine y NO crear un paso falso contra el mapa original.
             if (_baseline == null)
             {

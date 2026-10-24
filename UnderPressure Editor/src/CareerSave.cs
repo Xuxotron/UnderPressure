@@ -13,7 +13,7 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioCareerSaveBridge
     {
-        private const string MarkerVersion = "UPMAP_SAVE_V1";
+        private const string MarkerVersion = "SCENARIO_CONFIG_SAVE_V1";
         private static readonly FieldInfo MapPathField =
             AccessTools.Field(typeof(ScenarioCareerMapLoader), "_path");
         private static readonly FieldInfo WorldConfigAppliedField =
@@ -48,7 +48,7 @@ namespace UnderPressure.Editor
 
         private static string MapPath => MapPathField?.GetValue(null) as string;
         private static string MarkerPath(SaveFileHeader header) =>
-            string.IsNullOrEmpty(header?.FilePath) ? null : header.FilePath + ".upmapref";
+            string.IsNullOrEmpty(header?.FilePath) ? null : header.FilePath + ".configref";
 
         private static string Fingerprint(string mapPath)
         {
@@ -117,7 +117,7 @@ namespace UnderPressure.Editor
             if (!TryReadMarker(header, out savedMap))
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Carrera: el .upmap asociado a este guardado ha cambiado o no existe. " +
+                    "Carrera: el config.json asociado ha cambiado o no existe. " +
                     "No se cargara un escenario equivocado: " + marker);
                 _explicitHeader = null;
                 return false;
@@ -128,7 +128,7 @@ namespace UnderPressure.Editor
                 StringComparison.OrdinalIgnoreCase))
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Carrera: este guardado pertenece a otro UPMap. " +
+                    "Carrera: este guardado pertenece a otro config.json. " +
                     "Sal al menu principal antes de cambiar de escenario.");
                 _explicitHeader = null;
                 return false;
@@ -141,12 +141,12 @@ namespace UnderPressure.Editor
                     var config = app.Metagame.LevelList.GetLevelConfigByID(header.LevelID);
                     ScenarioCareerMapLoader.Prepare(config, savedMap);
                     UnderPressureEditorPlugin.Log?.LogInfo(
-                        "Carrera: UPMap reconocido desde partida guardada: " + savedMap);
+                        "Carrera: config.json reconocido desde partida guardada: " + savedMap);
                 }
                 catch (Exception ex)
                 {
                     UnderPressureEditorPlugin.Log?.LogError(
-                        "Carrera: no se pudo preparar el UPMap guardado: " + ex);
+                        "Carrera: no se pudo preparar el config.json guardado: " + ex);
                     _explicitHeader = null;
                     return false;
                 }
@@ -183,7 +183,7 @@ namespace UnderPressure.Editor
                 // Guardados previos a esta correccion, dentro de la sesion actual.
                 restore = true;
                 UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Carrera: restaurando guardado anterior sin identificador UPMap.");
+                    "Carrera: restaurando guardado anterior sin identificador de mapa.");
             }
 
             // El Prefix anterior transforma ignoreSave en true. Se utiliza
@@ -220,7 +220,7 @@ namespace UnderPressure.Editor
             ignoreSave = false;
             _sessionLoaded = false;
             UnderPressureEditorPlugin.Log?.LogInfo(
-                "Carrera: RESTAURANDO guardado nativo UPMap: " + candidate.FilePath);
+                "Carrera: RESTAURANDO guardado nativo del mapa: " + candidate.FilePath);
         }
 
         private static void ResetSceneVisualState()
@@ -306,7 +306,7 @@ namespace UnderPressure.Editor
                 var header = saveSystem.GetSaveForLevel(level.Config.UniqueId, false);
                 var marker = MarkerPath(header);
                 if (marker == null || !File.Exists(header.FilePath)) return;
-                // No asociar un save anterior del hospital ORIGINAL a este UPMap.
+                // No asociar un save anterior del hospital ORIGINAL a este mapa.
                 var lastWrite = File.GetLastWriteTimeUtc(header.FilePath);
                 if (lastWrite < _levelReadyUtc ||
                     header.Date.ToUniversalTime() < _levelReadyUtc.AddSeconds(-2)) return;
@@ -337,7 +337,7 @@ namespace UnderPressure.Editor
             catch (Exception ex)
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Carrera: no se pudo asociar la partida al UPMap: " + ex);
+                    "Carrera: no se pudo asociar la partida al config.json: " + ex);
             }
         }
     }
