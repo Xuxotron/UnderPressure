@@ -38,6 +38,12 @@ namespace UnderPressure.Editor
         private static string _builtRoomStyle = "";
         private static string _buildingRoomStyle = "";
         private static string _unbuiltRoomStyle = "";
+        private static Level _scenarioSettingsLevel;
+        private static string _displayName = "";
+        private static string[] _descriptionPerStar = new string[0];
+        private static int _initialBalance = 1000000;
+        private static int _failStateBalanceWarning = -150000;
+        private static int _failStateBalanceGameOver = -300000;
 
         internal static string CurrentMapName(Level level)
         {
@@ -104,6 +110,7 @@ namespace UnderPressure.Editor
             _architectLevel = level;
             _architectName = string.IsNullOrWhiteSpace(architect)
                 ? UnderPressureEditorPlugin.ArchitectName : architect.Trim();
+            ResetScenarioSettings(level);
         }
 
         private static string CurrentArchitect(Level level)
@@ -155,6 +162,67 @@ namespace UnderPressure.Editor
             _builtRoomStyle = source.builtRoomStyle ?? "";
             _buildingRoomStyle = source.buildingRoomStyle ?? "";
             _unbuiltRoomStyle = source.unbuiltRoomStyle ?? "";
+        }
+
+        internal static ScenarioMapFormat.Map CurrentScenarioSettings(Level level)
+        {
+            EnsureScenarioSettings(level);
+            return new ScenarioMapFormat.Map
+            {
+                DisplayName = _displayName,
+                DescriptionPerStar = (string[])_descriptionPerStar.Clone(),
+                InitialBalance = _initialBalance,
+                FailStateBalanceWarning = _failStateBalanceWarning,
+                FailStateBalanceGameOver = _failStateBalanceGameOver,
+                scenarioSettingsConfigured = true
+            };
+        }
+
+        internal static void SetScenarioSettings(Level level, ScenarioMapFormat.Map source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (!source.scenarioSettingsConfigured)
+            {
+                ResetScenarioSettings(level);
+                return;
+            }
+            _scenarioSettingsLevel = level;
+            _displayName = source.DisplayName ?? "";
+            _descriptionPerStar = source.DescriptionPerStar == null
+                ? new string[0] : (string[])source.DescriptionPerStar.Clone();
+            _initialBalance = source.InitialBalance;
+            _failStateBalanceWarning = source.FailStateBalanceWarning;
+            _failStateBalanceGameOver = source.FailStateBalanceGameOver;
+        }
+
+        private static void EnsureScenarioSettings(Level level)
+        {
+            if (!ReferenceEquals(_scenarioSettingsLevel, level)) ResetScenarioSettings(level);
+        }
+
+        private static void ResetScenarioSettings(Level level)
+        {
+            _scenarioSettingsLevel = level;
+            var config = level?.Config;
+            _displayName = ReadField<string>(config, "DisplayName");
+            if (string.IsNullOrWhiteSpace(_displayName))
+                _displayName = config?.GetLocalisedDisplayName() ?? "";
+            _descriptionPerStar = ReadField<string[]>(config, "DescriptionPerStar") ??
+                                  new string[0];
+            _failStateBalanceWarning = config?.FailStateBalanceWarning ?? -150000;
+            _failStateBalanceGameOver = config?.FailStateBalanceGameOver ?? -300000;
+            var finance = config?.GetFinanceManagerConfig();
+            _initialBalance = ReadField<int>(finance, "InitialBalance");
+            if (finance == null) _initialBalance = 1000000;
+        }
+
+        private static T ReadField<T>(object owner, string name)
+        {
+            if (owner == null) return default(T);
+            var field = AccessTools.Field(owner.GetType(), name);
+            if (field == null) return default(T);
+            var value = field.GetValue(owner);
+            return value is T typed ? typed : default(T);
         }
 
         private static readonly System.Reflection.MethodInfo CloneMethod = typeof(object).GetMethod(
@@ -406,6 +474,13 @@ namespace UnderPressure.Editor
                 terrainManifest = ScenarioEditorTerrainPainter.GetManifest(level),
                 plots = refs.ToArray()
             };
+            var settings = CurrentScenarioSettings(level);
+            header.DisplayName = settings.DisplayName;
+            header.DescriptionPerStar = settings.DescriptionPerStar;
+            header.InitialBalance = settings.InitialBalance;
+            header.FailStateBalanceWarning = settings.FailStateBalanceWarning;
+            header.FailStateBalanceGameOver = settings.FailStateBalanceGameOver;
+            header.scenarioSettingsConfigured = true;
             var styles = CurrentStyles(level);
             header.plotPerimeter = styles.plotPerimeter;
             header.perimeterPrefabs = styles.perimeterPrefabs;
@@ -657,6 +732,7 @@ namespace UnderPressure.Editor
                 world.UpdateNavigation();
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
+                SetScenarioSettings(level, map.Header);
                 ScenarioEditorFogOfWar.ApplyLoaded(map.Header, map.FogOfWarPng);
                 // Evitar que decoracion original importada vuelva a mezclarse
                 // con objetos de parcelas. Solo permanecen objetos nativos.

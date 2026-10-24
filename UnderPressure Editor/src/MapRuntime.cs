@@ -14,6 +14,9 @@ using UnityEngine;
 // Updated: 2026-10-14 - Restaurar decoracion nativa ingame; no ocultar LandscapeItems_Base.
 namespace UnderPressure.Editor
 {
+    internal sealed class UnderPressureFinanceConfigInstance :
+        SharedInstance<FinanceManager.Config> { }
+
     internal static class ScenarioCareerMapLoader
     {
         private const int PlotSaveIdBase = 9113000;
@@ -54,6 +57,7 @@ namespace UnderPressure.Editor
         private static bool _sceneApplied;
         private static bool _terrainApplied;
         private static ScenarioCareerMapTerrainRetry _retry;
+        private static UnderPressureFinanceConfigInstance _runtimeFinanceWrapper;
         internal static bool IsCustomSession => _active || _path != null;
 
         internal static void Prepare(LevelConfig level, string path)
@@ -103,6 +107,9 @@ namespace UnderPressure.Editor
                 UnityEngine.Object.Destroy(_runtimeFog);
             }
             _runtimeFog = null;
+            if (_runtimeFinanceWrapper != null)
+                UnityEngine.Object.Destroy(_runtimeFinanceWrapper);
+            _runtimeFinanceWrapper = null;
             _base = null;
             _path = null;
             _map = null;
@@ -116,6 +123,38 @@ namespace UnderPressure.Editor
 
         internal static bool Match(Level level) =>
             level != null && level.Config != null && MatchesConfig(level.Config);
+
+        internal static void ApplyScenarioSettings(ref LevelConfig config)
+        {
+            if (config == null || _map?.Header == null ||
+                !_map.Header.scenarioSettingsConfigured) return;
+            var header = _map.Header;
+            var clone = (LevelConfig)CloneMethod.Invoke(config, null);
+            AccessTools.Field(typeof(LevelConfig), "DisplayName")?.SetValue(
+                clone, header.DisplayName ?? "");
+            AccessTools.Field(typeof(LevelConfig), "DescriptionPerStar")?.SetValue(
+                clone, header.DescriptionPerStar ?? new string[0]);
+            clone.DisplayNameLocalised = default(LocalisedString);
+            clone.DescriptionPerStarLocalised = new LocalisedString[0];
+            clone.FailStateBalanceWarning = header.FailStateBalanceWarning;
+            clone.FailStateBalanceGameOver = header.FailStateBalanceGameOver;
+
+            var finance = config.GetFinanceManagerConfig();
+            if (finance != null)
+            {
+                var financeClone = (FinanceManager.Config)CloneMethod.Invoke(finance, null);
+                AccessTools.Field(typeof(FinanceManager.Config), "InitialBalance")?.SetValue(
+                    financeClone, header.InitialBalance);
+                _runtimeFinanceWrapper = ScriptableObject.CreateInstance<
+                    UnderPressureFinanceConfigInstance>();
+                _runtimeFinanceWrapper.name = "UP Scenario Finance Config";
+                _runtimeFinanceWrapper.hideFlags = HideFlags.DontSave;
+                _runtimeFinanceWrapper.Instance = financeClone;
+                AccessTools.Field(typeof(LevelConfig), "FinanceManagerConfig")?.SetValue(
+                    clone, _runtimeFinanceWrapper);
+            }
+            config = clone;
+        }
 
         internal static bool TryGetNativeSave(
             SaveSystem saveSystem, string levelId, out SaveFileHeader result)
@@ -571,7 +610,7 @@ namespace UnderPressure.Editor
         typeof(LevelConfig), typeof(SaveFileHeader), typeof(bool), typeof(bool) })]
     internal static class ScenarioCareerMapIgnoreSavePatch
     {
-        private static void Prefix(App __instance, LevelConfig __0,
+        private static void Prefix(App __instance, ref LevelConfig __0,
             ref SaveFileHeader __1, ref bool __2)
         {
             if (!ScenarioCareerMapLoader.IsCustomSession || ScenarioEditorFlow.IsRunning) return;
@@ -581,6 +620,7 @@ namespace UnderPressure.Editor
                 return;
             }
             ScenarioCareerMapLoader.StartPreparingForLoad(__instance?.Metagame);
+            ScenarioCareerMapLoader.ApplyScenarioSettings(ref __0);
             // GetSaveForLevel(baseId) devuelve tambien partidas del hospital
             // ORIGINAL. Esas partidas sustituyen las parcelas del .upmap al
             // deserializarse. Hasta que haya identificacion propia del mapa

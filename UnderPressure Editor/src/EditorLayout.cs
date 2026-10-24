@@ -1,5 +1,6 @@
 // Updated: 2026-10-21 - Objetos independiente: no se cierra con Escape ni al abrir otros menus.
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
@@ -89,6 +90,11 @@ namespace UnderPressure.Editor
         private Transform[] _settingsTabRoots;
         private Transform[] _settingsTabFolderBackgrounds;
         private GameObject[] _settingsPages;
+        private TMP_InputField _settingsDisplayName;
+        private TMP_InputField _settingsDescriptionPerStar;
+        private TMP_InputField _settingsInitialBalance;
+        private TMP_InputField _settingsFailWarning;
+        private TMP_InputField _settingsFailGameOver;
         private int _activeSettingsTab;
         private RectTransform _leftDivider;
         private RectTransform _rightDivider;
@@ -510,6 +516,7 @@ namespace UnderPressure.Editor
             ScenarioEditorStorageMenu.CloseOpenDialog();
             if (_settingsOverlay == null) BuildSettingsPanel();
             if (_settingsOverlay == null) return;
+            RefreshScenarioSettingsFields();
             SetSettingsTab(0);
             _settingsOverlay.SetActive(true);
             _settingsOverlay.transform.SetAsLastSibling();
@@ -577,7 +584,7 @@ namespace UnderPressure.Editor
             HideSettingsObjectsByName(clone.transform, "UnderPressureTabButton");
             HideSettingsObjectsByName(clone.transform, "UnderPressureMasterToggle");
             var credits = GetPreferencesField<Button>(clonedScreen, "_creditsButton");
-            if (credits != null) credits.gameObject.SetActive(false);
+            HideNativeVersionText(clone.transform);
 
             var titleText = clone.GetComponentsInChildren<TMP_Text>(true)
                 .Where(text => text != null && text.GetComponentInParent<Selectable>() == null)
@@ -663,6 +670,7 @@ namespace UnderPressure.Editor
                 _settingsTabFolderBackgrounds[index] = folder;
                 ClearNativeSettingsContents(contents, title);
             }
+            BuildGeneralSettingsContents();
 
             var languageTab = GetPreferencesField<Transform>(clonedScreen, "_languageTab");
             var languageContents = GetPreferencesField<Transform>(clonedScreen,
@@ -672,15 +680,15 @@ namespace UnderPressure.Editor
             RedistributeNativeSettingsTabs(clonedScreen);
 
             var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
-            if (close != null)
+            HideSettingsObject(close);
+            if (credits != null)
             {
-                DisableLocalisers(close.transform);
-                close.onClick.RemoveAllListeners();
-                close.onClick.AddListener(CloseSettingsPanel);
-                var closeLabel = close.GetComponentInChildren<TMP_Text>(true);
-                if (closeLabel != null)
-                    closeLabel.text = EditorLocalization.Get("editor.scenario_settings.accept");
-                ApplyButtonStyle(close);
+                DisableLocalisers(credits.transform);
+                credits.onClick.RemoveAllListeners();
+                credits.onClick.AddListener(AcceptScenarioSettings);
+                var acceptLabel = credits.GetComponentInChildren<TMP_Text>(true);
+                if (acceptLabel != null)
+                    acceptLabel.text = EditorLocalization.Get("editor.scenario_settings.accept");
             }
             ApplyNativeSettingsPalette(clone.transform);
             SetSettingsTab(0);
@@ -703,10 +711,9 @@ namespace UnderPressure.Editor
                 {
                     animator.CurrentState = selected
                         ? (ButtonAnimator.State)1 : (ButtonAnimator.State)0;
-                    animator.enabled = false;
+                    animator.enabled = true;
                 }
                 if (folder != null) folder.gameObject.SetActive(selected);
-                TintNativeSettingsTab(button, folder, selected);
                 if (_settingsPages[index] != null)
                     _settingsPages[index].SetActive(selected);
             }
@@ -742,12 +749,26 @@ namespace UnderPressure.Editor
                     component.enabled = false;
         }
 
+        private static void HideNativeVersionText(Transform root)
+        {
+            if (root == null) return;
+            foreach (var component in root.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (component == null || component.GetType().FullName !=
+                    "TH20.SetTextToVersionNumber") continue;
+                component.gameObject.SetActive(false);
+            }
+        }
+
         private static void ClearNativeSettingsContents(Transform contents, string title)
         {
             if (contents == null) return;
             DisableLocalisers(contents);
             var content = contents.Find("Scroll View/Viewport/Content");
             if (content == null) return;
+            foreach (var layout in content.GetComponents<LayoutGroup>()) layout.enabled = false;
+            var fitter = content.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
             for (var index = content.childCount - 1; index >= 0; --index)
             {
                 var child = content.GetChild(index);
@@ -756,7 +777,7 @@ namespace UnderPressure.Editor
             }
             var contentRect = content as RectTransform;
             if (contentRect != null)
-                contentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 90f);
+                contentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 430f);
             CreateSettingsLabel(content, title, 26f, TextAlignmentOptions.TopLeft,
                 new Vector2(22f, -18f));
         }
@@ -787,35 +808,131 @@ namespace UnderPressure.Editor
                 var color = image.color;
                 var maximum = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
                 var minimum = Mathf.Min(color.r, Mathf.Min(color.g, color.b));
-                if (color.a < .85f || maximum - minimum > .08f || maximum > .86f) continue;
-                var rect = image.rectTransform.rect;
-                if (rect.width < 400f || rect.height < 150f) continue;
-                var tint = _style.PanelColor;
+                if (color.a < .85f || maximum - minimum > .08f || maximum > .92f) continue;
+                var interior = _settingsPages != null && _settingsPages.Any(page =>
+                    page != null && image.transform.IsChildOf(page.transform));
+                var tint = interior ? _style.PanelColor : _style.HeaderColor;
                 tint.a = color.a;
                 image.color = tint;
             }
         }
 
-        private void TintNativeSettingsTab(DynamicButton button, Transform folder, bool selected)
+        private void BuildGeneralSettingsContents()
         {
-            var tint = selected ? _style.SelectedColor : _style.ButtonColor;
-            if (button != null)
-            {
-                button.transition = Selectable.Transition.None;
-                var image = button.targetGraphic as Image;
-                if (image != null) image.color = tint;
-                var borderRoot = image != null ? image.gameObject : button.gameObject;
-                var outline = borderRoot.GetComponent<Outline>() ??
-                    borderRoot.AddComponent<Outline>();
-                outline.effectColor = new Color32(255, 255, 255, 255);
-                outline.effectDistance = new Vector2(1f, -1f);
-                outline.useGraphicAlpha = true;
-                var label = button.GetComponentInChildren<TMP_Text>(true);
-                if (label != null) label.color = Color.white;
-            }
-            if (folder == null) return;
-            foreach (var image in folder.GetComponentsInChildren<Image>(true))
-                if (image != null) image.color = tint;
+            if (_settingsPages == null || _settingsPages.Length == 0 ||
+                _settingsPages[0] == null) return;
+            var content = _settingsPages[0].transform.Find("Scroll View/Viewport/Content");
+            if (content == null) return;
+
+            _settingsDisplayName = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.display_name", 58f, 42f, false);
+            _settingsDescriptionPerStar = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.description_per_star", 112f, 96f, true);
+            _settingsInitialBalance = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.initial_balance", 220f, 42f, false, true);
+            _settingsFailWarning = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.fail_warning", 274f, 42f, false, true);
+            _settingsFailGameOver = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.fail_game_over", 328f, 42f, false, true);
+            RefreshScenarioSettingsFields();
+        }
+
+        private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
+            float top, float height, bool multiline, bool integer = false)
+        {
+            var labelObject = new GameObject("Label " + labelKey, typeof(RectTransform),
+                typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(parent, false);
+            var labelRect = (RectTransform)labelObject.transform;
+            SetRect(labelRect, new Vector2(.02f, 1f), new Vector2(.45f, 1f),
+                new Vector2(0f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            var label = labelObject.GetComponent<TextMeshProUGUI>();
+            label.text = EditorLocalization.Get(labelKey);
+            label.fontSize = 20f;
+            label.fontStyle = FontStyles.Bold;
+            label.alignment = TextAlignmentOptions.MidlineLeft;
+            label.color = Color.white;
+            label.raycastTarget = false;
+
+            var fieldObject = new GameObject("Field " + labelKey, typeof(RectTransform),
+                typeof(Image), typeof(TMP_InputField));
+            fieldObject.transform.SetParent(parent, false);
+            var fieldRect = (RectTransform)fieldObject.transform;
+            SetRect(fieldRect, new Vector2(.47f, 1f), new Vector2(.98f, 1f),
+                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            var background = fieldObject.GetComponent<Image>();
+            background.color = Color.white;
+
+            var textObject = new GameObject("Text", typeof(RectTransform),
+                typeof(TextMeshProUGUI));
+            textObject.transform.SetParent(fieldObject.transform, false);
+            var textRect = (RectTransform)textObject.transform;
+            Stretch(textRect);
+            textRect.offsetMin = new Vector2(12f, 5f);
+            textRect.offsetMax = new Vector2(-12f, -5f);
+            var text = textObject.GetComponent<TextMeshProUGUI>();
+            text.fontSize = 19f;
+            text.color = _style.HeaderColor;
+            text.alignment = multiline
+                ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft;
+            text.enableWordWrapping = multiline;
+
+            var input = fieldObject.GetComponent<TMP_InputField>();
+            input.targetGraphic = background;
+            input.textViewport = fieldRect;
+            input.textComponent = text;
+            input.lineType = multiline
+                ? TMP_InputField.LineType.MultiLineNewline : TMP_InputField.LineType.SingleLine;
+            input.contentType = integer
+                ? TMP_InputField.ContentType.IntegerNumber : TMP_InputField.ContentType.Standard;
+            input.characterLimit = multiline ? 1000 : 120;
+            input.caretColor = _style.HeaderColor;
+            var selection = _style.ButtonColor;
+            selection.a = .35f;
+            input.selectionColor = selection;
+            return input;
+        }
+
+        private void RefreshScenarioSettingsFields()
+        {
+            if (_level == null || _settingsDisplayName == null) return;
+            var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
+            _settingsDisplayName.SetTextWithoutNotify(settings.DisplayName ?? "");
+            _settingsDescriptionPerStar.SetTextWithoutNotify(string.Join("\n",
+                settings.DescriptionPerStar ?? new string[0]));
+            _settingsInitialBalance.SetTextWithoutNotify(
+                settings.InitialBalance.ToString(CultureInfo.InvariantCulture));
+            _settingsFailWarning.SetTextWithoutNotify(
+                settings.FailStateBalanceWarning.ToString(CultureInfo.InvariantCulture));
+            _settingsFailGameOver.SetTextWithoutNotify(
+                settings.FailStateBalanceGameOver.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private void AcceptScenarioSettings()
+        {
+            if (_level == null) return;
+            var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
+            settings.DisplayName = _settingsDisplayName?.text ?? "";
+            var description = (_settingsDescriptionPerStar?.text ?? "")
+                .Replace("\r\n", "\n").Replace('\r', '\n');
+            settings.DescriptionPerStar = string.IsNullOrEmpty(description)
+                ? new string[0] : description.Split(new[] { '\n' }, StringSplitOptions.None);
+            if (!TryReadScenarioInteger(_settingsInitialBalance, out settings.InitialBalance) ||
+                !TryReadScenarioInteger(_settingsFailWarning,
+                    out settings.FailStateBalanceWarning) ||
+                !TryReadScenarioInteger(_settingsFailGameOver,
+                    out settings.FailStateBalanceGameOver)) return;
+            ScenarioEditorStorage.SetScenarioSettings(_level, settings);
+            CloseSettingsPanel();
+        }
+
+        private static bool TryReadScenarioInteger(TMP_InputField input, out int value)
+        {
+            value = 0;
+            if (input != null && int.TryParse(input.text, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out value)) return true;
+            input?.Select();
+            return false;
         }
 
         private static void CreateSettingsLabel(Transform parent, string value, float size,

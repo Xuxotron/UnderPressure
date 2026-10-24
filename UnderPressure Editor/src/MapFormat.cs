@@ -33,6 +33,12 @@ namespace UnderPressure.Editor
             public string baseHospitalId = "";
             public string baseHospitalName = "";
             public string description = "";
+            public string DisplayName = "";
+            public string[] DescriptionPerStar = new string[0];
+            public int InitialBalance = 1000000;
+            public int FailStateBalanceWarning = -150000;
+            public int FailStateBalanceGameOver = -300000;
+            public bool scenarioSettingsConfigured;
             public string terrainManifest = "";
             public string fogOfWarFile = "";
             public int fogTileWidth;
