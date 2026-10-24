@@ -857,13 +857,13 @@ namespace UnderPressure.Editor
                 }
                 image.color = tint;
             }
-            foreach (var shadow in root.GetComponentsInChildren<Shadow>(true))
+            foreach (var outline in root.GetComponentsInChildren<Outline>(true))
             {
-                if (shadow == null || !IsSettingsInterior(shadow.transform) ||
-                    shadow.GetComponentInParent<InputField>() != null ||
-                    shadow.GetComponentInParent<TMP_InputField>() != null ||
-                    IsWorkshopSettingsField(shadow.transform)) continue;
-                shadow.effectColor = _style.ButtonColor;
+                if (outline == null || !IsSettingsInterior(outline.transform) ||
+                    outline.GetComponentInParent<InputField>() != null ||
+                    outline.GetComponentInParent<TMP_InputField>() != null ||
+                    IsWorkshopSettingsField(outline.transform)) continue;
+                outline.effectColor = _style.ButtonColor;
             }
         }
 
@@ -879,7 +879,8 @@ namespace UnderPressure.Editor
         {
             if (value == null) return false;
             if (_settingsPages != null && _settingsPages.Any(page =>
-                    page != null && (value == page.transform || value.IsChildOf(page.transform))))
+                    page != null && (value == page.transform.parent ||
+                        value == page.transform || value.IsChildOf(page.transform))))
                 return true;
             return _settingsTabFolderBackgrounds != null &&
                 _settingsTabFolderBackgrounds.Any(folder => folder != null &&
