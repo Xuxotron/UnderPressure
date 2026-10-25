@@ -282,10 +282,11 @@ namespace UnderPressure.Editor
         private void CreateDiseaseInteger(Transform parent, string key, int current,
             float x, Action<int> setter)
         {
-            var input = CreateScenarioSettingsInput(parent, key, 64f, 36f, false, true,
-                x, 240f, 140f);
+            AddFieldLabel(parent, key, x, 64f, 135f);
+            var input = CreateDiseaseInput(parent,
+                current.ToString(CultureInfo.InvariantCulture));
             if (input == null) return;
-            input.SetTextWithoutNotify(current.ToString(CultureInfo.InvariantCulture));
+            SetTopLeft((RectTransform)input.transform, x + 140f, 64f, 100f, 36f);
             input.onEndEdit.AddListener(text =>
             {
                 if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture,
@@ -299,6 +300,38 @@ namespace UnderPressure.Editor
             var label = CreateDiseaseText(parent, EditorLocalization.Get(key), 17f,
                 TextAlignmentOptions.MidlineLeft, Color.white);
             SetTopLeft(label.rectTransform, x, y, width, 38f);
+        }
+
+        private TMP_InputField CreateDiseaseInput(Transform parent, string value)
+        {
+            var root = NewImage("Entrada", parent, _style.ButtonSprite,
+                new Color32(218, 222, 226, 255), true);
+            var input = root.AddComponent<TMP_InputField>();
+            var viewport = new GameObject("Text Area", typeof(RectTransform),
+                typeof(RectMask2D));
+            viewport.transform.SetParent(root.transform, false);
+            var viewportRect = (RectTransform)viewport.transform;
+            Stretch(viewportRect);
+            viewportRect.offsetMin = new Vector2(8f, 1f);
+            viewportRect.offsetMax = new Vector2(-8f, -1f);
+            var text = CreateDiseaseText(viewport.transform, value, 16f,
+                TextAlignmentOptions.MidlineLeft, Color.black);
+            text.overflowMode = TextOverflowModes.Overflow;
+            input.targetGraphic = root.GetComponent<Image>();
+            input.textViewport = viewportRect;
+            input.textComponent = text;
+            input.contentType = TMP_InputField.ContentType.IntegerNumber;
+            input.lineType = TMP_InputField.LineType.SingleLine;
+            input.interactable = true;
+            input.readOnly = false;
+            input.caretColor = Color.black;
+            input.caretWidth = 2;
+            input.caretBlinkRate = .85f;
+            var selection = _style.ButtonColor;
+            selection.a = .35f;
+            input.selectionColor = selection;
+            input.SetTextWithoutNotify(value);
+            return input;
         }
 
         private Toggle CreateDiseaseToggle(Transform parent, bool value, Action<bool> changed)

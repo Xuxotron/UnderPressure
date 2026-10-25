@@ -1033,8 +1033,7 @@ namespace UnderPressure.Editor
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
-            float top, float height, bool multiline, bool integer = false,
-            float? left = null, float width = 0f, float labelWidth = 0f)
+            float top, float height, bool multiline, bool integer = false)
         {
             GameObject panelTemplate;
             Component nativeInputTemplate;
@@ -1050,11 +1049,8 @@ namespace UnderPressure.Editor
             row.name = "UP Workshop Settings Field " + labelKey;
             row.SetActive(true);
             var rowRect = row.transform as RectTransform;
-            if (left.HasValue)
-                SetTopLeft(rowRect, left.Value, top, width, height);
-            else
-                SetRect(rowRect, new Vector2(.02f, 1f), new Vector2(.98f, 1f),
-                    new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            SetRect(rowRect, new Vector2(.02f, 1f), new Vector2(.98f, 1f),
+                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
             var layout = row.GetComponent<LayoutElement>() ?? row.AddComponent<LayoutElement>();
             layout.ignoreLayout = true;
             DisableLocalisers(row.transform);
@@ -1072,15 +1068,6 @@ namespace UnderPressure.Editor
             if (nativeBehaviour != null) nativeBehaviour.enabled = false;
             var fieldObject = nativeInput.gameObject;
             fieldObject.SetActive(true);
-            if (left.HasValue && fieldObject.transform is RectTransform fieldRect)
-            {
-                fieldRect.anchorMin = Vector2.zero;
-                fieldRect.anchorMax = Vector2.one;
-                fieldRect.pivot = new Vector2(.5f, .5f);
-                fieldRect.offsetMin = new Vector2(labelWidth, 0f);
-                fieldRect.offsetMax = Vector2.zero;
-                fieldRect.localScale = Vector3.one;
-            }
 
             SetWorkshopFieldLabel(row.transform, fieldObject.transform,
                 EditorLocalization.Get(labelKey));
