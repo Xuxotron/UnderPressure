@@ -49,7 +49,7 @@ namespace UnderPressure.Editor
     // Un unico coordinador calcula toda la geometria. Los paneles inferiores
     // nunca deciden su altura: reciben exactamente el espacio que dejan los
     // paneles superiores y las barras de 50 px.
-    internal sealed class ScenarioEditorDockLayout : MonoBehaviour
+    internal sealed partial class ScenarioEditorDockLayout : MonoBehaviour
     {
         internal const float PanelWidth = 220f;
         internal const float BarHeight = 50f;
@@ -526,6 +526,7 @@ namespace UnderPressure.Editor
             if (_settingsOverlay == null) BuildSettingsPanel();
             if (_settingsOverlay == null) return;
             RefreshScenarioSettingsFields();
+            RefreshDiseaseSettingsContents();
             SetSettingsTab(0);
             _settingsOverlay.SetActive(true);
             _settingsOverlay.transform.SetAsLastSibling();
@@ -727,6 +728,7 @@ namespace UnderPressure.Editor
                 ClearNativeSettingsContents(contents, index == 0 ? null : title);
             }
             BuildGeneralSettingsContents();
+            BuildDiseaseSettingsContents();
 
             var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
             HideSettingsObject(close);
@@ -1190,6 +1192,7 @@ namespace UnderPressure.Editor
                     out settings.FailStateBalanceWarning) ||
                 !TryReadScenarioInteger(_settingsFailGameOver,
                     out settings.FailStateBalanceGameOver)) return;
+            StoreDiseaseSettings(settings);
             ScenarioEditorStorage.SetScenarioSettings(_level, settings);
             CloseSettingsPanel();
         }
@@ -2235,6 +2238,7 @@ namespace UnderPressure.Editor
             _settingsTabRoots = null;
             _settingsTabFolderBackgrounds = null;
             _settingsPages = null;
+            ReleaseDiseaseSettingsContents();
             _style = null;
             _storage = null;
             _menu = null;

@@ -17,6 +17,9 @@ namespace UnderPressure.Editor
     internal sealed class UnderPressureFinanceConfigInstance :
         SharedInstance<FinanceManager.Config> { }
 
+    internal sealed class UnderPressureCharacterConfigInstance :
+        SharedInstance<CharacterManager.Config> { }
+
     internal static class ScenarioCareerMapLoader
     {
         private const int PlotSaveIdBase = 9113000;
@@ -58,6 +61,7 @@ namespace UnderPressure.Editor
         private static bool _terrainApplied;
         private static ScenarioCareerMapTerrainRetry _retry;
         private static UnderPressureFinanceConfigInstance _runtimeFinanceWrapper;
+        private static UnderPressureCharacterConfigInstance _runtimeCharacterWrapper;
         internal static bool IsCustomSession => _active || _path != null;
 
         internal static void Prepare(LevelConfig level, string path)
@@ -111,6 +115,9 @@ namespace UnderPressure.Editor
             if (_runtimeFinanceWrapper != null)
                 UnityEngine.Object.Destroy(_runtimeFinanceWrapper);
             _runtimeFinanceWrapper = null;
+            if (_runtimeCharacterWrapper != null)
+                UnityEngine.Object.Destroy(_runtimeCharacterWrapper);
+            _runtimeCharacterWrapper = null;
             _base = null;
             _path = null;
             _map = null;
@@ -153,6 +160,45 @@ namespace UnderPressure.Editor
                 _runtimeFinanceWrapper.Instance = financeClone;
                 AccessTools.Field(typeof(LevelConfig), "FinanceManagerConfig")?.SetValue(
                     clone, _runtimeFinanceWrapper);
+            }
+
+            if (header.illnessesConfigured)
+            {
+                var characters = config.GetCharacterManagerConfig();
+                if (characters != null)
+                {
+                    var characterClone = (CharacterManager.Config)CloneMethod.Invoke(characters, null);
+                    var weighted = new List<WeightedIllness>();
+                    foreach (var saved in header.illnesses ??
+                             new ScenarioMapFormat.WeightedIllnessData[0])
+                    {
+                        var definition = ScenarioDiseaseCatalog.Resolve(config, saved.definition);
+                        if (definition == null)
+                        {
+                            UnderPressureEditorPlugin.Log?.LogError(
+                                "Carrera: enfermedad desconocida en config.json: " + saved.definition);
+                            continue;
+                        }
+                        weighted.Add(new WeightedIllness
+                        {
+                            Definition = definition,
+                            Deprecated = saved.deprecated,
+                            Unlocked = saved.unlocked,
+                            MinWeight = saved.minWeight,
+                            MaxWeight = saved.maxWeight,
+                            MinStarRating = saved.minStarRating,
+                            MinPatientsSpawned = saved.minPatientsSpawned
+                        });
+                    }
+                    characterClone._weightedIllnesses = weighted.ToArray();
+                    _runtimeCharacterWrapper = ScriptableObject.CreateInstance<
+                        UnderPressureCharacterConfigInstance>();
+                    _runtimeCharacterWrapper.name = "UP Scenario Character Config";
+                    _runtimeCharacterWrapper.hideFlags = HideFlags.DontSave;
+                    _runtimeCharacterWrapper.Instance = characterClone;
+                    AccessTools.Field(typeof(LevelConfig), "CharacterManagerConfig")?.SetValue(
+                        clone, _runtimeCharacterWrapper);
+                }
             }
             config = clone;
         }

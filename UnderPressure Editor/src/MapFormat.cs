@@ -40,6 +40,8 @@ namespace UnderPressure.Editor
             public int FailStateBalanceWarning = -150000;
             public int FailStateBalanceGameOver = -300000;
             public bool scenarioSettingsConfigured;
+            public bool illnessesConfigured;
+            public WeightedIllnessData[] illnesses = new WeightedIllnessData[0];
             public string terrainManifest = "";
             public string fogOfWarFile = "";
             public int fogTileWidth;
@@ -57,6 +59,19 @@ namespace UnderPressure.Editor
             // Nombre del JSON de paisaje, independiente de las parcelas.
             public string landscapeFile = "";
             public PlotReference[] plots = new PlotReference[0];
+        }
+
+        [Serializable]
+        internal sealed class WeightedIllnessData
+        {
+            public string definition = "";
+            public string room = "";
+            public bool deprecated;
+            public bool unlocked = true;
+            public int minWeight = 20;
+            public int maxWeight = 100;
+            public int minStarRating;
+            public int minPatientsSpawned;
         }
 
         [Serializable]
@@ -168,6 +183,8 @@ namespace UnderPressure.Editor
             var json = ReadText(file, MaxHeaderBytes);
             var header = JsonUtility.FromJson<Map>(json);
             if (header != null) header.plots = ParseObjects<PlotReference>(json, "plots");
+            if (header != null && header.illnesses == null)
+                header.illnesses = new WeightedIllnessData[0];
             if (header != null) header.plotPerimeter = NormalizePerimeter(header.plotPerimeter);
             if (header != null && header.perimeterPrefabs == null)
                 header.perimeterPrefabs = new string[0];

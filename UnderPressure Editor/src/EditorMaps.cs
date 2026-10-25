@@ -44,6 +44,8 @@ namespace UnderPressure.Editor
         private static int _initialBalance = 1000000;
         private static int _failStateBalanceWarning = -150000;
         private static int _failStateBalanceGameOver = -300000;
+        private static ScenarioMapFormat.WeightedIllnessData[] _illnesses =
+            new ScenarioMapFormat.WeightedIllnessData[0];
 
         internal static string CurrentMapName(Level level)
         {
@@ -174,7 +176,9 @@ namespace UnderPressure.Editor
                 InitialBalance = _initialBalance,
                 FailStateBalanceWarning = _failStateBalanceWarning,
                 FailStateBalanceGameOver = _failStateBalanceGameOver,
-                scenarioSettingsConfigured = true
+                scenarioSettingsConfigured = true,
+                illnessesConfigured = true,
+                illnesses = CloneIllnesses(_illnesses)
             };
         }
 
@@ -193,6 +197,10 @@ namespace UnderPressure.Editor
             _initialBalance = source.InitialBalance;
             _failStateBalanceWarning = source.FailStateBalanceWarning;
             _failStateBalanceGameOver = source.FailStateBalanceGameOver;
+            _illnesses = source.illnessesConfigured
+                ? CloneIllnesses(source.illnesses)
+                : ScenarioDiseaseCatalog.Capture(
+                    level?.Config?.GetCharacterManagerConfig()?._weightedIllnesses);
         }
 
         private static void EnsureScenarioSettings(Level level)
@@ -214,6 +222,15 @@ namespace UnderPressure.Editor
             var finance = config?.GetFinanceManagerConfig();
             _initialBalance = ReadField<int>(finance, "InitialBalance");
             if (finance == null) _initialBalance = 1000000;
+            _illnesses = ScenarioDiseaseCatalog.Capture(
+                config?.GetCharacterManagerConfig()?._weightedIllnesses);
+        }
+
+        private static ScenarioMapFormat.WeightedIllnessData[] CloneIllnesses(
+            ScenarioMapFormat.WeightedIllnessData[] values)
+        {
+            if (values == null) return new ScenarioMapFormat.WeightedIllnessData[0];
+            return values.Select(ScenarioDiseaseCatalog.Clone).Where(value => value != null).ToArray();
         }
 
         private static T ReadField<T>(object owner, string name)
@@ -482,6 +499,8 @@ namespace UnderPressure.Editor
             header.FailStateBalanceWarning = settings.FailStateBalanceWarning;
             header.FailStateBalanceGameOver = settings.FailStateBalanceGameOver;
             header.scenarioSettingsConfigured = true;
+            header.illnessesConfigured = true;
+            header.illnesses = settings.illnesses;
             var styles = CurrentStyles(level);
             header.plotPerimeter = styles.plotPerimeter;
             header.perimeterPrefabs = styles.perimeterPrefabs;
