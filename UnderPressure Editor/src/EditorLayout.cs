@@ -558,6 +558,9 @@ namespace UnderPressure.Editor
 
             _settingsDiseaseNativeToggleTemplate =
                 GetPreferencesField<Toggle>(native, "_fullScreenToggle");
+            _settingsDiseaseNativeScrollTemplate =
+                GetPreferencesField<Transform>(native, "_videoTabContents")
+                    ?.GetComponentInChildren<ScrollRect>(true);
             _settingsDiseaseNativeScrollbarTemplate = native
                 .GetComponentsInChildren<Scrollbar>(true)
                 .Where(candidate => candidate != null &&

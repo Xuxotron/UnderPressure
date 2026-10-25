@@ -52,46 +52,26 @@ namespace UnderPressure.Editor
                         dlcOrder.Add(dlc.AppID, index++);
                 }
             }
-            var levels = new List<LevelConfig>();
-            if (level?.Config != null) levels.Add(level.Config);
-            var options = level?.App?.SandboxSettingsConfig?.LevelOptions;
-            if (options != null)
-                foreach (var option in options)
-                {
-                    var config = option?.Level?.Instance;
-                    if (config != null && !levels.Contains(config)) levels.Add(config);
-                }
-
-            // La entrada directa al editor no siempre conserva LevelOptions con
-            // sus SharedInstance resueltos. Los LevelConfig ya cargados son la
-            // fuente nativa completa y no crean ni modifican assets.
-            foreach (var shared in Resources.FindObjectsOfTypeAll<SharedInstance<LevelConfig>>())
-            {
-                LevelConfig config;
-                try { config = shared?.Instance; }
-                catch { continue; }
-                if (config != null && !levels.Contains(config)) levels.Add(config);
-            }
-
             var weightedRead = 0;
             var liveCharacters = level?.CharacterManager?.GetConfig();
             weightedRead += AddWeighted(snapshot, liveCharacters?._weightedIllnesses);
             weightedRead += AddWeighted(snapshot, liveCharacters?._weightedIllnessesTimePortal);
-
-            foreach (var config in levels)
+            try
             {
-                try
+                var configuredCharacters = level?.Config?.GetCharacterManagerConfig();
+                if (!ReferenceEquals(configuredCharacters, liveCharacters))
                 {
-                    var characters = config.GetCharacterManagerConfig();
-                    weightedRead += AddWeighted(snapshot, characters?._weightedIllnesses);
-                    weightedRead += AddWeighted(snapshot, characters?._weightedIllnessesTimePortal);
+                    weightedRead += AddWeighted(snapshot,
+                        configuredCharacters?._weightedIllnesses);
+                    weightedRead += AddWeighted(snapshot,
+                        configuredCharacters?._weightedIllnessesTimePortal);
                 }
-                catch (Exception exception)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Enfermedades: no se pudo examinar " + config.UniqueId + ": " +
-                        exception.Message);
-                }
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Enfermedades: no se pudo examinar la configuracion actual: " +
+                    exception.Message);
             }
 
             foreach (var list in Resources.FindObjectsOfTypeAll<SharedInstance<WeightedIllnessList>>())
@@ -163,7 +143,7 @@ namespace UnderPressure.Editor
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Enfermedades: " + snapshot.Diseases.Count + " definiciones, " +
                 treatmentDiseases + " con tratamiento y " + snapshot.Rooms.Count +
-                " salas; " + levels.Count + " LevelConfig, " + weightedRead +
+                " salas; " + weightedRead +
                 " entradas ponderadas y " + sharedRead + " SharedInstance examinados.");
             return snapshot;
         }

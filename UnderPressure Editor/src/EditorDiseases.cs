@@ -21,6 +21,7 @@ namespace UnderPressure.Editor
         private RectTransform _settingsDiseaseSurface;
         private RectTransform _settingsDiseaseContent;
         private ScrollRect _settingsDiseaseScroll;
+        private ScrollRect _settingsDiseaseNativeScrollTemplate;
         private Scrollbar _settingsDiseaseNativeScrollbarTemplate;
         private Toggle _settingsDiseaseNativeToggleTemplate;
         private bool _settingsDiseasesLoaded;
@@ -36,20 +37,40 @@ namespace UnderPressure.Editor
             if (_settingsPages == null || _settingsPages.Length < 2 ||
                 _settingsPages[1] == null) return;
             var page = _settingsPages[1].transform;
-            var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
+            var inheritedScroll = page.GetComponentInChildren<ScrollRect>(true);
+            if (inheritedScroll != null) inheritedScroll.gameObject.SetActive(false);
+
+            var source = _settingsDiseaseNativeScrollTemplate;
+            var nativeScrollObject = source != null
+                ? Instantiate(source.gameObject, page, false)
+                : null;
+            var nativeScroll = nativeScrollObject != null
+                ? nativeScrollObject.GetComponent<ScrollRect>()
+                : null;
             if (nativeScroll == null || nativeScroll.viewport == null ||
                 nativeScroll.content == null)
             {
+                if (nativeScrollObject != null) Destroy(nativeScrollObject);
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Enfermedades: la pagina de Ajustes no contiene su ScrollRect nativo completo.");
+                    "Enfermedades: no se pudo clonar el ScrollRect nativo completo de Ajustes.");
                 return;
             }
 
-            // Se conserva la estructura completa del desplazamiento de Ajustes:
-            // ScrollRect, viewport, mascara, fondo receptor y barra.
+            nativeScrollObject.name = "UP Disease Native Scroll";
+            DisableLocalisers(nativeScrollObject.transform);
             nativeScroll.gameObject.SetActive(true);
             _settingsDiseaseSurface = nativeScroll.transform as RectTransform;
             _settingsDiseaseContent = nativeScroll.content;
+            foreach (var layout in _settingsDiseaseContent.GetComponents<LayoutGroup>())
+                layout.enabled = false;
+            var fitter = _settingsDiseaseContent.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+            for (var index = _settingsDiseaseContent.childCount - 1; index >= 0; --index)
+            {
+                var child = _settingsDiseaseContent.GetChild(index);
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
             _settingsDiseaseContent.anchorMin = new Vector2(0f, 1f);
             _settingsDiseaseContent.anchorMax = Vector2.one;
             _settingsDiseaseContent.pivot = new Vector2(.5f, 1f);
@@ -624,6 +645,7 @@ namespace UnderPressure.Editor
             _settingsDiseaseSurface = null;
             _settingsDiseaseContent = null;
             _settingsDiseaseScroll = null;
+            _settingsDiseaseNativeScrollTemplate = null;
             _settingsDiseaseNativeScrollbarTemplate = null;
             _settingsDiseaseNativeToggleTemplate = null;
             _settingsDiseasesLoaded = false;
