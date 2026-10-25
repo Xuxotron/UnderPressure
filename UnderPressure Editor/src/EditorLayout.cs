@@ -526,7 +526,6 @@ namespace UnderPressure.Editor
             if (_settingsOverlay == null) BuildSettingsPanel();
             if (_settingsOverlay == null) return;
             RefreshScenarioSettingsFields();
-            RefreshDiseaseSettingsContents();
             SetSettingsTab(0);
             _settingsOverlay.SetActive(true);
             _settingsOverlay.transform.SetAsLastSibling();
@@ -556,6 +555,17 @@ namespace UnderPressure.Editor
                     "Ajustes del escenario: no se encontro PreferencesScreen nativo.");
                 return;
             }
+
+            _settingsDiseaseNativeToggleTemplate =
+                GetPreferencesField<Toggle>(native, "_fullScreenToggle");
+            _settingsDiseaseNativeScrollbarTemplate = native
+                .GetComponentsInChildren<Scrollbar>(true)
+                .Where(candidate => candidate != null &&
+                    (candidate.direction == Scrollbar.Direction.BottomToTop ||
+                     candidate.direction == Scrollbar.Direction.TopToBottom))
+                .OrderByDescending(candidate =>
+                    Mathf.Abs((candidate.transform as RectTransform)?.rect.height ?? 0f))
+                .FirstOrDefault();
 
             _settingsOverlay = NewImage("UP Scenario Settings Overlay", _root, null,
                 new Color32(0, 0, 0, 150), true);
@@ -749,6 +759,7 @@ namespace UnderPressure.Editor
             if (_settingsTabButtons == null || _settingsPages == null) return;
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
+            if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
                 var selected = index == _activeSettingsTab;

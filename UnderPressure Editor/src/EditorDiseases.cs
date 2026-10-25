@@ -21,6 +21,9 @@ namespace UnderPressure.Editor
         private RectTransform _settingsDiseaseSurface;
         private RectTransform _settingsDiseaseContent;
         private ScrollRect _settingsDiseaseScroll;
+        private Scrollbar _settingsDiseaseNativeScrollbarTemplate;
+        private Toggle _settingsDiseaseNativeToggleTemplate;
+        private bool _settingsDiseasesLoaded;
 
         private sealed class DiseaseChoice
         {
@@ -40,12 +43,15 @@ namespace UnderPressure.Editor
             // PreferencesScreen. Para esta pestaña solo se reutiliza su barra
             // visual; el área desplazable pertenece enteramente al editor.
             var surface = new GameObject("UP Disease Scroll", typeof(RectTransform),
-                typeof(ScrollRect));
+                typeof(Image), typeof(ScrollRect), typeof(ScenarioEditorWheelHandler));
             surface.transform.SetParent(page, false);
             _settingsDiseaseSurface = (RectTransform)surface.transform;
             Stretch(_settingsDiseaseSurface);
             _settingsDiseaseSurface.offsetMin = new Vector2(10f, 10f);
             _settingsDiseaseSurface.offsetMax = new Vector2(-10f, -10f);
+            var hitArea = surface.GetComponent<Image>();
+            hitArea.color = new Color(1f, 1f, 1f, 0f);
+            hitArea.raycastTarget = true;
 
             var viewport = new GameObject("Viewport", typeof(RectTransform),
                 typeof(RectMask2D));
@@ -68,15 +74,30 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll.content = _settingsDiseaseContent;
             _settingsDiseaseScroll.horizontal = false;
             _settingsDiseaseScroll.vertical = true;
-            _settingsDiseaseScroll.scrollSensitivity = 34f;
-            InstallNativeVerticalScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
+            _settingsDiseaseScroll.inertia = true;
+            _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
+            _settingsDiseaseScroll.scrollSensitivity = 0f;
+            InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
                 "UP Disease Native Scrollbar", 0f, 0f);
+            var wheel = surface.GetComponent<ScenarioEditorWheelHandler>();
+            wheel.Scroll = delta =>
+            {
+                if (_settingsDiseaseScroll == null ||
+                    _settingsDiseaseScroll.viewport == null ||
+                    _settingsDiseaseScroll.content == null) return;
+                var overflow = _settingsDiseaseScroll.content.rect.height -
+                               _settingsDiseaseScroll.viewport.rect.height;
+                if (overflow <= 0f) return;
+                _settingsDiseaseScroll.verticalNormalizedPosition = Mathf.Clamp01(
+                    _settingsDiseaseScroll.verticalNormalizedPosition + delta * 70f / overflow);
+            };
             _settingsDiseaseSurface.SetAsLastSibling();
         }
 
         private void RefreshDiseaseSettingsContents()
         {
             if (_settingsDiseaseContent == null || _level == null) return;
+            if (_settingsDiseasesLoaded) return;
             _settingsDiseaseCatalog = ScenarioDiseaseCatalog.Build(_level);
             _settingsIllnesses.Clear();
             var stored = ScenarioEditorStorage.CurrentScenarioSettings(_level).illnesses ??
@@ -87,6 +108,7 @@ namespace UnderPressure.Editor
                 if (copy != null) _settingsIllnesses.Add(copy);
             }
             NormalizeDiseaseRooms();
+            _settingsDiseasesLoaded = true;
             RebuildDiseaseSettingsContents();
             if (_settingsDiseaseScroll != null)
                 _settingsDiseaseScroll.verticalNormalizedPosition = 1f;
@@ -120,23 +142,59 @@ namespace UnderPressure.Editor
             {
                 if (!_settingsDiseaseExpanded.ContainsKey(room.Id))
                     _settingsDiseaseExpanded[room.Id] = true;
-                var values = _settingsIllnesses.Where(value => value.room == room.Id).ToList();
-                var expanded = _settingsDiseaseExpanded[room.Id];
-                var height = 66f + (expanded ? values.Count * 122f + 8f : 0f);
-                var section = NewImage("UP Disease Room " + room.Id, _settingsDiseaseContent,
-                    _style.ButtonSprite, new Color32(5, 132, 204, 255), false);
+                var section = BuildDiseaseRoomSection(room, top);
                 _settingsDiseaseSections.Add(section);
-                var sectionRect = (RectTransform)section.transform;
-                SetRect(sectionRect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
-                    new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
-                BuildDiseaseRoomHeader(section.transform, room, expanded);
-                if (expanded)
-                    for (var index = 0; index < values.Count; ++index)
-                        BuildDiseaseRow(section.transform, room, values[index], 68f + index * 122f);
-                top += height + 10f;
+                top += ((RectTransform)section.transform).sizeDelta.y + 10f;
             }
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, top));
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
+        }
+
+        private GameObject BuildDiseaseRoomSection(ScenarioDiseaseCatalog.Room room, float top)
+        {
+            var values = _settingsIllnesses.Where(value => value.room == room.Id).ToList();
+            var expanded = _settingsDiseaseExpanded[room.Id];
+            var height = 66f + (expanded ? values.Count * 122f + 8f : 0f);
+            var section = NewImage("UP Disease Room " + room.Id, _settingsDiseaseContent,
+                _style.ButtonSprite, new Color32(5, 132, 204, 255), false);
+            var sectionRect = (RectTransform)section.transform;
+            SetRect(sectionRect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
+                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            BuildDiseaseRoomHeader(section.transform, room, expanded);
+            if (expanded)
+                for (var index = 0; index < values.Count; ++index)
+                    BuildDiseaseRow(section.transform, room, values[index], 68f + index * 122f);
+            return section;
+        }
+
+        private void RebuildDiseaseRoom(ScenarioDiseaseCatalog.Room room)
+        {
+            if (_settingsDiseaseCatalog == null || _settingsDiseaseContent == null) return;
+            var index = _settingsDiseaseCatalog.Rooms.IndexOf(room);
+            if (index < 0 || index >= _settingsDiseaseSections.Count) return;
+            var previous = _settingsDiseaseSections[index];
+            var previousRect = previous != null ? previous.transform as RectTransform : null;
+            if (previousRect == null) return;
+            var top = -previousRect.anchoredPosition.y;
+            var previousHeight = previousRect.sizeDelta.y;
+            previous.SetActive(false);
+            Destroy(previous);
+
+            var replacement = BuildDiseaseRoomSection(room, top);
+            _settingsDiseaseSections[index] = replacement;
+            replacement.transform.SetSiblingIndex(index);
+            var replacementHeight = ((RectTransform)replacement.transform).sizeDelta.y;
+            var difference = replacementHeight - previousHeight;
+            if (Mathf.Abs(difference) > .01f)
+                for (var next = index + 1; next < _settingsDiseaseSections.Count; ++next)
+                {
+                    var nextRect = _settingsDiseaseSections[next]?.transform as RectTransform;
+                    if (nextRect != null)
+                        nextRect.anchoredPosition += new Vector2(0f, -difference);
+                }
+            _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                Mathf.Max(430f, _settingsDiseaseContent.rect.height + difference));
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
         }
 
@@ -184,7 +242,7 @@ namespace UnderPressure.Editor
                 _style.ButtonColor, () =>
                 {
                     _settingsDiseaseExpanded[room.Id] = !expanded;
-                    RebuildDiseaseSettingsContents();
+                    RebuildDiseaseRoom(room);
                 });
             SetTopRight((RectTransform)collapse.transform, 10f, 8f, 58f, 44f);
         }
@@ -334,18 +392,54 @@ namespace UnderPressure.Editor
             return input;
         }
 
+        private Scrollbar InstallDiseaseNativeScrollbar(RectTransform host, ScrollRect scroll,
+            string name, float top, float bottom)
+        {
+            var source = _settingsDiseaseNativeScrollbarTemplate;
+            if (host == null || scroll == null || source == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Enfermedades: no se encontro el Scrollbar vertical nativo de Ajustes.");
+                return null;
+            }
+
+            var scrollbar = Instantiate(source, host, false);
+            scrollbar.gameObject.name = name;
+            scrollbar.gameObject.SetActive(true);
+            scrollbar.transform.localScale = Vector3.one;
+            DisableLocalisers(scrollbar.transform);
+            var layout = scrollbar.GetComponent<LayoutElement>();
+            if (layout != null) layout.enabled = false;
+            scrollbar.onValueChanged.RemoveAllListeners();
+            scrollbar.interactable = true;
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+            var sourceRect = source.transform as RectTransform;
+            var width = Mathf.Clamp(sourceRect != null ? sourceRect.rect.width : 26f,
+                22f, 34f);
+            var rect = scrollbar.transform as RectTransform;
+            rect.anchorMin = new Vector2(1f, 0f);
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(1f, .5f);
+            rect.offsetMin = new Vector2(-width - 2f, bottom);
+            rect.offsetMax = new Vector2(-2f, -top);
+            scrollbar.transform.SetAsLastSibling();
+
+            scroll.verticalScrollbar = scrollbar;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarSpacing = 0f;
+            if (scroll.viewport != null)
+            {
+                var maximum = scroll.viewport.offsetMax;
+                maximum.x = -width - 4f;
+                scroll.viewport.offsetMax = maximum;
+            }
+            return scrollbar;
+        }
+
         private Toggle CreateDiseaseToggle(Transform parent, bool value, Action<bool> changed)
         {
-            Toggle native = null;
-            foreach (var screen in Resources.FindObjectsOfTypeAll<PreferencesScreen>())
-            {
-                if (screen == null) continue;
-                native = AccessTools.Field(typeof(PreferencesScreen), "_fullScreenToggle")?
-                    .GetValue(screen) as Toggle;
-                if (native != null &&
-                    (native.targetGraphic == null || native.graphic == null)) native = null;
-                if (native != null) break;
-            }
+            var native = _settingsDiseaseNativeToggleTemplate;
             if (native == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
@@ -457,8 +551,9 @@ namespace UnderPressure.Editor
 
             scroll.viewport = viewportRect;
             scroll.content = contentRect;
-            InstallNativeVerticalScrollbar(templateRect, scroll,
-                "UP Disease Dropdown Native Scrollbar", 2f, 2f);
+            if (options.Count > 7)
+                InstallDiseaseNativeScrollbar(templateRect, scroll,
+                    "UP Disease Dropdown Native Scrollbar", 2f, 2f);
             dropdown.targetGraphic = root.GetComponent<Image>();
             dropdown.template = templateRect;
             dropdown.captionText = caption;
@@ -506,6 +601,9 @@ namespace UnderPressure.Editor
             _settingsDiseaseSurface = null;
             _settingsDiseaseContent = null;
             _settingsDiseaseScroll = null;
+            _settingsDiseaseNativeScrollbarTemplate = null;
+            _settingsDiseaseNativeToggleTemplate = null;
+            _settingsDiseasesLoaded = false;
         }
     }
 }
