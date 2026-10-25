@@ -90,7 +90,7 @@ namespace UnderPressure.Editor
         private Transform[] _settingsTabRoots;
         private Transform[] _settingsTabFolderBackgrounds;
         private GameObject[] _settingsPages;
-        private Button _settingsCloseButton;
+        private Transform _settingsCloseButton;
         private TMP_InputField _settingsDisplayName;
         private TMP_InputField _settingsDescriptionPerStar;
         private TMP_InputField _settingsInitialBalance;
@@ -762,7 +762,6 @@ namespace UnderPressure.Editor
             if (_settingsTabButtons == null || _settingsPages == null) return;
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
-            if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
                 var selected = index == _activeSettingsTab;
@@ -779,10 +778,15 @@ namespace UnderPressure.Editor
                 if (_settingsPages[index] != null)
                     _settingsPages[index].SetActive(selected);
             }
+            if (_activeSettingsTab == 1)
+            {
+                Canvas.ForceUpdateCanvases();
+                RefreshDiseaseSettingsContents();
+            }
             // PreferencesScreen eleva la carpeta activa para que su borde quede encima.
             _settingsTabRoots[_activeSettingsTab]?.SetAsLastSibling();
             _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
-            _settingsCloseButton?.transform.SetAsLastSibling();
+            _settingsCloseButton?.SetAsLastSibling();
         }
 
         private static T GetPreferencesField<T>(PreferencesScreen screen, string name)
@@ -906,21 +910,29 @@ namespace UnderPressure.Editor
             LayoutRebuilder.ForceRebuildLayoutImmediate(commonFolder);
         }
 
-        private Button CreateNativeSettingsCloseButton(Transform parent)
+        private Transform CreateNativeSettingsCloseButton(Transform parent)
         {
             if (parent == null) return null;
             var redSprite = Resources.FindObjectsOfTypeAll<Sprite>()
                 .FirstOrDefault(candidate => candidate != null &&
                     candidate.name == "T_UI_Button_Close_Red");
             var buttons = Resources.FindObjectsOfTypeAll<Button>();
-            var template = buttons.FirstOrDefault(candidate => candidate != null &&
+            var buttonTemplate = buttons.FirstOrDefault(candidate => candidate != null &&
                 candidate.GetComponentsInChildren<Image>(true).Any(image =>
                     IsNativeCloseSprite(image, "T_UI_Button_Close_Red")));
-            if (template == null)
-                template = buttons.FirstOrDefault(candidate => candidate != null &&
+            if (buttonTemplate == null)
+                buttonTemplate = buttons.FirstOrDefault(candidate => candidate != null &&
                     candidate.GetComponentsInChildren<Image>(true).Any(image =>
                         IsNativeCloseSprite(image, "T_UI_Button_Close")));
-            if (template == null)
+            var dynamicButtons = Resources.FindObjectsOfTypeAll<DynamicButton>();
+            var dynamicTemplate = dynamicButtons.FirstOrDefault(candidate => candidate != null &&
+                candidate.GetComponentsInChildren<Image>(true).Any(image =>
+                    IsNativeCloseSprite(image, "T_UI_Button_Close_Red")));
+            if (dynamicTemplate == null)
+                dynamicTemplate = dynamicButtons.FirstOrDefault(candidate => candidate != null &&
+                    candidate.GetComponentsInChildren<Image>(true).Any(image =>
+                        IsNativeCloseSprite(image, "T_UI_Button_Close")));
+            if (buttonTemplate == null && dynamicTemplate == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
                     "Ajustes del escenario: no se encontro ningun boton X nativo.");
@@ -929,15 +941,17 @@ namespace UnderPressure.Editor
 
             // Se clona el objeto completo: sprite rojo, sombra, animador y escala
             // nativa. Solo cambian el padre, el anclaje y la accion del clic.
-            var button = Instantiate(template, parent, false);
-            button.gameObject.name = "UP Native Settings Close";
-            button.gameObject.SetActive(true);
-            var rect = button.transform as RectTransform;
+            var closeObject = buttonTemplate != null
+                ? Instantiate(buttonTemplate.gameObject, parent, false)
+                : Instantiate(dynamicTemplate.gameObject, parent, false);
+            closeObject.name = "UP Native Settings Close";
+            closeObject.SetActive(true);
+            var rect = closeObject.transform as RectTransform;
             rect.anchorMin = Vector2.one;
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(.5f, .5f);
             rect.anchoredPosition = new Vector2(-12f, -12f);
-            var closeImage = button.GetComponentsInChildren<Image>(true)
+            var closeImage = closeObject.GetComponentsInChildren<Image>(true)
                 .FirstOrDefault(image => IsNativeCloseSprite(image,
                     "T_UI_Button_Close_Red") || IsNativeCloseSprite(image,
                     "T_UI_Button_Close"));
@@ -946,11 +960,23 @@ namespace UnderPressure.Editor
                 closeImage.overrideSprite = redSprite;
                 closeImage.sprite = redSprite;
             }
-            DisableLocalisers(button.transform);
-            button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(AcceptScenarioSettings);
-            StandardiseClickSound(button);
-            return button;
+            DisableLocalisers(closeObject.transform);
+            var button = closeObject.GetComponent<Button>();
+            if (button != null)
+            {
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(AcceptScenarioSettings);
+                StandardiseClickSound(button);
+            }
+            var dynamicButton = closeObject.GetComponent<DynamicButton>();
+            if (dynamicButton != null)
+            {
+                dynamicButton.onPrimaryDown.RemoveAllListeners();
+                dynamicButton.onSecondaryDown.RemoveAllListeners();
+                dynamicButton.onPrimaryDownFailed.RemoveAllListeners();
+                dynamicButton.onPrimaryDown.AddListener(AcceptScenarioSettings);
+            }
+            return closeObject.transform;
         }
 
         private static bool IsNativeCloseSprite(Image image, string spriteName)
@@ -1170,7 +1196,10 @@ namespace UnderPressure.Editor
         private static void ArrangeCompactWorkshopField(Transform row, Transform inputRoot,
             float inputWidth)
         {
-            var inputRect = inputRoot as RectTransform;
+            var inputBranch = inputRoot;
+            while (inputBranch.parent != null && inputBranch.parent != row)
+                inputBranch = inputBranch.parent;
+            var inputRect = inputBranch as RectTransform;
             if (inputRect != null)
             {
                 var minimum = inputRect.anchorMin;
@@ -1186,11 +1215,16 @@ namespace UnderPressure.Editor
                 inputRect.sizeDelta = new Vector2(inputWidth, inputRect.sizeDelta.y);
             }
 
-            var label = row.GetComponentsInChildren<TMP_Text>(true)
+            var tmpLabel = row.GetComponentsInChildren<TMP_Text>(true)
                 .FirstOrDefault(text => text != null &&
                     !text.transform.IsChildOf(inputRoot));
-            if (label == null) return;
-            var labelRect = label.rectTransform;
+            var regularLabel = tmpLabel == null
+                ? row.GetComponentsInChildren<Text>(true).FirstOrDefault(text => text != null &&
+                    !text.transform.IsChildOf(inputRoot))
+                : null;
+            var labelRect = tmpLabel != null
+                ? tmpLabel.rectTransform : regularLabel?.rectTransform;
+            if (labelRect == null) return;
             var labelMin = labelRect.anchorMin;
             var labelMax = labelRect.anchorMax;
             labelMin.x = 0f;
@@ -1199,8 +1233,16 @@ namespace UnderPressure.Editor
             labelRect.anchorMax = labelMax;
             labelRect.offsetMin = new Vector2(12f, labelRect.offsetMin.y);
             labelRect.offsetMax = new Vector2(-inputWidth - 22f, labelRect.offsetMax.y);
-            label.enableWordWrapping = false;
-            label.overflowMode = TextOverflowModes.Ellipsis;
+            if (tmpLabel != null)
+            {
+                tmpLabel.enableWordWrapping = false;
+                tmpLabel.overflowMode = TextOverflowModes.Ellipsis;
+            }
+            if (regularLabel != null)
+            {
+                regularLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+                regularLabel.verticalOverflow = VerticalWrapMode.Truncate;
+            }
         }
 
         private static bool TryGetWorkshopFieldTemplate(bool multiline,
