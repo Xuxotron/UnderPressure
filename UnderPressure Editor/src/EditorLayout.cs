@@ -888,48 +888,28 @@ namespace UnderPressure.Editor
             var template = Resources.FindObjectsOfTypeAll<Button>()
                 .FirstOrDefault(candidate => candidate != null && candidate.image != null &&
                     ((candidate.image.overrideSprite != null &&
-                      candidate.image.overrideSprite.name == "T_UI_Button_Close") ||
+                      candidate.image.overrideSprite.name == "T_UI_Button_Close_Red") ||
                      (candidate.image.sprite != null &&
-                      candidate.image.sprite.name == "T_UI_Button_Close")));
-            var nativeSprite = Resources.FindObjectsOfTypeAll<Sprite>()
-                .FirstOrDefault(candidate => candidate != null &&
-                    candidate.name == "T_UI_Button_Close");
-            if (nativeSprite == null && template != null)
-                nativeSprite = template.image.overrideSprite ?? template.image.sprite;
-            if (nativeSprite == null)
+                      candidate.image.sprite.name == "T_UI_Button_Close_Red")));
+            if (template == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Ajustes del escenario: no se encontro el boton X nativo.");
+                    "Ajustes del escenario: no se encontro el boton X rojo nativo.");
                 return null;
             }
 
-            var closeObject = new GameObject("UP Native Settings Close", typeof(RectTransform),
-                typeof(CanvasRenderer), typeof(Image), typeof(Button));
-            closeObject.transform.SetParent(parent, false);
-            var rect = (RectTransform)closeObject.transform;
+            // Se clona el objeto completo: sprite rojo, sombra, animador y escala
+            // nativa. Solo cambian el padre, el anclaje y la accion del clic.
+            var button = Instantiate(template, parent, false);
+            button.gameObject.name = "UP Native Settings Close";
+            button.gameObject.SetActive(true);
+            var rect = button.transform as RectTransform;
             rect.anchorMin = Vector2.one;
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(.5f, .5f);
             rect.anchoredPosition = new Vector2(-12f, -12f);
-            rect.sizeDelta = new Vector2(45f, 45f);
-
-            var image = closeObject.GetComponent<Image>();
-            image.sprite = nativeSprite;
-            image.type = template != null ? template.image.type : Image.Type.Simple;
-            image.color = template != null ? template.image.color : Color.white;
-            image.material = template != null ? template.image.material : null;
-            image.preserveAspect = template == null || template.image.preserveAspect;
-            image.raycastTarget = true;
-
-            var button = closeObject.GetComponent<Button>();
-            button.targetGraphic = image;
-            if (template != null)
-            {
-                button.transition = template.transition;
-                button.colors = template.colors;
-                button.spriteState = template.spriteState;
-                button.navigation = template.navigation;
-            }
+            DisableLocalisers(button.transform);
+            button.onClick.RemoveAllListeners();
             button.onClick.AddListener(AcceptScenarioSettings);
             StandardiseClickSound(button);
             return button;
