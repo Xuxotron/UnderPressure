@@ -61,6 +61,13 @@ namespace UnderPressure.Editor
             nativeScroll.gameObject.SetActive(true);
             _settingsDiseaseSurface = nativeScroll.transform as RectTransform;
             _settingsDiseaseContent = nativeScroll.content;
+            Stretch(_settingsDiseaseSurface);
+            _settingsDiseaseSurface.offsetMin = new Vector2(10f, 10f);
+            _settingsDiseaseSurface.offsetMax = new Vector2(-10f, -10f);
+            nativeScroll.viewport.gameObject.SetActive(true);
+            _settingsDiseaseContent.gameObject.SetActive(true);
+            _settingsDiseaseContent.localScale = Vector3.one;
+            _settingsDiseaseContent.localRotation = Quaternion.identity;
             foreach (var layout in _settingsDiseaseContent.GetComponents<LayoutGroup>())
                 layout.enabled = false;
             var fitter = _settingsDiseaseContent.GetComponent<ContentSizeFitter>();
@@ -144,7 +151,14 @@ namespace UnderPressure.Editor
             }
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, top));
+            _settingsDiseaseContent.gameObject.SetActive(true);
+            _settingsDiseaseContent.anchoredPosition = Vector2.zero;
+            Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Enfermedades: renderizadas " + _settingsDiseaseSections.Count +
+                " salas en el contenido nativo (" + _settingsDiseaseContent.rect.width +
+                "x" + _settingsDiseaseContent.rect.height + ").");
         }
 
         private GameObject BuildDiseaseRoomSection(ScenarioDiseaseCatalog.Room room, float top)

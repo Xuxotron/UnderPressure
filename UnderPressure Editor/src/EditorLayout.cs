@@ -909,16 +909,21 @@ namespace UnderPressure.Editor
         private Button CreateNativeSettingsCloseButton(Transform parent)
         {
             if (parent == null) return null;
-            var template = Resources.FindObjectsOfTypeAll<Button>()
-                .FirstOrDefault(candidate => candidate != null && candidate.image != null &&
-                    ((candidate.image.overrideSprite != null &&
-                      candidate.image.overrideSprite.name == "T_UI_Button_Close_Red") ||
-                     (candidate.image.sprite != null &&
-                      candidate.image.sprite.name == "T_UI_Button_Close_Red")));
+            var redSprite = Resources.FindObjectsOfTypeAll<Sprite>()
+                .FirstOrDefault(candidate => candidate != null &&
+                    candidate.name == "T_UI_Button_Close_Red");
+            var buttons = Resources.FindObjectsOfTypeAll<Button>();
+            var template = buttons.FirstOrDefault(candidate => candidate != null &&
+                candidate.GetComponentsInChildren<Image>(true).Any(image =>
+                    IsNativeCloseSprite(image, "T_UI_Button_Close_Red")));
+            if (template == null)
+                template = buttons.FirstOrDefault(candidate => candidate != null &&
+                    candidate.GetComponentsInChildren<Image>(true).Any(image =>
+                        IsNativeCloseSprite(image, "T_UI_Button_Close")));
             if (template == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Ajustes del escenario: no se encontro el boton X rojo nativo.");
+                    "Ajustes del escenario: no se encontro ningun boton X nativo.");
                 return null;
             }
 
@@ -932,11 +937,28 @@ namespace UnderPressure.Editor
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(.5f, .5f);
             rect.anchoredPosition = new Vector2(-12f, -12f);
+            var closeImage = button.GetComponentsInChildren<Image>(true)
+                .FirstOrDefault(image => IsNativeCloseSprite(image,
+                    "T_UI_Button_Close_Red") || IsNativeCloseSprite(image,
+                    "T_UI_Button_Close"));
+            if (redSprite != null && closeImage != null)
+            {
+                closeImage.overrideSprite = redSprite;
+                closeImage.sprite = redSprite;
+            }
             DisableLocalisers(button.transform);
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(AcceptScenarioSettings);
             StandardiseClickSound(button);
             return button;
+        }
+
+        private static bool IsNativeCloseSprite(Image image, string spriteName)
+        {
+            if (image == null || string.IsNullOrEmpty(spriteName)) return false;
+            return string.Equals(image.overrideSprite?.name, spriteName,
+                       StringComparison.Ordinal) ||
+                   string.Equals(image.sprite?.name, spriteName, StringComparison.Ordinal);
         }
 
         private void ApplyNativeSettingsPalette(Transform root)
