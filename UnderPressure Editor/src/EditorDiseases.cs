@@ -34,8 +34,19 @@ namespace UnderPressure.Editor
             if (content == null) return;
             _settingsDiseaseContent = content;
             _settingsDiseaseScroll = page.GetComponentInChildren<ScrollRect>(true);
+            // El Content del panel de vídeo usa anclajes elásticos controlados
+            // por su layout nativo. Tras retirar ese layout, esos anclajes dejan
+            // el origen fuera del Viewport y todos los controles quedan
+            // recortados aunque existan. Esta página usa un lienzo vertical
+            // explícito, anclado al borde superior del Viewport.
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = Vector2.one;
+            content.pivot = new Vector2(.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = new Vector2(0f, 430f);
             if (_settingsDiseaseScroll != null)
             {
+                _settingsDiseaseScroll.content = content;
                 _settingsDiseaseScroll.horizontal = false;
                 _settingsDiseaseScroll.vertical = true;
                 _settingsDiseaseScroll.scrollSensitivity = 34f;
