@@ -24,6 +24,8 @@ namespace UnderPressure.Editor
             internal RoomDefinition Definition;
             internal string Name;
             internal Sprite Icon;
+            internal DLCItemDefinition Dlc;
+            internal int DlcOrder = int.MaxValue;
             internal readonly List<Disease> Diseases = new List<Disease>();
         }
 
@@ -38,6 +40,18 @@ namespace UnderPressure.Editor
         internal static Snapshot Build(Level level)
         {
             var snapshot = new Snapshot();
+            var dlcOrder = new Dictionary<uint, int>();
+            var availableDlc = level?.App?.DLCManager?.AvailableItems;
+            if (availableDlc != null)
+            {
+                var index = 0;
+                foreach (var shared in availableDlc)
+                {
+                    var dlc = shared?.Instance;
+                    if (dlc != null && !dlcOrder.ContainsKey(dlc.AppID))
+                        dlcOrder.Add(dlc.AppID, index++);
+                }
+            }
             var levels = new List<LevelConfig>();
             if (level?.Config != null) levels.Add(level.Config);
             var options = level?.App?.SandboxSettingsConfig?.LevelOptions;
@@ -108,12 +122,16 @@ namespace UnderPressure.Editor
                     disease.Rooms.Add(definition);
                     if (!rooms.TryGetValue(definition, out var room))
                     {
+                        var dlc = definition.DlcPackRequired?.Instance;
                         room = new Room
                         {
                             Definition = definition,
                             Id = RoomId(treatment._room),
                             Name = RoomName(definition),
-                            Icon = definition._icon
+                            Icon = definition._icon,
+                            Dlc = dlc,
+                            DlcOrder = dlc != null && dlcOrder.TryGetValue(dlc.AppID,
+                                out var order) ? order : int.MaxValue
                         };
                         rooms.Add(definition, room);
                         snapshot.Rooms.Add(room);
@@ -124,8 +142,21 @@ namespace UnderPressure.Editor
 
             snapshot.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                 StringComparison.CurrentCultureIgnoreCase));
-            snapshot.Rooms.Sort((left, right) => string.Compare(left.Name, right.Name,
-                StringComparison.CurrentCultureIgnoreCase));
+            snapshot.Rooms.Sort((left, right) =>
+            {
+                var leftDlc = left.Dlc != null;
+                var rightDlc = right.Dlc != null;
+                if (leftDlc != rightDlc) return leftDlc ? 1 : -1;
+                if (leftDlc)
+                {
+                    var order = left.DlcOrder.CompareTo(right.DlcOrder);
+                    if (order != 0) return order;
+                    order = left.Dlc.AppID.CompareTo(right.Dlc.AppID);
+                    if (order != 0) return order;
+                }
+                return string.Compare(left.Name, right.Name,
+                    StringComparison.CurrentCultureIgnoreCase);
+            });
             foreach (var room in snapshot.Rooms)
                 room.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                     StringComparison.CurrentCultureIgnoreCase));

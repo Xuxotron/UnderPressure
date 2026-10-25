@@ -1038,19 +1038,20 @@ namespace UnderPressure.Editor
                 false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
-                .02f, .32f);
+                .02f, .32f, 100f);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
-                .35f, .65f);
+                .35f, .65f, 100f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
-                .68f, .98f);
+                .68f, .98f, 100f);
             RefreshScenarioSettingsFields();
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
             float top, float height, bool multiline, bool integer = false,
-            float anchorMinX = .02f, float anchorMaxX = .98f)
+            float anchorMinX = .02f, float anchorMaxX = .98f,
+            float inputWidth = -1f)
         {
             GameObject panelTemplate;
             Component nativeInputTemplate;
@@ -1088,6 +1089,8 @@ namespace UnderPressure.Editor
 
             SetWorkshopFieldLabel(row.transform, fieldObject.transform,
                 EditorLocalization.Get(labelKey));
+            if (inputWidth > 0f)
+                ArrangeCompactWorkshopField(row.transform, fieldObject.transform, inputWidth);
             foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
                 oldText.gameObject.SetActive(false);
 
@@ -1137,6 +1140,42 @@ namespace UnderPressure.Editor
             selection.a = .35f;
             input.selectionColor = selection;
             return input;
+        }
+
+        private static void ArrangeCompactWorkshopField(Transform row, Transform inputRoot,
+            float inputWidth)
+        {
+            var inputRect = inputRoot as RectTransform;
+            if (inputRect != null)
+            {
+                var minimum = inputRect.anchorMin;
+                var maximum = inputRect.anchorMax;
+                var pivot = inputRect.pivot;
+                minimum.x = 1f;
+                maximum.x = 1f;
+                pivot.x = 1f;
+                inputRect.anchorMin = minimum;
+                inputRect.anchorMax = maximum;
+                inputRect.pivot = pivot;
+                inputRect.anchoredPosition = new Vector2(-10f, inputRect.anchoredPosition.y);
+                inputRect.sizeDelta = new Vector2(inputWidth, inputRect.sizeDelta.y);
+            }
+
+            var label = row.GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault(text => text != null &&
+                    !text.transform.IsChildOf(inputRoot));
+            if (label == null) return;
+            var labelRect = label.rectTransform;
+            var labelMin = labelRect.anchorMin;
+            var labelMax = labelRect.anchorMax;
+            labelMin.x = 0f;
+            labelMax.x = 1f;
+            labelRect.anchorMin = labelMin;
+            labelRect.anchorMax = labelMax;
+            labelRect.offsetMin = new Vector2(12f, labelRect.offsetMin.y);
+            labelRect.offsetMax = new Vector2(-inputWidth - 22f, labelRect.offsetMax.y);
+            label.enableWordWrapping = false;
+            label.overflowMode = TextOverflowModes.Ellipsis;
         }
 
         private static bool TryGetWorkshopFieldTemplate(bool multiline,

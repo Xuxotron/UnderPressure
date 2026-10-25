@@ -37,44 +37,35 @@ namespace UnderPressure.Editor
                 _settingsPages[1] == null) return;
             var page = _settingsPages[1].transform;
             var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
-            if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
+            if (nativeScroll == null || nativeScroll.viewport == null ||
+                nativeScroll.content == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Enfermedades: la pagina de Ajustes no contiene su ScrollRect nativo completo.");
+                return;
+            }
 
-            // La página clonada conserva animadores y máscaras internas de
-            // PreferencesScreen. Para esta pestaña solo se reutiliza su barra
-            // visual; el área desplazable pertenece enteramente al editor.
-            var surface = new GameObject("UP Disease Scroll", typeof(RectTransform),
-                typeof(ScrollRect));
-            surface.transform.SetParent(page, false);
-            _settingsDiseaseSurface = (RectTransform)surface.transform;
-            Stretch(_settingsDiseaseSurface);
-            _settingsDiseaseSurface.offsetMin = new Vector2(10f, 10f);
-            _settingsDiseaseSurface.offsetMax = new Vector2(-10f, -10f);
-            var viewport = new GameObject("Viewport", typeof(RectTransform),
-                typeof(RectMask2D));
-            viewport.transform.SetParent(surface.transform, false);
-            var viewportRect = (RectTransform)viewport.transform;
-            Stretch(viewportRect);
-            viewportRect.offsetMax = Vector2.zero;
-
-            var content = new GameObject("Content", typeof(RectTransform));
-            content.transform.SetParent(viewport.transform, false);
-            _settingsDiseaseContent = (RectTransform)content.transform;
+            // Se conserva la estructura completa del desplazamiento de Ajustes:
+            // ScrollRect, viewport, mascara, fondo receptor y barra.
+            nativeScroll.gameObject.SetActive(true);
+            _settingsDiseaseSurface = nativeScroll.transform as RectTransform;
+            _settingsDiseaseContent = nativeScroll.content;
             _settingsDiseaseContent.anchorMin = new Vector2(0f, 1f);
             _settingsDiseaseContent.anchorMax = Vector2.one;
             _settingsDiseaseContent.pivot = new Vector2(.5f, 1f);
             _settingsDiseaseContent.anchoredPosition = Vector2.zero;
             _settingsDiseaseContent.sizeDelta = new Vector2(0f, 430f);
 
-            _settingsDiseaseScroll = surface.GetComponent<ScrollRect>();
-            _settingsDiseaseScroll.viewport = viewportRect;
-            _settingsDiseaseScroll.content = _settingsDiseaseContent;
+            _settingsDiseaseScroll = nativeScroll;
             _settingsDiseaseScroll.horizontal = false;
             _settingsDiseaseScroll.vertical = true;
             _settingsDiseaseScroll.inertia = true;
             _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
-            _settingsDiseaseScroll.scrollSensitivity = 34f;
-            InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
-                "UP Disease Native Scrollbar", 0f, 0f);
+            _settingsDiseaseScroll.scrollSensitivity = 120f;
+            var viewportGraphic = _settingsDiseaseScroll.viewport.GetComponent<Graphic>();
+            if (viewportGraphic != null) viewportGraphic.raycastTarget = true;
+            ConfigureDiseaseNativeScrollbar(_settingsDiseaseScroll.verticalScrollbar,
+                _settingsDiseaseScroll);
             _settingsDiseaseSurface.SetAsLastSibling();
         }
 
@@ -221,6 +212,14 @@ namespace UnderPressure.Editor
                     AddDisease(room, choices[selector.value].Id);
                 });
             SetTopLeft((RectTransform)add.transform, 955f, 8f, 145f, 44f);
+
+            if (room.Dlc?.Icon != null)
+            {
+                var dlcIcon = NewImage("Icono DLC", header.transform, room.Dlc.Icon,
+                    Color.white, false);
+                SetTopLeft((RectTransform)dlcIcon.transform, 1110f, 8f, 44f, 44f);
+                dlcIcon.GetComponent<Image>().preserveAspect = true;
+            }
 
             var collapse = CreateDiseaseButton(header.transform, expanded ? "▲" : "▼",
                 _style.ButtonColor, () =>
@@ -408,26 +407,7 @@ namespace UnderPressure.Editor
             scrollbar.onValueChanged.RemoveAllListeners();
             scrollbar.interactable = true;
             scrollbar.direction = Scrollbar.Direction.BottomToTop;
-
-            // El componente y sus sprites siguen siendo los nativos. Solo se
-            // fija el tinte claro solicitado para que el asa no desaparezca
-            // visualmente cuando el control no tiene el foco.
-            var handleGraphic = scrollbar.handleRect == null
-                ? null : scrollbar.handleRect.GetComponent<Graphic>();
-            if (handleGraphic != null)
-            {
-                handleGraphic.enabled = true;
-                handleGraphic.color = Color.white;
-                scrollbar.targetGraphic = handleGraphic;
-            }
-            var colors = scrollbar.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = Color.white;
-            colors.pressedColor = new Color(.82f, .82f, .82f, 1f);
-            colors.selectedColor = Color.white;
-            colors.disabledColor = new Color(.72f, .72f, .72f, 1f);
-            colors.colorMultiplier = 1f;
-            scrollbar.colors = colors;
+            ConfigureDiseaseNativeScrollbar(scrollbar, scroll);
 
             var sourceRect = source.transform as RectTransform;
             var width = Mathf.Clamp(sourceRect != null ? sourceRect.rect.width : 26f,
@@ -450,6 +430,34 @@ namespace UnderPressure.Editor
                 scroll.viewport.offsetMax = maximum;
             }
             return scrollbar;
+        }
+
+        private static void ConfigureDiseaseNativeScrollbar(Scrollbar scrollbar,
+            ScrollRect scroll)
+        {
+            if (scrollbar == null || scroll == null) return;
+            scrollbar.gameObject.SetActive(true);
+            scrollbar.interactable = true;
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            var handleGraphic = scrollbar.handleRect == null
+                ? null : scrollbar.handleRect.GetComponent<Graphic>();
+            if (handleGraphic != null)
+            {
+                handleGraphic.enabled = true;
+                handleGraphic.color = Color.white;
+                scrollbar.targetGraphic = handleGraphic;
+            }
+            var colors = scrollbar.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.pressedColor = new Color(.82f, .82f, .82f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(.72f, .72f, .72f, 1f);
+            colors.colorMultiplier = 1f;
+            scrollbar.colors = colors;
+            scroll.verticalScrollbar = scrollbar;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            scroll.verticalScrollbarSpacing = 0f;
         }
 
         private Toggle CreateDiseaseToggle(Transform parent, bool value, Action<bool> changed)
