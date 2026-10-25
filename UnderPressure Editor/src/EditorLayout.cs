@@ -427,19 +427,27 @@ namespace UnderPressure.Editor
 
         internal static void RegisterPlotRow(PlotSelectionItem row)
         {
-            if (_active == null || row == null) return;
-            _active.ApplyPlotRow(row);
-            _active.RefreshPlotPanelForCount();
+            var active = _active;
+            if (active == null || active._closing || active._menu == null ||
+                active._plotViewport == null || row == null) return;
+            active.ApplyPlotRow(row);
+            active.RefreshPlotPanelForCount();
         }
 
         internal static void NotifyPlotListChanged()
         {
-            _active?.RefreshPlotPanelForCount();
+            var active = _active;
+            if (active == null || active._closing || active._menu == null ||
+                active._plotViewport == null) return;
+            active.RefreshPlotPanelForCount();
         }
 
         private void Initialise(EditHospitalMenu menu, Level level,
             ScenarioEditorStorageMenu storage, Button template, RectTransform plotViewport)
         {
+            // El Canvas raiz sobrevive al editor y reutiliza este componente.
+            // Cada sesion debe rearmar expresamente su ciclo de vida.
+            _closing = false;
             _active = this;
             _menu = menu;
             _level = level;
@@ -1512,8 +1520,10 @@ namespace UnderPressure.Editor
 
         private void RefreshPlotPanelForCount()
         {
+            if (_closing || _menu == null || _plotViewport == null || _plotPanel == null)
+                return;
             _resetPlotScroll = true;
-            ResizePlotScrollContent(_plotViewport?.GetComponent<ScrollRect>());
+            ResizePlotScrollContent(_plotViewport.GetComponent<ScrollRect>());
             ApplyLayout(true);
         }
 
@@ -2150,6 +2160,9 @@ namespace UnderPressure.Editor
         internal static void Shutdown()
         {
             var active = _active;
+            // Invalidar primero la entrada estatica: aunque la instancia ya se
+            // estuviera cerrando, ninguna nueva fila puede usar sus referencias.
+            _active = null;
             if (active == null) return;
             // ReleaseUi devuelve algunos controles nativos a su padre original.
             // Ocultar antes el menu evita que reaparezcan durante ese frame.
@@ -2159,6 +2172,7 @@ namespace UnderPressure.Editor
 
         private void ReleaseUi()
         {
+            if (ReferenceEquals(_active, this)) _active = null;
             if (_closing) return;
             _closing = true;
             // Ocultar los controles inmediatamente: Destroy se ejecuta al
@@ -2207,7 +2221,26 @@ namespace UnderPressure.Editor
             _originalRects.Clear();
             _originalLayouts.Clear();
             _styledButtons.Clear();
-            if (ReferenceEquals(_active, this)) _active = null;
+            _createdRaycasters.Clear();
+            _createdCanvases.Clear();
+            _createdLayouts.Clear();
+            _root = null;
+            _plotPanel = null;
+            _plotViewport = null;
+            _objectsMenu = null;
+            _settingsOverlay = null;
+            _settingsCloseButton = null;
+            _settingsTabButtons = null;
+            _settingsTabAnimators = null;
+            _settingsTabRoots = null;
+            _settingsTabFolderBackgrounds = null;
+            _settingsPages = null;
+            _style = null;
+            _storage = null;
+            _menu = null;
+            _level = null;
+            _canvas = null;
+            _canvasRect = null;
         }
 
         // PALETA CENTRAL: edita aqui el azul del fondo de paneles,
