@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using HarmonyLib;
+using TH20;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -32,7 +34,6 @@ namespace UnderPressure.Editor
                 _settingsPages[1] == null) return;
             var page = _settingsPages[1].transform;
             var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
-            var nativeScrollbar = nativeScroll?.verticalScrollbar;
             if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
 
             // La página clonada conserva animadores y máscaras internas de
@@ -51,7 +52,7 @@ namespace UnderPressure.Editor
             viewport.transform.SetParent(surface.transform, false);
             var viewportRect = (RectTransform)viewport.transform;
             Stretch(viewportRect);
-            viewportRect.offsetMax = new Vector2(-28f, 0f);
+            viewportRect.offsetMax = Vector2.zero;
 
             var content = new GameObject("Content", typeof(RectTransform));
             content.transform.SetParent(viewport.transform, false);
@@ -62,29 +63,14 @@ namespace UnderPressure.Editor
             _settingsDiseaseContent.anchoredPosition = Vector2.zero;
             _settingsDiseaseContent.sizeDelta = new Vector2(0f, 430f);
 
-            Scrollbar scrollbar = null;
-            if (nativeScrollbar != null)
-            {
-                scrollbar = Instantiate(nativeScrollbar, surface.transform, false);
-                scrollbar.gameObject.name = "UP Disease Native Scrollbar";
-                scrollbar.gameObject.SetActive(true);
-                var scrollbarRect = scrollbar.transform as RectTransform;
-                scrollbarRect.anchorMin = new Vector2(1f, 0f);
-                scrollbarRect.anchorMax = Vector2.one;
-                scrollbarRect.pivot = new Vector2(1f, .5f);
-                scrollbarRect.anchoredPosition = Vector2.zero;
-                scrollbarRect.sizeDelta = new Vector2(22f, 0f);
-            }
-
             _settingsDiseaseScroll = surface.GetComponent<ScrollRect>();
             _settingsDiseaseScroll.viewport = viewportRect;
             _settingsDiseaseScroll.content = _settingsDiseaseContent;
             _settingsDiseaseScroll.horizontal = false;
             _settingsDiseaseScroll.vertical = true;
             _settingsDiseaseScroll.scrollSensitivity = 34f;
-            _settingsDiseaseScroll.verticalScrollbar = scrollbar;
-            _settingsDiseaseScroll.verticalScrollbarVisibility =
-                ScrollRect.ScrollbarVisibility.Permanent;
+            InstallNativeVerticalScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
+                "UP Disease Native Scrollbar", 0f, 0f);
             _settingsDiseaseSurface.SetAsLastSibling();
         }
 
@@ -238,12 +224,14 @@ namespace UnderPressure.Editor
                 855f, 8f, 120f);
             var deprecated = CreateDiseaseToggle(panel.transform, value.deprecated,
                 state => value.deprecated = state);
-            SetTopLeft((RectTransform)deprecated.transform, 975f, 12f, 30f, 30f);
+            if (deprecated != null)
+                SetTopLeft((RectTransform)deprecated.transform, 975f, 12f, 30f, 30f);
             AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.unlocked",
                 1020f, 8f, 105f);
             var unlocked = CreateDiseaseToggle(panel.transform, value.unlocked,
                 state => value.unlocked = state);
-            SetTopLeft((RectTransform)unlocked.transform, 1125f, 12f, 30f, 30f);
+            if (unlocked != null)
+                SetTopLeft((RectTransform)unlocked.transform, 1125f, 12f, 30f, 30f);
 
             CreateDiseaseInteger(panel.transform,
                 "editor.scenario_settings.diseases.min_weight", value.minWeight,
@@ -294,6 +282,7 @@ namespace UnderPressure.Editor
         {
             AddFieldLabel(parent, key, x, 64f, 135f);
             var input = CreateDiseaseInput(parent, current.ToString(CultureInfo.InvariantCulture));
+            if (input == null) return;
             SetTopLeft((RectTransform)input.transform, x + 140f, 64f, 100f, 36f);
             input.onEndEdit.AddListener(text =>
             {
@@ -321,42 +310,66 @@ namespace UnderPressure.Editor
             return (RectTransform)field.transform;
         }
 
-        private TMP_InputField CreateDiseaseInput(Transform parent, string value)
+        private InputField CreateDiseaseInput(Transform parent, string value)
         {
-            var root = NewImage("Entrada", parent, _style.ButtonSprite,
-                new Color32(218, 222, 226, 255), true);
-            var input = root.AddComponent<TMP_InputField>();
-            var viewport = new GameObject("Text Area", typeof(RectTransform), typeof(RectMask2D));
-            viewport.transform.SetParent(root.transform, false);
-            var viewportRect = (RectTransform)viewport.transform;
-            Stretch(viewportRect);
-            viewportRect.offsetMin = new Vector2(8f, 1f);
-            viewportRect.offsetMax = new Vector2(-8f, -1f);
-            var label = CreateDiseaseText(viewport.transform, value, 16f,
-                TextAlignmentOptions.MidlineLeft, Color.black);
-            input.targetGraphic = root.GetComponent<Image>();
-            input.textViewport = viewportRect;
-            input.textComponent = label;
-            input.contentType = TMP_InputField.ContentType.IntegerNumber;
-            input.lineType = TMP_InputField.LineType.SingleLine;
+            if (!TryGetWorkshopFieldTemplate(false, out _, out var nativeComponent) ||
+                !(nativeComponent is InputField nativeInput))
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Enfermedades: no se encontro el InputField nativo del Workshop.");
+                return null;
+            }
+
+            var input = Instantiate(nativeInput, parent, false);
+            input.gameObject.name = "UP Disease Native Input";
+            input.gameObject.SetActive(true);
+            input.transform.localScale = Vector3.one;
+            DisableLocalisers(input.transform);
+            var layout = input.GetComponent<LayoutElement>();
+            if (layout != null) layout.enabled = false;
+            input.onEndEdit.RemoveAllListeners();
+            input.onValueChanged.RemoveAllListeners();
+            input.onValidateInput = null;
+            input.contentType = InputField.ContentType.IntegerNumber;
+            input.lineType = InputField.LineType.SingleLine;
+            input.characterLimit = 12;
+            input.customCaretColor = true;
+            input.caretColor = Color.black;
+            if (input.textComponent != null) input.textComponent.color = Color.black;
             input.SetTextWithoutNotify(value);
             return input;
         }
 
         private Toggle CreateDiseaseToggle(Transform parent, bool value, Action<bool> changed)
         {
-            var root = NewImage("Casilla", parent, _style.ButtonSprite,
-                new Color32(216, 226, 235, 255), true);
-            var toggle = root.AddComponent<Toggle>();
-            var mark = NewImage("Marca", root.transform, _style.ButtonSprite,
-                _style.ButtonColor, false);
-            var markRect = (RectTransform)mark.transform;
-            Stretch(markRect);
-            markRect.offsetMin = new Vector2(5f, 5f);
-            markRect.offsetMax = new Vector2(-5f, -5f);
-            toggle.targetGraphic = root.GetComponent<Image>();
-            toggle.graphic = mark.GetComponent<Image>();
-            toggle.isOn = value;
+            Toggle native = null;
+            foreach (var row in Resources.FindObjectsOfTypeAll<PlotSelectionItem>())
+            {
+                if (row == null) continue;
+                native = AccessTools.Field(typeof(PlotSelectionItem), "_toggleLayerBase")?
+                    .GetValue(row) as Toggle;
+                if (native != null &&
+                    (native.targetGraphic == null || native.graphic == null)) native = null;
+                if (native != null) break;
+            }
+            if (native == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Enfermedades: no se encontro el Toggle nativo de las parcelas.");
+                return null;
+            }
+
+            var toggle = Instantiate(native, parent, false);
+            toggle.gameObject.name = "UP Disease Native Toggle";
+            toggle.gameObject.SetActive(true);
+            toggle.transform.localScale = Vector3.one;
+            DisableLocalisers(toggle.transform);
+            var layout = toggle.GetComponent<LayoutElement>();
+            if (layout != null) layout.enabled = false;
+            toggle.onValueChanged.RemoveAllListeners();
+            toggle.interactable = true;
+            if (toggle.graphic != null) toggle.graphic.gameObject.SetActive(true);
+            toggle.SetIsOnWithoutNotify(value);
             toggle.onValueChanged.AddListener(state => changed(state));
             return toggle;
         }
@@ -400,7 +413,8 @@ namespace UnderPressure.Editor
             templateRect.anchorMax = new Vector2(1f, 0f);
             templateRect.pivot = new Vector2(.5f, 1f);
             templateRect.anchoredPosition = new Vector2(0f, -2f);
-            templateRect.sizeDelta = new Vector2(0f, 260f);
+            templateRect.sizeDelta = new Vector2(0f,
+                Mathf.Clamp(options.Count * 35f + 4f, 39f, 260f));
             var scroll = template.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
@@ -421,7 +435,7 @@ namespace UnderPressure.Editor
             contentRect.anchorMax = Vector2.one;
             contentRect.pivot = new Vector2(.5f, 1f);
             contentRect.anchoredPosition = Vector2.zero;
-            contentRect.sizeDelta = Vector2.zero;
+            contentRect.sizeDelta = new Vector2(0f, Mathf.Max(34f, options.Count * 35f));
             var layout = content.GetComponent<VerticalLayoutGroup>();
             layout.childControlHeight = true;
             layout.childControlWidth = true;
@@ -433,6 +447,10 @@ namespace UnderPressure.Editor
             var item = NewImage("Item", content.transform, _style.ButtonSprite,
                 new Color32(218, 222, 226, 255), true);
             var itemRect = (RectTransform)item.transform;
+            itemRect.anchorMin = new Vector2(0f, 1f);
+            itemRect.anchorMax = Vector2.one;
+            itemRect.pivot = new Vector2(.5f, 1f);
+            itemRect.anchoredPosition = Vector2.zero;
             itemRect.sizeDelta = new Vector2(0f, 34f);
             var itemLayout = item.AddComponent<LayoutElement>();
             itemLayout.minHeight = itemLayout.preferredHeight = 34f;
@@ -443,28 +461,10 @@ namespace UnderPressure.Editor
             itemLabel.rectTransform.offsetMin = new Vector2(10f, 0f);
             itemLabel.rectTransform.offsetMax = new Vector2(-8f, 0f);
 
-            var scrollbarRoot = NewImage("Scrollbar", template.transform, _style.ButtonSprite,
-                new Color32(13, 96, 145, 255), true);
-            var scrollbarRect = (RectTransform)scrollbarRoot.transform;
-            scrollbarRect.anchorMin = new Vector2(1f, 0f);
-            scrollbarRect.anchorMax = Vector2.one;
-            scrollbarRect.pivot = new Vector2(1f, .5f);
-            scrollbarRect.anchoredPosition = Vector2.zero;
-            scrollbarRect.sizeDelta = new Vector2(18f, 0f);
-            var scrollbar = scrollbarRoot.AddComponent<Scrollbar>();
-            var sliding = new GameObject("Sliding Area", typeof(RectTransform));
-            sliding.transform.SetParent(scrollbarRoot.transform, false);
-            Stretch((RectTransform)sliding.transform);
-            var handle = NewImage("Handle", sliding.transform, _style.ButtonSprite,
-                _style.ButtonColor, true);
-            Stretch((RectTransform)handle.transform);
-            scrollbar.handleRect = (RectTransform)handle.transform;
-            scrollbar.targetGraphic = handle.GetComponent<Image>();
-            scrollbar.direction = Scrollbar.Direction.BottomToTop;
-
             scroll.viewport = viewportRect;
             scroll.content = contentRect;
-            scroll.verticalScrollbar = scrollbar;
+            InstallNativeVerticalScrollbar(templateRect, scroll,
+                "UP Disease Dropdown Native Scrollbar", 2f, 2f);
             dropdown.targetGraphic = root.GetComponent<Image>();
             dropdown.template = templateRect;
             dropdown.captionText = caption;
