@@ -43,16 +43,12 @@ namespace UnderPressure.Editor
             // PreferencesScreen. Para esta pestaña solo se reutiliza su barra
             // visual; el área desplazable pertenece enteramente al editor.
             var surface = new GameObject("UP Disease Scroll", typeof(RectTransform),
-                typeof(Image), typeof(ScrollRect), typeof(ScenarioEditorWheelHandler));
+                typeof(ScrollRect));
             surface.transform.SetParent(page, false);
             _settingsDiseaseSurface = (RectTransform)surface.transform;
             Stretch(_settingsDiseaseSurface);
             _settingsDiseaseSurface.offsetMin = new Vector2(10f, 10f);
             _settingsDiseaseSurface.offsetMax = new Vector2(-10f, -10f);
-            var hitArea = surface.GetComponent<Image>();
-            hitArea.color = new Color(1f, 1f, 1f, 0f);
-            hitArea.raycastTarget = true;
-
             var viewport = new GameObject("Viewport", typeof(RectTransform),
                 typeof(RectMask2D));
             viewport.transform.SetParent(surface.transform, false);
@@ -76,21 +72,9 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll.vertical = true;
             _settingsDiseaseScroll.inertia = true;
             _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
-            _settingsDiseaseScroll.scrollSensitivity = 0f;
+            _settingsDiseaseScroll.scrollSensitivity = 34f;
             InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
                 "UP Disease Native Scrollbar", 0f, 0f);
-            var wheel = surface.GetComponent<ScenarioEditorWheelHandler>();
-            wheel.Scroll = delta =>
-            {
-                if (_settingsDiseaseScroll == null ||
-                    _settingsDiseaseScroll.viewport == null ||
-                    _settingsDiseaseScroll.content == null) return;
-                var overflow = _settingsDiseaseScroll.content.rect.height -
-                               _settingsDiseaseScroll.viewport.rect.height;
-                if (overflow <= 0f) return;
-                _settingsDiseaseScroll.verticalNormalizedPosition = Mathf.Clamp01(
-                    _settingsDiseaseScroll.verticalNormalizedPosition + delta * 70f / overflow);
-            };
             _settingsDiseaseSurface.SetAsLastSibling();
         }
 
@@ -157,7 +141,7 @@ namespace UnderPressure.Editor
             var expanded = _settingsDiseaseExpanded[room.Id];
             var height = 66f + (expanded ? values.Count * 122f + 8f : 0f);
             var section = NewImage("UP Disease Room " + room.Id, _settingsDiseaseContent,
-                _style.ButtonSprite, new Color32(5, 132, 204, 255), false);
+                _style.ButtonSprite, new Color32(5, 132, 204, 255), true);
             var sectionRect = (RectTransform)section.transform;
             SetRect(sectionRect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
