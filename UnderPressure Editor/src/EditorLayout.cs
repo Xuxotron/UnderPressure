@@ -644,6 +644,14 @@ namespace UnderPressure.Editor
                 _settingsOverlay = null;
                 return;
             }
+            var nativeVideoTab = GetPreferencesField<Transform>(clonedScreen, "_videoTab");
+            var settingsPanel = nativeVideoTab != null
+                ? nativeVideoTab.parent as RectTransform : null;
+            if (settingsPanel != null)
+            {
+                settingsPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 1400f);
+                settingsPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 940f);
+            }
             for (var index = 0; index < tabKeys.Length; ++index)
             {
                 if (index < contentsNames.Length && index > 0)
@@ -717,7 +725,8 @@ namespace UnderPressure.Editor
             HideSettingsObject(credits);
             ExpandNativeSettingsContents(clonedScreen);
             RedistributeNativeSettingsTabs(clonedScreen);
-            _settingsCloseButton = CreateNativeSettingsCloseButton(clone.transform);
+            _settingsCloseButton = CreateNativeSettingsCloseButton(
+                settingsPanel != null ? settingsPanel : clone.transform);
             ApplyNativeSettingsPalette(clone.transform);
             ApplySettingsContentFrameColor();
             SetSettingsTab(0);
@@ -901,7 +910,7 @@ namespace UnderPressure.Editor
             rect.anchorMin = Vector2.one;
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(.5f, .5f);
-            rect.anchoredPosition = new Vector2(-33.1f, -32f);
+            rect.anchoredPosition = new Vector2(-12f, -12f);
             rect.sizeDelta = new Vector2(45f, 45f);
 
             var image = closeObject.GetComponent<Image>();
@@ -1101,7 +1110,7 @@ namespace UnderPressure.Editor
             textRect.offsetMax = Vector2.zero;
             var text = textObject.GetComponent<TextMeshProUGUI>();
             text.fontSize = 18f;
-            text.color = _style.HeaderColor;
+            text.color = Color.black;
             text.alignment = multiline
                 ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft;
             text.enableWordWrapping = multiline;
