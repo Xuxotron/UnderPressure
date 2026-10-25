@@ -1031,20 +1031,26 @@ namespace UnderPressure.Editor
             if (content == null) return;
 
             _settingsDisplayName = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.display_name", 16f, 48f, false);
+                "editor.scenario_settings.field.display_name", 16f, 48f, false,
+                false, .02f, .50f);
             _settingsDescriptionPerStar = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.description_per_star", 70f, 118f, true);
+                "editor.scenario_settings.field.description_per_star", 70f, 118f, true,
+                false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true);
+                "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
+                .02f, .32f);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.fail_warning", 264f, 48f, false, true);
+                "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
+                .35f, .65f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.fail_game_over", 326f, 48f, false, true);
+                "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
+                .68f, .98f);
             RefreshScenarioSettingsFields();
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
-            float top, float height, bool multiline, bool integer = false)
+            float top, float height, bool multiline, bool integer = false,
+            float anchorMinX = .02f, float anchorMaxX = .98f)
         {
             GameObject panelTemplate;
             Component nativeInputTemplate;
@@ -1060,7 +1066,7 @@ namespace UnderPressure.Editor
             row.name = "UP Workshop Settings Field " + labelKey;
             row.SetActive(true);
             var rowRect = row.transform as RectTransform;
-            SetRect(rowRect, new Vector2(.02f, 1f), new Vector2(.98f, 1f),
+            SetRect(rowRect, new Vector2(anchorMinX, 1f), new Vector2(anchorMaxX, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
             var layout = row.GetComponent<LayoutElement>() ?? row.AddComponent<LayoutElement>();
             layout.ignoreLayout = true;

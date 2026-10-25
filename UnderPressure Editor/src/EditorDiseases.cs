@@ -265,17 +265,17 @@ namespace UnderPressure.Editor
             });
 
             AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.deprecated",
-                855f, 8f, 120f);
+                855f, 8f, 92f);
             var deprecated = CreateDiseaseToggle(panel.transform, value.deprecated,
                 state => value.deprecated = state);
             if (deprecated != null)
-                SetTopLeft((RectTransform)deprecated.transform, 975f, 12f, 30f, 30f);
+                SetTopLeft((RectTransform)deprecated.transform, 947f, 12f, 30f, 30f);
             AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.unlocked",
-                1020f, 8f, 105f);
+                995f, 8f, 145f);
             var unlocked = CreateDiseaseToggle(panel.transform, value.unlocked,
                 state => value.unlocked = state);
             if (unlocked != null)
-                SetTopLeft((RectTransform)unlocked.transform, 1125f, 12f, 30f, 30f);
+                SetTopLeft((RectTransform)unlocked.transform, 1140f, 12f, 30f, 30f);
 
             CreateDiseaseInteger(panel.transform,
                 "editor.scenario_settings.diseases.min_weight", value.minWeight,
@@ -305,8 +305,19 @@ namespace UnderPressure.Editor
         {
             var selected = new HashSet<string>(_settingsIllnesses
                 .Select(value => value.definition ?? ""), StringComparer.Ordinal);
-            return room.Diseases.Where(disease => disease.Id == includeId ||
-                !selected.Contains(disease.Id)).ToList();
+            var selectedNames = new HashSet<string>(_settingsIllnesses
+                .Select(value => _settingsDiseaseCatalog.ById.TryGetValue(
+                    value.definition ?? "", out var disease) ? disease.Name : "")
+                .Where(name => !string.IsNullOrEmpty(name)),
+                StringComparer.CurrentCultureIgnoreCase);
+            return room.Diseases
+                .Where(disease => disease.Id == includeId ||
+                    (!selected.Contains(disease.Id) && !selectedNames.Contains(disease.Name)))
+                .GroupBy(disease => disease.Name,
+                    StringComparer.CurrentCultureIgnoreCase)
+                .Select(group => group.FirstOrDefault(disease => disease.Id == includeId) ??
+                                 group.First())
+                .ToList();
         }
 
         private void AddDisease(ScenarioDiseaseCatalog.Room room, string id)
@@ -397,6 +408,26 @@ namespace UnderPressure.Editor
             scrollbar.onValueChanged.RemoveAllListeners();
             scrollbar.interactable = true;
             scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+            // El componente y sus sprites siguen siendo los nativos. Solo se
+            // fija el tinte claro solicitado para que el asa no desaparezca
+            // visualmente cuando el control no tiene el foco.
+            var handleGraphic = scrollbar.handleRect == null
+                ? null : scrollbar.handleRect.GetComponent<Graphic>();
+            if (handleGraphic != null)
+            {
+                handleGraphic.enabled = true;
+                handleGraphic.color = Color.white;
+                scrollbar.targetGraphic = handleGraphic;
+            }
+            var colors = scrollbar.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.pressedColor = new Color(.82f, .82f, .82f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(.72f, .72f, .72f, 1f);
+            colors.colorMultiplier = 1f;
+            scrollbar.colors = colors;
 
             var sourceRect = source.transform as RectTransform;
             var width = Mathf.Clamp(sourceRect != null ? sourceRect.rect.width : 26f,
