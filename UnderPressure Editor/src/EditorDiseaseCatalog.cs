@@ -48,13 +48,29 @@ namespace UnderPressure.Editor
                     if (config != null && !levels.Contains(config)) levels.Add(config);
                 }
 
+            // La entrada directa al editor no siempre conserva LevelOptions con
+            // sus SharedInstance resueltos. Los LevelConfig ya cargados son la
+            // fuente nativa completa y no crean ni modifican assets.
+            foreach (var shared in Resources.FindObjectsOfTypeAll<SharedInstance<LevelConfig>>())
+            {
+                LevelConfig config;
+                try { config = shared?.Instance; }
+                catch { continue; }
+                if (config != null && !levels.Contains(config)) levels.Add(config);
+            }
+
+            var weightedRead = 0;
+            var liveCharacters = level?.CharacterManager?.GetConfig();
+            weightedRead += AddWeighted(snapshot, liveCharacters?._weightedIllnesses);
+            weightedRead += AddWeighted(snapshot, liveCharacters?._weightedIllnessesTimePortal);
+
             foreach (var config in levels)
             {
                 try
                 {
                     var characters = config.GetCharacterManagerConfig();
-                    AddWeighted(snapshot, characters?._weightedIllnesses);
-                    AddWeighted(snapshot, characters?._weightedIllnessesTimePortal);
+                    weightedRead += AddWeighted(snapshot, characters?._weightedIllnesses);
+                    weightedRead += AddWeighted(snapshot, characters?._weightedIllnessesTimePortal);
                 }
                 catch (Exception exception)
                 {
@@ -64,11 +80,27 @@ namespace UnderPressure.Editor
                 }
             }
 
+            foreach (var list in Resources.FindObjectsOfTypeAll<SharedInstance<WeightedIllnessList>>())
+            {
+                var illnesses = list?.Instance?.Illnesses;
+                if (illnesses != null) weightedRead += AddWeighted(snapshot, illnesses.ToArray());
+            }
+
+            var sharedRead = 0;
+            foreach (var shared in Resources.FindObjectsOfTypeAll<SharedInstance<IllnessDefinition>>())
+            {
+                ++sharedRead;
+                AddDefinition(snapshot, shared, null);
+            }
+
             var rooms = new Dictionary<RoomDefinition, Room>();
+            var treatmentDiseases = 0;
             foreach (var disease in snapshot.Diseases)
             {
                 var treatments = disease.Definition?.Instance?._treatmentTypes;
                 if (treatments == null) continue;
+                if (treatments.Any(treatment => treatment?._room?.Instance != null))
+                    ++treatmentDiseases;
                 foreach (var treatment in treatments)
                 {
                     var definition = treatment?._room?.Instance;
@@ -97,29 +129,48 @@ namespace UnderPressure.Editor
             foreach (var room in snapshot.Rooms)
                 room.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                     StringComparison.CurrentCultureIgnoreCase));
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Enfermedades: " + snapshot.Diseases.Count + " definiciones, " +
+                treatmentDiseases + " con tratamiento y " + snapshot.Rooms.Count +
+                " salas; " + levels.Count + " LevelConfig, " + weightedRead +
+                " entradas ponderadas y " + sharedRead + " SharedInstance examinados.");
             return snapshot;
         }
 
-        private static void AddWeighted(Snapshot snapshot, WeightedIllness[] values)
+        private static int AddWeighted(Snapshot snapshot, WeightedIllness[] values)
         {
-            if (values == null) return;
+            if (values == null) return 0;
+            var read = 0;
             foreach (var value in values)
             {
+                ++read;
                 var shared = value?.Definition;
-                var illness = shared?.Instance;
-                if (illness == null || !illness.DLCIsValid()) continue;
-                var id = DefinitionId(shared);
-                if (string.IsNullOrEmpty(id) || snapshot.ById.ContainsKey(id)) continue;
-                var disease = new Disease
-                {
-                    Id = id,
-                    Name = IllnessName(illness),
-                    Definition = shared,
-                    Defaults = Clone(value)
-                };
-                snapshot.ById.Add(id, disease);
-                snapshot.Diseases.Add(disease);
+                AddDefinition(snapshot, shared, value);
             }
+            return read;
+        }
+
+        private static void AddDefinition(Snapshot snapshot,
+            SharedInstance<IllnessDefinition> shared, WeightedIllness defaults)
+        {
+            IllnessDefinition illness;
+            try { illness = shared?.Instance; }
+            catch { return; }
+            if (illness == null || !illness.DLCIsValid()) return;
+            var id = DefinitionId(shared);
+            if (string.IsNullOrEmpty(id) || snapshot.ById.ContainsKey(id)) return;
+            var disease = new Disease
+            {
+                Id = id,
+                Name = IllnessName(illness),
+                Definition = shared,
+                Defaults = defaults == null ? new WeightedIllness
+                {
+                    Definition = shared
+                } : Clone(defaults)
+            };
+            snapshot.ById.Add(id, disease);
+            snapshot.Diseases.Add(disease);
         }
 
         internal static ScenarioMapFormat.WeightedIllnessData[] Capture(WeightedIllness[] values)
