@@ -16,6 +16,7 @@ namespace UnderPressure.Editor
         private readonly Dictionary<string, bool> _settingsDiseaseExpanded =
             new Dictionary<string, bool>(StringComparer.Ordinal);
         private readonly List<GameObject> _settingsDiseaseSections = new List<GameObject>();
+        private RectTransform _settingsDiseaseSurface;
         private RectTransform _settingsDiseaseContent;
         private ScrollRect _settingsDiseaseScroll;
 
@@ -30,33 +31,61 @@ namespace UnderPressure.Editor
             if (_settingsPages == null || _settingsPages.Length < 2 ||
                 _settingsPages[1] == null) return;
             var page = _settingsPages[1].transform;
-            var content = page.Find("Scroll View/Viewport/Content") as RectTransform;
-            if (content == null) return;
-            _settingsDiseaseContent = content;
-            _settingsDiseaseScroll = page.GetComponentInChildren<ScrollRect>(true);
-            // El Content del panel de vídeo usa anclajes elásticos controlados
-            // por su layout nativo. Tras retirar ese layout, esos anclajes dejan
-            // el origen fuera del Viewport y todos los controles quedan
-            // recortados aunque existan. Esta página usa un lienzo vertical
-            // explícito, anclado al borde superior del Viewport.
-            content.anchorMin = new Vector2(0f, 1f);
-            content.anchorMax = Vector2.one;
-            content.pivot = new Vector2(.5f, 1f);
-            content.anchoredPosition = Vector2.zero;
-            content.sizeDelta = new Vector2(0f, 430f);
-            if (_settingsDiseaseScroll != null)
+            var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
+            var nativeScrollbar = nativeScroll?.verticalScrollbar;
+            if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
+
+            // La página clonada conserva animadores y máscaras internas de
+            // PreferencesScreen. Para esta pestaña solo se reutiliza su barra
+            // visual; el área desplazable pertenece enteramente al editor.
+            var surface = new GameObject("UP Disease Scroll", typeof(RectTransform),
+                typeof(ScrollRect));
+            surface.transform.SetParent(page, false);
+            _settingsDiseaseSurface = (RectTransform)surface.transform;
+            Stretch(_settingsDiseaseSurface);
+            _settingsDiseaseSurface.offsetMin = new Vector2(10f, 10f);
+            _settingsDiseaseSurface.offsetMax = new Vector2(-10f, -10f);
+
+            var viewport = new GameObject("Viewport", typeof(RectTransform),
+                typeof(RectMask2D));
+            viewport.transform.SetParent(surface.transform, false);
+            var viewportRect = (RectTransform)viewport.transform;
+            Stretch(viewportRect);
+            viewportRect.offsetMax = new Vector2(-28f, 0f);
+
+            var content = new GameObject("Content", typeof(RectTransform));
+            content.transform.SetParent(viewport.transform, false);
+            _settingsDiseaseContent = (RectTransform)content.transform;
+            _settingsDiseaseContent.anchorMin = new Vector2(0f, 1f);
+            _settingsDiseaseContent.anchorMax = Vector2.one;
+            _settingsDiseaseContent.pivot = new Vector2(.5f, 1f);
+            _settingsDiseaseContent.anchoredPosition = Vector2.zero;
+            _settingsDiseaseContent.sizeDelta = new Vector2(0f, 430f);
+
+            Scrollbar scrollbar = null;
+            if (nativeScrollbar != null)
             {
-                _settingsDiseaseScroll.content = content;
-                _settingsDiseaseScroll.horizontal = false;
-                _settingsDiseaseScroll.vertical = true;
-                _settingsDiseaseScroll.scrollSensitivity = 34f;
-                if (_settingsDiseaseScroll.verticalScrollbar != null)
-                {
-                    _settingsDiseaseScroll.verticalScrollbar.gameObject.SetActive(true);
-                    _settingsDiseaseScroll.verticalScrollbarVisibility =
-                        ScrollRect.ScrollbarVisibility.Permanent;
-                }
+                scrollbar = Instantiate(nativeScrollbar, surface.transform, false);
+                scrollbar.gameObject.name = "UP Disease Native Scrollbar";
+                scrollbar.gameObject.SetActive(true);
+                var scrollbarRect = scrollbar.transform as RectTransform;
+                scrollbarRect.anchorMin = new Vector2(1f, 0f);
+                scrollbarRect.anchorMax = Vector2.one;
+                scrollbarRect.pivot = new Vector2(1f, .5f);
+                scrollbarRect.anchoredPosition = Vector2.zero;
+                scrollbarRect.sizeDelta = new Vector2(22f, 0f);
             }
+
+            _settingsDiseaseScroll = surface.GetComponent<ScrollRect>();
+            _settingsDiseaseScroll.viewport = viewportRect;
+            _settingsDiseaseScroll.content = _settingsDiseaseContent;
+            _settingsDiseaseScroll.horizontal = false;
+            _settingsDiseaseScroll.vertical = true;
+            _settingsDiseaseScroll.scrollSensitivity = 34f;
+            _settingsDiseaseScroll.verticalScrollbar = scrollbar;
+            _settingsDiseaseScroll.verticalScrollbarVisibility =
+                ScrollRect.ScrollbarVisibility.Permanent;
+            _settingsDiseaseSurface.SetAsLastSibling();
         }
 
         private void RefreshDiseaseSettingsContents()
@@ -480,6 +509,7 @@ namespace UnderPressure.Editor
             _settingsIllnesses.Clear();
             _settingsDiseaseExpanded.Clear();
             _settingsDiseaseCatalog = null;
+            _settingsDiseaseSurface = null;
             _settingsDiseaseContent = null;
             _settingsDiseaseScroll = null;
         }
