@@ -558,9 +558,6 @@ namespace UnderPressure.Editor
 
             _settingsDiseaseNativeToggleTemplate =
                 GetPreferencesField<Toggle>(native, "_fullScreenToggle");
-            _settingsDiseaseNativeScrollTemplate =
-                GetPreferencesField<Transform>(native, "_videoTabContents")
-                    ?.GetComponentInChildren<ScrollRect>(true);
             _settingsDiseaseNativeScrollbarTemplate = native
                 .GetComponentsInChildren<Scrollbar>(true)
                 .Where(candidate => candidate != null &&
@@ -762,6 +759,7 @@ namespace UnderPressure.Editor
             if (_settingsTabButtons == null || _settingsPages == null) return;
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
+            if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
                 var selected = index == _activeSettingsTab;
@@ -777,11 +775,6 @@ namespace UnderPressure.Editor
                 if (folder != null) folder.gameObject.SetActive(selected);
                 if (_settingsPages[index] != null)
                     _settingsPages[index].SetActive(selected);
-            }
-            if (_activeSettingsTab == 1)
-            {
-                Canvas.ForceUpdateCanvases();
-                RefreshDiseaseSettingsContents();
             }
             // PreferencesScreen eleva la carpeta activa para que su borde quede encima.
             _settingsTabRoots[_activeSettingsTab]?.SetAsLastSibling();
@@ -1089,20 +1082,19 @@ namespace UnderPressure.Editor
                 false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
-                .02f, .32f, 100f);
+                .02f, .32f);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
-                .35f, .65f, 100f);
+                .35f, .65f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
-                .68f, .98f, 100f);
+                .68f, .98f);
             RefreshScenarioSettingsFields();
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
             float top, float height, bool multiline, bool integer = false,
-            float anchorMinX = .02f, float anchorMaxX = .98f,
-            float inputWidth = -1f)
+            float anchorMinX = .02f, float anchorMaxX = .98f)
         {
             GameObject panelTemplate;
             Component nativeInputTemplate;
@@ -1140,8 +1132,6 @@ namespace UnderPressure.Editor
 
             SetWorkshopFieldLabel(row.transform, fieldObject.transform,
                 EditorLocalization.Get(labelKey));
-            if (inputWidth > 0f)
-                ArrangeCompactWorkshopField(row.transform, fieldObject.transform, inputWidth);
             foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
                 oldText.gameObject.SetActive(false);
 
@@ -1191,58 +1181,6 @@ namespace UnderPressure.Editor
             selection.a = .35f;
             input.selectionColor = selection;
             return input;
-        }
-
-        private static void ArrangeCompactWorkshopField(Transform row, Transform inputRoot,
-            float inputWidth)
-        {
-            var inputBranch = inputRoot;
-            while (inputBranch.parent != null && inputBranch.parent != row)
-                inputBranch = inputBranch.parent;
-            var inputRect = inputBranch as RectTransform;
-            if (inputRect != null)
-            {
-                var minimum = inputRect.anchorMin;
-                var maximum = inputRect.anchorMax;
-                var pivot = inputRect.pivot;
-                minimum.x = 1f;
-                maximum.x = 1f;
-                pivot.x = 1f;
-                inputRect.anchorMin = minimum;
-                inputRect.anchorMax = maximum;
-                inputRect.pivot = pivot;
-                inputRect.anchoredPosition = new Vector2(-10f, inputRect.anchoredPosition.y);
-                inputRect.sizeDelta = new Vector2(inputWidth, inputRect.sizeDelta.y);
-            }
-
-            var tmpLabel = row.GetComponentsInChildren<TMP_Text>(true)
-                .FirstOrDefault(text => text != null &&
-                    !text.transform.IsChildOf(inputRoot));
-            var regularLabel = tmpLabel == null
-                ? row.GetComponentsInChildren<Text>(true).FirstOrDefault(text => text != null &&
-                    !text.transform.IsChildOf(inputRoot))
-                : null;
-            var labelRect = tmpLabel != null
-                ? tmpLabel.rectTransform : regularLabel?.rectTransform;
-            if (labelRect == null) return;
-            var labelMin = labelRect.anchorMin;
-            var labelMax = labelRect.anchorMax;
-            labelMin.x = 0f;
-            labelMax.x = 1f;
-            labelRect.anchorMin = labelMin;
-            labelRect.anchorMax = labelMax;
-            labelRect.offsetMin = new Vector2(12f, labelRect.offsetMin.y);
-            labelRect.offsetMax = new Vector2(-inputWidth - 22f, labelRect.offsetMax.y);
-            if (tmpLabel != null)
-            {
-                tmpLabel.enableWordWrapping = false;
-                tmpLabel.overflowMode = TextOverflowModes.Ellipsis;
-            }
-            if (regularLabel != null)
-            {
-                regularLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
-                regularLabel.verticalOverflow = VerticalWrapMode.Truncate;
-            }
         }
 
         private static bool TryGetWorkshopFieldTemplate(bool multiline,
