@@ -833,7 +833,8 @@ namespace UnderPressure.Editor
                 {
                     image.color = _style.ButtonColor;
                     var interiorRect = image.rectTransform.rect;
-                    if (interiorRect.width >= 400f && interiorRect.height >= 120f)
+                    if (!IsSettingsPageRoot(image.transform) &&
+                        interiorRect.width >= 400f && interiorRect.height >= 120f)
                     {
                         image.overrideSprite = null;
                         image.sprite = null;
@@ -887,19 +888,22 @@ namespace UnderPressure.Editor
                     (value == folder || value.IsChildOf(folder)));
         }
 
+        private bool IsSettingsPageRoot(Transform value)
+        {
+            return value != null && _settingsPages != null &&
+                _settingsPages.Any(page => page != null && value == page.transform);
+        }
+
         private void ApplySettingsContentFrameColor()
         {
             if (_settingsPages == null) return;
-            // Es el azul que ya usa el exterior de las filas nativas del Workshop.
+            // El prefab nativo separa el marco (VideoTabContent) del Viewport.
+            // Se recolorea su Image existente sin alterar sprite ni geometria.
             var frameColor = new Color32(56, 161, 223, 255);
             foreach (var page in _settingsPages)
             {
                 var frame = page != null ? page.GetComponent<Image>() : null;
-                if (frame == null) continue;
-                frame.overrideSprite = null;
-                frame.sprite = null;
-                frame.type = Image.Type.Simple;
-                frame.color = frameColor;
+                if (frame != null) frame.color = frameColor;
             }
         }
 
