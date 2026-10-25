@@ -200,9 +200,11 @@ namespace UnderPressure.Editor
 
             _settingsDiseaseCatalog.ById.TryGetValue(value.definition ?? "", out var selected);
             AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.illness", 16f, 8f, 115f);
-            var nameField = CreateReadOnlyDiseaseField(panel.transform,
-                selected?.Name ?? value.definition);
-            SetTopLeft(nameField, 130f, 8f, 250f, 38f);
+            var name = CreateDiseaseText(panel.transform,
+                selected?.Name ?? value.definition, 18f,
+                TextAlignmentOptions.MidlineLeft, Color.white);
+            name.fontStyle = FontStyles.Bold;
+            SetTopLeft(name.rectTransform, 130f, 8f, 250f, 38f);
 
             AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.definition",
                 395f, 8f, 120f);
@@ -280,10 +282,10 @@ namespace UnderPressure.Editor
         private void CreateDiseaseInteger(Transform parent, string key, int current,
             float x, Action<int> setter)
         {
-            AddFieldLabel(parent, key, x, 64f, 135f);
-            var input = CreateDiseaseInput(parent, current.ToString(CultureInfo.InvariantCulture));
+            var input = CreateScenarioSettingsInput(parent, key, 64f, 36f, false, true,
+                x, 240f, 140f);
             if (input == null) return;
-            SetTopLeft((RectTransform)input.transform, x + 140f, 64f, 100f, 36f);
+            input.SetTextWithoutNotify(current.ToString(CultureInfo.InvariantCulture));
             input.onEndEdit.AddListener(text =>
             {
                 if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture,
@@ -299,55 +301,14 @@ namespace UnderPressure.Editor
             SetTopLeft(label.rectTransform, x, y, width, 38f);
         }
 
-        private RectTransform CreateReadOnlyDiseaseField(Transform parent, string value)
-        {
-            var field = NewImage("Valor", parent, _style.ButtonSprite,
-                new Color32(218, 222, 226, 255), false);
-            var label = CreateDiseaseText(field.transform, value ?? "", 16f,
-                TextAlignmentOptions.MidlineLeft, Color.black);
-            label.rectTransform.offsetMin = new Vector2(10f, 0f);
-            label.rectTransform.offsetMax = new Vector2(-8f, 0f);
-            return (RectTransform)field.transform;
-        }
-
-        private InputField CreateDiseaseInput(Transform parent, string value)
-        {
-            if (!TryGetWorkshopFieldTemplate(false, out _, out var nativeComponent) ||
-                !(nativeComponent is InputField nativeInput))
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Enfermedades: no se encontro el InputField nativo del Workshop.");
-                return null;
-            }
-
-            var input = Instantiate(nativeInput, parent, false);
-            input.gameObject.name = "UP Disease Native Input";
-            input.gameObject.SetActive(true);
-            input.transform.localScale = Vector3.one;
-            DisableLocalisers(input.transform);
-            var layout = input.GetComponent<LayoutElement>();
-            if (layout != null) layout.enabled = false;
-            input.onEndEdit.RemoveAllListeners();
-            input.onValueChanged.RemoveAllListeners();
-            input.onValidateInput = null;
-            input.contentType = InputField.ContentType.IntegerNumber;
-            input.lineType = InputField.LineType.SingleLine;
-            input.characterLimit = 12;
-            input.customCaretColor = true;
-            input.caretColor = Color.black;
-            if (input.textComponent != null) input.textComponent.color = Color.black;
-            input.SetTextWithoutNotify(value);
-            return input;
-        }
-
         private Toggle CreateDiseaseToggle(Transform parent, bool value, Action<bool> changed)
         {
             Toggle native = null;
-            foreach (var row in Resources.FindObjectsOfTypeAll<PlotSelectionItem>())
+            foreach (var screen in Resources.FindObjectsOfTypeAll<PreferencesScreen>())
             {
-                if (row == null) continue;
-                native = AccessTools.Field(typeof(PlotSelectionItem), "_toggleLayerBase")?
-                    .GetValue(row) as Toggle;
+                if (screen == null) continue;
+                native = AccessTools.Field(typeof(PreferencesScreen), "_fullScreenToggle")?
+                    .GetValue(screen) as Toggle;
                 if (native != null &&
                     (native.targetGraphic == null || native.graphic == null)) native = null;
                 if (native != null) break;
@@ -355,7 +316,7 @@ namespace UnderPressure.Editor
             if (native == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Enfermedades: no se encontro el Toggle nativo de las parcelas.");
+                    "Enfermedades: no se encontro el Toggle nativo de Ajustes.");
                 return null;
             }
 
