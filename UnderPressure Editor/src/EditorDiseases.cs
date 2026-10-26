@@ -400,9 +400,9 @@ namespace UnderPressure.Editor
                 button.transition = Selectable.Transition.None;
                 button.onClick.AddListener(() =>
                 {
-                    // La primera estrella permite volver al unico estado sin
-                    // estrellas sin introducir un cuarto control ajeno al juego.
-                    var next = rating == 1 && value.minStarRating == 1 ? 0 : rating;
+                    // Pulsar de nuevo la estrella que ya representa el valor
+                    // activo devuelve el selector al estado de cero estrellas.
+                    var next = value.minStarRating == rating ? 0 : rating;
                     value.minStarRating = next;
                     RefreshDiseaseStarRating(images, next);
                 });
