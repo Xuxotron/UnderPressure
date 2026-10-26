@@ -1230,6 +1230,13 @@ namespace UnderPressure.Editor
             inputPanel.offsetMin = new Vector2(-inputWidth, 0f);
             inputPanel.offsetMax = Vector2.zero;
 
+            // El prefab resta 20,8 px en InputFieldContainer y otros margenes en
+            // TextField/InputField. La anchura solicitada corresponde al campo gris
+            // visible, por lo que sus tres capas nativas deben llenar TitlePanel.
+            Stretch(inputPanel.Find("TextField") as RectTransform);
+            Stretch(inputPanel.Find("InputFieldContainer") as RectTransform);
+            Stretch(input as RectTransform);
+
             var label = labelHolder.GetComponentInChildren<TMP_Text>(true);
             if (label != null)
             {

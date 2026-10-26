@@ -72,7 +72,7 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll.vertical = true;
             _settingsDiseaseScroll.inertia = true;
             _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
-            _settingsDiseaseScroll.scrollSensitivity = 120f;
+            _settingsDiseaseScroll.scrollSensitivity = 800f;
             InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
                 "UP Disease Native Scrollbar", 0f, 0f);
             _settingsDiseaseSurface.SetAsLastSibling();
