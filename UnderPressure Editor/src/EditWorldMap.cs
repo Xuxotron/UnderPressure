@@ -80,15 +80,17 @@ namespace UnderPressure.Editor
         internal readonly Vector3 Position;
         internal readonly Vector3 CameraFocalPoint;
         internal readonly float CameraRotation;
+        internal readonly float CameraZoom;
 
         internal WorldMapConflux(string id, string template, Vector3 position,
-            Vector3 cameraFocalPoint, float cameraRotation)
+            Vector3 cameraFocalPoint, float cameraRotation, float cameraZoom)
         {
             Id = id;
             Template = template;
             Position = position;
             CameraFocalPoint = cameraFocalPoint;
             CameraRotation = cameraRotation;
+            CameraZoom = cameraZoom;
         }
     }
 
@@ -146,10 +148,11 @@ namespace UnderPressure.Editor
                 "Conflux",
                 "Metagame[0]/Pins[7]/MapPin_Hospital_R1_L1[0]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                // Encuadre al seleccionar el Conflux. Ajustar estos dos valores
-                // permite afinar manualmente la posicion y direccion de la camara.
+                // Encuadre al seleccionar el Conflux. Punto focal, rotacion y zoom
+                // se pueden copiar desde Ctrl+Alt+F10 y ajustar manualmente aqui.
                 new Vector3(-125f, 0f, 1026.279f),
-                0f)
+                0f,
+                -1f) // -1 conserva el zoom actual.
         };
     }
 }

@@ -1184,6 +1184,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(MapPinHospital), "_cursorOver");
         private static readonly FieldInfo ActiveHospitalEffectField =
             AccessTools.Field(typeof(MapPinHospital), "_activeHospitalEffect");
+        private static readonly FieldInfo CameraRotationField =
+            AccessTools.Field(typeof(TopDownCameraLogic), "_currentRotation");
         private static readonly FieldInfo[] PinMaterialFields =
         {
             AccessTools.Field(typeof(MapPinHospital), "_materialDefault"),
@@ -1223,6 +1225,16 @@ namespace UnderPressure.Editor
             new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Texture2D> _worldMeshTextures =
             new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+
+        private struct AuthorCameraData
+        {
+            internal Vector3 Position;
+            internal Vector3 FocalPoint;
+            internal Vector3 EulerAngles;
+            internal Vector3 Direction;
+            internal float Rotation;
+            internal float Zoom;
+        }
 
         internal void Initialise(MetagameMap map)
         {
@@ -1272,20 +1284,15 @@ namespace UnderPressure.Editor
             if (!_debugVisible) return;
             _hasCursorPosition = TryGetCursorPosition(out _cursorPosition);
             if (Input.GetKeyDown(KeyCode.F9)) Reload();
-            if (control && alt && Input.GetKeyDown(KeyCode.C) && _hasCursorPosition)
-            {
-                GUIUtility.systemCopyBuffer = string.Format(
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    "new Vector3({0:0.###}f, {1:0.###}f, {2:0.###}f)",
-                    _cursorPosition.x, _cursorPosition.y, _cursorPosition.z);
-            }
+            if (control && alt && Input.GetKeyDown(KeyCode.C))
+                GUIUtility.systemCopyBuffer = BuildAuthoringSnapshot();
         }
 
         private void OnGUI()
         {
             if (!_debugVisible || _map == null || !_map.IsVisible) return;
-            var width = Mathf.Min(670f, Screen.width - 24f);
-            GUI.Box(new Rect(12f, 12f, width, 88f), GUIContent.none);
+            var width = Mathf.Min(1000f, Screen.width - 24f);
+            GUI.Box(new Rect(12f, 12f, width, 202f), GUIContent.none);
             GUI.Label(new Rect(24f, 18f, width - 24f, 24f),
                 EditorLocalization.Get("world_map.author.title"));
             var position = _hasCursorPosition
@@ -1295,9 +1302,65 @@ namespace UnderPressure.Editor
                     _cursorPosition.z.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))
                 : EditorLocalization.Get("world_map.author.no_surface");
             GUI.Label(new Rect(24f, 42f, width - 24f, 22f), position);
-            GUI.Label(new Rect(24f, 64f, width - 24f, 22f),
+            if (TryGetCameraData(out var camera))
+            {
+                GUI.Label(new Rect(24f, 64f, width - 24f, 22f),
+                    FormatVector("world_map.author.camera_position", camera.Position));
+                GUI.Label(new Rect(24f, 86f, width - 24f, 22f),
+                    FormatVector("world_map.author.camera_focal", camera.FocalPoint));
+                GUI.Label(new Rect(24f, 108f, width - 24f, 22f),
+                    FormatVector("world_map.author.camera_angles", camera.EulerAngles));
+                GUI.Label(new Rect(24f, 130f, width - 24f, 22f),
+                    EditorLocalization.Format("world_map.author.camera_native",
+                        Number(camera.Rotation), Number(camera.Zoom)));
+                GUI.Label(new Rect(24f, 152f, width - 24f, 22f),
+                    FormatVector("world_map.author.camera_direction", camera.Direction));
+            }
+            GUI.Label(new Rect(24f, 176f, width - 24f, 22f),
                 EditorLocalization.Get("world_map.author.shortcuts"));
         }
+
+        private bool TryGetCameraData(out AuthorCameraData data)
+        {
+            data = default(AuthorCameraData);
+            var camera = _map?.CameraLogic;
+            var component = camera?.CameraComponent;
+            if (camera == null || component == null) return false;
+            var rotationValue = CameraRotationField?.GetValue(camera);
+            data.Position = component.transform.position;
+            data.FocalPoint = camera.GetFocalPoint();
+            data.EulerAngles = component.transform.eulerAngles;
+            data.Direction = component.transform.forward;
+            data.Rotation = rotationValue is float rotation
+                ? rotation : data.EulerAngles.y;
+            data.Zoom = camera.CurrentZoomScalar;
+            return true;
+        }
+
+        private string BuildAuthoringSnapshot()
+        {
+            var result = new StringBuilder();
+            if (_hasCursorPosition)
+                result.AppendLine("CursorPosition = " + VectorCode(_cursorPosition) + ";");
+            if (!TryGetCameraData(out var camera)) return result.ToString();
+            result.AppendLine("CameraFocalPoint = " + VectorCode(camera.FocalPoint) + ";");
+            result.AppendLine("CameraRotation = " + Number(camera.Rotation) + "f;");
+            result.AppendLine("CameraZoom = " + Number(camera.Zoom) + "f;");
+            result.AppendLine("CameraPosition = " + VectorCode(camera.Position) + ";");
+            result.AppendLine("CameraEulerAngles = " + VectorCode(camera.EulerAngles) + ";");
+            result.AppendLine("CameraDirection = " + VectorCode(camera.Direction) + ";");
+            return result.ToString().TrimEnd();
+        }
+
+        private static string FormatVector(string key, Vector3 value) =>
+            EditorLocalization.Format(key, Number(value.x), Number(value.y), Number(value.z));
+
+        private static string VectorCode(Vector3 value) =>
+            "new Vector3(" + Number(value.x) + "f, " + Number(value.y) + "f, " +
+            Number(value.z) + "f)";
+
+        private static string Number(float value) =>
+            value.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture);
 
         private void Reload()
         {
@@ -1507,6 +1570,8 @@ namespace UnderPressure.Editor
                 return false;
             camera.TrackObject(null);
             camera.SetTrackedObjectFrame(null);
+            if (conflux.CameraZoom >= 0f)
+                camera.Reset(conflux.CameraZoom, conflux.CameraRotation);
             camera.SetInitialFocalPoint(conflux.CameraFocalPoint, conflux.CameraRotation);
             return true;
         }
