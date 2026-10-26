@@ -1219,23 +1219,21 @@ namespace UnderPressure.Editor
                 if (behaviour != null && behaviour.GetType().Name == "StaticLayoutGroup")
                     behaviour.enabled = false;
 
+            var inputContainer = inputPanel.Find("InputFieldContainer") as RectTransform;
+            var nativeHorizontalInset = inputContainer == null
+                ? 0f : Mathf.Max(0f, -inputContainer.sizeDelta.x);
+            var nativePanelWidth = inputWidth + nativeHorizontalInset;
+
             labelHolder.anchorMin = Vector2.zero;
             labelHolder.anchorMax = Vector2.one;
             labelHolder.offsetMin = Vector2.zero;
-            labelHolder.offsetMax = new Vector2(-inputWidth - 8f, 0f);
+            labelHolder.offsetMax = new Vector2(-nativePanelWidth - 8f, 0f);
 
             inputPanel.anchorMin = new Vector2(1f, 0f);
             inputPanel.anchorMax = Vector2.one;
             inputPanel.pivot = new Vector2(1f, .5f);
-            inputPanel.offsetMin = new Vector2(-inputWidth, 0f);
+            inputPanel.offsetMin = new Vector2(-nativePanelWidth, 0f);
             inputPanel.offsetMax = Vector2.zero;
-
-            // El prefab resta 20,8 px en InputFieldContainer y otros margenes en
-            // TextField/InputField. La anchura solicitada corresponde al campo gris
-            // visible, por lo que sus tres capas nativas deben llenar TitlePanel.
-            Stretch(inputPanel.Find("TextField") as RectTransform);
-            Stretch(inputPanel.Find("InputFieldContainer") as RectTransform);
-            Stretch(input as RectTransform);
 
             var label = labelHolder.GetComponentInChildren<TMP_Text>(true);
             if (label != null)

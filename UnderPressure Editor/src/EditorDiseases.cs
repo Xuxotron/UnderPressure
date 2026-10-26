@@ -29,6 +29,7 @@ namespace UnderPressure.Editor
         {
             internal string Id;
             internal string Name;
+            internal Sprite DlcIcon;
         }
 
         private void BuildDiseaseSettingsContents()
@@ -72,7 +73,7 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll.vertical = true;
             _settingsDiseaseScroll.inertia = true;
             _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
-            _settingsDiseaseScroll.scrollSensitivity = 800f;
+            _settingsDiseaseScroll.scrollSensitivity = 120f;
             InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
                 "UP Disease Native Scrollbar", 0f, 0f);
             _settingsDiseaseSurface.SetAsLastSibling();
@@ -208,9 +209,10 @@ namespace UnderPressure.Editor
                     "editor.scenario_settings.diseases.select") }
             };
             choices.AddRange(available.Select(disease => new DiseaseChoice
-                { Id = disease.Id, Name = disease.Name }));
-            var selector = CreateDiseaseDropdown(header.transform, choices.Select(choice =>
-                choice.Name).ToList(), 0);
+                { Id = disease.Id, Name = disease.Name, DlcIcon = disease.Dlc?.Icon }));
+            var selector = CreateDiseaseDropdown(header.transform,
+                choices.Select(choice => choice.Name).ToList(), 0,
+                choices.Select(choice => choice.DlcIcon).ToList());
             SetTopLeft((RectTransform)selector.transform, 350f, 8f, 590f, 44f);
 
             var add = CreateDiseaseButton(header.transform,
@@ -260,10 +262,11 @@ namespace UnderPressure.Editor
                 395f, 8f, 120f);
             var available = AvailableForRoom(room, value.definition);
             var choices = available.Select(disease => new DiseaseChoice
-                { Id = disease.Id, Name = disease.Id }).ToList();
+                { Id = disease.Id, Name = disease.Id, DlcIcon = disease.Dlc?.Icon }).ToList();
             var currentIndex = Mathf.Max(0, choices.FindIndex(choice => choice.Id == value.definition));
             var definition = CreateDiseaseDropdown(panel.transform,
-                choices.Select(choice => choice.Name).ToList(), currentIndex);
+                choices.Select(choice => choice.Name).ToList(), currentIndex,
+                choices.Select(choice => choice.DlcIcon).ToList());
             SetTopLeft((RectTransform)definition.transform, 515f, 8f, 325f, 38f);
             definition.onValueChanged.AddListener(index =>
             {
@@ -284,6 +287,14 @@ namespace UnderPressure.Editor
                 state => value.unlocked = state);
             if (unlocked != null)
                 SetTopLeft((RectTransform)unlocked.transform, 1140f, 12f, 30f, 30f);
+
+            if (selected?.Dlc?.Icon != null)
+            {
+                var dlcIcon = NewImage("Icono DLC enfermedad", panel.transform,
+                    selected.Dlc.Icon, Color.white, false);
+                SetTopRight((RectTransform)dlcIcon.transform, 10f, 8f, 38f, 38f);
+                dlcIcon.GetComponent<Image>().preserveAspect = true;
+            }
 
             CreateDiseaseInteger(panel.transform,
                 "editor.scenario_settings.diseases.min_weight", value.minWeight,
@@ -500,7 +511,7 @@ namespace UnderPressure.Editor
         }
 
         private TMP_Dropdown CreateDiseaseDropdown(Transform parent, IList<string> options,
-            int selected)
+            int selected, IList<Sprite> icons = null)
         {
             var root = NewImage("Selector", parent, _style.ButtonSprite,
                 new Color32(218, 222, 226, 255), true);
@@ -508,7 +519,17 @@ namespace UnderPressure.Editor
             var caption = CreateDiseaseText(root.transform, "", 16f,
                 TextAlignmentOptions.MidlineLeft, Color.black);
             caption.rectTransform.offsetMin = new Vector2(10f, 0f);
-            caption.rectTransform.offsetMax = new Vector2(-34f, 0f);
+            caption.rectTransform.offsetMax = new Vector2(-68f, 0f);
+            var captionIconObject = NewImage("Icono DLC seleccionado", root.transform,
+                null, Color.white, false);
+            var captionIcon = captionIconObject.GetComponent<Image>();
+            captionIcon.preserveAspect = true;
+            var captionIconRect = (RectTransform)captionIconObject.transform;
+            captionIconRect.anchorMin = new Vector2(1f, .5f);
+            captionIconRect.anchorMax = new Vector2(1f, .5f);
+            captionIconRect.pivot = new Vector2(1f, .5f);
+            captionIconRect.sizeDelta = new Vector2(26f, 26f);
+            captionIconRect.anchoredPosition = new Vector2(-34f, 0f);
             var arrow = CreateDiseaseText(root.transform, "▼", 17f,
                 TextAlignmentOptions.Center, Color.black);
             arrow.rectTransform.anchorMin = new Vector2(1f, 0f);
@@ -529,6 +550,7 @@ namespace UnderPressure.Editor
             var scroll = template.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
+            scroll.scrollSensitivity = 800f;
 
             var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image),
                 typeof(Mask));
@@ -570,7 +592,17 @@ namespace UnderPressure.Editor
             var itemLabel = CreateDiseaseText(item.transform, "", 15f,
                 TextAlignmentOptions.MidlineLeft, Color.black);
             itemLabel.rectTransform.offsetMin = new Vector2(10f, 0f);
-            itemLabel.rectTransform.offsetMax = new Vector2(-8f, 0f);
+            itemLabel.rectTransform.offsetMax = new Vector2(-42f, 0f);
+            var itemIconObject = NewImage("Icono DLC opcion", item.transform,
+                null, Color.white, false);
+            var itemIcon = itemIconObject.GetComponent<Image>();
+            itemIcon.preserveAspect = true;
+            var itemIconRect = (RectTransform)itemIconObject.transform;
+            itemIconRect.anchorMin = new Vector2(1f, .5f);
+            itemIconRect.anchorMax = new Vector2(1f, .5f);
+            itemIconRect.pivot = new Vector2(1f, .5f);
+            itemIconRect.sizeDelta = new Vector2(26f, 26f);
+            itemIconRect.anchoredPosition = new Vector2(-8f, 0f);
 
             scroll.viewport = viewportRect;
             scroll.content = contentRect;
@@ -580,8 +612,12 @@ namespace UnderPressure.Editor
             dropdown.targetGraphic = root.GetComponent<Image>();
             dropdown.template = templateRect;
             dropdown.captionText = caption;
+            dropdown.captionImage = captionIcon;
             dropdown.itemText = itemLabel;
-            dropdown.options = options.Select(value => new TMP_Dropdown.OptionData(value)).ToList();
+            dropdown.itemImage = itemIcon;
+            dropdown.options = options.Select((value, index) =>
+                new TMP_Dropdown.OptionData(value,
+                    icons != null && index < icons.Count ? icons[index] : null)).ToList();
             dropdown.SetValueWithoutNotify(Mathf.Clamp(selected, 0,
                 Mathf.Max(0, dropdown.options.Count - 1)));
             dropdown.RefreshShownValue();
