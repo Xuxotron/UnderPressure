@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using FullInspector;
+using HarmonyLib;
 using TH20;
 using UnityEngine;
 
@@ -15,6 +16,7 @@ namespace UnderPressure.Editor
             internal string Name;
             internal SharedInstance<IllnessDefinition> Definition;
             internal WeightedIllness Defaults;
+            internal DLCItemDefinition Dlc;
             internal readonly List<RoomDefinition> Rooms = new List<RoomDefinition>();
         }
 
@@ -41,11 +43,11 @@ namespace UnderPressure.Editor
         {
             var snapshot = new Snapshot();
             var dlcOrder = new Dictionary<uint, int>();
-            var availableDlc = level?.App?.DLCManager?.AvailableItems;
-            if (availableDlc != null)
+            var allDlc = AllDlcItems(level);
+            if (allDlc != null)
             {
                 var index = 0;
-                foreach (var shared in availableDlc)
+                foreach (var shared in allDlc)
                 {
                     var dlc = shared?.Instance;
                     if (dlc != null && !dlcOrder.ContainsKey(dlc.AppID))
@@ -148,6 +150,24 @@ namespace UnderPressure.Editor
                 }
             }
 
+            // Muchas RoomDefinition de los DLC no declaran DlcPackRequired. En ese
+            // caso la procedencia se deduce solo si TODAS las enfermedades que usan
+            // la sala pertenecen al mismo paquete. Las salas base compartidas nunca
+            // se etiquetan como DLC por este procedimiento.
+            foreach (var room in snapshot.Rooms)
+            {
+                if (room.Dlc == null && room.Diseases.Count > 0 &&
+                    room.Diseases.All(disease => disease.Dlc != null))
+                {
+                    var packs = room.Diseases.Select(disease => disease.Dlc)
+                        .GroupBy(dlc => dlc.AppID).ToList();
+                    if (packs.Count == 1) room.Dlc = packs[0].First();
+                }
+                room.DlcOrder = room.Dlc != null &&
+                    dlcOrder.TryGetValue(room.Dlc.AppID, out var order)
+                        ? order : int.MaxValue;
+            }
+
             snapshot.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                 StringComparison.CurrentCultureIgnoreCase));
             snapshot.Rooms.Sort((left, right) =>
@@ -196,7 +216,7 @@ namespace UnderPressure.Editor
             IllnessDefinition illness;
             try { illness = shared?.Instance; }
             catch { return; }
-            if (illness == null || !illness.DLCIsValid()) return;
+            if (illness == null) return;
             var id = DefinitionId(shared);
             if (string.IsNullOrEmpty(id) || snapshot.ById.ContainsKey(id)) return;
             var disease = new Disease
@@ -204,6 +224,7 @@ namespace UnderPressure.Editor
                 Id = id,
                 Name = IllnessName(illness),
                 Definition = shared,
+                Dlc = illness.DLCPackRequired?.Instance,
                 Defaults = defaults == null ? new WeightedIllness
                 {
                     Definition = shared
@@ -211,6 +232,28 @@ namespace UnderPressure.Editor
             };
             snapshot.ById.Add(id, disease);
             snapshot.Diseases.Add(disease);
+        }
+
+        private static IEnumerable<SharedInstance<DLCItemDefinition>> AllDlcItems(Level level)
+        {
+            var manager = level?.App?.DLCManager;
+            if (manager == null) return null;
+            try
+            {
+                var config = AccessTools.Field(typeof(DLCManager), "_config")
+                    ?.GetValue(manager);
+                var items = config == null ? null : AccessTools.Field(config.GetType(),
+                    "DLCItems")?.GetValue(config) as
+                    IEnumerable<SharedInstance<DLCItemDefinition>>;
+                if (items != null) return items;
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Enfermedades: no se pudo leer el orden completo de DLC: " +
+                    exception.Message);
+            }
+            return manager.AvailableItems;
         }
 
         internal static ScenarioMapFormat.WeightedIllnessData[] Capture(WeightedIllness[] values)
