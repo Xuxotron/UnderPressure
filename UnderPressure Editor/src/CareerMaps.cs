@@ -1364,8 +1364,9 @@ namespace UnderPressure.Editor
                 var main = particles.main;
                 main.simulationSpeed *= placement.SpeedMultiplier;
                 if (placement.TintMagenta) TintParticleSystem(particles);
-                if (placement.ContinuousStaticRotation)
-                    ConfigureContinuousStaticRotation(particles);
+                if (string.Equals(placement.Id, "conflux_swirl",
+                    StringComparison.OrdinalIgnoreCase))
+                    RemoveSwirlOpacityCurve(particles);
                 if (placement.CircularEmissionRadius > 0f)
                 {
                     var shape = particles.shape;
@@ -1567,82 +1568,22 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void ConfigureContinuousStaticRotation(ParticleSystem particles)
+        private static void RemoveSwirlOpacityCurve(ParticleSystem particles)
         {
-            var main = particles.main;
-            main.loop = true;
-            main.startDelay = 0f;
-            main.startSpeed = 0f;
-            main.gravityModifier = 0f;
-            main.startColor = FlattenParticleAlpha(main.startColor);
-            main.playOnAwake = true;
-            main.prewarm = true;
-            main.stopAction = ParticleSystemStopAction.None;
-            main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+            var lifetime = particles.colorOverLifetime;
+            var source = lifetime.color;
+            var gradient = source.gradient;
+            if (gradient == null) return;
 
-            // La gravedad nativa desplaza las particulas en Y. Se conserva su
-            // curva de tamaño original porque es la que las hace visibles.
-            var colorOverLifetime = particles.colorOverLifetime;
-            colorOverLifetime.enabled = false;
-            var colorBySpeed = particles.colorBySpeed;
-            colorBySpeed.enabled = false;
-            var velocity = particles.velocityOverLifetime;
-            velocity.enabled = false;
-            var force = particles.forceOverLifetime;
-            force.enabled = false;
-            var noise = particles.noise;
-            noise.enabled = false;
-            var externalForces = particles.externalForces;
-            externalForces.enabled = false;
-            var textureAnimation = particles.textureSheetAnimation;
-            textureAnimation.enabled = false;
-
-            var trails = particles.trails;
-            if (!trails.enabled) return;
-            trails.colorOverLifetime = FlattenParticleAlpha(trails.colorOverLifetime);
-            trails.colorOverTrail = FlattenParticleAlpha(trails.colorOverTrail);
-        }
-
-        private static ParticleSystem.MinMaxGradient FlattenParticleAlpha(
-            ParticleSystem.MinMaxGradient source)
-        {
-            switch (source.mode)
-            {
-                case ParticleSystemGradientMode.TwoColors:
-                    return new ParticleSystem.MinMaxGradient(
-                        WithFullAlpha(source.colorMin), WithFullAlpha(source.colorMax));
-                case ParticleSystemGradientMode.Gradient:
-                    return new ParticleSystem.MinMaxGradient(FlattenGradientAlpha(source.gradient));
-                case ParticleSystemGradientMode.TwoGradients:
-                    return new ParticleSystem.MinMaxGradient(
-                        FlattenGradientAlpha(source.gradientMin),
-                        FlattenGradientAlpha(source.gradientMax));
-                case ParticleSystemGradientMode.RandomColor:
-                    var random = new ParticleSystem.MinMaxGradient(
-                        FlattenGradientAlpha(source.gradient));
-                    random.mode = ParticleSystemGradientMode.RandomColor;
-                    return random;
-                default:
-                    return new ParticleSystem.MinMaxGradient(WithFullAlpha(source.color));
-            }
-        }
-
-        private static Gradient FlattenGradientAlpha(Gradient source)
-        {
-            if (source == null) return new Gradient();
-            var result = new Gradient { mode = source.mode };
-            result.SetKeys(source.colorKeys, new[]
+            // Conserva el color del Swirl, pero elimina su variacion de opacidad.
+            var flattened = new Gradient { mode = gradient.mode };
+            flattened.SetKeys(gradient.colorKeys, new[]
             {
                 new GradientAlphaKey(1f, 0f),
                 new GradientAlphaKey(1f, 1f)
             });
-            return result;
-        }
-
-        private static Color WithFullAlpha(Color source)
-        {
-            source.a = 1f;
-            return source;
+            lifetime.enabled = true;
+            lifetime.color = new ParticleSystem.MinMaxGradient(flattened);
         }
 
         private static ParticleSystem.MinMaxGradient TintGradient(
