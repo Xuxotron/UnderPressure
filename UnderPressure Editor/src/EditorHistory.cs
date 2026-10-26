@@ -109,7 +109,7 @@ namespace UnderPressure.Editor
                 _active = null;
             }
             var go = new GameObject("UP Editor - Historial", typeof(RectTransform));
-            var editorMenu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var editorMenu = level.HUD?.FindMenu<EditHospitalMenu>(true);
             var canvas = editorMenu == null ? null : editorMenu.GetComponentInParent<Canvas>();
             ScenarioEditorUiHierarchy.Attach(go, canvas);
             var rootRect = (RectTransform)go.transform;
@@ -231,9 +231,15 @@ namespace UnderPressure.Editor
         private static readonly FieldInfo[] PlotLayerToggleFields = LayerToggleFields
             .Select(name => AccessTools.Field(typeof(PlotSelectionItem), name)).ToArray();
 
-        private static void SynchronisePlotChecks()
+        private void SynchronisePlotChecks()
         {
-            foreach (var row in UnityEngine.Object.FindObjectsOfType<PlotSelectionItem>())
+            var menu = _level?.HUD?.FindMenu<EditHospitalMenu>(true);
+            var root = menu == null ? null : AccessTools.Field(typeof(EditHospitalMenu),
+                "_plotSelectionRoot")?.GetValue(menu) as Transform;
+            if (root == null) return;
+            // Solo filas activas del menu actual: las antiguas se desactivan antes
+            // de Destroy y aun pueden existir hasta el final de ese frame.
+            foreach (var row in root.GetComponentsInChildren<PlotSelectionItem>(false))
             {
                 var plot = PlotSelectionPlotField?.GetValue(row) as HospitalPlot;
                 if (plot == null) continue;

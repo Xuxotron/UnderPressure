@@ -843,8 +843,10 @@ namespace UnderPressure.Editor
             var previews = previewField?.GetValue(cursor) as Dictionary<HospitalPlot, GameObject>;
             var create = AccessTools.Method(typeof(CursorEditHospital), "CreateTilemapPreview",
                 new[] { typeof(HospitalPlot) });
+            var select = AccessTools.Method(typeof(CursorEditHospital), "OnSelectHospitalPlot",
+                new[] { typeof(HospitalPlot) });
             var selectedField = AccessTools.Field(typeof(CursorEditHospital), "_hospitalPlot");
-            if (previews == null || create == null || selectedField == null)
+            if (previews == null || create == null || select == null || selectedField == null)
                 throw new InvalidOperationException("No se pueden sincronizar las parcelas del Editor.");
 
             selectedField.SetValue(cursor, null); // El objeto anterior ya puede estar destruido.
@@ -864,6 +866,11 @@ namespace UnderPressure.Editor
                     previews.TryGetValue(plot, out var tilePreview) && tilePreview != null)
                     tilePreview.SetActive(plot.IsVisible());
             }
+            if (level.WorldState.HospitalPlots.Count == 0)
+                throw new InvalidOperationException("No quedan parcelas para seleccionar en el Editor.");
+            // CursorEditHospital hace esta misma llamada directa al iniciarse. Repetirla
+            // aqui evita depender del estado visible del menu durante la carga del mapa.
+            select.Invoke(cursor, new object[] { level.WorldState.HospitalPlots[0] });
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Editor: controles 3D sincronizados con " + previews.Count + " parcelas.");
         }
@@ -891,7 +898,7 @@ namespace UnderPressure.Editor
             var previewMethod = AccessTools.Method(typeof(CursorEditHospital), "CreateTilemapPreview");
             var previewField = AccessTools.Field(typeof(CursorEditHospital), "_tileMapPreview");
             var previews = previewField?.GetValue(nativeCursor) as Dictionary<HospitalPlot, GameObject>;
-            var menu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var menu = FindNativeEditorMenu(level);
             var root = menu == null ? null : AccessTools.Field(typeof(EditHospitalMenu),
                 "_plotSelectionRoot")?.GetValue(menu) as Transform;
             var prefab = menu == null ? null : AccessTools.Field(typeof(EditHospitalMenu),
@@ -1123,7 +1130,7 @@ namespace UnderPressure.Editor
                 throw new InvalidOperationException("Selecciona la parcela que quieres eliminar.");
 
             StopActiveEditorTools(level);
-            var menu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var menu = FindNativeEditorMenu(level);
             var root = menu == null ? null : AccessTools.Field(typeof(EditHospitalMenu),
                 "_plotSelectionRoot")?.GetValue(menu) as Transform;
             if (root == null)
@@ -1183,8 +1190,9 @@ namespace UnderPressure.Editor
 
         private static void RefreshPlotButtons(Level level, int selectedIndex = 0)
         {
-            var menu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
-            if (menu == null) return;
+            var menu = FindNativeEditorMenu(level);
+            if (menu == null)
+                throw new InvalidOperationException("No se encontro el menu nativo de parcelas del Editor.");
             var menuType = typeof(EditHospitalMenu);
             var root = AccessTools.Field(menuType, "_plotSelectionRoot")?.GetValue(menu) as Transform;
             var prefab = AccessTools.Field(menuType, "_plotSelectionButtonPrefab")?.GetValue(menu) as GameObject;
@@ -1218,7 +1226,7 @@ namespace UnderPressure.Editor
         // del idioma activo; nunca forma parte de los datos guardados del mapa.
         internal static void RefreshLocalizedPlotLabels()
         {
-            var menu = UnityEngine.Object.FindObjectOfType<EditHospitalMenu>();
+            var menu = FindNativeEditorMenu(ScenarioEditorSession.Level);
             if (menu == null) return;
             var root = AccessTools.Field(typeof(EditHospitalMenu),
                 "_plotSelectionRoot")?.GetValue(menu) as Transform;
@@ -1231,6 +1239,13 @@ namespace UnderPressure.Editor
                 if (label != null)
                     label.text = EditorLocalization.Format("editor.plot.default_name", i + 1);
             }
+        }
+
+        // HUD conserva el registro de menus aunque Unity los tenga inactivos durante
+        // una transicion. Es la misma via nativa utilizada por CursorEditHospital.
+        private static EditHospitalMenu FindNativeEditorMenu(Level level)
+        {
+            return level?.HUD?.FindMenu<EditHospitalMenu>(true);
         }
 
         private static void StopActiveEditorTools(Level level)
