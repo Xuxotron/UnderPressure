@@ -2293,11 +2293,16 @@ namespace UnderPressure.Editor
             // Ocultar los controles inmediatamente: Destroy se ejecuta al
             // final del frame y no debe dejar restos en el menu principal.
             if (_root != null) _root.gameObject.SetActive(false);
-            // El catalogo y su panel no pertenecen al registro de menus del HUD.
+            // Aunque el catalogo se haya retirado del registro del HUD, debe
+            // cerrarse por la ruta nativa: DestroyMenu ejecuta primero
+            // LandscapeObjectsMenu.Destroy y despues destruye su GameObject.
             if (_objectsMenu != null)
             {
                 ScenarioEditorObjectDock.Forget(_objectsMenu);
-                Destroy(_objectsMenu.gameObject);
+                if (_level?.HUD != null)
+                    _level.HUD.DestroyMenu(_objectsMenu);
+                else
+                    Destroy(_objectsMenu.gameObject);
             }
             if (_objectsDockHost != null) Destroy(_objectsDockHost.gameObject);
             _objectsDockHost = null;
