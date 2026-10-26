@@ -74,6 +74,34 @@ namespace UnderPressure.Editor
                     exception.Message);
             }
 
+            // LevelOptions enumera los hospitales originales de todo el juego,
+            // incluidos los DLC. El hospital abierto no contiene por si solo
+            // todas sus enfermedades ni, por tanto, todas las salas de tratamiento.
+            var examinedLevels = new HashSet<LevelConfig>();
+            if (level?.Config != null) examinedLevels.Add(level.Config);
+            var options = level?.App?.SandboxSettingsConfig?.LevelOptions;
+            if (options != null)
+                foreach (var option in options)
+                {
+                    LevelConfig levelConfig;
+                    try { levelConfig = option?.Level?.Instance; }
+                    catch { continue; }
+                    if (levelConfig == null || !examinedLevels.Add(levelConfig)) continue;
+                    try
+                    {
+                        var characters = levelConfig.GetCharacterManagerConfig();
+                        weightedRead += AddWeighted(snapshot, characters?._weightedIllnesses);
+                        weightedRead += AddWeighted(snapshot,
+                            characters?._weightedIllnessesTimePortal);
+                    }
+                    catch (Exception exception)
+                    {
+                        UnderPressureEditorPlugin.Log?.LogWarning(
+                            "Enfermedades: no se pudo examinar " + levelConfig.UniqueId +
+                            ": " + exception.Message);
+                    }
+                }
+
             foreach (var list in Resources.FindObjectsOfTypeAll<SharedInstance<WeightedIllnessList>>())
             {
                 var illnesses = list?.Instance?.Illnesses;
@@ -140,10 +168,11 @@ namespace UnderPressure.Editor
             foreach (var room in snapshot.Rooms)
                 room.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                     StringComparison.CurrentCultureIgnoreCase));
+            var dlcRooms = snapshot.Rooms.Count(room => room.Dlc != null);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Enfermedades: " + snapshot.Diseases.Count + " definiciones, " +
                 treatmentDiseases + " con tratamiento y " + snapshot.Rooms.Count +
-                " salas; " + weightedRead +
+                " salas (" + dlcRooms + " DLC); " + weightedRead +
                 " entradas ponderadas y " + sharedRead + " SharedInstance examinados.");
             return snapshot;
         }

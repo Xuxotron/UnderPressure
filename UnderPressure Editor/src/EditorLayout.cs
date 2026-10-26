@@ -987,7 +987,8 @@ namespace UnderPressure.Editor
             {
                 if (image == null || image.GetComponentInParent<InputField>() != null ||
                     image.GetComponentInParent<TMP_InputField>() != null ||
-                    IsWorkshopSettingsField(image.transform)) continue;
+                    IsWorkshopSettingsField(image.transform) ||
+                    IsDiseaseNativeScrollbar(image.transform)) continue;
                 var interior = IsSettingsInterior(image.transform);
                 if (interior)
                 {
@@ -1037,6 +1038,14 @@ namespace UnderPressure.Editor
             return false;
         }
 
+        private static bool IsDiseaseNativeScrollbar(Transform value)
+        {
+            for (var current = value; current != null; current = current.parent)
+                if (current.name.StartsWith("UP Disease Native Scrollbar",
+                        StringComparison.Ordinal)) return true;
+            return false;
+        }
+
         private bool IsSettingsInterior(Transform value)
         {
             if (value == null) return false;
@@ -1082,19 +1091,20 @@ namespace UnderPressure.Editor
                 false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
-                .02f, .32f);
+                .02f, .32f, 100f);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
-                .35f, .65f);
+                .35f, .65f, 100f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
-                .68f, .98f);
+                .68f, .98f, 100f);
             RefreshScenarioSettingsFields();
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
             float top, float height, bool multiline, bool integer = false,
-            float anchorMinX = .02f, float anchorMaxX = .98f)
+            float anchorMinX = .02f, float anchorMaxX = .98f,
+            float inputWidth = -1f)
         {
             GameObject panelTemplate;
             Component nativeInputTemplate;
@@ -1132,6 +1142,9 @@ namespace UnderPressure.Editor
 
             SetWorkshopFieldLabel(row.transform, fieldObject.transform,
                 EditorLocalization.Get(labelKey));
+            if (inputWidth > 0f)
+                ArrangeNativeWorkshopColumns(row.transform, fieldObject.transform,
+                    inputWidth);
             foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
                 oldText.gameObject.SetActive(false);
 
@@ -1181,6 +1194,48 @@ namespace UnderPressure.Editor
             selection.a = .35f;
             input.selectionColor = selection;
             return input;
+        }
+
+        private static void ArrangeNativeWorkshopColumns(Transform row, Transform input,
+            float inputWidth)
+        {
+            // Jerarquia verificada del prefab nativo GameItemUIScreen:
+            // LayoutGroup/TitleLabelTextHolder y LayoutGroup/TitlePanel/
+            // InputFieldContainer/InputField. Se cambian solo sus dos columnas.
+            var layoutRoot = row.Find("LayoutGroup");
+            var labelHolder = row.Find("LayoutGroup/TitleLabelTextHolder") as RectTransform;
+            var inputPanel = row.Find("LayoutGroup/TitlePanel") as RectTransform;
+            if (layoutRoot == null || labelHolder == null || inputPanel == null ||
+                input == null || !input.IsChildOf(inputPanel))
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Ajustes del escenario: la jerarquia nativa del campo Workshop no coincide.");
+                return;
+            }
+
+            // StaticLayoutGroup fija la proporcion 20/80 del prefab. Una vez clonado,
+            // se desactiva para conservar las columnas explicitas solicitadas.
+            foreach (var behaviour in layoutRoot.GetComponents<Behaviour>())
+                if (behaviour != null && behaviour.GetType().Name == "StaticLayoutGroup")
+                    behaviour.enabled = false;
+
+            labelHolder.anchorMin = Vector2.zero;
+            labelHolder.anchorMax = Vector2.one;
+            labelHolder.offsetMin = Vector2.zero;
+            labelHolder.offsetMax = new Vector2(-inputWidth - 8f, 0f);
+
+            inputPanel.anchorMin = new Vector2(1f, 0f);
+            inputPanel.anchorMax = Vector2.one;
+            inputPanel.pivot = new Vector2(1f, .5f);
+            inputPanel.offsetMin = new Vector2(-inputWidth, 0f);
+            inputPanel.offsetMax = Vector2.zero;
+
+            var label = labelHolder.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.enableWordWrapping = false;
+                label.overflowMode = TextOverflowModes.Ellipsis;
+            }
         }
 
         private static bool TryGetWorkshopFieldTemplate(bool multiline,
