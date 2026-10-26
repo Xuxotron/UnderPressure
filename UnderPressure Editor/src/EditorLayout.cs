@@ -987,8 +987,7 @@ namespace UnderPressure.Editor
             {
                 if (image == null || image.GetComponentInParent<InputField>() != null ||
                     image.GetComponentInParent<TMP_InputField>() != null ||
-                    IsWorkshopSettingsField(image.transform) ||
-                    IsDiseaseNativeScrollbar(image.transform)) continue;
+                    IsWorkshopSettingsField(image.transform)) continue;
                 var interior = IsSettingsInterior(image.transform);
                 if (interior)
                 {
@@ -1038,14 +1037,6 @@ namespace UnderPressure.Editor
             return false;
         }
 
-        private static bool IsDiseaseNativeScrollbar(Transform value)
-        {
-            for (var current = value; current != null; current = current.parent)
-                if (current.name.StartsWith("UP Disease Native Scrollbar",
-                        StringComparison.Ordinal)) return true;
-            return false;
-        }
-
         private bool IsSettingsInterior(Transform value)
         {
             if (value == null) return false;
@@ -1091,20 +1082,19 @@ namespace UnderPressure.Editor
                 false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
-                .02f, .32f, 100f);
+                .02f, .32f);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
-                .35f, .65f, 100f);
+                .35f, .65f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
-                .68f, .98f, 100f);
+                .68f, .98f);
             RefreshScenarioSettingsFields();
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
             float top, float height, bool multiline, bool integer = false,
-            float anchorMinX = .02f, float anchorMaxX = .98f,
-            float inputWidth = -1f)
+            float anchorMinX = .02f, float anchorMaxX = .98f)
         {
             GameObject panelTemplate;
             Component nativeInputTemplate;
@@ -1142,9 +1132,6 @@ namespace UnderPressure.Editor
 
             SetWorkshopFieldLabel(row.transform, fieldObject.transform,
                 EditorLocalization.Get(labelKey));
-            if (inputWidth > 0f)
-                ArrangeCompactWorkshopField(row.transform, fieldObject.transform,
-                    (nativeInput as Selectable)?.targetGraphic?.transform, inputWidth);
             foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
                 oldText.gameObject.SetActive(false);
 
@@ -1194,64 +1181,6 @@ namespace UnderPressure.Editor
             selection.a = .35f;
             input.selectionColor = selection;
             return input;
-        }
-
-        private static void ArrangeCompactWorkshopField(Transform row, Transform inputRoot,
-            Transform targetGraphic, float inputWidth)
-        {
-            var tmpLabel = row.GetComponentsInChildren<TMP_Text>(true)
-                .FirstOrDefault(text => text != null &&
-                    !text.transform.IsChildOf(inputRoot));
-            var regularLabel = tmpLabel == null
-                ? row.GetComponentsInChildren<Text>(true).FirstOrDefault(text => text != null &&
-                    !text.transform.IsChildOf(inputRoot))
-                : null;
-            var labelRect = tmpLabel != null
-                ? tmpLabel.rectTransform : regularLabel?.rectTransform;
-
-            SetCompactInputRect(inputRoot as RectTransform, inputWidth);
-            if (targetGraphic != null && targetGraphic != inputRoot)
-            {
-                if (targetGraphic.IsChildOf(inputRoot))
-                    Stretch(targetGraphic as RectTransform);
-                else if (inputRoot.IsChildOf(targetGraphic) &&
-                         (labelRect == null || !labelRect.IsChildOf(targetGraphic)))
-                    SetCompactInputRect(targetGraphic as RectTransform, inputWidth);
-            }
-            for (var current = inputRoot.parent; current != null && current != row;
-                 current = current.parent)
-            {
-                if (current.GetComponent<Image>() == null ||
-                    (labelRect != null && labelRect.IsChildOf(current))) continue;
-                SetCompactInputRect(current as RectTransform, inputWidth);
-                break;
-            }
-
-            if (labelRect == null) return;
-            labelRect.anchorMin = new Vector2(0f, labelRect.anchorMin.y);
-            labelRect.anchorMax = new Vector2(1f, labelRect.anchorMax.y);
-            labelRect.offsetMin = new Vector2(12f, labelRect.offsetMin.y);
-            labelRect.offsetMax = new Vector2(-inputWidth - 22f, labelRect.offsetMax.y);
-            if (tmpLabel != null)
-            {
-                tmpLabel.enableWordWrapping = false;
-                tmpLabel.overflowMode = TextOverflowModes.Ellipsis;
-            }
-            if (regularLabel != null)
-            {
-                regularLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
-                regularLabel.verticalOverflow = VerticalWrapMode.Truncate;
-            }
-        }
-
-        private static void SetCompactInputRect(RectTransform rect, float width)
-        {
-            if (rect == null) return;
-            rect.anchorMin = new Vector2(1f, rect.anchorMin.y);
-            rect.anchorMax = new Vector2(1f, rect.anchorMax.y);
-            rect.pivot = new Vector2(1f, rect.pivot.y);
-            rect.anchoredPosition = new Vector2(-10f, rect.anchoredPosition.y);
-            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
         }
 
         private static bool TryGetWorkshopFieldTemplate(bool multiline,
