@@ -268,14 +268,6 @@ namespace UnderPressure.Editor
 
             _settingsDiseaseCatalog.ById.TryGetValue(value.definition ?? "", out var selected);
             AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.illness", 16f, 8f, 115f);
-            var name = CreateDiseaseText(panel.transform,
-                selected?.Name ?? value.definition, 18f,
-                TextAlignmentOptions.MidlineLeft, Color.white);
-            name.fontStyle = FontStyles.Bold;
-            SetTopLeft(name.rectTransform, 130f, 8f, 250f, 38f);
-
-            AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.definition",
-                395f, 8f, 120f);
             var available = AvailableForRoom(room, value.definition);
             var choices = available.Select(disease => new DiseaseChoice
                 { Id = disease.Id, Name = disease.Name, DlcIcon = disease.Dlc?.Icon }).ToList();
@@ -283,7 +275,7 @@ namespace UnderPressure.Editor
             var definition = CreateDiseaseDropdown(panel.transform,
                 choices.Select(choice => choice.Name).ToList(), currentIndex,
                 choices.Select(choice => choice.DlcIcon).ToList());
-            SetTopLeft((RectTransform)definition.transform, 515f, 8f, 325f, 38f);
+            SetTopLeft((RectTransform)definition.transform, 130f, 8f, 710f, 38f);
             definition.onValueChanged.AddListener(index =>
             {
                 if (index < 0 || index >= choices.Count) return;
