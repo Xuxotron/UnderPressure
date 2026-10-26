@@ -12,6 +12,7 @@ using TH20;
 using TH20.UI;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.UI;
 
 // ===== BEGIN ORIGINAL: ScenarioCareerMapMenu.cs =====
@@ -1218,6 +1219,8 @@ namespace UnderPressure.Editor
         private string _catalogPath;
         private readonly Dictionary<string, Texture2D> _pinIconTextures =
             new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Texture2D> _worldMeshTextures =
+            new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
 
         internal void Initialise(MetagameMap map)
         {
@@ -1351,15 +1354,18 @@ namespace UnderPressure.Editor
                 renderer.gameObject.SetActive(true);
                 renderer.enabled = true;
             }
+            ApplyWorldMeshTextureOverride(clone, placement.TextureOverrideSourceName,
+                placement.TextureOverrideFile);
+            if (placement.ContinuousStaticRotation)
+                DisablePortalObjectAnimation(clone);
             foreach (var particles in clone.GetComponentsInChildren<ParticleSystem>(true))
             {
                 particles.gameObject.SetActive(true);
                 var main = particles.main;
                 main.simulationSpeed *= placement.SpeedMultiplier;
                 if (placement.TintMagenta) TintParticleSystem(particles);
-                if (string.Equals(placement.Id, "conflux_swirl",
-                    StringComparison.OrdinalIgnoreCase))
-                    RemoveSwirlOpacityCurve(particles);
+                if (placement.ContinuousStaticRotation)
+                    ConfigureContinuousStaticRotation(particles);
                 if (placement.CircularEmissionRadius > 0f)
                 {
                     var shape = particles.shape;
@@ -1545,22 +1551,96 @@ namespace UnderPressure.Editor
             SetMaterialMagenta(trailMaterial, "_EmissionColor", magenta);
         }
 
-        private static void RemoveSwirlOpacityCurve(ParticleSystem particles)
+        private static void DisablePortalObjectAnimation(GameObject target)
         {
-            var lifetime = particles.colorOverLifetime;
-            var source = lifetime.color;
-            var gradient = source.gradient;
-            if (gradient == null) return;
+            foreach (var animator in target.GetComponentsInChildren<Animator>(true))
+                animator.enabled = false;
+            foreach (var animation in target.GetComponentsInChildren<Animation>(true))
+            {
+                animation.Stop();
+                animation.enabled = false;
+            }
+            foreach (var director in target.GetComponentsInChildren<PlayableDirector>(true))
+            {
+                director.Stop();
+                director.enabled = false;
+            }
+        }
 
-            // Conserva el color del Swirl, pero elimina su variacion de opacidad.
-            var flattened = new Gradient { mode = gradient.mode };
-            flattened.SetKeys(gradient.colorKeys, new[]
+        private static void ConfigureContinuousStaticRotation(ParticleSystem particles)
+        {
+            var main = particles.main;
+            main.loop = true;
+            main.startDelay = 0f;
+            main.startSpeed = 0f;
+            main.startColor = FlattenParticleAlpha(main.startColor);
+            main.playOnAwake = true;
+            main.prewarm = true;
+            main.stopAction = ParticleSystemStopAction.None;
+            main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+
+            // Se conserva Rotation over Lifetime: es la unica animacion deseada.
+            var colorOverLifetime = particles.colorOverLifetime;
+            colorOverLifetime.enabled = false;
+            var colorBySpeed = particles.colorBySpeed;
+            colorBySpeed.enabled = false;
+            var velocity = particles.velocityOverLifetime;
+            velocity.enabled = false;
+            var force = particles.forceOverLifetime;
+            force.enabled = false;
+            var noise = particles.noise;
+            noise.enabled = false;
+            var externalForces = particles.externalForces;
+            externalForces.enabled = false;
+            var textureAnimation = particles.textureSheetAnimation;
+            textureAnimation.enabled = false;
+
+            var trails = particles.trails;
+            if (!trails.enabled) return;
+            trails.colorOverLifetime = FlattenParticleAlpha(trails.colorOverLifetime);
+            trails.colorOverTrail = FlattenParticleAlpha(trails.colorOverTrail);
+        }
+
+        private static ParticleSystem.MinMaxGradient FlattenParticleAlpha(
+            ParticleSystem.MinMaxGradient source)
+        {
+            switch (source.mode)
+            {
+                case ParticleSystemGradientMode.TwoColors:
+                    return new ParticleSystem.MinMaxGradient(
+                        WithFullAlpha(source.colorMin), WithFullAlpha(source.colorMax));
+                case ParticleSystemGradientMode.Gradient:
+                    return new ParticleSystem.MinMaxGradient(FlattenGradientAlpha(source.gradient));
+                case ParticleSystemGradientMode.TwoGradients:
+                    return new ParticleSystem.MinMaxGradient(
+                        FlattenGradientAlpha(source.gradientMin),
+                        FlattenGradientAlpha(source.gradientMax));
+                case ParticleSystemGradientMode.RandomColor:
+                    var random = new ParticleSystem.MinMaxGradient(
+                        FlattenGradientAlpha(source.gradient));
+                    random.mode = ParticleSystemGradientMode.RandomColor;
+                    return random;
+                default:
+                    return new ParticleSystem.MinMaxGradient(WithFullAlpha(source.color));
+            }
+        }
+
+        private static Gradient FlattenGradientAlpha(Gradient source)
+        {
+            if (source == null) return new Gradient();
+            var result = new Gradient { mode = source.mode };
+            result.SetKeys(source.colorKeys, new[]
             {
                 new GradientAlphaKey(1f, 0f),
                 new GradientAlphaKey(1f, 1f)
             });
-            lifetime.enabled = true;
-            lifetime.color = new ParticleSystem.MinMaxGradient(flattened);
+            return result;
+        }
+
+        private static Color WithFullAlpha(Color source)
+        {
+            source.a = 1f;
+            return source;
         }
 
         private static ParticleSystem.MinMaxGradient TintGradient(
@@ -1636,6 +1716,55 @@ namespace UnderPressure.Editor
                 PinMaterialFields[index]?.SetValue(pin, (index & 1) == 0 ? off : on);
             GeneratedPinIconMaterials[pin] = new PinIconMaterials { Off = off, On = on };
             RefreshGeneratedPinVisual(pin);
+        }
+
+        private void ApplyWorldMeshTextureOverride(GameObject target, string sourceTextureName,
+            string fileName)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(sourceTextureName) ||
+                string.IsNullOrWhiteSpace(fileName)) return;
+            var path = Path.Combine(UnderPressure.LoaderRuntime.Paths.PluginPath,
+                "Assets", fileName);
+            if (!File.Exists(path))
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Textura del portal no encontrada: " + path);
+                return;
+            }
+
+            if (!_worldMeshTextures.TryGetValue(fileName, out var texture) || texture == null)
+            {
+                texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, true)
+                {
+                    name = Path.GetFileNameWithoutExtension(fileName),
+                    wrapMode = TextureWrapMode.Repeat,
+                    filterMode = FilterMode.Bilinear
+                };
+                if (!ImageConversion.LoadImage(texture, File.ReadAllBytes(path), false))
+                {
+                    Destroy(texture);
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "No se pudo decodificar la textura del portal: " + path);
+                    return;
+                }
+                _worldMeshTextures[fileName] = texture;
+            }
+
+            var replacements = 0;
+            foreach (var renderer in target.GetComponentsInChildren<Renderer>(true))
+            {
+                foreach (var material in renderer.materials)
+                {
+                    var original = material != null ? material.mainTexture : null;
+                    if (original == null || !string.Equals(original.name, sourceTextureName,
+                            StringComparison.Ordinal)) continue;
+                    material.mainTexture = texture;
+                    replacements++;
+                }
+            }
+            if (replacements == 0)
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "La malla del portal no usa la textura esperada: " + sourceTextureName);
         }
 
         private Material CreatePinIconMaterial(MeshRenderer mesh, string fileName,
@@ -1837,6 +1966,11 @@ namespace UnderPressure.Editor
                 if (texture != null) Destroy(texture);
             }
             _pinIconTextures.Clear();
+            foreach (var texture in _worldMeshTextures.Values)
+            {
+                if (texture != null) Destroy(texture);
+            }
+            _worldMeshTextures.Clear();
             if (_generatedRoot == null) return;
             _generatedRoot.gameObject.SetActive(false);
             Destroy(_generatedRoot.gameObject);

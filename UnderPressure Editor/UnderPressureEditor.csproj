@@ -113,5 +113,8 @@
     <None Include="..\Assets\UnderMapsON.png" Link="Assets\UnderMapsON.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Assets\T_Portal_Whirl2.png" Link="Assets\T_Portal_Whirl2.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
