@@ -13,22 +13,31 @@ namespace UnderPressure.Editor
         internal sealed class Disease
         {
             internal string Id;
-            internal string Name;
             internal SharedInstance<IllnessDefinition> Definition;
             internal WeightedIllness Defaults;
             internal DLCItemDefinition Dlc;
             internal readonly List<RoomDefinition> Rooms = new List<RoomDefinition>();
+
+            internal string Name
+            {
+                get
+                {
+                    try { return IllnessName(Definition?.Instance); }
+                    catch { return ""; }
+                }
+            }
         }
 
         internal sealed class Room
         {
             internal string Id;
             internal RoomDefinition Definition;
-            internal string Name;
             internal Sprite Icon;
             internal DLCItemDefinition Dlc;
             internal int DlcOrder = int.MaxValue;
             internal readonly List<Disease> Diseases = new List<Disease>();
+
+            internal string Name => RoomName(Definition);
         }
 
         internal sealed class Snapshot
@@ -137,7 +146,6 @@ namespace UnderPressure.Editor
                         {
                             Definition = definition,
                             Id = RoomId(treatment._room),
-                            Name = RoomName(definition),
                             Icon = definition._icon,
                             Dlc = dlc,
                             DlcOrder = dlc != null && dlcOrder.TryGetValue(dlc.AppID,
@@ -168,6 +176,28 @@ namespace UnderPressure.Editor
                         ? order : int.MaxValue;
             }
 
+            SortLocalized(snapshot, dlcOrder);
+            var dlcRooms = snapshot.Rooms.Count(room => room.Dlc != null);
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Enfermedades: " + snapshot.Diseases.Count + " definiciones, " +
+                treatmentDiseases + " con tratamiento y " + snapshot.Rooms.Count +
+                " salas (" + dlcRooms + " DLC); " + weightedRead +
+                " entradas ponderadas y " + sharedRead + " SharedInstance examinados.");
+            return snapshot;
+        }
+
+        internal static void SortLocalized(Snapshot snapshot)
+        {
+            if (snapshot == null) return;
+            var dlcOrder = snapshot.Rooms.Where(room => room.Dlc != null)
+                .GroupBy(room => room.Dlc.AppID)
+                .ToDictionary(group => group.Key, group => group.Min(room => room.DlcOrder));
+            SortLocalized(snapshot, dlcOrder);
+        }
+
+        private static void SortLocalized(Snapshot snapshot,
+            IDictionary<uint, int> dlcOrder)
+        {
             snapshot.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                 StringComparison.CurrentCultureIgnoreCase));
             snapshot.Rooms.Sort((left, right) =>
@@ -177,7 +207,11 @@ namespace UnderPressure.Editor
                 if (leftDlc != rightDlc) return leftDlc ? 1 : -1;
                 if (leftDlc)
                 {
-                    var order = left.DlcOrder.CompareTo(right.DlcOrder);
+                    var leftOrder = dlcOrder != null && dlcOrder.TryGetValue(left.Dlc.AppID,
+                        out var resolvedLeft) ? resolvedLeft : left.DlcOrder;
+                    var rightOrder = dlcOrder != null && dlcOrder.TryGetValue(right.Dlc.AppID,
+                        out var resolvedRight) ? resolvedRight : right.DlcOrder;
+                    var order = leftOrder.CompareTo(rightOrder);
                     if (order != 0) return order;
                     order = left.Dlc.AppID.CompareTo(right.Dlc.AppID);
                     if (order != 0) return order;
@@ -188,13 +222,6 @@ namespace UnderPressure.Editor
             foreach (var room in snapshot.Rooms)
                 room.Diseases.Sort((left, right) => string.Compare(left.Name, right.Name,
                     StringComparison.CurrentCultureIgnoreCase));
-            var dlcRooms = snapshot.Rooms.Count(room => room.Dlc != null);
-            UnderPressureEditorPlugin.Log?.LogInfo(
-                "Enfermedades: " + snapshot.Diseases.Count + " definiciones, " +
-                treatmentDiseases + " con tratamiento y " + snapshot.Rooms.Count +
-                " salas (" + dlcRooms + " DLC); " + weightedRead +
-                " entradas ponderadas y " + sharedRead + " SharedInstance examinados.");
-            return snapshot;
         }
 
         private static int AddWeighted(Snapshot snapshot, WeightedIllness[] values)
@@ -222,7 +249,6 @@ namespace UnderPressure.Editor
             var disease = new Disease
             {
                 Id = id,
-                Name = IllnessName(illness),
                 Definition = shared,
                 Dlc = illness.DLCPackRequired?.Instance,
                 Defaults = defaults == null ? new WeightedIllness
@@ -345,14 +371,14 @@ namespace UnderPressure.Editor
         {
             if (illness == null) return "";
             var value = illness.Name.Translation;
-            return string.IsNullOrEmpty(value) ? illness.ToString() : value;
+            return value ?? "";
         }
 
         private static string RoomName(RoomDefinition room)
         {
             if (room == null) return "";
             var value = room.GetLocalisedName();
-            return string.IsNullOrEmpty(value) ? room.ToString() : value;
+            return value ?? "";
         }
 
         private static WeightedIllness Clone(WeightedIllness value)

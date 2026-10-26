@@ -24,6 +24,10 @@ namespace UnderPressure.Editor
         private Scrollbar _settingsDiseaseNativeScrollbarTemplate;
         private Toggle _settingsDiseaseNativeToggleTemplate;
         private bool _settingsDiseasesLoaded;
+        private string _settingsDiseaseLanguage;
+        private Sprite _settingsDiseaseStarFullSprite;
+        private Sprite _settingsDiseaseStarEmptySprite;
+        private bool _settingsDiseaseStarSpritesSearched;
 
         private sealed class DiseaseChoice
         {
@@ -82,7 +86,18 @@ namespace UnderPressure.Editor
         private void RefreshDiseaseSettingsContents()
         {
             if (_settingsDiseaseContent == null || _level == null) return;
-            if (_settingsDiseasesLoaded) return;
+            var language = EditorLocalization.CurrentLanguageCode();
+            if (_settingsDiseasesLoaded)
+            {
+                if (!string.Equals(language, _settingsDiseaseLanguage,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    _settingsDiseaseLanguage = language;
+                    ScenarioDiseaseCatalog.SortLocalized(_settingsDiseaseCatalog);
+                    RebuildDiseaseSettingsContents();
+                }
+                return;
+            }
             _settingsDiseaseCatalog = ScenarioDiseaseCatalog.Build(_level);
             _settingsIllnesses.Clear();
             var stored = ScenarioEditorStorage.CurrentScenarioSettings(_level).illnesses ??
@@ -93,6 +108,7 @@ namespace UnderPressure.Editor
                 if (copy != null) _settingsIllnesses.Add(copy);
             }
             NormalizeDiseaseRooms();
+            _settingsDiseaseLanguage = language;
             _settingsDiseasesLoaded = true;
             RebuildDiseaseSettingsContents();
             if (_settingsDiseaseScroll != null)
@@ -262,7 +278,7 @@ namespace UnderPressure.Editor
                 395f, 8f, 120f);
             var available = AvailableForRoom(room, value.definition);
             var choices = available.Select(disease => new DiseaseChoice
-                { Id = disease.Id, Name = disease.Id, DlcIcon = disease.Dlc?.Icon }).ToList();
+                { Id = disease.Id, Name = disease.Name, DlcIcon = disease.Dlc?.Icon }).ToList();
             var currentIndex = Mathf.Max(0, choices.FindIndex(choice => choice.Id == value.definition));
             var definition = CreateDiseaseDropdown(panel.transform,
                 choices.Select(choice => choice.Name).ToList(), currentIndex,
@@ -302,9 +318,7 @@ namespace UnderPressure.Editor
             CreateDiseaseInteger(panel.transform,
                 "editor.scenario_settings.diseases.max_weight", value.maxWeight,
                 275f, changed => value.maxWeight = changed);
-            CreateDiseaseInteger(panel.transform,
-                "editor.scenario_settings.diseases.min_stars", value.minStarRating,
-                535f, changed => value.minStarRating = changed);
+            CreateDiseaseStarRating(panel.transform, value, 535f);
             CreateDiseaseInteger(panel.transform,
                 "editor.scenario_settings.diseases.min_spawned", value.minPatientsSpawned,
                 795f, changed => value.minPatientsSpawned = changed);
@@ -365,6 +379,90 @@ namespace UnderPressure.Editor
                         out var parsed)) setter(parsed);
                 else input.SetTextWithoutNotify(current.ToString(CultureInfo.InvariantCulture));
             });
+        }
+
+        private void CreateDiseaseStarRating(Transform parent,
+            ScenarioMapFormat.WeightedIllnessData value, float x)
+        {
+            AddFieldLabel(parent, "editor.scenario_settings.diseases.min_stars",
+                x, 64f, 135f);
+            value.minStarRating = Mathf.Clamp(value.minStarRating, 0, 3);
+            if (!ResolveNativeDiseaseStarSprites()) return;
+
+            var images = new Image[3];
+            for (var index = 0; index < images.Length; ++index)
+            {
+                var rating = index + 1;
+                var star = NewImage("Estrella minima " + rating, parent,
+                    rating <= value.minStarRating ? _settingsDiseaseStarFullSprite :
+                    _settingsDiseaseStarEmptySprite, Color.white, true);
+                var image = star.GetComponent<Image>();
+                image.type = Image.Type.Simple;
+                image.preserveAspect = true;
+                images[index] = image;
+                SetTopLeft((RectTransform)star.transform,
+                    x + 140f + index * 38f, 64f, 34f, 34f);
+
+                var button = star.AddComponent<Button>();
+                button.targetGraphic = image;
+                button.transition = Selectable.Transition.None;
+                button.onClick.AddListener(() =>
+                {
+                    // La primera estrella permite volver al unico estado sin
+                    // estrellas sin introducir un cuarto control ajeno al juego.
+                    var next = rating == 1 && value.minStarRating == 1 ? 0 : rating;
+                    value.minStarRating = next;
+                    RefreshDiseaseStarRating(images, next);
+                });
+                StandardiseClickSound(button);
+            }
+        }
+
+        private void RefreshDiseaseStarRating(IList<Image> images, int rating)
+        {
+            if (images == null) return;
+            for (var index = 0; index < images.Count; ++index)
+                if (images[index] != null)
+                    images[index].overrideSprite = index < rating
+                        ? _settingsDiseaseStarFullSprite : _settingsDiseaseStarEmptySprite;
+        }
+
+        private bool ResolveNativeDiseaseStarSprites()
+        {
+            if (_settingsDiseaseStarFullSprite != null &&
+                _settingsDiseaseStarEmptySprite != null) return true;
+            if (_settingsDiseaseStarSpritesSearched) return false;
+            _settingsDiseaseStarSpritesSearched = true;
+
+            foreach (var source in Resources.FindObjectsOfTypeAll<HospitalStarIcons>())
+            {
+                if (source == null) continue;
+                var full = AccessTools.Field(typeof(HospitalStarIcons), "_starSprite")
+                    ?.GetValue(source) as Sprite;
+                var empty = AccessTools.Field(typeof(HospitalStarIcons), "_starHolderSprite")
+                    ?.GetValue(source) as Sprite;
+                if (full == null || empty == null) continue;
+                _settingsDiseaseStarFullSprite = full;
+                _settingsDiseaseStarEmptySprite = empty;
+                return true;
+            }
+
+            foreach (var source in Resources.FindObjectsOfTypeAll<StarIcons>())
+            {
+                if (source == null) continue;
+                var full = AccessTools.Field(typeof(StarIcons), "_starFullSprite")
+                    ?.GetValue(source) as Sprite;
+                var empty = AccessTools.Field(typeof(StarIcons), "_starEmptySprite")
+                    ?.GetValue(source) as Sprite;
+                if (full == null || empty == null) continue;
+                _settingsDiseaseStarFullSprite = full;
+                _settingsDiseaseStarEmptySprite = empty;
+                return true;
+            }
+
+            UnderPressureEditorPlugin.Log?.LogError(
+                "Enfermedades: no se encontraron los sprites nativos de estrellas.");
+            return false;
         }
 
         private void AddFieldLabel(Transform parent, string key, float x, float y, float width)
@@ -662,6 +760,10 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll = null;
             _settingsDiseaseNativeScrollbarTemplate = null;
             _settingsDiseaseNativeToggleTemplate = null;
+            _settingsDiseaseLanguage = null;
+            _settingsDiseaseStarFullSprite = null;
+            _settingsDiseaseStarEmptySprite = null;
+            _settingsDiseaseStarSpritesSearched = false;
             _settingsDiseasesLoaded = false;
         }
     }

@@ -175,7 +175,7 @@ namespace UnderPressure.Editor
             return false;
         }
 
-        private static string CurrentLanguageCode()
+        internal static string CurrentLanguageCode()
         {
             try
             {
