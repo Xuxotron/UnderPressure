@@ -1570,16 +1570,26 @@ namespace UnderPressure.Editor
         private static void ConfigureContinuousStaticRotation(ParticleSystem particles)
         {
             var main = particles.main;
+            var fixedSize = main.startSize.constantMax;
             main.loop = true;
             main.startDelay = 0f;
             main.startSpeed = 0f;
+            main.gravityModifier = 0f;
+            main.startSize = fixedSize;
             main.startColor = FlattenParticleAlpha(main.startColor);
             main.playOnAwake = true;
             main.prewarm = true;
             main.stopAction = ParticleSystemStopAction.None;
             main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.ringBufferMode = ParticleSystemRingBufferMode.LoopUntilReplaced;
 
-            // Se conserva Rotation over Lifetime: es la unica animacion deseada.
+            // Los originales Halo y Swirl tienen gravedad y una curva de tamaño.
+            // Ambas alteran su altura aparente; solo se conserva la rotacion.
+            var sizeOverLifetime = particles.sizeOverLifetime;
+            sizeOverLifetime.enabled = false;
+            var sizeBySpeed = particles.sizeBySpeed;
+            sizeBySpeed.enabled = false;
             var colorOverLifetime = particles.colorOverLifetime;
             colorOverLifetime.enabled = false;
             var colorBySpeed = particles.colorBySpeed;
