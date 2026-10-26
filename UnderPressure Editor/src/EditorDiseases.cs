@@ -72,7 +72,7 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll.vertical = true;
             _settingsDiseaseScroll.inertia = true;
             _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
-            _settingsDiseaseScroll.scrollSensitivity = 34f;
+            _settingsDiseaseScroll.scrollSensitivity = 120f;
             InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
                 "UP Disease Native Scrollbar", 0f, 0f);
             _settingsDiseaseSurface.SetAsLastSibling();
@@ -221,6 +221,14 @@ namespace UnderPressure.Editor
                     AddDisease(room, choices[selector.value].Id);
                 });
             SetTopLeft((RectTransform)add.transform, 955f, 8f, 145f, 44f);
+
+            if (room.Dlc?.Icon != null)
+            {
+                var dlcIcon = NewImage("Icono DLC", header.transform, room.Dlc.Icon,
+                    Color.white, false);
+                SetTopLeft((RectTransform)dlcIcon.transform, 1110f, 8f, 44f, 44f);
+                dlcIcon.GetComponent<Image>().preserveAspect = true;
+            }
 
             var collapse = CreateDiseaseButton(header.transform, expanded ? "▲" : "▼",
                 _style.ButtonColor, () =>
@@ -430,8 +438,8 @@ namespace UnderPressure.Editor
             scrollbar.colors = colors;
 
             var sourceRect = source.transform as RectTransform;
-            var width = Mathf.Clamp(sourceRect != null ? sourceRect.rect.width : 26f,
-                22f, 34f);
+            var width = Mathf.Clamp(sourceRect != null ? sourceRect.rect.width : 30f,
+                30f, 40f);
             var rect = scrollbar.transform as RectTransform;
             rect.anchorMin = new Vector2(1f, 0f);
             rect.anchorMax = Vector2.one;
