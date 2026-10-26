@@ -91,6 +91,7 @@ namespace UnderPressure.Editor
         private Transform[] _settingsTabFolderBackgrounds;
         private GameObject[] _settingsPages;
         private Transform _settingsCloseButton;
+        private bool _settingsClosePending;
         private TMP_InputField _settingsDisplayName;
         private TMP_InputField _settingsDescriptionPerStar;
         private TMP_InputField _settingsInitialBalance;
@@ -534,6 +535,7 @@ namespace UnderPressure.Editor
 
         private void CloseSettingsPanel()
         {
+            _settingsClosePending = false;
             if (_settingsOverlay != null) _settingsOverlay.SetActive(false);
             SetSelected(_settingsToggle, false);
         }
@@ -906,70 +908,59 @@ namespace UnderPressure.Editor
         private Transform CreateNativeSettingsCloseButton(Transform parent)
         {
             if (parent == null) return null;
-            var redSprite = Resources.FindObjectsOfTypeAll<Sprite>()
-                .FirstOrDefault(candidate => candidate != null &&
-                    candidate.name == "T_UI_Button_Close_Red");
-            var buttons = Resources.FindObjectsOfTypeAll<Button>();
-            var buttonTemplate = buttons.FirstOrDefault(candidate => candidate != null &&
-                candidate.GetComponentsInChildren<Image>(true).Any(image =>
+            var closeField = AccessTools.Field(typeof(MenuBase), "_closeMenuButton");
+            var nativeCloseButtons = Resources.FindObjectsOfTypeAll<MenuBase>()
+                .Select(menu => closeField?.GetValue(menu) as DynamicButton)
+                .Where(button => button != null)
+                .Distinct().ToArray();
+            var template = nativeCloseButtons.FirstOrDefault(button =>
+                button.GetComponentsInChildren<Image>(true).Any(image =>
                     IsNativeCloseSprite(image, "T_UI_Button_Close_Red")));
-            if (buttonTemplate == null)
-                buttonTemplate = buttons.FirstOrDefault(candidate => candidate != null &&
-                    candidate.GetComponentsInChildren<Image>(true).Any(image =>
+            if (template == null)
+                template = nativeCloseButtons.FirstOrDefault(button =>
+                    button.GetComponentsInChildren<Image>(true).Any(image =>
                         IsNativeCloseSprite(image, "T_UI_Button_Close")));
-            var dynamicButtons = Resources.FindObjectsOfTypeAll<DynamicButton>();
-            var dynamicTemplate = dynamicButtons.FirstOrDefault(candidate => candidate != null &&
-                candidate.GetComponentsInChildren<Image>(true).Any(image =>
-                    IsNativeCloseSprite(image, "T_UI_Button_Close_Red")));
-            if (dynamicTemplate == null)
-                dynamicTemplate = dynamicButtons.FirstOrDefault(candidate => candidate != null &&
-                    candidate.GetComponentsInChildren<Image>(true).Any(image =>
-                        IsNativeCloseSprite(image, "T_UI_Button_Close")));
-            if (buttonTemplate == null && dynamicTemplate == null)
+            if (template == null)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Ajustes del escenario: no se encontro ningun boton X nativo.");
+                    "Ajustes del escenario: no se encontro el DynamicButton X de MenuBase.");
                 return null;
             }
 
-            // Se clona el objeto completo: sprite rojo, sombra, animador y escala
-            // nativa. Solo cambian el padre, el anclaje y la accion del clic.
-            var closeObject = buttonTemplate != null
-                ? Instantiate(buttonTemplate.gameObject, parent, false)
-                : Instantiate(dynamicTemplate.gameObject, parent, false);
+            // Se clona exactamente el DynamicButton que MenuBase usa como cierre,
+            // incluidos su sombra, animador, dimensiones y escala nativos.
+            var closeObject = Instantiate(template.gameObject, parent, false);
             closeObject.name = "UP Native Settings Close";
             closeObject.SetActive(true);
             var rect = closeObject.transform as RectTransform;
             rect.anchorMin = Vector2.one;
             rect.anchorMax = Vector2.one;
             rect.pivot = new Vector2(.5f, .5f);
-            rect.anchoredPosition = new Vector2(-12f, -12f);
-            var closeImage = closeObject.GetComponentsInChildren<Image>(true)
-                .FirstOrDefault(image => IsNativeCloseSprite(image,
-                    "T_UI_Button_Close_Red") || IsNativeCloseSprite(image,
-                    "T_UI_Button_Close"));
-            if (redSprite != null && closeImage != null)
-            {
-                closeImage.overrideSprite = redSprite;
-                closeImage.sprite = redSprite;
-            }
+            rect.anchoredPosition = Vector2.zero;
             DisableLocalisers(closeObject.transform);
-            var button = closeObject.GetComponent<Button>();
-            if (button != null)
-            {
-                button.onClick.RemoveAllListeners();
-                button.onClick.AddListener(AcceptScenarioSettings);
-                StandardiseClickSound(button);
-            }
             var dynamicButton = closeObject.GetComponent<DynamicButton>();
-            if (dynamicButton != null)
-            {
-                dynamicButton.onPrimaryDown.RemoveAllListeners();
-                dynamicButton.onSecondaryDown.RemoveAllListeners();
-                dynamicButton.onPrimaryDownFailed.RemoveAllListeners();
-                dynamicButton.onPrimaryDown.AddListener(AcceptScenarioSettings);
-            }
+            dynamicButton.onPrimaryDown.RemoveAllListeners();
+            dynamicButton.onSecondaryDown.RemoveAllListeners();
+            dynamicButton.onPrimaryDownFailed.RemoveAllListeners();
+            dynamicButton.onPrimaryDown.AddListener(RequestAcceptScenarioSettings);
             return closeObject.transform;
+        }
+
+        private void RequestAcceptScenarioSettings()
+        {
+            if (_settingsClosePending) return;
+            _settingsClosePending = true;
+            StartCoroutine(AcceptScenarioSettingsAfterPointerRelease());
+        }
+
+        private System.Collections.IEnumerator AcceptScenarioSettingsAfterPointerRelease()
+        {
+            // MenuBase mantiene el menu activo durante su cierre. Aqui se espera
+            // igualmente a que termine la pulsacion para que no atraviese al mapa.
+            while (Input.GetMouseButton(0)) yield return null;
+            yield return null;
+            _settingsClosePending = false;
+            AcceptScenarioSettings();
         }
 
         private static bool IsNativeCloseSprite(Image image, string spriteName)
