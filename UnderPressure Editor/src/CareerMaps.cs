@@ -1199,6 +1199,8 @@ namespace UnderPressure.Editor
             new Dictionary<MapPinHospital, string>();
         private static readonly Dictionary<MapPinHospital, WorldMapConflux> ConfluxPins =
             new Dictionary<MapPinHospital, WorldMapConflux>();
+        private static readonly Dictionary<MapPinHospital, TopDownCameraLogic> ConfluxCameras =
+            new Dictionary<MapPinHospital, TopDownCameraLogic>();
         private static readonly Dictionary<MapPinHospital, PinIconMaterials> GeneratedPinIconMaterials =
             new Dictionary<MapPinHospital, PinIconMaterials>();
 
@@ -1460,6 +1462,7 @@ namespace UnderPressure.Editor
             AppendPin(UiPinsField, _map.MapUI, pin);
             _generatedHospitalPins.Add(pin);
             ConfluxPins[pin] = placement;
+            ConfluxCameras[pin] = _map.CameraLogic;
             ApplyPinIcons(pin, "confluxOFF.png", "confluxON.png", "UP_Conflux");
             RefreshCameraBoundsMethod?.Invoke(_map.MapUI, null);
             UnderPressureEditorPlugin.Log?.LogInfo(
@@ -1495,6 +1498,17 @@ namespace UnderPressure.Editor
         {
             conflux = null;
             return pin != null && ConfluxPins.TryGetValue(pin, out conflux);
+        }
+
+        internal static bool ApplyConfluxCamera(MapPinHospital pin)
+        {
+            if (!TryGetConflux(pin, out var conflux) ||
+                !ConfluxCameras.TryGetValue(pin, out var camera) || camera == null)
+                return false;
+            camera.TrackObject(null);
+            camera.SetTrackedObjectFrame(null);
+            camera.SetInitialFocalPoint(conflux.CameraFocalPoint, conflux.CameraRotation);
+            return true;
         }
 
         internal static void RefreshGeneratedPinVisual(MapPinHospital pin)
@@ -1953,6 +1967,7 @@ namespace UnderPressure.Editor
                 RemovePin(UiPinsField, _map?.MapUI, pin);
                 PinMapPaths.Remove(pin);
                 ConfluxPins.Remove(pin);
+                ConfluxCameras.Remove(pin);
                 if (GeneratedPinIconMaterials.TryGetValue(pin, out var icons))
                 {
                     GeneratedPinIconMaterials.Remove(pin);
@@ -2092,7 +2107,11 @@ namespace UnderPressure.Editor
         {
             var isConflux = ScenarioWorldMapAuthoring.TryGetConflux(__instance, out _);
             ScenarioConfluxMenu.EndPinSelection();
-            if (isConflux) return;
+            if (isConflux)
+            {
+                ScenarioWorldMapAuthoring.ApplyConfluxCamera(__instance);
+                return;
+            }
             if (!ScenarioWorldMapAuthoring.TryGetMapPath(__instance, out var path)) return;
             var selector = UnityEngine.Object.FindObjectOfType<ScenarioCareerMapMenu>();
             if (selector != null && selector.SelectPath(path)) return;
