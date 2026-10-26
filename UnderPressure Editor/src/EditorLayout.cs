@@ -1091,13 +1091,13 @@ namespace UnderPressure.Editor
                 false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
-                .02f, .32f, 150f);
+                .02f, .32f, 130f);
             _settingsFailWarning = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
-                .35f, .65f, 150f);
+                .35f, .65f, 130f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
-                .68f, .98f, 150f);
+                .68f, .98f, 130f);
             RefreshScenarioSettingsFields();
         }
 
