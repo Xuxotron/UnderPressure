@@ -710,7 +710,7 @@ namespace UnderPressure.Editor
 
 namespace UnderPressure.Editor
 {
-    // Adds the check to the existing Under Pressure MOD options (real, cloned native toggle).
+    // Añade los ajustes del editor clonando el Toggle nativo real del panel.
     [HarmonyPatch]
     internal static class ScenarioCareerMapSettingsPatch
     {
@@ -724,46 +724,90 @@ namespace UnderPressure.Editor
         {
             try
             {
-                if (UnderPressureEditorPlugin.ShowNewMapsSetting == null) return;
+                if (UnderPressureEditorPlugin.ShowNewMapsSetting == null ||
+                    UnderPressureEditorPlugin.FocusLevelsSetting == null) return;
                 var field = AccessTools.Field(__instance.GetType(), "_contents");
                 var root = field?.GetValue(__instance) as Transform;
                 var content = root?.Find("Scroll View/Viewport/Content");
                 var left = content?.Find("Startup Settings");
+                var right = content?.Find("Startup Settings Right");
                 var source = left?.Find("Show Electricity");
-                if (source == null || left.Find("Show New Maps") != null) return;
+                if (source == null || right == null) return;
 
-                var row = UnityEngine.Object.Instantiate(source, left, false);
-                row.name = "Show New Maps";
-                var rect = row as RectTransform;
-                if (rect != null)
-                {
-                    rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, -327f);
-                    rect.SetAsLastSibling();
-                }
-                foreach (var component in row.GetComponentsInChildren<Component>(true))
-                {
-                    if (component == null) continue;
-                    var type = component.GetType().FullName ?? string.Empty;
-                    if (type.StartsWith("I2.Loc.", StringComparison.Ordinal) ||
-                        type.IndexOf("Tooltip", StringComparison.OrdinalIgnoreCase) >= 0)
-                        UnityEngine.Object.Destroy(component);
-                }
-                var label = row.GetComponentInChildren<TMP_Text>(true);
-                if (label != null)
-                    label.text = EditorLocalization.Get("editor.settings.show_new_maps");
-                var toggle = row.GetComponentInChildren<Toggle>(true);
-                if (toggle == null) return;
-                toggle.onValueChanged.RemoveAllListeners();
-                toggle.isOn = UnderPressureEditorPlugin.ShowNewMaps;
-                toggle.onValueChanged.AddListener(value =>
-                {
-                    UnderPressureEditorPlugin.ShowNewMapsSetting.Value = value;
-                });
+                AddNativeToggle(left, source, "Show New Maps", -327f,
+                    "editor.settings.show_new_maps", UnderPressureEditorPlugin.ShowNewMaps,
+                    value => UnderPressureEditorPlugin.ShowNewMapsSetting.Value = value);
+                AddNativeToggle(left, source, "Focus Levels", -372f,
+                    "editor.settings.focus_levels", UnderPressureEditorPlugin.FocusLevels,
+                    value =>
+                    {
+                        UnderPressureEditorPlugin.FocusLevelsSetting.Value = value;
+                        if (!value) ScenarioWorldMapAuthoring.RestoreFocusedHospital();
+                    });
+                ExpandNativeSettingsLayout(content, left, right);
             }
             catch (Exception ex)
             {
-                UnderPressureEditorPlugin.Log?.LogError("No se pudo añadir Mostrar nuevos mapas: " + ex);
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "No se pudieron añadir los ajustes del mapa de Carrera: " + ex);
             }
+        }
+
+        private static void AddNativeToggle(Transform parent, Transform source, string name,
+            float y, string localizationKey, bool value, UnityEngine.Events.UnityAction<bool> listener)
+        {
+            if (parent.Find(name) != null) return;
+            var row = UnityEngine.Object.Instantiate(source, parent, false);
+            row.name = name;
+            var rect = row as RectTransform;
+            if (rect != null)
+            {
+                rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, y);
+                rect.SetAsLastSibling();
+            }
+            foreach (var component in row.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null) continue;
+                var type = component.GetType().FullName ?? string.Empty;
+                if (type.StartsWith("I2.Loc.", StringComparison.Ordinal) ||
+                    type.IndexOf("Tooltip", StringComparison.OrdinalIgnoreCase) >= 0)
+                    UnityEngine.Object.Destroy(component);
+            }
+            var label = row.GetComponentInChildren<TMP_Text>(true);
+            if (label != null) label.text = EditorLocalization.Get(localizationKey);
+            var toggle = row.GetComponentInChildren<Toggle>(true);
+            if (toggle == null) return;
+            toggle.onValueChanged.RemoveAllListeners();
+            toggle.isOn = value;
+            toggle.onValueChanged.AddListener(listener);
+        }
+
+        private static void ExpandNativeSettingsLayout(Transform content, Transform left,
+            Transform right)
+        {
+            const float extraHeight = 45f;
+            const string markerName = "UP Focus Levels Layout";
+            if (content.Find(markerName) != null) return;
+            var marker = new GameObject(markerName).transform;
+            marker.SetParent(content, false);
+
+            foreach (var section in new[] { left, right })
+            {
+                var rect = section as RectTransform;
+                if (rect != null)
+                    rect.sizeDelta = new Vector2(rect.sizeDelta.x, rect.sizeDelta.y + extraHeight);
+            }
+            for (var index = 0; index < content.childCount; ++index)
+            {
+                var child = content.GetChild(index) as RectTransform;
+                if (child == null || child == left || child == right || child == marker) continue;
+                if (child.anchoredPosition.y > -400f) continue;
+                child.anchoredPosition += new Vector2(0f, -extraHeight);
+            }
+            var contentRect = content as RectTransform;
+            if (contentRect != null)
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x,
+                    contentRect.sizeDelta.y + extraHeight);
         }
     }
 }
@@ -1184,6 +1228,8 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(MapPinHospital), "_cursorOver");
         private static readonly FieldInfo ActiveHospitalEffectField =
             AccessTools.Field(typeof(MapPinHospital), "_activeHospitalEffect");
+        private static readonly FieldInfo LevelConfigReferenceField =
+            AccessTools.Field(typeof(MapPinHospital), "_levelConfig");
         private static readonly FieldInfo CameraRotationField =
             AccessTools.Field(typeof(TopDownCameraLogic), "_currentRotation");
         private static readonly FieldInfo[] PinMaterialFields =
@@ -1205,6 +1251,12 @@ namespace UnderPressure.Editor
             new Dictionary<MapPinHospital, TopDownCameraLogic>();
         private static readonly Dictionary<MapPinHospital, PinIconMaterials> GeneratedPinIconMaterials =
             new Dictionary<MapPinHospital, PinIconMaterials>();
+        private static readonly Dictionary<string, WorldMapHospitalCamera> HospitalCameras =
+            BuildHospitalCameraLookup();
+        private static ScenarioWorldMapAuthoring _activeAuthoring;
+        private static MapPinHospital _focusedHospital;
+        private static bool _focusedMeshWasActive;
+        private static bool[] _focusedStarsWereActive;
 
         private sealed class PinIconMaterials
         {
@@ -1241,6 +1293,7 @@ namespace UnderPressure.Editor
             if (map == null || map.App?.MetagameMapScene?.RootObject == null) return;
             if (_map != null && _map != map) ClearGenerated();
             _map = map;
+            _activeAuthoring = this;
             _sceneRoot = map.App.MetagameMapScene.RootObject.transform;
             var folder = Path.Combine(ScenarioEditorStorage.Folder, "_author");
             _catalogPath = Path.Combine(folder, "world_map_assets.txt");
@@ -1574,6 +1627,89 @@ namespace UnderPressure.Editor
                 camera.Reset(conflux.CameraZoom, conflux.CameraRotation);
             camera.SetInitialFocalPoint(conflux.CameraFocalPoint, conflux.CameraRotation);
             return true;
+        }
+
+        private static Dictionary<string, WorldMapHospitalCamera> BuildHospitalCameraLookup()
+        {
+            var result = new Dictionary<string, WorldMapHospitalCamera>(
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var camera in EditWorldMap.HospitalCameras ??
+                new WorldMapHospitalCamera[0])
+            {
+                if (camera == null || string.IsNullOrWhiteSpace(camera.LevelConfigName)) continue;
+                result[camera.LevelConfigName] = camera;
+            }
+            return result;
+        }
+
+        internal static void PreparePinSelection(MapPinHospital pin)
+        {
+            RestoreFocusedHospital();
+        }
+
+        internal static bool ApplyHospitalCamera(MapPinHospital pin)
+        {
+            if (!UnderPressureEditorPlugin.FocusLevels || pin == null ||
+                _activeAuthoring?._map?.CameraLogic == null) return false;
+            var levelConfig = LevelConfigReferenceField?.GetValue(pin) as UnityEngine.Object;
+            if (levelConfig == null ||
+                !HospitalCameras.TryGetValue(levelConfig.name, out var camera) ||
+                !camera.HasCamera) return false;
+
+            var cameraLogic = _activeAuthoring._map.CameraLogic;
+            cameraLogic.TrackObject(null);
+            cameraLogic.SetTrackedObjectFrame(null);
+            cameraLogic.Reset(camera.CameraZoom, camera.CameraRotation);
+            cameraLogic.SetInitialFocalPoint(camera.CameraFocalPoint, camera.CameraRotation);
+            HideFocusedHospital(pin);
+            return true;
+        }
+
+        private static void HideFocusedHospital(MapPinHospital pin)
+        {
+            if (pin == null) return;
+            _focusedHospital = pin;
+            var mesh = MeshIconField?.GetValue(pin) as MeshRenderer;
+            _focusedMeshWasActive = mesh != null && mesh.gameObject.activeSelf;
+            var stars = StarsField?.GetValue(pin) as GameObject[];
+            _focusedStarsWereActive = stars == null ? null : new bool[stars.Length];
+            if (stars != null)
+                for (var index = 0; index < stars.Length; ++index)
+                {
+                    var star = stars[index];
+                    _focusedStarsWereActive[index] = star != null && star.activeSelf;
+                    if (star != null) star.SetActive(false);
+                }
+            if (mesh != null) mesh.gameObject.SetActive(false);
+        }
+
+        internal static void RefreshFocusedHospitalVisual(MapPinHospital pin)
+        {
+            if (pin == null || pin != _focusedHospital) return;
+            var mesh = MeshIconField?.GetValue(pin) as MeshRenderer;
+            if (mesh != null) mesh.gameObject.SetActive(false);
+            var stars = StarsField?.GetValue(pin) as GameObject[];
+            if (stars == null) return;
+            foreach (var star in stars)
+                if (star != null) star.SetActive(false);
+        }
+
+        internal static void RestoreFocusedHospital()
+        {
+            var pin = _focusedHospital;
+            var meshWasActive = _focusedMeshWasActive;
+            var starsWereActive = _focusedStarsWereActive;
+            _focusedHospital = null;
+            _focusedStarsWereActive = null;
+            _focusedMeshWasActive = false;
+            if (pin == null) return;
+
+            var mesh = MeshIconField?.GetValue(pin) as MeshRenderer;
+            if (mesh != null) mesh.gameObject.SetActive(meshWasActive);
+            var stars = StarsField?.GetValue(pin) as GameObject[];
+            if (stars == null || starsWereActive == null) return;
+            for (var index = 0; index < stars.Length && index < starsWereActive.Length; ++index)
+                if (stars[index] != null) stars[index].SetActive(starsWereActive[index]);
         }
 
         internal static void RefreshGeneratedPinVisual(MapPinHospital pin)
@@ -2068,7 +2204,9 @@ namespace UnderPressure.Editor
 
         private void OnDestroy()
         {
+            RestoreFocusedHospital();
             ClearGenerated();
+            if (_activeAuthoring == this) _activeAuthoring = null;
             _map = null;
             _sceneRoot = null;
         }
@@ -2141,14 +2279,18 @@ namespace UnderPressure.Editor
         {
             ScenarioCareerMapControls.RevealHospital(__instance);
             ScenarioWorldMapAuthoring.RefreshGeneratedPinVisual(__instance);
+            ScenarioWorldMapAuthoring.RefreshFocusedHospitalVisual(__instance);
         }
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "RefreshVisual")]
     internal static class ScenarioWorldMapConfluxVisualPatch
     {
-        private static void Postfix(MapPinHospital __instance) =>
+        private static void Postfix(MapPinHospital __instance)
+        {
             ScenarioWorldMapAuthoring.RefreshGeneratedPinVisual(__instance);
+            ScenarioWorldMapAuthoring.RefreshFocusedHospitalVisual(__instance);
+        }
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "OnCursorOver")]
@@ -2158,14 +2300,18 @@ namespace UnderPressure.Editor
         {
             ScenarioCareerMapControls.RevealHospital(__instance);
             ScenarioWorldMapAuthoring.RefreshGeneratedPinVisual(__instance);
+            ScenarioWorldMapAuthoring.RefreshFocusedHospitalVisual(__instance);
         }
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "OnSelected")]
     internal static class ScenarioWorldMapHospitalSelectionPatch
     {
-        private static void Prefix(MapPinHospital __instance) =>
+        private static void Prefix(MapPinHospital __instance)
+        {
+            ScenarioWorldMapAuthoring.PreparePinSelection(__instance);
             ScenarioConfluxMenu.BeginPinSelection(__instance);
+        }
 
         [HarmonyPriority(Priority.Last)]
         private static void Postfix(MapPinHospital __instance)
@@ -2177,12 +2323,23 @@ namespace UnderPressure.Editor
                 ScenarioWorldMapAuthoring.ApplyConfluxCamera(__instance);
                 return;
             }
-            if (!ScenarioWorldMapAuthoring.TryGetMapPath(__instance, out var path)) return;
-            var selector = UnityEngine.Object.FindObjectOfType<ScenarioCareerMapMenu>();
-            if (selector != null && selector.SelectPath(path)) return;
-            UnderPressureEditorPlugin.Log?.LogWarning(
-                "El pin no pudo seleccionar su mapa asignado: " + path);
+            if (ScenarioWorldMapAuthoring.TryGetMapPath(__instance, out var path))
+            {
+                var selector = UnityEngine.Object.FindObjectOfType<ScenarioCareerMapMenu>();
+                if (selector != null && selector.SelectPath(path)) return;
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "El pin no pudo seleccionar su mapa asignado: " + path);
+                return;
+            }
+            ScenarioWorldMapAuthoring.ApplyHospitalCamera(__instance);
         }
+    }
+
+    [HarmonyPatch(typeof(MapPinHospital), "OnUnselected")]
+    internal static class ScenarioWorldMapHospitalUnselectionPatch
+    {
+        private static void Postfix(MapPinHospital __instance) =>
+            ScenarioWorldMapAuthoring.RestoreFocusedHospital();
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "IsPinUnlocked")]

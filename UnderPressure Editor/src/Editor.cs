@@ -29,8 +29,10 @@ namespace UnderPressure.Editor
 
         internal static ModLogSource Log { get; private set; }
         internal static ConfigEntry<bool> ShowNewMapsSetting { get; private set; }
+        internal static ConfigEntry<bool> FocusLevelsSetting { get; private set; }
         internal static ConfigEntry<string> ArchitectNameSetting { get; private set; }
         internal static bool ShowNewMaps => ShowNewMapsSetting == null || ShowNewMapsSetting.Value;
+        internal static bool FocusLevels => FocusLevelsSetting != null && FocusLevelsSetting.Value;
         internal static string ArchitectName =>
             string.IsNullOrWhiteSpace(ArchitectNameSetting?.Value)
                 ? "Xuxotron" : ArchitectNameSetting.Value.Trim();
@@ -44,6 +46,10 @@ namespace UnderPressure.Editor
                 EditorLocalization.Get("editor.settings.career"),
                 EditorLocalization.Get("editor.settings.show_new_maps"), true,
                 EditorLocalization.Get("editor.settings.show_new_maps.description"));
+            FocusLevelsSetting = Config.Bind(
+                EditorLocalization.Get("editor.settings.career"),
+                EditorLocalization.Get("editor.settings.focus_levels"), false,
+                EditorLocalization.Get("editor.settings.focus_levels.description"));
             ArchitectNameSetting = Config.Bind(
                 EditorLocalization.Get("editor.settings.maps"),
                 EditorLocalization.Get("editor.settings.architect"), "Xuxotron",

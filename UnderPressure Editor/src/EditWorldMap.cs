@@ -94,6 +94,30 @@ namespace UnderPressure.Editor
         }
     }
 
+    internal sealed class WorldMapHospitalCamera
+    {
+        internal readonly string LevelConfigName;
+        internal readonly bool HasCamera;
+        internal readonly Vector3 CameraFocalPoint;
+        internal readonly float CameraRotation;
+        internal readonly float CameraZoom;
+
+        internal WorldMapHospitalCamera(string levelConfigName)
+        {
+            LevelConfigName = levelConfigName;
+        }
+
+        internal WorldMapHospitalCamera(string levelConfigName, Vector3 cameraFocalPoint,
+            float cameraRotation, float cameraZoom)
+        {
+            LevelConfigName = levelConfigName;
+            HasCamera = true;
+            CameraFocalPoint = cameraFocalPoint;
+            CameraRotation = cameraRotation;
+            CameraZoom = cameraZoom;
+        }
+    }
+
     // Configuracion privada del mapamundi. Cada entrada se aplica al compilar
     // UnderPressure.Editor; no se lee ningun fichero JSON en tiempo de ejecucion.
     internal static class EditWorldMap
@@ -150,9 +174,52 @@ namespace UnderPressure.Editor
                 new Vector3(1.991f, 71.773f, 1026.279f),
                 // Encuadre al seleccionar el Conflux. Punto focal, rotacion y zoom
                 // se pueden copiar desde Ctrl+Alt+F10 y ajustar manualmente aqui.
-                new Vector3(-125f, 0f, 1026.279f),
-                0f,
-                -1f) // -1 conserva el zoom actual.
+                new Vector3(106.0239f, 0.75f, 948.1385f),
+                3f,
+                0f)
+        };
+
+        // Camaras opcionales de los 36 hospitales reales del juego. Las entradas
+        // vacias conservan el enfoque nativo. Para configurarlas, sustituir una por:
+        // new WorldMapHospitalCamera("Nombre", new Vector3(x, y, z), rotacion, zoom)
+        internal static readonly WorldMapHospitalCamera[] HospitalCameras =
+        {
+            new WorldMapHospitalCamera("R1_TutorialHospital"),
+            new WorldMapHospitalCamera("R1_IntroHospital2"),
+            new WorldMapHospitalCamera("R1_IntroHospital3"),
+            new WorldMapHospitalCamera("R2_ResearchHospital"),
+            new WorldMapHospitalCamera("R2_WealthyHospital"),
+            new WorldMapHospitalCamera("R2_FractureHospital"),
+            new WorldMapHospitalCamera("R3_TeachingHospital"),
+            new WorldMapHospitalCamera("R3_AbandonedHospital"),
+            new WorldMapHospitalCamera("R3_PublicHospital"),
+            new WorldMapHospitalCamera("R4_DisasterHospital"),
+            new WorldMapHospitalCamera("R4_TouristHospital"),
+            new WorldMapHospitalCamera("R4_EpidemicHospital"),
+            new WorldMapHospitalCamera("R5_HighTechHospital"),
+            new WorldMapHospitalCamera("R5_FailingHospital"),
+            new WorldMapHospitalCamera("R5_FinalHospital"),
+            new WorldMapHospitalCamera("R6_InjuriesHospital"),
+            new WorldMapHospitalCamera("R6_MoreTrainingHospital"),
+            new WorldMapHospitalCamera("R6_CastleHospital"),
+            new WorldMapHospitalCamera("R7_JungleClearingHospital"),
+            new WorldMapHospitalCamera("R7_HordeHospital"),
+            new WorldMapHospitalCamera("R7_AtollHospital"),
+            new WorldMapHospitalCamera("R8_KitschAmericanaHospital"),
+            new WorldMapHospitalCamera("R8_AirBaseHospital"),
+            new WorldMapHospitalCamera("R8_SecretFacilityHospital"),
+            new WorldMapHospitalCamera("R9_HippyCommuneHospital"),
+            new WorldMapHospitalCamera("R9_AmishHospital"),
+            new WorldMapHospitalCamera("R9_EcoCityHospital"),
+            new WorldMapHospitalCamera("R10_TelevisionHospital"),
+            new WorldMapHospitalCamera("R10_FestivalHospital"),
+            new WorldMapHospitalCamera("R10_GalaHospital"),
+            new WorldMapHospitalCamera("R11_Medieval"),
+            new WorldMapHospitalCamera("R11_Prehistory"),
+            new WorldMapHospitalCamera("R11_Future"),
+            new WorldMapHospitalCamera("R12_RoadHospital"),
+            new WorldMapHospitalCamera("R12_RoadAndAirHospital"),
+            new WorldMapHospitalCamera("R12_RescueHospital")
         };
     }
 }
