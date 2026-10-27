@@ -432,9 +432,9 @@ namespace UnderPressure.Editor
 
         private static string DecodeName(byte[] bytes, ushort flags)
         {
-            if ((flags & Utf8Flag) != 0) return Encoding.UTF8.GetString(bytes);
-            try { return Encoding.GetEncoding(437).GetString(bytes); }
-            catch (ArgumentException) { return Encoding.UTF8.GetString(bytes); }
+            // Los nombres del formato .upmap son ASCII o UTF-8. No usar CP437:
+            // el runtime Mono del juego no instala proveedores de paginas de codigos.
+            return Encoding.UTF8.GetString(bytes);
         }
 
         private static void SkipExact(Stream stream, int count)
