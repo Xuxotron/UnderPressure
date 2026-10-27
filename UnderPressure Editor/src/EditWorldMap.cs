@@ -102,17 +102,12 @@ namespace UnderPressure.Editor
         internal readonly float CameraRotation;
         internal readonly float CameraZoom;
 
-        internal WorldMapHospitalCamera(string levelConfigName)
-        {
-            LevelConfigName = levelConfigName;
-        }
-
-        internal WorldMapHospitalCamera(string levelConfigName, Vector3 cameraFocalPoint,
+        internal WorldMapHospitalCamera(string levelConfigName, Vector3? cameraFocalPoint,
             float cameraRotation, float cameraZoom)
         {
             LevelConfigName = levelConfigName;
-            HasCamera = true;
-            CameraFocalPoint = cameraFocalPoint;
+            HasCamera = cameraFocalPoint.HasValue;
+            CameraFocalPoint = cameraFocalPoint.GetValueOrDefault();
             CameraRotation = cameraRotation;
             CameraZoom = cameraZoom;
         }
@@ -179,47 +174,190 @@ namespace UnderPressure.Editor
                 0f)
         };
 
-        // Camaras opcionales de los 36 hospitales reales del juego. Las entradas
-        // vacias conservan el enfoque nativo. Para configurarlas, sustituir una por:
-        // new WorldMapHospitalCamera("Nombre", new Vector3(x, y, z), rotacion, zoom)
+        // Cada hospital está listo para pegar los tres valores de Ctrl+Alt+F10.
+        // Mientras CameraFocalPoint sea null, ese hospital conserva el enfoque nativo.
         internal static readonly WorldMapHospitalCamera[] HospitalCameras =
         {
-            new WorldMapHospitalCamera("R1_TutorialHospital"),
-            new WorldMapHospitalCamera("R1_IntroHospital2"),
-            new WorldMapHospitalCamera("R1_IntroHospital3"),
-            new WorldMapHospitalCamera("R2_ResearchHospital"),
-            new WorldMapHospitalCamera("R2_WealthyHospital"),
-            new WorldMapHospitalCamera("R2_FractureHospital"),
-            new WorldMapHospitalCamera("R3_TeachingHospital"),
-            new WorldMapHospitalCamera("R3_AbandonedHospital"),
-            new WorldMapHospitalCamera("R3_PublicHospital"),
-            new WorldMapHospitalCamera("R4_DisasterHospital"),
-            new WorldMapHospitalCamera("R4_TouristHospital"),
-            new WorldMapHospitalCamera("R4_EpidemicHospital"),
-            new WorldMapHospitalCamera("R5_HighTechHospital"),
-            new WorldMapHospitalCamera("R5_FailingHospital"),
-            new WorldMapHospitalCamera("R5_FinalHospital"),
-            new WorldMapHospitalCamera("R6_InjuriesHospital"),
-            new WorldMapHospitalCamera("R6_MoreTrainingHospital"),
-            new WorldMapHospitalCamera("R6_CastleHospital"),
-            new WorldMapHospitalCamera("R7_JungleClearingHospital"),
-            new WorldMapHospitalCamera("R7_HordeHospital"),
-            new WorldMapHospitalCamera("R7_AtollHospital"),
-            new WorldMapHospitalCamera("R8_KitschAmericanaHospital"),
-            new WorldMapHospitalCamera("R8_AirBaseHospital"),
-            new WorldMapHospitalCamera("R8_SecretFacilityHospital"),
-            new WorldMapHospitalCamera("R9_HippyCommuneHospital"),
-            new WorldMapHospitalCamera("R9_AmishHospital"),
-            new WorldMapHospitalCamera("R9_EcoCityHospital"),
-            new WorldMapHospitalCamera("R10_TelevisionHospital"),
-            new WorldMapHospitalCamera("R10_FestivalHospital"),
-            new WorldMapHospitalCamera("R10_GalaHospital"),
-            new WorldMapHospitalCamera("R11_Medieval"),
-            new WorldMapHospitalCamera("R11_Prehistory"),
-            new WorldMapHospitalCamera("R11_Future"),
-            new WorldMapHospitalCamera("R12_RoadHospital"),
-            new WorldMapHospitalCamera("R12_RoadAndAirHospital"),
-            new WorldMapHospitalCamera("R12_RescueHospital")
+            new WorldMapHospitalCamera(
+                levelConfigName: "R1_TutorialHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R1_IntroHospital2",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R1_IntroHospital3",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R2_ResearchHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R2_WealthyHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R2_FractureHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R3_TeachingHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R3_AbandonedHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R3_PublicHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R4_DisasterHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R4_TouristHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R4_EpidemicHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R5_HighTechHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R5_FailingHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R5_FinalHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R6_InjuriesHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R6_MoreTrainingHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R6_CastleHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R7_JungleClearingHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R7_HordeHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R7_AtollHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R8_KitschAmericanaHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R8_AirBaseHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R8_SecretFacilityHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R9_HippyCommuneHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R9_AmishHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R9_EcoCityHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R10_TelevisionHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R10_FestivalHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R10_GalaHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R11_Medieval",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R11_Prehistory",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R11_Future",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R12_RoadHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R12_RoadAndAirHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f),
+            new WorldMapHospitalCamera(
+                levelConfigName: "R12_RescueHospital",
+                cameraFocalPoint: null,
+                cameraRotation: 0f,
+                cameraZoom: 0f)
         };
     }
 }
