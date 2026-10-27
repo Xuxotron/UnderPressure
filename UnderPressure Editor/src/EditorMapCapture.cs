@@ -198,16 +198,16 @@ namespace UnderPressure.Editor
                     if (string.IsNullOrEmpty(archivo))
                         throw new InvalidOperationException(
                             "Guarda primero el mapa antes de generar su imagen cenital.");
-                    var carpeta = Path.GetDirectoryName(archivo);
-                    Directory.CreateDirectory(carpeta);
                     var jpg = ImageConversion.EncodeToJPG(imagen, CalidadJpeg);
                     if (jpg == null || jpg.Length == 0)
                         throw new IOException("No se ha podido codificar la captura JPG.");
-                    File.WriteAllBytes(archivo, jpg);
-                    archivoGuardado = archivo;
+                    archivoGuardado = ScenarioEditorStorage.CommitCurrentMapFile(
+                        _level, "map.jpg", jpg);
+                    if (string.IsNullOrEmpty(archivoGuardado))
+                        throw new IOException("No se ha podido actualizar map.jpg dentro del paquete.");
 
                     UnderPressureEditorPlugin.Log?.LogInfo(
-                        "Captura cenital guardada en: " + archivo +
+                        "Captura cenital guardada en: " + archivoGuardado +
                         "; centro real=(" + centro.x.ToString("F2") + ", " +
                         centro.z.ToString("F2") + "); tamano X/Z=(" +
                         terreno.size.x.ToString("F2") + ", " +

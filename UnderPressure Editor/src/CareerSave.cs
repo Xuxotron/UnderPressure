@@ -13,7 +13,7 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioCareerSaveBridge
     {
-        private const string MarkerVersion = "SCENARIO_CONFIG_SAVE_V1";
+        private const string MarkerVersion = "SCENARIO_UPMAP_SAVE_V2";
         private static readonly FieldInfo MapPathField =
             AccessTools.Field(typeof(ScenarioCareerMapLoader), "_path");
         private static readonly FieldInfo WorldConfigAppliedField =
@@ -41,6 +41,8 @@ namespace UnderPressure.Editor
         private static bool _sessionLoaded;
         private static string _cachedPath;
         private static string _cachedFingerprint;
+        private static long _cachedLength;
+        private static DateTime _cachedModifiedUtc;
         private static DateTime _levelReadyUtc;
         private static DateTime _nextSaveCheckUtc;
         private static string _lastRecordedSave;
@@ -53,12 +55,16 @@ namespace UnderPressure.Editor
         private static string Fingerprint(string mapPath)
         {
             if (string.IsNullOrEmpty(mapPath) || !File.Exists(mapPath)) return null;
-            if (string.Equals(mapPath, _cachedPath, StringComparison.OrdinalIgnoreCase))
+            var info = new FileInfo(mapPath);
+            if (string.Equals(mapPath, _cachedPath, StringComparison.OrdinalIgnoreCase) &&
+                info.Length == _cachedLength && info.LastWriteTimeUtc == _cachedModifiedUtc)
                 return _cachedFingerprint;
             using (var stream = File.OpenRead(mapPath))
             using (var sha = SHA256.Create())
             {
                 _cachedPath = mapPath;
+                _cachedLength = info.Length;
+                _cachedModifiedUtc = info.LastWriteTimeUtc;
                 _cachedFingerprint = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
                 return _cachedFingerprint;
             }

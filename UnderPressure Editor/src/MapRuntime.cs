@@ -71,8 +71,7 @@ namespace UnderPressure.Editor
             var folder = Path.GetFullPath(ScenarioEditorStorage.Folder).TrimEnd(Path.DirectorySeparatorChar) +
                          Path.DirectorySeparatorChar;
             if (!full.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(Path.GetFileName(full), ScenarioMapFormat.ConfigFileName,
-                    StringComparison.OrdinalIgnoreCase))
+                !ScenarioMapPackage.IsDirectPackage(full, ScenarioEditorStorage.Folder))
                 throw new InvalidDataException("El mapa no esta en la carpeta maps.");
             var read = ScenarioMapFormat.Read(full);
             if (!string.Equals(read.Header.baseHospitalId, level.UniqueId, StringComparison.Ordinal))
@@ -353,7 +352,7 @@ namespace UnderPressure.Editor
             if (_terrainApplied) return;
             try
             {
-                var folder = Path.GetDirectoryName(_path);
+                var folder = _map.ContentFolder;
                 var roots = UnityEngine.Object.FindObjectsOfType<Transform>();
                 var root = roots.FirstOrDefault(t => t != null &&
                     t.name.StartsWith("Terrain_", StringComparison.OrdinalIgnoreCase));

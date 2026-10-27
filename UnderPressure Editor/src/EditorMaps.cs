@@ -30,6 +30,7 @@ namespace UnderPressure.Editor
         // o de una carga completos, nunca al abrir un cuadro de dialogo.
         private static Level _namedMapLevel;
         private static string _namedMap;
+        private static string _namedMapPath;
         private static Level _architectLevel;
         private static string _architectName;
         private static Level _perimeterModeLevel;
@@ -61,9 +62,23 @@ namespace UnderPressure.Editor
 
         internal static string CurrentMapFolder(Level level)
         {
-            var name = NameForSave(level);
-            if (string.IsNullOrWhiteSpace(name)) return null;
-            return Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
+            var package = CurrentMapPath(level);
+            return string.IsNullOrEmpty(package) || !File.Exists(package)
+                ? null : ScenarioMapPackage.Materialize(package);
+        }
+
+        internal static string CurrentMapPath(Level level)
+        {
+            return ReferenceEquals(_namedMapLevel, level) ? _namedMapPath : null;
+        }
+
+        internal static string CommitCurrentMapFile(Level level, string entryName, byte[] content)
+        {
+            var package = CurrentMapPath(level);
+            if (string.IsNullOrEmpty(package) || !File.Exists(package)) return null;
+            var folder = ScenarioMapPackage.UpdateEntry(package, entryName, content,
+                candidate => ScenarioMapFormat.Read(candidate));
+            return Path.Combine(folder, entryName);
         }
 
         internal static string FolderForArchitect(string architect)
@@ -78,14 +93,11 @@ namespace UnderPressure.Editor
         {
             header = null;
             png = null;
-            var name = NameForSave(level);
-            if (string.IsNullOrWhiteSpace(name)) return false;
-            var folder = Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
-            var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
-            if (!File.Exists(main)) return false;
+            var package = CurrentMapPath(level);
+            if (string.IsNullOrEmpty(package) || !File.Exists(package)) return false;
             try
             {
-                var loaded = ScenarioMapFormat.Read(main);
+                var loaded = ScenarioMapFormat.Read(package);
                 header = loaded.Header;
                 png = loaded.FogOfWarPng;
                 return header != null && !string.IsNullOrEmpty(header.fogOfWarFile) &&
@@ -101,10 +113,11 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void MarkCurrentMap(Level level, string name)
+        private static void MarkCurrentMap(Level level, string name, string path)
         {
             _namedMapLevel = level;
             _namedMap = name;
+            _namedMapPath = Path.GetFullPath(path);
         }
 
         internal static void BeginNewMap(Level level, string architect)
@@ -112,6 +125,9 @@ namespace UnderPressure.Editor
             _architectLevel = level;
             _architectName = string.IsNullOrWhiteSpace(architect)
                 ? UnderPressureEditorPlugin.ArchitectName : architect.Trim();
+            _namedMapLevel = null;
+            _namedMap = null;
+            _namedMapPath = null;
             ResetScenarioSettings(level);
         }
 
@@ -343,10 +359,9 @@ namespace UnderPressure.Editor
         {
             var result = new List<MapInfo>();
             if (!Directory.Exists(Folder)) return result;
-            foreach (var path in Directory.GetFiles(Folder,
-                         ScenarioMapFormat.ConfigFileName, SearchOption.AllDirectories))
+            foreach (var path in ScenarioMapPackage.Enumerate(Folder))
                 result.Add(ReadInfo(path));
-            // La fecha real de config.json cambia al volver a guardar.
+            // La fecha real del paquete cambia al volver a guardar.
             result.Sort((left, right) =>
             {
                 var cmp = right.ModifiedUtc.CompareTo(left.ModifiedUtc);
@@ -398,15 +413,20 @@ namespace UnderPressure.Editor
                 throw new ArgumentException("Introduce un nombre de mapa de 1 a 80 caracteres.");
             var baseId = level.Config.UniqueId;
             var baseName = level.Config.GetLocalisedDisplayName();
-            var folder = Path.Combine(Folder, SafeName(CurrentArchitect(level)), SafeName(name));
-            Directory.CreateDirectory(folder);
+            var creatorFolder = FolderForArchitect(CurrentArchitect(level));
+            Directory.CreateDirectory(creatorFolder);
+            var package = Path.Combine(creatorFolder, SafeName(name) + ScenarioMapPackage.Extension);
+            var folder = ScenarioMapPackage.CreateStagingDirectory();
+            try
+            {
+            if (File.Exists(package)) ScenarioMapPackage.Extract(package, folder);
             var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
             var originalDescription = name;
-            if (File.Exists(main))
+            if (File.Exists(package))
             {
                 try
                 {
-                    var existing = ScenarioMapFormat.ReadHeader(main);
+                    var existing = ScenarioMapFormat.ReadHeader(package);
                     if (!string.IsNullOrEmpty(existing.description)) originalDescription = existing.description;
                 }
                 catch (Exception) { /* Los datos de prueba no se importan. */ }
@@ -510,6 +530,8 @@ namespace UnderPressure.Editor
             // La máscara conserva su resolución nativa (128 o 256) y la
             // definición se registra en la cabecera; no se genera ningún .asset.
             ScenarioEditorFogOfWar.Export(folder, header);
+            // El terreno forma parte del paquete y debe exportarse antes de publicarlo.
+            ScenarioEditorTerrainPainter.ExportSidecar(level, main);
             // Verificar TODAS las parcelas antes de publicar el indice. Nunca
             // informar de un guardado correcto si ha desaparecido una capa.
             foreach (var entry in saved)
@@ -528,14 +550,18 @@ namespace UnderPressure.Editor
                 VerifySavedItems(entry.Item2.builtItems, check.builtItems, entry.Item1, "Built");
                 VerifySavedItems(entry.Item2.unbuiltItems, check.unbuiltItems, entry.Item1, "Unbuilt");
             }
-            // Guardar config.json al final: nunca publicarlo antes de los datos referenciados.
+            // Guardar config.json al final dentro del area temporal. El .upmap anterior
+            // no se sustituye hasta que todos los archivos hayan sido verificados.
             ScenarioMapFormat.WriteJson(main, header);
-            var verified = ScenarioMapFormat.Read(main);
+            var verified = ScenarioMapFormat.ReadLoose(main);
             if (verified.Plots.Count != saved.Count)
                 throw new InvalidDataException("El mapa guardado no coincide con las parcelas del Editor.");
-            UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + main + " (" + refs.Count + " parcelas)");
-            MarkCurrentMap(level, name);
-            return main;
+            ScenarioMapPackage.Publish(folder, package, candidate => ScenarioMapFormat.Read(candidate));
+            UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + package + " (" + refs.Count + " parcelas)");
+            MarkCurrentMap(level, name, package);
+            return package;
+            }
+            finally { ScenarioMapPackage.DeleteDirectory(folder); }
         }
 
         // Comparar tambien identidad y transformacion, no solo cantidades.
@@ -693,8 +719,7 @@ namespace UnderPressure.Editor
             var allowed = Path.GetFullPath(Folder).TrimEnd(Path.DirectorySeparatorChar) +
                           Path.DirectorySeparatorChar;
             if (!full.StartsWith(allowed, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(Path.GetFileName(full), ScenarioMapFormat.ConfigFileName,
-                    StringComparison.OrdinalIgnoreCase))
+                !ScenarioMapPackage.IsDirectPackage(full, Folder))
                 throw new InvalidOperationException("Solo se pueden abrir mapas de la carpeta maps.");
             var map = ScenarioMapFormat.Read(full);
             if (!string.Equals(map.Header.baseHospitalId, level.Config.UniqueId, StringComparison.Ordinal))
@@ -761,9 +786,9 @@ namespace UnderPressure.Editor
                 var landscapeFile = string.IsNullOrEmpty(map.Header.landscapeFile)
                     ? ScenarioLandscape.FileName : map.Header.landscapeFile;
                 ScenarioLandscape.SetMapFile(Path.Combine(
-                    Path.GetDirectoryName(full), landscapeFile));
+                    map.ContentFolder, landscapeFile));
                 ScenarioEditorStorageMenu.NotifyLoadedMap();
-                MarkCurrentMap(level, map.Header.name);
+                MarkCurrentMap(level, map.Header.name, full);
                 _architectLevel = level;
                 _architectName = ArchitectFromPath(full);
             }
@@ -1265,6 +1290,7 @@ namespace UnderPressure.Editor
             _currentCustomPlots = null;
             _namedMapLevel = null;
             _namedMap = null;
+            _namedMapPath = null;
             _architectLevel = null;
             _architectName = null;
             ScenarioEditorScene.Clear();
@@ -3341,7 +3367,7 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void ShowLoad()
         {
-            BuildDialog(T("editor.map.open") + " config.json");
+            BuildDialog(T("editor.map.open") + " .upmap");
             if (_dialog == null) return;
             var list = ScenarioEditorStorage.ListSaved();
             if (list.Count == 0)

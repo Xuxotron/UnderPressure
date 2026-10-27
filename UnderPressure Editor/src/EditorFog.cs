@@ -120,82 +120,15 @@ namespace UnderPressure.Editor
             Open();
         }
 
-        // Abrir el PNG directamente desde la carpeta del mapa actual.
-        // No depender del lector completo (config.json + parcelas) ni de que la
-        // cabecera tenga fogOfWarFile: el archivo RGBA es la fuente de verdad.
+        // El paquete actual es la unica fuente de verdad para la niebla guardada.
         private static bool TryReadSavedFog(out ScenarioMapFormat.Map header, out byte[] png)
         {
             header = null;
             png = null;
             if (_level == null) return false;
-            var name = ScenarioEditorStorage.NameForSave(_level);
-            if (string.IsNullOrWhiteSpace(name)) return false;
             try
             {
-                var safe = SafeName(name);
-                var architectMethod = AccessTools.Method(typeof(ScenarioEditorStorage),
-                    "CurrentArchitect");
-                var architect = architectMethod == null ? null :
-                    architectMethod.Invoke(null, new object[] { _level }) as string;
-                if (string.IsNullOrWhiteSpace(architect))
-                    architect = UnderPressureEditorPlugin.ArchitectName;
-                var root = ScenarioEditorStorage.Folder;
-                var folder = Path.Combine(root, SafeName(architect), safe);
-                var pngPath = Path.Combine(folder, "fog_of_war.png");
-                var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
-                // Buscar unicamente el config.json de este mapa.
-                if (!File.Exists(pngPath) && Directory.Exists(root))
-                {
-                    var matches = Directory.GetFiles(root, ScenarioMapFormat.ConfigFileName,
-                            SearchOption.AllDirectories)
-                        .Where(path => string.Equals(Path.GetFileName(
-                                Path.GetDirectoryName(path)), safe,
-                            StringComparison.OrdinalIgnoreCase)).ToArray();
-                    if (matches.Length == 1)
-                    {
-                        main = matches[0];
-                        folder = Path.GetDirectoryName(main);
-                        pngPath = Path.Combine(folder, "fog_of_war.png");
-                    }
-                }
-                if (!File.Exists(pngPath))
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Fog de disco no encontrado: " + pngPath);
-                    return false;
-                }
-                var info = new FileInfo(pngPath);
-                if (info.Length < 24 || info.Length > 32 * 1024 * 1024)
-                    return false;
-                // La cabecera solo aporta parámetros para aplicar la textura
-                // al mundo. Para mostrarla no es necesario cargar parcelas.
-                ScenarioMapFormat.Map saved = null;
-                if (File.Exists(main) && new FileInfo(main).Length <= 1024 * 1024)
-                {
-                    try { saved = JsonUtility.FromJson<ScenarioMapFormat.Map>(
-                        File.ReadAllText(main)); }
-                    catch (Exception exception)
-                    {
-                        UnderPressureEditorPlugin.Log?.LogWarning(
-                            "Cabecera Fog incompleta; se muestra el PNG: " +
-                            exception.Message);
-                    }
-                }
-                png = File.ReadAllBytes(pngPath);
-                if (saved == null) saved = new ScenarioMapFormat.Map();
-                // La longitud del PNG no basta para determinar la resolución:
-                // DecodePng comprobará la imagen real después de LoadImage.
-                if (saved.fogTileWidth <= 0 || saved.fogTileHeight <= 0)
-                {
-                    saved.fogTileWidth = 0;
-                    saved.fogTileHeight = 0;
-                }
-                if (string.IsNullOrEmpty(saved.fogOfWarFile))
-                    saved.fogOfWarFile = "fog_of_war.png";
-                header = saved;
-                UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Fog de disco: " + pngPath + " (" + png.Length + " bytes)");
-                return true;
+                return ScenarioEditorStorage.TryReadCurrentFog(_level, out header, out png);
             }
             catch (Exception exception)
             {

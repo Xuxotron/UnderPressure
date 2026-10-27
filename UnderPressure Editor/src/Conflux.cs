@@ -152,8 +152,8 @@ namespace UnderPressure.Editor
                     Folder = creatorFolder
                 };
                 foreach (var path in Directory.GetFiles(creatorFolder,
-                             ScenarioMapFormat.ConfigFileName,
-                             SearchOption.AllDirectories))
+                             ScenarioMapPackage.SearchPattern,
+                             SearchOption.TopDirectoryOnly))
                 {
                     try
                     {

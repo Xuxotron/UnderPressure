@@ -176,11 +176,25 @@ namespace UnderPressure.Editor
             internal Scene SceneData = new Scene();
             internal readonly List<LoadedPlot> Plots = new List<LoadedPlot>();
             internal byte[] FogOfWarPng;
+            internal string PackagePath;
+            internal string ContentFolder;
         }
 
         internal static Map ReadHeader(string file)
         {
-            var json = ReadText(file, MaxHeaderBytes);
+            if (!string.Equals(Path.GetExtension(file), ScenarioMapPackage.Extension,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("El mapa debe ser un paquete .upmap.");
+            return ParseHeader(ScenarioMapPackage.ReadText(file, ConfigFileName, MaxHeaderBytes));
+        }
+
+        internal static Map ReadLooseHeader(string file)
+        {
+            return ParseHeader(ReadText(file, MaxHeaderBytes));
+        }
+
+        private static Map ParseHeader(string json)
+        {
             var header = JsonUtility.FromJson<Map>(json);
             if (header != null) header.plots = ParseObjects<PlotReference>(json, "plots");
             if (header != null && header.illnesses == null)
@@ -233,9 +247,22 @@ namespace UnderPressure.Editor
 
         internal static LoadedMap Read(string file)
         {
-            var header = ReadHeader(file);
-            var result = new LoadedMap { Header = header };
+            if (!string.Equals(Path.GetExtension(file), ScenarioMapPackage.Extension,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("El mapa debe ser un paquete .upmap.");
+            var package = Path.GetFullPath(file);
+            var folder = ScenarioMapPackage.Materialize(package);
+            var result = ReadLoose(Path.Combine(folder, ConfigFileName));
+            result.PackagePath = package;
+            result.ContentFolder = folder;
+            return result;
+        }
+
+        internal static LoadedMap ReadLoose(string file)
+        {
+            var header = ReadLooseHeader(file);
             var folder = Path.GetDirectoryName(Path.GetFullPath(file));
+            var result = new LoadedMap { Header = header, ContentFolder = folder };
             if (!string.IsNullOrEmpty(header.fogOfWarFile))
             {
                 if (header.fogTileWidth <= 0 || header.fogTileHeight <= 0 ||

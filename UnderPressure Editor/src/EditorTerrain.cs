@@ -1485,6 +1485,9 @@ namespace UnderPressure.Editor
 
         internal static string GetSidecarFolder(Level level, string mapPath)
         {
+            if (string.Equals(Path.GetExtension(mapPath), ScenarioMapPackage.Extension,
+                    StringComparison.OrdinalIgnoreCase))
+                return ScenarioMapPackage.Materialize(mapPath);
             return Path.GetDirectoryName(Path.GetFullPath(mapPath));
         }
 
@@ -2427,22 +2430,6 @@ namespace UnderPressure.Editor
             if (!ScenarioEditorTerrainPainter.Ready)
                 ScenarioEditorTerrainPainter.Initialize(ScenarioEditorSession.Level);
             ScenarioEditorTerrainPainter.EnsureUi(__instance);
-        }
-    }
-
-    [HarmonyPatch(typeof(ScenarioEditorStorage), "Save")]
-    internal static class ScenarioTerrainPainterSavePatch
-    {
-        private static void Postfix(Level level, string displayName, string __result)
-        {
-            try
-            {
-                ScenarioEditorTerrainPainter.ExportSidecar(level, __result);
-            }
-            catch (Exception exception)
-            {
-                UnderPressureEditorPlugin.Log?.LogError("Terrain painter: export post-save fallo: " + exception);
-            }
         }
     }
 

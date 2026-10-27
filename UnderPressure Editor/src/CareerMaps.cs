@@ -126,8 +126,7 @@ namespace UnderPressure.Editor
             _choices.Clear();
             var root = ScenarioEditorStorage.Folder;
             if (!Directory.Exists(root)) return;
-            foreach (var path in Directory.GetFiles(root,
-                         ScenarioMapFormat.ConfigFileName, SearchOption.AllDirectories))
+            foreach (var path in ScenarioMapPackage.Enumerate(root))
             {
                 try
                 {
@@ -1569,8 +1568,7 @@ namespace UnderPressure.Editor
                 Path.DirectorySeparatorChar;
             var full = Path.GetFullPath(Path.Combine(root, path));
             if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(Path.GetFileName(full), ScenarioMapFormat.ConfigFileName,
-                    StringComparison.OrdinalIgnoreCase) ||
+                !ScenarioMapPackage.IsDirectPackage(full, ScenarioEditorStorage.Folder) ||
                 !File.Exists(full))
             {
                 UnderPressureEditorPlugin.Log?.LogWarning(

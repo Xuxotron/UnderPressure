@@ -897,7 +897,7 @@ namespace UnderPressure.Editor
             var folder = ScenarioEditorStorage.FolderForArchitect(architect);
             if (!Directory.Exists(folder)) return result;
             foreach (var file in Directory.GetFiles(folder,
-                         ScenarioMapFormat.ConfigFileName, SearchOption.AllDirectories))
+                         ScenarioMapPackage.SearchPattern, SearchOption.TopDirectoryOnly))
             {
                 try
                 {
