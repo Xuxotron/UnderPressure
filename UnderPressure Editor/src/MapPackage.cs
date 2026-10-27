@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
@@ -18,6 +19,7 @@ namespace UnderPressure.Editor
         private const uint EndHeaderSignature = 0x06054b50;
         private const ushort Utf8Flag = 0x0800;
         private const ushort StoredMethod = 0;
+        private const ushort DeflateMethod = 8;
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, CacheEntry> Cache =
             new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
@@ -314,8 +316,10 @@ namespace UnderPressure.Editor
                 var localOffset = reader.ReadUInt32();
                 if ((flags & 1) != 0)
                     throw new InvalidDataException("No se admiten entradas ZIP cifradas.");
-                if (method != StoredMethod || compressedSize != length)
-                    throw new InvalidDataException("El paquete debe ser un ZIP sin compresion.");
+                if (method != StoredMethod && method != DeflateMethod)
+                    throw new InvalidDataException("Metodo de compresion ZIP no compatible.");
+                if (method == StoredMethod && compressedSize != length)
+                    throw new InvalidDataException("Entrada ZIP almacenada con tamanos incoherentes.");
                 if (startDisk != 0 || compressedSize == uint.MaxValue || length == uint.MaxValue ||
                     localOffset == uint.MaxValue)
                     throw new InvalidDataException("No se admite ZIP64 ni paquetes divididos.");
@@ -356,16 +360,44 @@ namespace UnderPressure.Editor
             reader.ReadUInt32();
             var nameLength = reader.ReadUInt16();
             var extraLength = reader.ReadUInt16();
-            if ((flags & 1) != 0 || method != StoredMethod || method != entry.Method)
+            if ((flags & 1) != 0 || method != entry.Method ||
+                (method != StoredMethod && method != DeflateMethod))
                 throw new InvalidDataException("Entrada ZIP incompatible: " + entry.Name);
             SkipExact(stream, nameLength + extraLength);
-            if ((long)entry.CompressedSize > int.MaxValue ||
+            if ((long)entry.CompressedSize > int.MaxValue || entry.Length > int.MaxValue ||
                 stream.Position + entry.CompressedSize > stream.Length)
                 throw new InvalidDataException("Entrada ZIP demasiado grande o incompleta: " + entry.Name);
-            var bytes = reader.ReadBytes((int)entry.CompressedSize);
-            if (bytes.Length != entry.CompressedSize || ComputeCrc32(bytes) != entry.Crc32)
+            var compressed = reader.ReadBytes((int)entry.CompressedSize);
+            if (compressed.Length != entry.CompressedSize)
+                throw new InvalidDataException("Entrada ZIP incompleta: " + entry.Name);
+            var bytes = entry.Method == StoredMethod
+                ? compressed
+                : Inflate(compressed, (int)entry.Length, entry.Name);
+            if (bytes.Length != entry.Length || ComputeCrc32(bytes) != entry.Crc32)
                 throw new InvalidDataException("CRC ZIP incorrecto: " + entry.Name);
             return bytes;
+        }
+
+        private static byte[] Inflate(byte[] compressed, int expectedLength, string name)
+        {
+            using (var input = new MemoryStream(compressed, false))
+            using (var inflater = new DeflateStream(input, CompressionMode.Decompress, false))
+            using (var output = new MemoryStream(expectedLength))
+            {
+                var buffer = new byte[81920];
+                var total = 0;
+                int read;
+                while ((read = inflater.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    total += read;
+                    if (total > expectedLength)
+                        throw new InvalidDataException("Entrada ZIP expandida en exceso: " + name);
+                    output.Write(buffer, 0, read);
+                }
+                if (total != expectedLength)
+                    throw new InvalidDataException("Tamano ZIP expandido incorrecto: " + name);
+                return output.ToArray();
+            }
         }
 
         private static void WriteLocalHeader(BinaryWriter writer, PackageEntry entry)
