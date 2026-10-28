@@ -214,7 +214,7 @@ namespace UnderPressure.Editor
             _content.anchoredPosition = Vector2.zero;
             _content.sizeDelta = Vector2.zero;
             var layout = content.GetComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(3, 3, 2, 2);
+            layout.padding = new RectOffset(8, 3, 2, 2);
             layout.spacing = 10f;
             layout.childControlWidth = true;
             layout.childControlHeight = true;
