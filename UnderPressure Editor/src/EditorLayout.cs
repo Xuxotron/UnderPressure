@@ -161,6 +161,81 @@ namespace UnderPressure.Editor
 
         // Referencia cromatica de Build.
         internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
+        internal static Color EditorButtonColor => new Color(.14f, .62f, .89f, 1f);
+        internal static Color EditorSelectedButtonColor => new Color32(10, 110, 170, 255);
+
+        internal static Sprite CreateEditorButtonSprite(out Texture2D texture)
+        {
+            const int size = 32;
+            texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.name = "UP Editor - Boton azul blanco";
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; ++y)
+                for (int x = 0; x < size; ++x)
+                {
+                    var dx = Mathf.Max(Mathf.Abs(x - 15.5f) - 9.5f, 0f);
+                    var dy = Mathf.Max(Mathf.Abs(y - 15.5f) - 9.5f, 0f);
+                    var distance = Mathf.Sqrt(dx * dx + dy * dy);
+                    var alpha = (byte)Mathf.RoundToInt(255f *
+                        Mathf.Clamp01(6.5f - distance));
+                    pixels[y * size + x] = new Color32(255, 255, 255, alpha);
+                }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            var sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size),
+                new Vector2(.5f, .5f), 100f, 0, SpriteMeshType.FullRect,
+                new Vector4(8f, 8f, 8f, 8f));
+            sprite.name = "UP Editor - Boton uniforme";
+            return sprite;
+        }
+
+        internal static void ApplyEditorButtonVisuals(Button button, Sprite sprite, Color tint)
+        {
+            ApplyEditorSelectableVisuals(button, button != null ? button.image : null,
+                sprite, tint);
+        }
+
+        internal static void ApplyEditorButtonVisuals(DynamicButton button, Sprite sprite,
+            Color tint)
+        {
+            var image = button != null
+                ? button.targetGraphic as Image ?? button.GetComponent<Image>() : null;
+            ApplyEditorSelectableVisuals(button, image, sprite, tint);
+        }
+
+        private static void ApplyEditorSelectableVisuals(Selectable button, Image image,
+            Sprite sprite, Color tint)
+        {
+            if (button == null || sprite == null) return;
+            var animator = button.GetComponent<ButtonAnimator>();
+            if (animator != null) animator.enabled = false;
+            if (image != null)
+            {
+                image.overrideSprite = null;
+                image.sprite = sprite;
+                image.type = Image.Type.Sliced;
+                image.color = tint;
+            }
+            button.transition = Selectable.Transition.None;
+            var colors = ColorBlock.defaultColorBlock;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.pressedColor = Color.white;
+            colors.selectedColor = Color.white;
+            colors.disabledColor = Color.white;
+            colors.colorMultiplier = 1f;
+            button.colors = colors;
+            var borderRoot = image != null ? image.gameObject : button.gameObject;
+            var border = borderRoot.GetComponent<Outline>() ?? borderRoot.AddComponent<Outline>();
+            border.enabled = true;
+            border.effectColor = Color.white;
+            border.effectDistance = new Vector2(1f, -1f);
+            border.useGraphicAlpha = true;
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null) label.color = Color.white;
+        }
 
         internal static void StyleToolbarButton(Button button, bool selected)
         {
@@ -2093,33 +2168,12 @@ namespace UnderPressure.Editor
             // La plantilla, el borde y el sonido se configuran una sola vez.
             if (_styledButtons.Add(button))
             {
-                var animator = button.GetComponent<ButtonAnimator>();
-                if (animator != null) animator.enabled = false;
-                if (button.image != null)
-                {
-                    button.image.overrideSprite = null;
-                    button.image.sprite = _style.ButtonSprite;
-                    button.image.type = Image.Type.Sliced;
-                }
-                button.transition = Selectable.Transition.None;
-                button.colors = _style.ButtonColors;
-                var borderRoot = button.image != null ? button.image.gameObject : button.gameObject;
-                var border = borderRoot.GetComponent<Outline>();
-                if (border == null) border = borderRoot.AddComponent<Outline>();
-                border.effectColor = Color.white;
-                border.effectDistance = new Vector2(1f, -1f);
-                border.useGraphicAlpha = true;
-                var label = button.GetComponentInChildren<TMP_Text>(true);
-                if (label != null) label.color = Color.white;
                 // CloneButton elimina los eventos runtime del prefab, incluido
                 // ButtonSFX. Recuperar uno y el MISMO sonido en todos.
                 StandardiseClickSound(button);
             }
-            if (button.image != null)
-            {
-                var desired = tint ?? _style.ButtonColor;
-                if (button.image.color != desired) button.image.color = desired;
-            }
+            ApplyEditorButtonVisuals(button, _style.ButtonSprite,
+                tint ?? _style.ButtonColor);
         }
 
         // Solo botones PEQUENOS: misma altura de letra y centrado real.
@@ -2374,8 +2428,8 @@ namespace UnderPressure.Editor
             internal Color PanelColor = new Color32(10, 110, 170, 255);
             internal Color HeaderColor = new Color(.045f, .38f, .64f, 1f);
             // Referencia visual: celeste de los botones de la segunda imagen.
-            internal Color ButtonColor = new Color(.14f, .62f, .89f, 1f);
-            internal Color SelectedColor = new Color32(10, 110, 170, 255);
+            internal Color ButtonColor = EditorButtonColor;
+            internal Color SelectedColor = EditorSelectedButtonColor;
             internal ColorBlock ButtonColors = ColorBlock.defaultColorBlock;
 
             internal static WorkshopStyle Read(Button baldosa)
@@ -2385,28 +2439,7 @@ namespace UnderPressure.Editor
                 // cualquier tintado azul quedaba oscuro, aun con color blanco.
                 // Crear UNA textura blanca 9-slice, usada por todos los botones;
                 // el tinte sera literalmente el color elegido, con el mismo marco.
-                const int size = 32;
-                style.ButtonTexture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-                style.ButtonTexture.name = "UP Editor - Boton azul blanco";
-                style.ButtonTexture.wrapMode = TextureWrapMode.Clamp;
-                style.ButtonTexture.filterMode = FilterMode.Bilinear;
-                var pixels = new Color32[size * size];
-                for (int y = 0; y < size; ++y)
-                    for (int x = 0; x < size; ++x)
-                    {
-                        var dx = Mathf.Max(Mathf.Abs(x - 15.5f) - 9.5f, 0f);
-                        var dy = Mathf.Max(Mathf.Abs(y - 15.5f) - 9.5f, 0f);
-                        var distance = Mathf.Sqrt(dx * dx + dy * dy);
-                        var alpha = (byte)Mathf.RoundToInt(255f *
-                            Mathf.Clamp01(6.5f - distance));
-                        pixels[y * size + x] = new Color32(255, 255, 255, alpha);
-                    }
-                style.ButtonTexture.SetPixels32(pixels);
-                style.ButtonTexture.Apply(false, false);
-                style.ButtonSprite = Sprite.Create(style.ButtonTexture,
-                    new Rect(0f, 0f, size, size), new Vector2(.5f, .5f), 100f,
-                    0, SpriteMeshType.FullRect, new Vector4(8f, 8f, 8f, 8f));
-                style.ButtonSprite.name = "UP Editor - Boton uniforme";
+                style.ButtonSprite = CreateEditorButtonSprite(out style.ButtonTexture);
                 var colors = ColorBlock.defaultColorBlock;
                 colors.normalColor = Color.white;
                 colors.highlightedColor = Color.white;

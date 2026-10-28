@@ -647,6 +647,8 @@ namespace UnderPressure.Editor
         private static GameObject _root;
         private static DynamicButton _nativeButtonTemplate;
         private static TMP_Text _nativeTextTemplate;
+        private static Texture2D _buttonTexture;
+        private static Sprite _buttonSprite;
         private static Action<LevelConfig, string> _onOpen;
         private static Action _onCancel;
         private static LevelConfig _selectedLevel;
@@ -676,6 +678,7 @@ namespace UnderPressure.Editor
             _nativeTextTemplate = _nativeButtonTemplate.GetComponentInChildren<TMP_Text>(true);
             if (_nativeTextTemplate == null)
                 throw new InvalidOperationException("No se encontro el texto nativo del boton.");
+            _buttonSprite = ScenarioEditorDockLayout.CreateEditorButtonSprite(out _buttonTexture);
             _onOpen = openMap;
             _onCancel = cancel;
 
@@ -762,13 +765,27 @@ namespace UnderPressure.Editor
             // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
             // Sus capas estructurales se conservan y solo se ocultan los controles
             // y contenidos propios de Ajustes.
-            var panel = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
+            var screen = UnityEngine.Object.Instantiate(nativeScreen.gameObject, parent, false);
+            screen.name = "UP Native Scenario Selector Screen";
+            screen.SetActive(false);
+            var screenRect = screen.transform as RectTransform;
+            if (screenRect != null) Stretch(screenRect);
+            var clonedScreen = screen.GetComponent<PreferencesScreen>();
+            if (clonedScreen == null)
+                throw new InvalidOperationException(
+                    "No se pudo clonar PreferencesScreen para el selector.");
+            clonedScreen.enabled = false;
+            var panelTransform = FindCloneTransform(nativeScreen.transform, screen.transform,
+                nativePanel);
+            if (panelTransform == null)
+                throw new InvalidOperationException(
+                    "No se encontro el panel clonado de PreferencesScreen.");
+            var panel = panelTransform.gameObject;
             panel.name = "UP Native Scenario Selector Panel";
-            panel.SetActive(false);
 
             var hiddenTransforms = new[]
             {
-                "_videoTab", "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
+                "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
                 "_videoTabContents", "_audioTabContents", "_controlsTabContents",
                 "_gameTabContents", "_languageTabContents",
                 "_videoTabFolderBackground", "_audioTabFolderBackground",
@@ -779,20 +796,20 @@ namespace UnderPressure.Editor
             {
                 var source = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen)
                     as Transform;
-                var clone = FindCloneTransform(nativePanel, panel.transform, source);
+                var clone = FindCloneTransform(nativeScreen.transform, screen.transform, source);
                 if (clone != null) clone.gameObject.SetActive(false);
             }
-            foreach (var selectable in panel.GetComponentsInChildren<Selectable>(true))
+            foreach (var selectable in screen.GetComponentsInChildren<Selectable>(true))
                 selectable.gameObject.SetActive(false);
-            foreach (var text in panel.GetComponentsInChildren<TMP_Text>(true))
+            foreach (var text in screen.GetComponentsInChildren<TMP_Text>(true))
                 text.gameObject.SetActive(false);
-            foreach (var behaviour in panel.GetComponentsInChildren<MonoBehaviour>(true))
+            foreach (var behaviour in screen.GetComponentsInChildren<MonoBehaviour>(true))
                 behaviour.enabled = false;
-            foreach (var graphic in panel.GetComponentsInChildren<Graphic>(true))
+            foreach (var graphic in screen.GetComponentsInChildren<Graphic>(true))
                 graphic.raycastTarget = false;
             var panelImage = panel.GetComponent<Image>();
             if (panelImage != null) panelImage.raycastTarget = true;
-            panel.SetActive(true);
+            screen.SetActive(true);
             return panel;
         }
 
@@ -946,6 +963,10 @@ namespace UnderPressure.Editor
             _root = null;
             _nativeButtonTemplate = null;
             _nativeTextTemplate = null;
+            if (_buttonSprite != null) UnityEngine.Object.Destroy(_buttonSprite);
+            if (_buttonTexture != null) UnityEngine.Object.Destroy(_buttonTexture);
+            _buttonSprite = null;
+            _buttonTexture = null;
             _onOpen = null;
             _onCancel = null;
             _selectedLevel = null;
@@ -1145,16 +1166,12 @@ namespace UnderPressure.Editor
             }
             else if (selected)
             {
-                var colors = button.colors;
-                var selectedColor = new Color32(10, 110, 170, 255);
-                colors.normalColor = selectedColor;
-                colors.highlightedColor = Color.Lerp(selectedColor, Color.white, 0.18f);
-                colors.pressedColor = Color.Lerp(selectedColor, Color.black, 0.18f);
-                colors.selectedColor = selectedColor;
-                button.colors = colors;
-                if (button.targetGraphic != null)
-                    button.targetGraphic.color = selectedColor;
+                ScenarioEditorDockLayout.ApplyEditorButtonVisuals(button, _buttonSprite,
+                    ScenarioEditorDockLayout.EditorSelectedButtonColor);
             }
+            else
+                ScenarioEditorDockLayout.ApplyEditorButtonVisuals(button, _buttonSprite,
+                    ScenarioEditorDockLayout.EditorButtonColor);
             return row;
         }
 
