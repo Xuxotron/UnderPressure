@@ -685,6 +685,12 @@ namespace UnderPressure.Editor
             overlay.color = new Color(0f, 0f, 0f, 0.58f);
             overlay.raycastTarget = true;
             _root.transform.SetAsLastSibling();
+            var closeHandler = _root.AddComponent<ScenarioEditorSelectorCloseHandler>();
+            closeHandler.Close = () =>
+            {
+                ClearPendingMap();
+                _onCancel?.Invoke();
+            };
 
             var panel = CreateNativeSettingsPanel(_root.transform);
             var panelRect = (RectTransform)panel.transform;
@@ -708,7 +714,7 @@ namespace UnderPressure.Editor
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
             CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
-                new Vector2(20f, -497f), new Vector2(300f, 50f), () =>
+                new Vector2(20f, -497f), new Vector2(290f, 50f), () =>
                 {
                     ClearPendingMap();
                     _onCancel?.Invoke();
@@ -754,22 +760,58 @@ namespace UnderPressure.Editor
                     "No se encontro el panel raiz nativo de PreferencesScreen.");
 
             // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
-            // Se conserva ese contenedor y se retira solamente su contenido interno.
+            // Sus capas estructurales se conservan y solo se ocultan los controles
+            // y contenidos propios de Ajustes.
             var panel = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
             panel.name = "UP Native Scenario Selector Panel";
             panel.SetActive(false);
-            for (var index = panel.transform.childCount - 1; index >= 0; --index)
+
+            var hiddenTransforms = new[]
             {
-                var child = panel.transform.GetChild(index).gameObject;
-                child.SetActive(false);
-                UnityEngine.Object.Destroy(child);
+                "_videoTab", "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
+                "_videoTabContents", "_audioTabContents", "_controlsTabContents",
+                "_gameTabContents", "_languageTabContents",
+                "_videoTabFolderBackground", "_audioTabFolderBackground",
+                "_controlsTabFolderBackground", "_gameTabFolderBackground",
+                "_languageTabFolderBackground"
+            };
+            foreach (var fieldName in hiddenTransforms)
+            {
+                var source = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen)
+                    as Transform;
+                var clone = FindCloneTransform(nativePanel, panel.transform, source);
+                if (clone != null) clone.gameObject.SetActive(false);
             }
-            foreach (var behaviour in panel.GetComponents<MonoBehaviour>())
+            foreach (var selectable in panel.GetComponentsInChildren<Selectable>(true))
+                selectable.gameObject.SetActive(false);
+            foreach (var text in panel.GetComponentsInChildren<TMP_Text>(true))
+                text.gameObject.SetActive(false);
+            foreach (var behaviour in panel.GetComponentsInChildren<MonoBehaviour>(true))
                 behaviour.enabled = false;
+            foreach (var graphic in panel.GetComponentsInChildren<Graphic>(true))
+                graphic.raycastTarget = false;
             var panelImage = panel.GetComponent<Image>();
             if (panelImage != null) panelImage.raycastTarget = true;
             panel.SetActive(true);
             return panel;
+        }
+
+        private static Transform FindCloneTransform(Transform sourceRoot, Transform cloneRoot,
+            Transform source)
+        {
+            if (sourceRoot == null || cloneRoot == null || source == null ||
+                !source.IsChildOf(sourceRoot)) return null;
+            var names = new Stack<string>();
+            for (var current = source; current != null && current != sourceRoot;
+                 current = current.parent)
+                names.Push(current.name);
+            var clone = cloneRoot;
+            while (names.Count > 0)
+            {
+                clone = clone.Find(names.Pop());
+                if (clone == null) return null;
+            }
+            return clone;
         }
 
         private static void SelectHospital(LevelConfig level)
@@ -968,7 +1010,7 @@ namespace UnderPressure.Editor
             hostRect.anchoredPosition = pos;
             hostRect.sizeDelta = size;
             var background = host.GetComponent<Image>();
-            background.color = new Color(1f, 1f, 1f, 0.06f);
+            background.color = new Color32(82, 82, 82, 255);
             background.raycastTarget = true;
 
             // NUNCA hay elementos fuera de pantalla: se crean solo las 7 filas visibles.
@@ -1103,13 +1145,15 @@ namespace UnderPressure.Editor
             }
             else if (selected)
             {
-                // La seleccion usa el amarillo de resaltado del propio prefab.
-                // No se aplica un tinte inventado sobre el fondo cian: esa
-                // multiplicacion era la que convertia el boton en verde.
                 var colors = button.colors;
-                colors.normalColor = colors.highlightedColor;
-                colors.selectedColor = colors.highlightedColor;
+                var selectedColor = new Color32(10, 110, 170, 255);
+                colors.normalColor = selectedColor;
+                colors.highlightedColor = Color.Lerp(selectedColor, Color.white, 0.18f);
+                colors.pressedColor = Color.Lerp(selectedColor, Color.black, 0.18f);
+                colors.selectedColor = selectedColor;
                 button.colors = colors;
+                if (button.targetGraphic != null)
+                    button.targetGraphic.color = selectedColor;
             }
             return row;
         }
@@ -1208,7 +1252,7 @@ namespace UnderPressure.Editor
             rect.anchoredPosition = new Vector2(490f, -68f);
             rect.sizeDelta = new Vector2(260f, 422f);
             _architectDropdown.GetComponent<Image>().color =
-                new Color(0.12f, 0.15f, 0.18f, 0.99f);
+                new Color(0.12f, 0.15f, 0.18f, 1f);
             _architectDropdown.transform.SetAsLastSibling();
             _architectColumn = CreateColumn(_architectDropdown.transform,
                 "Architects", Vector2.zero, new Vector2(260f, 422f));
@@ -1311,6 +1355,17 @@ namespace UnderPressure.Editor
         public void OnScroll(PointerEventData eventData)
         {
             if (Scroll != null) Scroll(eventData.scrollDelta.y);
+        }
+    }
+
+    // Replica el cierre por Escape usado por los menus nativos.
+    public sealed class ScenarioEditorSelectorCloseHandler : MonoBehaviour
+    {
+        internal Action Close;
+
+        private void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape)) Close?.Invoke();
         }
     }
 
