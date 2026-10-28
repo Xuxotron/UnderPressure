@@ -765,18 +765,13 @@ namespace UnderPressure.Editor
                     "No se encontro el panel raiz nativo de PreferencesScreen.");
 
             // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
-            // Se conserva su jerarquia completa y sus componentes de disposicion,
-            // igual que en Ajustes del escenario; solo se ocultan sus controles.
+            // Sus capas estructurales se conservan y solo se ocultan los controles
+            // y contenidos propios de Ajustes.
             var screen = UnityEngine.Object.Instantiate(nativeScreen.gameObject, parent, false);
             screen.name = "UP Native Scenario Selector Screen";
+            screen.SetActive(false);
             var screenRect = screen.transform as RectTransform;
-            if (screenRect != null)
-            {
-                Stretch(screenRect);
-                screenRect.localScale = Vector3.one;
-            }
-            foreach (var nestedCanvas in screen.GetComponentsInChildren<Canvas>(true))
-                nestedCanvas.overrideSorting = false;
+            if (screenRect != null) Stretch(screenRect);
             var clonedScreen = screen.GetComponent<PreferencesScreen>();
             if (clonedScreen == null)
                 throw new InvalidOperationException(
@@ -792,40 +787,26 @@ namespace UnderPressure.Editor
 
             var hiddenTransforms = new[]
             {
+                "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
                 "_videoTabContents", "_audioTabContents", "_controlsTabContents",
                 "_gameTabContents", "_languageTabContents",
                 "_videoTabFolderBackground", "_audioTabFolderBackground",
                 "_controlsTabFolderBackground", "_gameTabFolderBackground",
-                "_languageTabFolderBackground",
-                "_videoTabButton", "_audioTabButton", "_controlsTabButton",
-                "_gameTabButton", "_languageTabButton", "_creditsButton", "_closeButton"
+                "_languageTabFolderBackground"
             };
             foreach (var fieldName in hiddenTransforms)
             {
-                var value = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen);
-                var source = value as Transform ?? (value as Component)?.transform;
+                var source = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen)
+                    as Transform;
                 var clone = FindCloneTransform(nativeScreen.transform, screen.transform, source);
                 if (clone != null) clone.gameObject.SetActive(false);
             }
+            foreach (var selectable in screen.GetComponentsInChildren<Selectable>(true))
+                selectable.gameObject.SetActive(false);
+            foreach (var text in screen.GetComponentsInChildren<TMP_Text>(true))
+                text.gameObject.SetActive(false);
             foreach (var behaviour in screen.GetComponentsInChildren<MonoBehaviour>(true))
-            {
-                if (behaviour == null) continue;
-                var typeName = behaviour.GetType().FullName;
-                if (typeName == "UnderPressure.ModSettingsTab") behaviour.enabled = false;
-                if (typeName != null && typeName.StartsWith("I2.Loc.", StringComparison.Ordinal))
-                    behaviour.enabled = false;
-                if (typeName == "TH20.SetTextToVersionNumber")
-                    behaviour.gameObject.SetActive(false);
-            }
-            foreach (var child in screen.GetComponentsInChildren<Transform>(true))
-                if (child != null && (child.name == "UnderPressureTabButton" ||
-                                      child.name == "UnderPressureMasterToggle"))
-                    child.gameObject.SetActive(false);
-            var title = screen.GetComponentsInChildren<TMP_Text>(true)
-                .Where(text => text != null && text.GetComponentInParent<Selectable>() == null)
-                .OrderByDescending(text => text.fontSize)
-                .FirstOrDefault();
-            if (title != null) title.gameObject.SetActive(false);
+                behaviour.enabled = false;
             foreach (var graphic in screen.GetComponentsInChildren<Graphic>(true))
                 graphic.raycastTarget = false;
             var panelImage = panel.GetComponent<Image>();
