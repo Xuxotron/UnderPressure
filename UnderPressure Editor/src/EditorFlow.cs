@@ -696,7 +696,7 @@ namespace UnderPressure.Editor
                 _onCancel?.Invoke();
             };
 
-            var panel = CreateNativeHospitalPanel(_root.transform);
+            var panel = CreateNativeSettingsPanel(_root.transform);
             var panelRect = (RectTransform)panel.transform;
             panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
@@ -751,20 +751,86 @@ namespace UnderPressure.Editor
             return _root;
         }
 
-        private static GameObject CreateNativeHospitalPanel(Transform parent)
+        private static GameObject CreateNativeSettingsPanel(Transform parent)
         {
-            var nativeMenu = Resources.FindObjectsOfTypeAll<SelectedHospitalMenu>()
-                .FirstOrDefault(ScenarioNativeHospitalFrame.IsAvailable);
-            if (nativeMenu == null)
+            var videoTabField = AccessTools.Field(typeof(PreferencesScreen), "_videoTab");
+            var nativeScreen = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
+                .FirstOrDefault(candidate => candidate != null &&
+                    videoTabField?.GetValue(candidate) is Transform);
+            var nativeVideoTab = nativeScreen == null
+                ? null : videoTabField.GetValue(nativeScreen) as Transform;
+            var nativePanel = nativeVideoTab?.parent as RectTransform;
+            if (nativePanel == null)
                 throw new InvalidOperationException(
-                    "No se encontro el fondo nativo de SelectedHospitalMenu.");
+                    "No se encontro el panel raiz nativo de PreferencesScreen.");
 
-            var panel = Ui("UP Native Scenario Selector Panel", parent);
-            panel.name = "UP Native Scenario Selector Panel";
-            if (!ScenarioNativeHospitalFrame.CopyTo(nativeMenu, panel.transform, true))
+            // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
+            // Sus capas estructurales se conservan y solo se ocultan los controles
+            // y contenidos propios de Ajustes.
+            var screen = UnityEngine.Object.Instantiate(nativeScreen.gameObject, parent, false);
+            screen.name = "UP Native Scenario Selector Screen";
+            screen.SetActive(false);
+            var screenRect = screen.transform as RectTransform;
+            if (screenRect != null) Stretch(screenRect);
+            var clonedScreen = screen.GetComponent<PreferencesScreen>();
+            if (clonedScreen == null)
                 throw new InvalidOperationException(
-                    "No se pudo copiar el fondo nativo de SelectedHospitalMenu.");
+                    "No se pudo clonar PreferencesScreen para el selector.");
+            clonedScreen.enabled = false;
+            var panelTransform = FindCloneTransform(nativeScreen.transform, screen.transform,
+                nativePanel);
+            if (panelTransform == null)
+                throw new InvalidOperationException(
+                    "No se encontro el panel clonado de PreferencesScreen.");
+            var panel = panelTransform.gameObject;
+            panel.name = "UP Native Scenario Selector Panel";
+
+            var hiddenTransforms = new[]
+            {
+                "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
+                "_videoTabContents", "_audioTabContents", "_controlsTabContents",
+                "_gameTabContents", "_languageTabContents",
+                "_videoTabFolderBackground", "_audioTabFolderBackground",
+                "_controlsTabFolderBackground", "_gameTabFolderBackground",
+                "_languageTabFolderBackground"
+            };
+            foreach (var fieldName in hiddenTransforms)
+            {
+                var source = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen)
+                    as Transform;
+                var clone = FindCloneTransform(nativeScreen.transform, screen.transform, source);
+                if (clone != null) clone.gameObject.SetActive(false);
+            }
+            foreach (var selectable in screen.GetComponentsInChildren<Selectable>(true))
+                selectable.gameObject.SetActive(false);
+            foreach (var text in screen.GetComponentsInChildren<TMP_Text>(true))
+                text.gameObject.SetActive(false);
+            foreach (var behaviour in screen.GetComponentsInChildren<MonoBehaviour>(true))
+                behaviour.enabled = false;
+            foreach (var graphic in screen.GetComponentsInChildren<Graphic>(true))
+                graphic.raycastTarget = false;
+            var panelImage = panel.GetComponent<Image>();
+            if (panelImage != null) panelImage.raycastTarget = true;
+            screen.SetActive(true);
             return panel;
+        }
+
+        private static Transform FindCloneTransform(Transform sourceRoot, Transform cloneRoot,
+            Transform source)
+        {
+            if (sourceRoot == null || cloneRoot == null || source == null ||
+                !source.IsChildOf(sourceRoot)) return null;
+            var names = new Stack<string>();
+            for (var current = source; current != null && current != sourceRoot;
+                 current = current.parent)
+                names.Push(current.name);
+            var clone = cloneRoot;
+            while (names.Count > 0)
+            {
+                clone = clone.Find(names.Pop());
+                if (clone == null) return null;
+            }
+            return clone;
         }
 
         private static void SelectHospital(LevelConfig level)
