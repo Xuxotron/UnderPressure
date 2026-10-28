@@ -214,7 +214,10 @@ namespace UnderPressure.Editor
             _content.anchoredPosition = Vector2.zero;
             _content.sizeDelta = Vector2.zero;
             var layout = content.GetComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(8, 3, 2, 2);
+            // Los offsets exteriores del viewport son 15 px a la izquierda y
+            // 18 px a la derecha. Estos valores dejan 28 px efectivos en ambos
+            // lados y conservan el mismo ancho visual alrededor de cada boton.
+            layout.padding = new RectOffset(13, 10, 2, 2);
             layout.spacing = 10f;
             layout.childControlWidth = true;
             layout.childControlHeight = true;
@@ -236,7 +239,7 @@ namespace UnderPressure.Editor
                 barRect.anchorMin = new Vector2(1f, 0f);
                 barRect.anchorMax = new Vector2(1f, 1f);
                 barRect.pivot = new Vector2(1f, 0.5f);
-                barRect.offsetMin = new Vector2(-15f, 0f);
+                barRect.offsetMin = new Vector2(-20f, 0f);
                 barRect.offsetMax = Vector2.zero;
                 scrollbar.direction = Scrollbar.Direction.BottomToTop;
                 _scroll.verticalScrollbar = scrollbar;
@@ -262,7 +265,7 @@ namespace UnderPressure.Editor
             var needsScrollbar = PreferredContentHeight() > visibleHeight + 0.5f;
             if (_scrollbar != null && _scrollbar.gameObject.activeSelf != needsScrollbar)
                 _scrollbar.gameObject.SetActive(needsScrollbar);
-            _viewportRect.offsetMax = new Vector2(needsScrollbar ? -19f : 0f, 0f);
+            _viewportRect.offsetMax = new Vector2(needsScrollbar ? -24f : 0f, 0f);
             _scroll.vertical = needsScrollbar;
             if (!needsScrollbar) _scroll.verticalNormalizedPosition = 1f;
         }

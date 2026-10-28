@@ -1778,7 +1778,8 @@ namespace UnderPressure.Editor
         // BARRAS VERTICALES: clonar el Scrollbar vertical real de Ajustes.
         // No se reutiliza ni se gira ningun Slider de valores.
         internal static Scrollbar InstallNativeVerticalScrollbar(RectTransform host,
-            ScrollRect scroll, string name, float top, float bottom, bool left = false)
+            ScrollRect scroll, string name, float top, float bottom, bool left = false,
+            float width = 12f)
         {
             if (host == null || scroll == null) return null;
             var existing = host.Find(name)?.GetComponent<Scrollbar>();
@@ -1819,8 +1820,9 @@ namespace UnderPressure.Editor
             rect.anchorMin = new Vector2(left ? 0f : 1f, 0f);
             rect.anchorMax = new Vector2(left ? 0f : 1f, 1f);
             rect.pivot = new Vector2(left ? 0f : 1f, .5f);
-            rect.offsetMin = new Vector2(left ? 2f : -14f, bottom);
-            rect.offsetMax = new Vector2(left ? 14f : -2f, -top);
+            width = Mathf.Max(12f, width);
+            rect.offsetMin = new Vector2(left ? 2f : -(width + 2f), bottom);
+            rect.offsetMax = new Vector2(left ? width + 2f : -2f, -top);
             rect.localScale = Vector3.one;
             existing.direction = Scrollbar.Direction.BottomToTop;
             existing.interactable = true;
@@ -1852,9 +1854,9 @@ namespace UnderPressure.Editor
                 var minimum = scroll.viewport.offsetMin;
                 var maximum = scroll.viewport.offsetMax;
                 if (left)
-                    minimum.x = 12f;
+                    minimum.x = width;
                 else
-                    maximum.x = -12f;
+                    maximum.x = -width;
                 scroll.viewport.offsetMin = minimum;
                 scroll.viewport.offsetMax = maximum;
             }

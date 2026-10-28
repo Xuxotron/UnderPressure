@@ -998,7 +998,7 @@ namespace UnderPressure.Editor
                 RowInset = rowInset
             };
             column.Bar = ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(hostRect, scroll,
-                "UP Native Vertical Scrollbar", 4f, 4f);
+                "UP Native Vertical Scrollbar", 4f, 4f, false, 20f);
             if (column.Bar == null)
                 throw new InvalidOperationException("No se encontro el Scrollbar vertical nativo.");
             return column;
@@ -1020,7 +1020,10 @@ namespace UnderPressure.Editor
             var hasScroll = column.Entries.Count > VisibleRows;
             column.Bar.gameObject.SetActive(hasScroll);
 
-            var width = column.Width - (hasScroll ? 30f : 13f);
+            const float horizontalInset = 12f;
+            const float scrollbarWidth = 20f;
+            var width = column.Width - horizontalInset * 2f -
+                (hasScroll ? scrollbarWidth : 0f);
             for (var row = 0; row < column.Entries.Count; ++row)
             {
                 var entry = column.Entries[row];
@@ -1029,7 +1032,7 @@ namespace UnderPressure.Editor
                     selected = _hospitalChoices.Any(
                         x => x.Label == entry.Label && x.Level == _selectedLevel);
                 var buttonRow = CreateNativeRow(column.Content, entry.Label,
-                    new Vector2(column.RowInset,
+                    new Vector2(horizontalInset,
                         -(RowInset + row * (RowHeight + RowSpacing))),
                     new Vector2(width, RowHeight), entry.OnClick, entry.Green, selected);
                 column.VisibleRows.Add(buttonRow);
