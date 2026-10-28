@@ -628,6 +628,7 @@ namespace UnderPressure.Editor
             internal RectTransform Viewport;
             internal Scrollbar Bar;
             internal float Width;
+            internal float RowInset;
             internal readonly List<RowEntry> Entries = new List<RowEntry>();
             internal readonly List<GameObject> VisibleRows = new List<GameObject>();
             internal int FirstRow;
@@ -642,7 +643,7 @@ namespace UnderPressure.Editor
         private const float PanelWidth = 780f;
         private const float PanelHeight = 560f;
         private const float LeftColumnWidth = 380f;
-        private const float RightColumnWidth = 340f;
+        private const float RightColumnWidth = 345f;
 
         private static GameObject _root;
         private static DynamicButton _nativeButtonTemplate;
@@ -695,7 +696,7 @@ namespace UnderPressure.Editor
                 _onCancel?.Invoke();
             };
 
-            var panel = CreateNativeSettingsPanel(_root.transform);
+            var panel = CreateNativeHospitalPanel(_root.transform);
             var panelRect = (RectTransform)panel.transform;
             panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
@@ -713,7 +714,8 @@ namespace UnderPressure.Editor
                 new Vector2(20f, -68f), new Vector2(LeftColumnWidth, ColumnHeight));
             _mapsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.maps"),
-                new Vector2(420f, -68f), new Vector2(RightColumnWidth, ColumnHeight));
+                new Vector2(420f, -68f), new Vector2(RightColumnWidth, ColumnHeight),
+                RowInset + 5f);
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
             CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
@@ -749,86 +751,20 @@ namespace UnderPressure.Editor
             return _root;
         }
 
-        private static GameObject CreateNativeSettingsPanel(Transform parent)
+        private static GameObject CreateNativeHospitalPanel(Transform parent)
         {
-            var videoTabField = AccessTools.Field(typeof(PreferencesScreen), "_videoTab");
-            var nativeScreen = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
-                .FirstOrDefault(candidate => candidate != null &&
-                    videoTabField?.GetValue(candidate) is Transform);
-            var nativeVideoTab = nativeScreen == null
-                ? null : videoTabField.GetValue(nativeScreen) as Transform;
-            var nativePanel = nativeVideoTab?.parent as RectTransform;
-            if (nativePanel == null)
+            var nativeMenu = Resources.FindObjectsOfTypeAll<SelectedHospitalMenu>()
+                .FirstOrDefault(ScenarioNativeHospitalFrame.IsAvailable);
+            if (nativeMenu == null)
                 throw new InvalidOperationException(
-                    "No se encontro el panel raiz nativo de PreferencesScreen.");
+                    "No se encontro el fondo nativo de SelectedHospitalMenu.");
 
-            // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
-            // Sus capas estructurales se conservan y solo se ocultan los controles
-            // y contenidos propios de Ajustes.
-            var screen = UnityEngine.Object.Instantiate(nativeScreen.gameObject, parent, false);
-            screen.name = "UP Native Scenario Selector Screen";
-            screen.SetActive(false);
-            var screenRect = screen.transform as RectTransform;
-            if (screenRect != null) Stretch(screenRect);
-            var clonedScreen = screen.GetComponent<PreferencesScreen>();
-            if (clonedScreen == null)
-                throw new InvalidOperationException(
-                    "No se pudo clonar PreferencesScreen para el selector.");
-            clonedScreen.enabled = false;
-            var panelTransform = FindCloneTransform(nativeScreen.transform, screen.transform,
-                nativePanel);
-            if (panelTransform == null)
-                throw new InvalidOperationException(
-                    "No se encontro el panel clonado de PreferencesScreen.");
-            var panel = panelTransform.gameObject;
+            var panel = Ui("UP Native Scenario Selector Panel", parent);
             panel.name = "UP Native Scenario Selector Panel";
-
-            var hiddenTransforms = new[]
-            {
-                "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
-                "_videoTabContents", "_audioTabContents", "_controlsTabContents",
-                "_gameTabContents", "_languageTabContents",
-                "_videoTabFolderBackground", "_audioTabFolderBackground",
-                "_controlsTabFolderBackground", "_gameTabFolderBackground",
-                "_languageTabFolderBackground"
-            };
-            foreach (var fieldName in hiddenTransforms)
-            {
-                var source = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen)
-                    as Transform;
-                var clone = FindCloneTransform(nativeScreen.transform, screen.transform, source);
-                if (clone != null) clone.gameObject.SetActive(false);
-            }
-            foreach (var selectable in screen.GetComponentsInChildren<Selectable>(true))
-                selectable.gameObject.SetActive(false);
-            foreach (var text in screen.GetComponentsInChildren<TMP_Text>(true))
-                text.gameObject.SetActive(false);
-            foreach (var behaviour in screen.GetComponentsInChildren<MonoBehaviour>(true))
-                behaviour.enabled = false;
-            foreach (var graphic in screen.GetComponentsInChildren<Graphic>(true))
-                graphic.raycastTarget = false;
-            var panelImage = panel.GetComponent<Image>();
-            if (panelImage != null) panelImage.raycastTarget = true;
-            screen.SetActive(true);
+            if (!ScenarioNativeHospitalFrame.CopyTo(nativeMenu, panel.transform, true))
+                throw new InvalidOperationException(
+                    "No se pudo copiar el fondo nativo de SelectedHospitalMenu.");
             return panel;
-        }
-
-        private static Transform FindCloneTransform(Transform sourceRoot, Transform cloneRoot,
-            Transform source)
-        {
-            if (sourceRoot == null || cloneRoot == null || source == null ||
-                !source.IsChildOf(sourceRoot)) return null;
-            var names = new Stack<string>();
-            for (var current = source; current != null && current != sourceRoot;
-                 current = current.parent)
-                names.Push(current.name);
-            var clone = cloneRoot;
-            while (names.Count > 0)
-            {
-                clone = clone.Find(names.Pop());
-                if (clone == null) return null;
-            }
-            return clone;
         }
 
         private static void SelectHospital(LevelConfig level)
@@ -1022,7 +958,8 @@ namespace UnderPressure.Editor
             return result.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
-        private static ScrollColumn CreateColumn(Transform parent, string name, Vector2 pos, Vector2 size)
+        private static ScrollColumn CreateColumn(Transform parent, string name, Vector2 pos,
+            Vector2 size, float rowInset = RowInset)
         {
             var host = Ui(name, parent, typeof(Image));
             var hostRect = (RectTransform)host.transform;
@@ -1045,7 +982,8 @@ namespace UnderPressure.Editor
             var column = new ScrollColumn
             {
                 Viewport = (RectTransform)viewport.transform,
-                Width = size.x
+                Width = size.x,
+                RowInset = rowInset
             };
 
             var wheel = host.AddComponent<ScenarioEditorWheelHandler>();
@@ -1091,7 +1029,8 @@ namespace UnderPressure.Editor
             column.Bar.value = maxFirst == 0 ? 1f : 1f - (float)column.FirstRow / maxFirst;
             column.ChangingBar = false;
 
-            var width = column.Width - (hasScroll ? 30f : 13f);
+            var width = column.Width - (hasScroll ? 30f : 13f) -
+                        (column.RowInset - RowInset);
             for (var row = 0; row < VisibleRows && row + column.FirstRow < column.Entries.Count; ++row)
             {
                 var entry = column.Entries[row + column.FirstRow];
@@ -1100,7 +1039,8 @@ namespace UnderPressure.Editor
                     selected = _hospitalChoices.Any(
                         x => x.Label == entry.Label && x.Level == _selectedLevel);
                 var buttonRow = CreateNativeRow(column.Viewport, entry.Label,
-                    new Vector2(RowInset, -(RowInset + row * (RowHeight + RowSpacing))),
+                    new Vector2(column.RowInset,
+                        -(RowInset + row * (RowHeight + RowSpacing))),
                     new Vector2(width, RowHeight), entry.OnClick, entry.Green, selected);
                 column.VisibleRows.Add(buttonRow);
             }
@@ -1154,15 +1094,9 @@ namespace UnderPressure.Editor
 
             if (green)
             {
-                var colors = button.colors;
                 var baseColor = new Color(0.22f, 0.96f, 0.22f, 1f);
-                colors.normalColor = baseColor;
-                colors.highlightedColor = Color.Lerp(baseColor, Color.white, 0.22f);
-                colors.pressedColor = Color.Lerp(baseColor, Color.black, 0.22f);
-                colors.selectedColor = colors.highlightedColor;
-                button.colors = colors;
-                if (button.targetGraphic != null)
-                    button.targetGraphic.color = colors.normalColor;
+                ScenarioEditorDockLayout.ApplyEditorButtonVisuals(button, _buttonSprite,
+                    baseColor);
             }
             else if (selected)
             {
@@ -1266,7 +1200,7 @@ namespace UnderPressure.Editor
             var rect = (RectTransform)_architectDropdown.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(490f, -68f);
+            rect.anchoredPosition = new Vector2(PanelWidth + 10f, -68f);
             rect.sizeDelta = new Vector2(260f, 422f);
             _architectDropdown.GetComponent<Image>().color =
                 new Color(0.12f, 0.15f, 0.18f, 1f);

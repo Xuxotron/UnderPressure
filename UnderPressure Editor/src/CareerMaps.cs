@@ -22,6 +22,49 @@ using UnityEngine.UI;
 // No reutiliza la interfaz del editor ni modifica el cargador de config.json.
 namespace UnderPressure.Editor
 {
+    internal static class ScenarioNativeHospitalFrame
+    {
+        private static readonly FieldInfo BackgroundField =
+            AccessTools.Field(typeof(SelectedHospitalMenu), "_defaultBackground");
+
+        internal static bool IsAvailable(SelectedHospitalMenu menu)
+        {
+            return menu != null && BackgroundField?.GetValue(menu) is LayoutElement;
+        }
+
+        internal static bool CopyTo(SelectedHospitalMenu menu, Transform target,
+            bool receiveRaycasts = false)
+        {
+            if (target == null || !(BackgroundField?.GetValue(menu) is LayoutElement background))
+                return false;
+
+            var clone = UnityEngine.Object.Instantiate(background.gameObject, target, false);
+            clone.name = "TPH_NativeHospitalBackground";
+            clone.SetActive(true);
+            var rect = clone.transform as RectTransform;
+            if (rect != null)
+            {
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.offsetMin = Vector2.zero;
+                rect.offsetMax = Vector2.zero;
+                rect.localScale = Vector3.one;
+            }
+            foreach (var button in clone.GetComponentsInChildren<Button>(true))
+                button.interactable = false;
+            foreach (var text in clone.GetComponentsInChildren<TMP_Text>(true))
+                text.gameObject.SetActive(false);
+            foreach (var graphic in clone.GetComponentsInChildren<Graphic>(true))
+                graphic.raycastTarget = receiveRaycasts;
+            if (clone.GetComponentsInChildren<Image>(true).Length > 0)
+                return true;
+
+            UnityEngine.Object.Destroy(clone);
+            return false;
+        }
+    }
+
     internal sealed class ScenarioCareerMapMenu : MonoBehaviour
     {
         private sealed class Choice
@@ -369,30 +412,7 @@ namespace UnderPressure.Editor
         {
             // Copy the game's COMPLETE default background hierarchy, not a lookalike
             // Image or an Outline: this preserves its original borders and rounding.
-            var background = NativeBackgroundField?.GetValue(_native) as LayoutElement;
-            if (background != null)
-            {
-                var clone = Instantiate(background.gameObject, target, false);
-                clone.name = "TPH_NativeHospitalBackground";
-                clone.SetActive(true);
-                var copyRect = clone.transform as RectTransform;
-                if (copyRect != null)
-                {
-                    copyRect.anchorMin = Vector2.zero;
-                    copyRect.anchorMax = Vector2.one;
-                    copyRect.pivot = new Vector2(0.5f, 0.5f);
-                    copyRect.offsetMin = Vector2.zero;
-                    copyRect.offsetMax = Vector2.zero;
-                    copyRect.localScale = Vector3.one;
-                }
-                foreach (var b in clone.GetComponentsInChildren<Button>(true)) b.interactable = false;
-                foreach (var t in clone.GetComponentsInChildren<TMP_Text>(true)) t.gameObject.SetActive(false);
-                foreach (var graphic in clone.GetComponentsInChildren<Graphic>(true))
-                    graphic.raycastTarget = false;
-                if (clone.GetComponentsInChildren<Image>(true).Length > 0)
-                    return true;
-                Destroy(clone);
-            }
+            if (ScenarioNativeHospitalFrame.CopyTo(_native, target)) return true;
 
             // Fallback for variations of the prefab in which the native graphic
             // layers are siblings of _defaultBackground.
