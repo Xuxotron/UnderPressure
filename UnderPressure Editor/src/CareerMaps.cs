@@ -1618,6 +1618,20 @@ namespace UnderPressure.Editor
         internal static void PreparePinSelection(MapPinHospital pin)
         {
             RestoreFocusedHospital();
+            if (pin == null) return;
+
+            if (ConfluxCameras.TryGetValue(pin, out var confluxCamera))
+            {
+                CaptureCameraReturn(confluxCamera);
+                return;
+            }
+            if (!UnderPressureEditorPlugin.FocusLevels ||
+                _activeAuthoring?._map?.CameraLogic == null) return;
+            var levelConfig = LevelConfigReferenceField?.GetValue(pin) as UnityEngine.Object;
+            if (levelConfig == null ||
+                !HospitalCameras.TryGetValue(levelConfig.name, out var hospitalCamera) ||
+                !hospitalCamera.HasCamera) return;
+            CaptureCameraReturn(_activeAuthoring._map.CameraLogic);
         }
 
         internal static bool ApplyHospitalCamera(MapPinHospital pin)
@@ -1630,19 +1644,27 @@ namespace UnderPressure.Editor
                 !camera.HasCamera) return false;
 
             var cameraLogic = _activeAuthoring._map.CameraLogic;
-            var rotationValue = CameraRotationField?.GetValue(cameraLogic);
-            var returnCamera = new AuthorCameraData
-            {
-                FocalPoint = cameraLogic.GetFocalPoint(),
-                Rotation = rotationValue is float rotation ? rotation : 0f,
-                Zoom = cameraLogic.CurrentZoomScalar
-            };
             if (!ApplySmoothCamera(cameraLogic, camera.CameraFocalPoint,
                     camera.CameraRotation, camera.CameraZoom)) return false;
-            _focusedCamera = cameraLogic;
-            _focusedCameraReturn = returnCamera;
-            _hasFocusedCameraReturn = true;
             HideFocusedHospital(pin);
+            return true;
+        }
+
+        private static bool CaptureCameraReturn(TopDownCameraLogic camera)
+        {
+            if (camera == null || CameraTargetRotationField == null ||
+                CameraTargetZoomField == null) return false;
+            var rotationValue = CameraTargetRotationField.GetValue(camera);
+            var zoomValue = CameraTargetZoomField.GetValue(camera);
+            if (!(rotationValue is float rotation) || !(zoomValue is float zoom)) return false;
+            _focusedCamera = camera;
+            _focusedCameraReturn = new AuthorCameraData
+            {
+                FocalPoint = camera.GetTargetFocalPoint(),
+                Rotation = rotation,
+                Zoom = zoom
+            };
+            _hasFocusedCameraReturn = true;
             return true;
         }
 
