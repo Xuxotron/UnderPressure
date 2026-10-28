@@ -639,6 +639,10 @@ namespace UnderPressure.Editor
         private const float RowSpacing = 5f;
         private const float ColumnHeight = 422f;
         private const float RowInset = 6f;
+        private const float PanelWidth = 780f;
+        private const float PanelHeight = 560f;
+        private const float LeftColumnWidth = 380f;
+        private const float RightColumnWidth = 340f;
 
         private static GameObject _root;
         private static DynamicButton _nativeButtonTemplate;
@@ -682,41 +686,38 @@ namespace UnderPressure.Editor
             overlay.raycastTarget = true;
             _root.transform.SetAsLastSibling();
 
-            var panel = Ui("Panel", _root.transform, typeof(Image));
+            var panel = CreateNativeSettingsPanel(_root.transform);
             var panelRect = (RectTransform)panel.transform;
             panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
             panelRect.anchoredPosition = Vector2.zero;
-            panelRect.sizeDelta = new Vector2(864f, 595f);
-            var panelImage = panel.GetComponent<Image>();
-            panelImage.color = new Color(0.175f, 0.200f, 0.225f, 0.97f);
-            panelImage.raycastTarget = true;
+            panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
 
             CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.base_scenario"),
-                new Vector2(23f, -15f), new Vector2(418f, 44f));
+                new Vector2(20f, -15f), new Vector2(LeftColumnWidth, 44f));
             _selectedHospitalTitle = CreateHeader(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospital"),
-                new Vector2(466f, -15f), new Vector2(375f, 44f));
+                new Vector2(420f, -15f), new Vector2(RightColumnWidth, 44f));
 
             _hospitalsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospitals"),
-                new Vector2(22f, -68f), new Vector2(421f, ColumnHeight));
+                new Vector2(20f, -68f), new Vector2(LeftColumnWidth, ColumnHeight));
             _mapsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.maps"),
-                new Vector2(464f, -68f), new Vector2(379f, ColumnHeight));
+                new Vector2(420f, -68f), new Vector2(RightColumnWidth, ColumnHeight));
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
             CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
-                new Vector2(23f, -511f), new Vector2(418f, 56f), () =>
+                new Vector2(20f, -497f), new Vector2(300f, 50f), () =>
                 {
                     ClearPendingMap();
                     _onCancel?.Invoke();
                 }, false);
             CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.architect_name"),
-                new Vector2(466f, -511f), new Vector2(150f, 56f));
+                new Vector2(340f, -497f), new Vector2(145f, 50f));
             _architectInput = CreateArchitectInput(panel.transform,
-                new Vector2(616f, -518f), new Vector2(178f, 42f));
-            CreateNativeRow(panel.transform, "▼", new Vector2(799f, -518f),
+                new Vector2(490f, -501f), new Vector2(210f, 42f));
+            CreateNativeRow(panel.transform, "▼", new Vector2(708f, -501f),
                 new Vector2(42f, 42f), () => ToggleArchitectDropdown(panel.transform), false, false);
 
             foreach (var level in levels.Where(l => l != null).Distinct()
@@ -737,6 +738,38 @@ namespace UnderPressure.Editor
             ShowArchitectMaps(UnderPressureEditorPlugin.ArchitectName);
             Canvas.ForceUpdateCanvases();
             return _root;
+        }
+
+        private static GameObject CreateNativeSettingsPanel(Transform parent)
+        {
+            var videoTabField = AccessTools.Field(typeof(PreferencesScreen), "_videoTab");
+            var nativeScreen = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
+                .FirstOrDefault(candidate => candidate != null &&
+                    videoTabField?.GetValue(candidate) is Transform);
+            var nativeVideoTab = nativeScreen == null
+                ? null : videoTabField.GetValue(nativeScreen) as Transform;
+            var nativePanel = nativeVideoTab?.parent as RectTransform;
+            if (nativePanel == null)
+                throw new InvalidOperationException(
+                    "No se encontro el panel raiz nativo de PreferencesScreen.");
+
+            // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
+            // Se conserva ese contenedor y se retira solamente su contenido interno.
+            var panel = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
+            panel.name = "UP Native Scenario Selector Panel";
+            panel.SetActive(false);
+            for (var index = panel.transform.childCount - 1; index >= 0; --index)
+            {
+                var child = panel.transform.GetChild(index).gameObject;
+                child.SetActive(false);
+                UnityEngine.Object.Destroy(child);
+            }
+            foreach (var behaviour in panel.GetComponents<MonoBehaviour>())
+                behaviour.enabled = false;
+            var panelImage = panel.GetComponent<Image>();
+            if (panelImage != null) panelImage.raycastTarget = true;
+            panel.SetActive(true);
+            return panel;
         }
 
         private static void SelectHospital(LevelConfig level)
@@ -1172,13 +1205,13 @@ namespace UnderPressure.Editor
             var rect = (RectTransform)_architectDropdown.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(616f, -82f);
-            rect.sizeDelta = new Vector2(225f, 422f);
+            rect.anchoredPosition = new Vector2(490f, -68f);
+            rect.sizeDelta = new Vector2(260f, 422f);
             _architectDropdown.GetComponent<Image>().color =
                 new Color(0.12f, 0.15f, 0.18f, 0.99f);
             _architectDropdown.transform.SetAsLastSibling();
             _architectColumn = CreateColumn(_architectDropdown.transform,
-                "Architects", Vector2.zero, new Vector2(225f, 422f));
+                "Architects", Vector2.zero, new Vector2(260f, 422f));
             foreach (var architect in names)
             {
                 var selected = architect;
