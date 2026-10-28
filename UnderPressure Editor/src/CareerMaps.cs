@@ -1719,9 +1719,10 @@ namespace UnderPressure.Editor
                 if (star != null) star.SetActive(false);
         }
 
-        internal static void RestoreFocusedHospital()
+        internal static void RestoreFocusedHospital(bool restoreCamera = true)
         {
-            RestoreFocusedCamera();
+            if (restoreCamera) RestoreFocusedCamera();
+            else DiscardFocusedCameraReturn();
             var pin = _focusedHospital;
             var meshWasActive = _focusedMeshWasActive;
             var starsWereActive = _focusedStarsWereActive;
@@ -1752,6 +1753,13 @@ namespace UnderPressure.Editor
             // Se recupera suavemente el encuadre exacto anterior a la seleccion.
             ApplySmoothCamera(camera, returnCamera.FocalPoint,
                 returnCamera.Rotation, returnCamera.Zoom);
+        }
+
+        private static void DiscardFocusedCameraReturn()
+        {
+            _focusedCamera = null;
+            _focusedCameraReturn = default(AuthorCameraData);
+            _hasFocusedCameraReturn = false;
         }
 
         internal static void RefreshGeneratedPinVisual(MapPinHospital pin)
@@ -2380,8 +2388,12 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(MapPinHospital), "OnUnselected")]
     internal static class ScenarioWorldMapHospitalUnselectionPatch
     {
-        private static void Postfix(MapPinHospital __instance) =>
-            ScenarioWorldMapAuthoring.RestoreFocusedHospital();
+        private static void Postfix(MapPinHospital __instance)
+        {
+            // El boton derecho inicia el desplazamiento nativo del mapa: conserva
+            // el encuadre enfocado y descarta solamente el punto de retorno.
+            ScenarioWorldMapAuthoring.RestoreFocusedHospital(!Input.GetMouseButtonDown(1));
+        }
     }
 
     [HarmonyPatch(typeof(MapPinHospital), "IsPinUnlocked")]
