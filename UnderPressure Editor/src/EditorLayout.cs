@@ -205,6 +205,50 @@ namespace UnderPressure.Editor
             ApplyEditorSelectableVisuals(button, image, sprite, tint);
         }
 
+        // MARCO DE PANEL: reutiliza exclusivamente la jerarquia visual nativa de
+        // SelectedHospitalMenu. No clona el menu ni ninguno de sus controles.
+        internal static GameObject CreateNativePanelFrame(Transform parent, string name)
+        {
+            if (parent == null) return null;
+            var backgroundField = AccessTools.Field(typeof(SelectedHospitalMenu),
+                "_defaultBackground");
+            foreach (var menu in Resources.FindObjectsOfTypeAll<SelectedHospitalMenu>())
+            {
+                if (menu == null || !(backgroundField?.GetValue(menu) is LayoutElement background))
+                    continue;
+                var clone = UnityEngine.Object.Instantiate(background.gameObject, parent, false);
+                clone.name = name;
+                clone.SetActive(true);
+                var rect = clone.transform as RectTransform;
+                if (rect != null)
+                {
+                    rect.anchorMin = Vector2.zero;
+                    rect.anchorMax = Vector2.one;
+                    rect.pivot = new Vector2(.5f, .5f);
+                    rect.offsetMin = Vector2.zero;
+                    rect.offsetMax = Vector2.zero;
+                    rect.localScale = Vector3.one;
+                }
+                foreach (var button in clone.GetComponentsInChildren<Button>(true))
+                    button.interactable = false;
+                foreach (var text in clone.GetComponentsInChildren<TMP_Text>(true))
+                    text.gameObject.SetActive(false);
+                foreach (var graphic in clone.GetComponentsInChildren<Graphic>(true))
+                    graphic.raycastTarget = false;
+                var backgroundImage = clone.GetComponent<Image>() ??
+                    clone.GetComponentsInChildren<Image>(true).FirstOrDefault();
+                if (backgroundImage != null)
+                {
+                    // El propio fondo nativo bloquea la entrada; no se anade
+                    // ninguna capa transparente sobre el panel.
+                    backgroundImage.raycastTarget = true;
+                    return clone;
+                }
+                UnityEngine.Object.Destroy(clone);
+            }
+            return null;
+        }
+
         private static void ApplyEditorSelectableVisuals(Selectable button, Image image,
             Sprite sprite, Color tint)
         {
@@ -1731,7 +1775,7 @@ namespace UnderPressure.Editor
         internal static Scrollbar InstallNativeVerticalScrollbar(RectTransform host,
             ScrollRect scroll, string name, float top, float bottom, bool left = false)
         {
-            if (_active == null || host == null || scroll == null) return null;
+            if (host == null || scroll == null) return null;
             var existing = host.Find(name)?.GetComponent<Scrollbar>();
             if (existing == null)
             {

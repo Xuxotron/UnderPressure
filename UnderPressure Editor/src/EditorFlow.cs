@@ -626,13 +626,13 @@ namespace UnderPressure.Editor
         private sealed class ScrollColumn
         {
             internal RectTransform Viewport;
+            internal RectTransform Content;
+            internal ScrollRect Scroll;
             internal Scrollbar Bar;
             internal float Width;
             internal float RowInset;
             internal readonly List<RowEntry> Entries = new List<RowEntry>();
             internal readonly List<GameObject> VisibleRows = new List<GameObject>();
-            internal int FirstRow;
-            internal bool ChangingBar;
         }
 
         private const int VisibleRows = 7;
@@ -640,10 +640,11 @@ namespace UnderPressure.Editor
         private const float RowSpacing = 5f;
         private const float ColumnHeight = 422f;
         private const float RowInset = 6f;
-        private const float PanelWidth = 780f;
+        private const float PanelWidth = 785f;
         private const float PanelHeight = 560f;
         private const float LeftColumnWidth = 380f;
         private const float RightColumnWidth = 345f;
+        private const float RightColumnX = 425f;
 
         private static GameObject _root;
         private static DynamicButton _nativeButtonTemplate;
@@ -707,15 +708,14 @@ namespace UnderPressure.Editor
                 new Vector2(20f, -15f), new Vector2(LeftColumnWidth, 44f));
             _selectedHospitalTitle = CreateHeader(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospital"),
-                new Vector2(420f, -15f), new Vector2(RightColumnWidth, 44f));
+                new Vector2(RightColumnX, -15f), new Vector2(RightColumnWidth, 44f));
 
             _hospitalsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospitals"),
                 new Vector2(20f, -68f), new Vector2(LeftColumnWidth, ColumnHeight));
             _mapsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.maps"),
-                new Vector2(420f, -68f), new Vector2(RightColumnWidth, ColumnHeight),
-                RowInset + 5f);
+                new Vector2(RightColumnX, -68f), new Vector2(RightColumnWidth, ColumnHeight));
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
             CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
@@ -753,84 +753,15 @@ namespace UnderPressure.Editor
 
         private static GameObject CreateNativeSettingsPanel(Transform parent)
         {
-            var videoTabField = AccessTools.Field(typeof(PreferencesScreen), "_videoTab");
-            var nativeScreen = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
-                .FirstOrDefault(candidate => candidate != null &&
-                    videoTabField?.GetValue(candidate) is Transform);
-            var nativeVideoTab = nativeScreen == null
-                ? null : videoTabField.GetValue(nativeScreen) as Transform;
-            var nativePanel = nativeVideoTab?.parent as RectTransform;
-            if (nativePanel == null)
-                throw new InvalidOperationException(
-                    "No se encontro el panel raiz nativo de PreferencesScreen.");
-
-            // PreferencesScreen ya contiene el marco gris, borde y sombra nativos.
-            // Sus capas estructurales se conservan y solo se ocultan los controles
-            // y contenidos propios de Ajustes.
-            var screen = UnityEngine.Object.Instantiate(nativeScreen.gameObject, parent, false);
-            screen.name = "UP Native Scenario Selector Screen";
-            screen.SetActive(false);
-            var screenRect = screen.transform as RectTransform;
-            if (screenRect != null) Stretch(screenRect);
-            var clonedScreen = screen.GetComponent<PreferencesScreen>();
-            if (clonedScreen == null)
-                throw new InvalidOperationException(
-                    "No se pudo clonar PreferencesScreen para el selector.");
-            clonedScreen.enabled = false;
-            var panelTransform = FindCloneTransform(nativeScreen.transform, screen.transform,
-                nativePanel);
-            if (panelTransform == null)
-                throw new InvalidOperationException(
-                    "No se encontro el panel clonado de PreferencesScreen.");
-            var panel = panelTransform.gameObject;
-            panel.name = "UP Native Scenario Selector Panel";
-
-            var hiddenTransforms = new[]
+            var panel = Ui("UP Native Scenario Selector Panel", parent);
+            if (ScenarioEditorDockLayout.CreateNativePanelFrame(panel.transform,
+                    "TPH Native Scenario Selector Frame") == null)
             {
-                "_audioTab", "_controlsTab", "_gameTab", "_languageTab",
-                "_videoTabContents", "_audioTabContents", "_controlsTabContents",
-                "_gameTabContents", "_languageTabContents",
-                "_videoTabFolderBackground", "_audioTabFolderBackground",
-                "_controlsTabFolderBackground", "_gameTabFolderBackground",
-                "_languageTabFolderBackground"
-            };
-            foreach (var fieldName in hiddenTransforms)
-            {
-                var source = AccessTools.Field(typeof(PreferencesScreen), fieldName)?.GetValue(nativeScreen)
-                    as Transform;
-                var clone = FindCloneTransform(nativeScreen.transform, screen.transform, source);
-                if (clone != null) clone.gameObject.SetActive(false);
+                UnityEngine.Object.Destroy(panel);
+                throw new InvalidOperationException(
+                    "No se encontro el marco nativo de SelectedHospitalMenu.");
             }
-            foreach (var selectable in screen.GetComponentsInChildren<Selectable>(true))
-                selectable.gameObject.SetActive(false);
-            foreach (var text in screen.GetComponentsInChildren<TMP_Text>(true))
-                text.gameObject.SetActive(false);
-            foreach (var behaviour in screen.GetComponentsInChildren<MonoBehaviour>(true))
-                behaviour.enabled = false;
-            foreach (var graphic in screen.GetComponentsInChildren<Graphic>(true))
-                graphic.raycastTarget = false;
-            var panelImage = panel.GetComponent<Image>();
-            if (panelImage != null) panelImage.raycastTarget = true;
-            screen.SetActive(true);
             return panel;
-        }
-
-        private static Transform FindCloneTransform(Transform sourceRoot, Transform cloneRoot,
-            Transform source)
-        {
-            if (sourceRoot == null || cloneRoot == null || source == null ||
-                !source.IsChildOf(sourceRoot)) return null;
-            var names = new Stack<string>();
-            for (var current = source; current != null && current != sourceRoot;
-                 current = current.parent)
-                names.Push(current.name);
-            var clone = cloneRoot;
-            while (names.Count > 0)
-            {
-                clone = clone.Find(names.Pop());
-                if (clone == null) return null;
-            }
-            return clone;
         }
 
         private static void SelectHospital(LevelConfig level)
@@ -844,7 +775,6 @@ namespace UnderPressure.Editor
             RefreshRows(_hospitalsColumn);
 
             _mapsColumn.Entries.Clear();
-            _mapsColumn.FirstRow = 0;
             _mapsColumn.Entries.Add(new RowEntry
             {
                 Label = EditorLocalization.Get("scenario_editor.new_map"),
@@ -861,7 +791,7 @@ namespace UnderPressure.Editor
                     OnClick = () => OpenMap(captured)
                 });
             }
-            RefreshRows(_mapsColumn);
+            RefreshRows(_mapsColumn, true);
         }
 
         private static void ShowArchitectMaps(string architect)
@@ -876,7 +806,6 @@ namespace UnderPressure.Editor
             RefreshRows(_hospitalsColumn);
 
             _mapsColumn.Entries.Clear();
-            _mapsColumn.FirstRow = 0;
             foreach (var map in ReadMaps(_currentArchitect, null))
             {
                 var captured = map;
@@ -886,7 +815,7 @@ namespace UnderPressure.Editor
                     OnClick = () => OpenMap(captured)
                 });
             }
-            RefreshRows(_mapsColumn);
+            RefreshRows(_mapsColumn, true);
         }
 
         private static void OpenMap(MapChoice map)
@@ -1027,7 +956,7 @@ namespace UnderPressure.Editor
         private static ScrollColumn CreateColumn(Transform parent, string name, Vector2 pos,
             Vector2 size, float rowInset = RowInset)
         {
-            var host = Ui(name, parent, typeof(Image));
+            var host = Ui(name, parent, typeof(Image), typeof(ScrollRect));
             var hostRect = (RectTransform)host.transform;
             hostRect.anchorMin = hostRect.anchorMax = new Vector2(0f, 1f);
             hostRect.pivot = new Vector2(0f, 1f);
@@ -1037,46 +966,49 @@ namespace UnderPressure.Editor
             background.color = new Color32(82, 82, 82, 255);
             background.raycastTarget = true;
 
-            // NUNCA hay elementos fuera de pantalla: se crean solo las 7 filas visibles.
-            // Por eso no necesitamos Mask / RectMask2D ni ContentSizeFitter.
-            var viewport = Ui("VisibleButtons", host.transform, typeof(Image));
+            var viewport = Ui("Viewport", host.transform, typeof(Image), typeof(RectMask2D));
             Stretch((RectTransform)viewport.transform);
             var viewportImage = viewport.GetComponent<Image>();
-            viewportImage.color = new Color(1f, 1f, 1f, 0f);
+            viewportImage.color = new Color(1f, 1f, 1f, 0.002f);
             viewportImage.raycastTarget = true;
+
+            var content = Ui("Content", viewport.transform);
+            var contentRect = (RectTransform)content.transform;
+            contentRect.anchorMin = new Vector2(0f, 1f);
+            contentRect.anchorMax = new Vector2(1f, 1f);
+            contentRect.pivot = new Vector2(.5f, 1f);
+            contentRect.anchoredPosition = Vector2.zero;
+            contentRect.sizeDelta = Vector2.zero;
+
+            var scroll = host.GetComponent<ScrollRect>();
+            scroll.viewport = (RectTransform)viewport.transform;
+            scroll.content = contentRect;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = true;
+            scroll.scrollSensitivity = RowHeight + RowSpacing;
 
             var column = new ScrollColumn
             {
                 Viewport = (RectTransform)viewport.transform,
+                Content = contentRect,
+                Scroll = scroll,
                 Width = size.x,
                 RowInset = rowInset
             };
-
-            var wheel = host.AddComponent<ScenarioEditorWheelHandler>();
-            wheel.Scroll = delta =>
-            {
-                var maxFirst = Math.Max(0, column.Entries.Count - VisibleRows);
-                if (maxFirst == 0 || Mathf.Approximately(delta, 0f)) return;
-                column.FirstRow = Mathf.Clamp(column.FirstRow + (delta > 0f ? -2 : 2), 0, maxFirst);
-                RefreshRows(column);
-            };
-
-            column.Bar = CreateScrollbar(host.transform);
-            column.Bar.onValueChanged.AddListener(value =>
-            {
-                if (column.ChangingBar) return;
-                var maxFirst = Math.Max(0, column.Entries.Count - VisibleRows);
-                var row = Mathf.Clamp(Mathf.RoundToInt((1f - value) * maxFirst), 0, maxFirst);
-                if (row == column.FirstRow) return;
-                column.FirstRow = row;
-                RefreshRows(column);
-            });
+            column.Bar = ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(hostRect, scroll,
+                "UP Native Vertical Scrollbar", 4f, 4f);
+            if (column.Bar == null)
+                throw new InvalidOperationException("No se encontro el Scrollbar vertical nativo.");
             return column;
         }
 
-        private static void RefreshRows(ScrollColumn column)
+        private static void RefreshRows(ScrollColumn column, bool resetToTop = false)
         {
             if (column == null || column.Viewport == null) return;
+            var oldPosition = column.Scroll.verticalNormalizedPosition;
+            var hadRows = column.VisibleRows.Count > 0;
             foreach (var existing in column.VisibleRows)
             {
                 if (existing == null) continue;
@@ -1085,31 +1017,29 @@ namespace UnderPressure.Editor
             }
             column.VisibleRows.Clear();
 
-            var maxFirst = Math.Max(0, column.Entries.Count - VisibleRows);
-            column.FirstRow = Mathf.Clamp(column.FirstRow, 0, maxFirst);
-            var hasScroll = maxFirst > 0;
+            var hasScroll = column.Entries.Count > VisibleRows;
             column.Bar.gameObject.SetActive(hasScroll);
-            column.ChangingBar = true;
-            column.Bar.numberOfSteps = Math.Max(1, maxFirst + 1);
-            column.Bar.size = Mathf.Clamp01((float)VisibleRows / Math.Max(1, column.Entries.Count));
-            column.Bar.value = maxFirst == 0 ? 1f : 1f - (float)column.FirstRow / maxFirst;
-            column.ChangingBar = false;
 
-            var width = column.Width - (hasScroll ? 30f : 13f) -
-                        (column.RowInset - RowInset);
-            for (var row = 0; row < VisibleRows && row + column.FirstRow < column.Entries.Count; ++row)
+            var width = column.Width - (hasScroll ? 30f : 13f);
+            for (var row = 0; row < column.Entries.Count; ++row)
             {
-                var entry = column.Entries[row + column.FirstRow];
+                var entry = column.Entries[row];
                 var selected = entry.Selected;
                 if (ReferenceEquals(column, _hospitalsColumn))
                     selected = _hospitalChoices.Any(
                         x => x.Label == entry.Label && x.Level == _selectedLevel);
-                var buttonRow = CreateNativeRow(column.Viewport, entry.Label,
+                var buttonRow = CreateNativeRow(column.Content, entry.Label,
                     new Vector2(column.RowInset,
                         -(RowInset + row * (RowHeight + RowSpacing))),
                     new Vector2(width, RowHeight), entry.OnClick, entry.Green, selected);
                 column.VisibleRows.Add(buttonRow);
             }
+            var contentHeight = RowInset * 2f + Math.Max(0, column.Entries.Count) *
+                (RowHeight + RowSpacing) - (column.Entries.Count > 0 ? RowSpacing : 0f);
+            column.Content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
+                Mathf.Max(ColumnHeight, contentHeight));
+            Canvas.ForceUpdateCanvases();
+            column.Scroll.verticalNormalizedPosition = resetToTop || !hadRows ? 1f : oldPosition;
         }
 
         // Todos los botones, tanto el visible inferior como los de las listas,
@@ -1307,38 +1237,6 @@ namespace UnderPressure.Editor
             _architectColumn = null;
         }
 
-        private static Scrollbar CreateScrollbar(Transform parent)
-        {
-            var track = Ui("Scrollbar", parent, typeof(Image), typeof(Scrollbar));
-            var rect = (RectTransform)track.transform;
-            rect.anchorMin = new Vector2(1f, 0f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, 0.5f);
-            rect.offsetMin = new Vector2(-14f, 4f);
-            rect.offsetMax = new Vector2(-3f, -4f);
-            track.GetComponent<Image>().color = new Color(0.03f, 0.08f, 0.11f, 0.65f);
-
-            var sliding = Ui("Sliding Area", track.transform);
-            Stretch((RectTransform)sliding.transform);
-            var handle = Ui("Handle", sliding.transform, typeof(Image));
-            var handleRect = (RectTransform)handle.transform;
-            Stretch(handleRect);
-            var handleImage = handle.GetComponent<Image>();
-            var sourceImage = _nativeButtonTemplate.GetComponent<Image>();
-            if (sourceImage != null)
-            {
-                handleImage.sprite = sourceImage.sprite;
-                handleImage.type = sourceImage.type;
-            }
-            handleImage.color = new Color(0.08f, 0.77f, 0.93f, 1f);
-            var scrollbar = track.GetComponent<Scrollbar>();
-            scrollbar.direction = Scrollbar.Direction.BottomToTop;
-            scrollbar.handleRect = handleRect;
-            scrollbar.targetGraphic = handleImage;
-            scrollbar.value = 1f;
-            return scrollbar;
-        }
-
         private static void DisableNativeLocalizers(GameObject root)
         {
             foreach (var component in root.GetComponentsInChildren<MonoBehaviour>(true))
@@ -1361,17 +1259,6 @@ namespace UnderPressure.Editor
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
-        }
-    }
-
-    // Maneja la rueda del raton sin depender del ScrollRect o de mascaras UI.
-    public sealed class ScenarioEditorWheelHandler : MonoBehaviour, IScrollHandler
-    {
-        internal Action<float> Scroll;
-
-        public void OnScroll(PointerEventData eventData)
-        {
-            if (Scroll != null) Scroll(eventData.scrollDelta.y);
         }
     }
 
