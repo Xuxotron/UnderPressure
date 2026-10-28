@@ -640,10 +640,11 @@ namespace UnderPressure.Editor
         private const float RowSpacing = 5f;
         private const float ColumnHeight = 422f;
         private const float RowInset = 6f;
-        private const float PanelWidth = 780f;
+        private const float PanelWidth = 785f;
         private const float PanelHeight = 560f;
         private const float LeftColumnWidth = 380f;
         private const float RightColumnWidth = 345f;
+        private const float RightColumnX = 425f;
 
         private static GameObject _root;
         private static DynamicButton _nativeButtonTemplate;
@@ -707,14 +708,14 @@ namespace UnderPressure.Editor
                 new Vector2(20f, -15f), new Vector2(LeftColumnWidth, 44f));
             _selectedHospitalTitle = CreateHeader(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospital"),
-                new Vector2(420f, -15f), new Vector2(RightColumnWidth, 44f));
+                new Vector2(RightColumnX, -15f), new Vector2(RightColumnWidth, 44f));
 
             _hospitalsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospitals"),
                 new Vector2(20f, -68f), new Vector2(LeftColumnWidth, ColumnHeight));
             _mapsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.maps"),
-                new Vector2(420f, -68f), new Vector2(RightColumnWidth, ColumnHeight),
+                new Vector2(RightColumnX, -68f), new Vector2(RightColumnWidth, ColumnHeight),
                 RowInset + 5f);
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
