@@ -754,12 +754,12 @@ namespace UnderPressure.Editor
         private static GameObject CreateNativeSettingsPanel(Transform parent)
         {
             var panel = Ui("UP Native Scenario Selector Panel", parent);
-            if (ScenarioEditorDockLayout.CreateNativePanelFrame(panel.transform,
+            if (ScenarioEditorDockLayout.CreateNativePreferencesPanelFrame(panel.transform,
                     "TPH Native Scenario Selector Frame") == null)
             {
                 UnityEngine.Object.Destroy(panel);
                 throw new InvalidOperationException(
-                    "No se encontro el marco nativo de SelectedHospitalMenu.");
+                    "No se encontro el panel raiz nativo de PreferencesScreen.");
             }
             return panel;
         }

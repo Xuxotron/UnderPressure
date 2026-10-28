@@ -205,20 +205,33 @@ namespace UnderPressure.Editor
             ApplyEditorSelectableVisuals(button, image, sprite, tint);
         }
 
-        // MARCO DE PANEL: reutiliza exclusivamente la jerarquia visual nativa de
-        // SelectedHospitalMenu. No clona el menu ni ninguno de sus controles.
-        internal static GameObject CreateNativePanelFrame(Transform parent, string name)
+        // MARCO DE PANEL: reutiliza exclusivamente el panel raiz de Ajustes que
+        // ya esta cargado en la pantalla inicial. Sus controles no se clonan.
+        internal static GameObject CreateNativePreferencesPanelFrame(Transform parent,
+            string name)
         {
             if (parent == null) return null;
-            var backgroundField = AccessTools.Field(typeof(SelectedHospitalMenu),
-                "_defaultBackground");
-            foreach (var menu in Resources.FindObjectsOfTypeAll<SelectedHospitalMenu>())
+            var videoTabField = AccessTools.Field(typeof(PreferencesScreen), "_videoTab");
+            foreach (var screen in Resources.FindObjectsOfTypeAll<PreferencesScreen>())
             {
-                if (menu == null || !(backgroundField?.GetValue(menu) is LayoutElement background))
+                if (screen == null ||
+                    !(videoTabField?.GetValue(screen) is Transform videoTab) ||
+                    !(videoTab.parent is RectTransform nativePanel) ||
+                    nativePanel.GetComponent<Image>() == null)
                     continue;
-                var clone = UnityEngine.Object.Instantiate(background.gameObject, parent, false);
+
+                var clone = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
                 clone.name = name;
-                clone.SetActive(true);
+                clone.SetActive(false);
+
+                // Los hijos contienen pestanas y opciones de Ajustes. Se separan
+                // antes de activar el clon para que nunca lleguen a renderizarse.
+                var discarded = new GameObject(name + " - Controles descartados");
+                discarded.SetActive(false);
+                while (clone.transform.childCount > 0)
+                    clone.transform.GetChild(0).SetParent(discarded.transform, false);
+                UnityEngine.Object.Destroy(discarded);
+
                 var rect = clone.transform as RectTransform;
                 if (rect != null)
                 {
@@ -229,22 +242,14 @@ namespace UnderPressure.Editor
                     rect.offsetMax = Vector2.zero;
                     rect.localScale = Vector3.one;
                 }
-                foreach (var button in clone.GetComponentsInChildren<Button>(true))
-                    button.interactable = false;
-                foreach (var text in clone.GetComponentsInChildren<TMP_Text>(true))
-                    text.gameObject.SetActive(false);
-                foreach (var graphic in clone.GetComponentsInChildren<Graphic>(true))
+
+                foreach (var behaviour in clone.GetComponents<MonoBehaviour>())
+                    if (!(behaviour is Graphic)) behaviour.enabled = false;
+                foreach (var graphic in clone.GetComponents<Graphic>())
                     graphic.raycastTarget = false;
-                var backgroundImage = clone.GetComponent<Image>() ??
-                    clone.GetComponentsInChildren<Image>(true).FirstOrDefault();
-                if (backgroundImage != null)
-                {
-                    // El propio fondo nativo bloquea la entrada; no se anade
-                    // ninguna capa transparente sobre el panel.
-                    backgroundImage.raycastTarget = true;
-                    return clone;
-                }
-                UnityEngine.Object.Destroy(clone);
+                clone.GetComponent<Image>().raycastTarget = true;
+                clone.SetActive(true);
+                return clone;
             }
             return null;
         }
