@@ -1266,6 +1266,9 @@ namespace UnderPressure.Editor
         private static MapPinHospital _focusedHospital;
         private static bool _focusedMeshWasActive;
         private static bool[] _focusedStarsWereActive;
+        private static TopDownCameraLogic _focusedCamera;
+        private static AuthorCameraData _focusedCameraReturn;
+        private static bool _hasFocusedCameraReturn;
 
         private sealed class PinIconMaterials
         {
@@ -1627,8 +1630,18 @@ namespace UnderPressure.Editor
                 !camera.HasCamera) return false;
 
             var cameraLogic = _activeAuthoring._map.CameraLogic;
+            var rotationValue = CameraRotationField?.GetValue(cameraLogic);
+            var returnCamera = new AuthorCameraData
+            {
+                FocalPoint = cameraLogic.GetFocalPoint(),
+                Rotation = rotationValue is float rotation ? rotation : 0f,
+                Zoom = cameraLogic.CurrentZoomScalar
+            };
             if (!ApplySmoothCamera(cameraLogic, camera.CameraFocalPoint,
                     camera.CameraRotation, camera.CameraZoom)) return false;
+            _focusedCamera = cameraLogic;
+            _focusedCameraReturn = returnCamera;
+            _hasFocusedCameraReturn = true;
             HideFocusedHospital(pin);
             return true;
         }
@@ -1686,6 +1699,7 @@ namespace UnderPressure.Editor
 
         internal static void RestoreFocusedHospital()
         {
+            RestoreFocusedCamera();
             var pin = _focusedHospital;
             var meshWasActive = _focusedMeshWasActive;
             var starsWereActive = _focusedStarsWereActive;
@@ -1700,6 +1714,22 @@ namespace UnderPressure.Editor
             if (stars == null || starsWereActive == null) return;
             for (var index = 0; index < stars.Length && index < starsWereActive.Length; ++index)
                 if (stars[index] != null) stars[index].SetActive(starsWereActive[index]);
+        }
+
+        private static void RestoreFocusedCamera()
+        {
+            var camera = _focusedCamera;
+            var returnCamera = _focusedCameraReturn;
+            var hasReturn = _hasFocusedCameraReturn;
+            _focusedCamera = null;
+            _focusedCameraReturn = default(AuthorCameraData);
+            _hasFocusedCameraReturn = false;
+            if (!hasReturn || camera == null) return;
+
+            // OnUnselected es el flujo nativo usado por el boton derecho.
+            // Se recupera suavemente el encuadre exacto anterior a la seleccion.
+            ApplySmoothCamera(camera, returnCamera.FocalPoint,
+                returnCamera.Rotation, returnCamera.Zoom);
         }
 
         internal static void RefreshGeneratedPinVisual(MapPinHospital pin)
