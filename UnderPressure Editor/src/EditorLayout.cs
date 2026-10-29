@@ -205,8 +205,9 @@ namespace UnderPressure.Editor
             ApplyEditorSelectableVisuals(button, image, sprite, tint);
         }
 
-        // MARCO DE PANEL: reutiliza exclusivamente el panel raiz de Ajustes que
-        // ya esta cargado en la pantalla inicial. Sus controles no se clonan.
+        // MARCO DE PANEL: reutiliza exactamente el panel raiz de Ajustes.
+        // El Image, Outline, Shadow y demas efectos nativos permanecen intactos;
+        // solo se retiran sus controles hijos para alojar el selector de escenarios.
         internal static GameObject CreateNativePreferencesPanelFrame(Transform parent,
             string name)
         {
@@ -224,8 +225,8 @@ namespace UnderPressure.Editor
                 clone.name = name;
                 clone.SetActive(false);
 
-                // Los hijos contienen pestanas y opciones de Ajustes. Se separan
-                // antes de activar el clon para que nunca lleguen a renderizarse.
+                // Los hijos son las pestanas y opciones. El marco nativo completo
+                // esta en el propio objeto raiz y no se modifica ni se reconstruye.
                 var discarded = new GameObject(name + " - Controles descartados");
                 discarded.SetActive(false);
                 while (clone.transform.childCount > 0)
@@ -243,8 +244,6 @@ namespace UnderPressure.Editor
                     rect.localScale = Vector3.one;
                 }
 
-                foreach (var behaviour in clone.GetComponents<MonoBehaviour>())
-                    if (!(behaviour is Graphic)) behaviour.enabled = false;
                 foreach (var graphic in clone.GetComponents<Graphic>())
                     graphic.raycastTarget = false;
                 clone.GetComponent<Image>().raycastTarget = true;

@@ -719,7 +719,7 @@ namespace UnderPressure.Editor
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
             CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
-                new Vector2(20f, -497f), new Vector2(290f, 50f), () =>
+                new Vector2(65f, -497f), new Vector2(290f, 50f), () =>
                 {
                     ClearPendingMap();
                     _onCancel?.Invoke();
@@ -998,9 +998,10 @@ namespace UnderPressure.Editor
                 RowInset = rowInset
             };
             column.Bar = ScenarioEditorDockLayout.InstallNativeVerticalScrollbar(hostRect, scroll,
-                "UP Native Vertical Scrollbar", 4f, 4f, false, 20f);
+                "UP Native Vertical Scrollbar", 4f, 4f, false, 24f);
             if (column.Bar == null)
                 throw new InvalidOperationException("No se encontro el Scrollbar vertical nativo.");
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             return column;
         }
 
@@ -1020,10 +1021,12 @@ namespace UnderPressure.Editor
             var hasScroll = column.Entries.Count > VisibleRows;
             column.Bar.gameObject.SetActive(hasScroll);
 
-            const float horizontalInset = 12f;
-            const float scrollbarWidth = 20f;
-            var width = column.Width - horizontalInset * 2f -
-                (hasScroll ? scrollbarWidth : 0f);
+            Canvas.ForceUpdateCanvases();
+            const float horizontalInset = 25f;
+            var viewportWidth = column.Viewport.rect.width;
+            if (viewportWidth <= 0f)
+                viewportWidth = column.Width - (hasScroll ? 24f : 0f);
+            var width = Mathf.Max(0f, viewportWidth - horizontalInset * 2f);
             for (var row = 0; row < column.Entries.Count; ++row)
             {
                 var entry = column.Entries[row];
