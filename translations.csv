@@ -1,4 +1,17 @@
 key,en,es,fr,de,it,pt
+editor.scenario_settings.plots.list,Plot list,Lista de parcelas,Liste des parcelles,Grundstücksliste,Elenco lotti,Lista de lotes
+editor.scenario_settings.plots.plot,Plot {0},Parcela {0},Parcelle {0},Grundstück {0},Lotto {0},Lote {0}
+editor.scenario_settings.plots.cost,Purchase price,Precio de compra,Prix d'achat,Kaufpreis,Prezzo di acquisto,Preço de compra
+editor.scenario_settings.plots.initially_open,Available from start,Disponible desde el inicio,Disponible dès le début,Von Beginn verfügbar,Disponibile dall'inizio,Disponível desde o início
+editor.scenario_settings.plots.hide_until_available,Hide until available,Ocultar hasta disponible,Masquer jusqu'à disponibilité,Bis zur Verfügbarkeit ausblenden,Nascondi fino alla disponibilità,Ocultar até estar disponível
+editor.scenario_settings.plots.initial_state,Initial state,Estado inicial,État initial,Ausgangszustand,Stato iniziale,Estado inicial
+editor.scenario_settings.plots.unbuilt,Unbuilt,Sin construir,Non construit,Unbebaut,Non costruito,Não construído
+editor.scenario_settings.plots.built,Built,Construida,Construit,Gebaut,Costruito,Construído
+editor.scenario_settings.plots.instant_build,Instant construction,Construcción instantánea,Construction instantanée,Sofortbau,Costruzione istantanea,Construção instantânea
+editor.scenario_settings.plots.build_time,Construction time,Tiempo de construcción,Temps de construction,Bauzeit,Tempo di costruzione,Tempo de construção
+editor.scenario_settings.plots.merge_into,Merge with,Fusionar con,Fusionner avec,Zusammenführen mit,Unisci con,Fundir com
+editor.scenario_settings.plots.requires,Requires,Requiere,Nécessite,Benötigt,Richiede,Requer
+editor.scenario_settings.plots.none,None,Ninguna,Aucun,Keine,Nessuna,Nenhuma
 hud.variables.title,Active variables,Variables activas,Variables actives,Aktive Variablen,Variabili attive,Variáveis ativas
 hud.variables.adjustment,Setting,Ajuste,Réglage,Einstellung,Impostazione,Definição
 hud.variables.economy,Economy (balance),Economía (saldo),Économie (solde),Wirtschaft (Kontostand),Economia (saldo),Economia (saldo)

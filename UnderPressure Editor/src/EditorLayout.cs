@@ -864,6 +864,7 @@ namespace UnderPressure.Editor
             }
             BuildGeneralSettingsContents();
             BuildDiseaseSettingsContents();
+            BuildPlotSettingsContents();
 
             var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
             HideSettingsObject(close);
@@ -885,6 +886,7 @@ namespace UnderPressure.Editor
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
             if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
+            if (_activeSettingsTab == 3) RefreshPlotSettingsContents();
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
                 var selected = index == _activeSettingsTab;
@@ -2460,6 +2462,7 @@ namespace UnderPressure.Editor
             _settingsTabFolderBackgrounds = null;
             _settingsPages = null;
             ReleaseDiseaseSettingsContents();
+            ReleasePlotSettingsContents();
             _style = null;
             _storage = null;
             _menu = null;

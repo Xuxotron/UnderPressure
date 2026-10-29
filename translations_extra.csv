@@ -1,4 +1,17 @@
 key,ru,pl,ko,zh-hans,zh-hant
+editor.scenario_settings.plots.list,Список участков,Lista działek,부지 목록,地块列表,地塊列表
+editor.scenario_settings.plots.plot,Участок {0},Działka {0},부지 {0},地块 {0},地塊 {0}
+editor.scenario_settings.plots.cost,Цена покупки,Cena zakupu,구매 가격,购买价格,購買價格
+editor.scenario_settings.plots.initially_open,Доступен с начала,Dostępna od początku,시작 시 사용 가능,初始可用,初始可用
+editor.scenario_settings.plots.hide_until_available,Скрыть до доступности,Ukryj do odblokowania,사용 가능할 때까지 숨기기,可用前隐藏,可用前隱藏
+editor.scenario_settings.plots.initial_state,Начальное состояние,Stan początkowy,초기 상태,初始状态,初始狀態
+editor.scenario_settings.plots.unbuilt,Не построен,Niezbudowana,미건설,未建造,未建造
+editor.scenario_settings.plots.built,Построен,Zbudowana,건설됨,已建造,已建造
+editor.scenario_settings.plots.instant_build,Мгновенное строительство,Natychmiastowa budowa,즉시 건설,立即建造,立即建造
+editor.scenario_settings.plots.build_time,Время строительства,Czas budowy,건설 시간,建造时间,建造時間
+editor.scenario_settings.plots.merge_into,Объединить с,Scal z,병합 대상,合并到,合併到
+editor.scenario_settings.plots.requires,Требует,Wymaga,필요 조건,需要,需要
+editor.scenario_settings.plots.none,Нет,Brak,없음,无,無
 hud.variables.title,Активные параметры,Aktywne parametry,활성 변수,当前生效的参数,目前生效的參數
 hud.variables.adjustment,Настройка,Ustawienie,설정,设置,設定
 hud.variables.economy,Экономика (баланс),Ekonomia (saldo),경제 (잔액),经济（余额）,經濟（餘額）
