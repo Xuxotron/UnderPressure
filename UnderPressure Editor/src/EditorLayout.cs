@@ -217,11 +217,23 @@ namespace UnderPressure.Editor
             {
                 if (screen == null ||
                     !(videoTabField?.GetValue(screen) is Transform videoTab) ||
-                    !(videoTab.parent is RectTransform nativePanel) ||
-                    nativePanel.GetComponent<Image>() == null)
+                    !(videoTab.parent is RectTransform nativePanel))
                     continue;
 
-                var clone = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
+                // _videoTab cuelga del contenedor gris interior. El marco blanco nativo
+                // pertenece al primer ancestro grafico que lo contiene, no a ese interior.
+                RectTransform nativeFrame = null;
+                for (var candidate = nativePanel.parent as RectTransform;
+                     candidate != null && candidate.IsChildOf(screen.transform);
+                     candidate = candidate.parent as RectTransform)
+                {
+                    if (candidate.GetComponent<Image>() == null) continue;
+                    nativeFrame = candidate;
+                    break;
+                }
+                if (nativeFrame == null) continue;
+
+                var clone = UnityEngine.Object.Instantiate(nativeFrame.gameObject, parent, false);
                 clone.name = name;
                 clone.SetActive(false);
 

@@ -638,10 +638,10 @@ namespace UnderPressure.Editor
         private const int VisibleRows = 7;
         private const float RowHeight = 52f;
         private const float RowSpacing = 5f;
-        private const float ColumnHeight = 422f;
+        private const float ColumnHeight = 406f;
         private const float RowInset = 6f;
         private const float PanelWidth = 785f;
-        private const float PanelHeight = 560f;
+        private const float PanelHeight = 544f;
         private const float LeftColumnWidth = 380f;
         private const float RightColumnWidth = 345f;
         private const float RightColumnX = 425f;
@@ -665,6 +665,8 @@ namespace UnderPressure.Editor
         private static string _pendingMap;
         private static string _pendingArchitect;
         private static bool _pendingNewMap;
+        private static RectTransform _panelRect;
+        private static Vector2 _panelBasePosition;
 
         internal static GameObject CreateSelector(
             Transform canvas, GameObject rowTemplate, IReadOnlyList<LevelConfig> levels,
@@ -699,9 +701,11 @@ namespace UnderPressure.Editor
 
             var panel = CreateNativeSettingsPanel(_root.transform);
             var panelRect = (RectTransform)panel.transform;
+            _panelRect = panelRect;
             panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
             panelRect.anchoredPosition = Vector2.zero;
+            _panelBasePosition = panelRect.anchoredPosition;
             panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
 
             CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.base_scenario"),
@@ -719,16 +723,16 @@ namespace UnderPressure.Editor
 
             // Este mismo tipo de boton se ve correctamente FUERA del area de listas.
             CreateNativeRow(panel.transform, EditorLocalization.Get("scenario_editor.return_to_menu"),
-                new Vector2(65f, -497f), new Vector2(290f, 50f), () =>
+                new Vector2(68f, -481f), new Vector2(260f, 50f), () =>
                 {
                     ClearPendingMap();
                     _onCancel?.Invoke();
                 }, false);
             CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.architect_name"),
-                new Vector2(340f, -497f), new Vector2(145f, 50f));
+                new Vector2(340f, -481f), new Vector2(145f, 50f));
             _architectInput = CreateArchitectInput(panel.transform,
-                new Vector2(490f, -501f), new Vector2(210f, 42f));
-            CreateNativeRow(panel.transform, "▼", new Vector2(708f, -501f),
+                new Vector2(490f, -485f), new Vector2(210f, 42f));
+            CreateNativeRow(panel.transform, "▼", new Vector2(708f, -485f),
                 new Vector2(42f, 42f), () => ToggleArchitectDropdown(panel.transform), false, false);
 
             foreach (var level in levels.Where(l => l != null).Distinct()
@@ -892,6 +896,7 @@ namespace UnderPressure.Editor
         {
             CloseArchitectDropdown();
             _root = null;
+            _panelRect = null;
             _nativeButtonTemplate = null;
             _nativeTextTemplate = null;
             if (_buttonSprite != null) UnityEngine.Object.Destroy(_buttonSprite);
@@ -1198,17 +1203,19 @@ namespace UnderPressure.Editor
                     .ToList()
                 : new List<string>();
 
-            _architectDropdown = Ui("UP_ArchitectDropdown", panel, typeof(Image));
+            _panelRect?.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
+                PanelWidth + 260f);
+            if (_panelRect != null)
+                _panelRect.anchoredPosition = _panelBasePosition + new Vector2(130f, 0f);
+            _architectDropdown = Ui("UP_ArchitectDropdown", panel);
             var rect = (RectTransform)_architectDropdown.transform;
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(PanelWidth + 10f, -68f);
-            rect.sizeDelta = new Vector2(260f, 422f);
-            _architectDropdown.GetComponent<Image>().color =
-                new Color(0.12f, 0.15f, 0.18f, 1f);
+            rect.anchoredPosition = new Vector2(PanelWidth, 0f);
+            rect.sizeDelta = new Vector2(260f, PanelHeight);
             _architectDropdown.transform.SetAsLastSibling();
             _architectColumn = CreateColumn(_architectDropdown.transform,
-                "Architects", Vector2.zero, new Vector2(260f, 422f));
+                "Architects", new Vector2(0f, -68f), new Vector2(260f, ColumnHeight));
             foreach (var architect in names)
             {
                 var selected = architect;
@@ -1239,6 +1246,8 @@ namespace UnderPressure.Editor
         private static void CloseArchitectDropdown()
         {
             if (_architectDropdown != null) UnityEngine.Object.Destroy(_architectDropdown);
+            _panelRect?.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, PanelWidth);
+            if (_panelRect != null) _panelRect.anchoredPosition = _panelBasePosition;
             _architectDropdown = null;
             _architectColumn = null;
         }
