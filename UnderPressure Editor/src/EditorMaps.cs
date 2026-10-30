@@ -47,6 +47,9 @@ namespace UnderPressure.Editor
         private static int _failStateBalanceGameOver = -300000;
         private static ScenarioMapFormat.WeightedIllnessData[] _illnesses =
             new ScenarioMapFormat.WeightedIllnessData[0];
+        private static Level _plotSettingsLevel;
+        private static readonly List<ScenarioMapFormat.Plot> _plotSettings =
+            new List<ScenarioMapFormat.Plot>();
 
         internal static string CurrentMapName(Level level)
         {
@@ -129,6 +132,111 @@ namespace UnderPressure.Editor
             _namedMap = null;
             _namedMapPath = null;
             ResetScenarioSettings(level);
+            ResetPlotSettings(level);
+        }
+
+        // Estos datos describen la logica de compra de cada parcela. La geometria,
+        // los objetos y sus tres capas siguen perteneciendo a HospitalPlot.
+        internal static IList<ScenarioMapFormat.Plot> CurrentPlotSettings(Level level)
+        {
+            if (!ReferenceEquals(_plotSettingsLevel, level)) ResetPlotSettings(level);
+            SynchronisePlotSettings(level);
+            return _plotSettings;
+        }
+
+        private static void ResetPlotSettings(Level level)
+        {
+            _plotSettingsLevel = level;
+            _plotSettings.Clear();
+            SynchronisePlotSettings(level);
+        }
+
+        private static void SynchronisePlotSettings(Level level)
+        {
+            var plots = level?.WorldState?.HospitalPlots;
+            if (plots == null) return;
+            while (_plotSettings.Count > plots.Count)
+                _plotSettings.RemoveAt(_plotSettings.Count - 1);
+            while (_plotSettings.Count < plots.Count)
+            {
+                var index = _plotSettings.Count;
+                _plotSettings.Add(CapturePlotSettings(plots[index]?.Definition, index, plots));
+            }
+            for (var index = 0; index < _plotSettings.Count; ++index)
+                _plotSettings[index].index = index;
+        }
+
+        private static ScenarioMapFormat.Plot CapturePlotSettings(
+            HospitalPlotDefinition definition, int index, IList<HospitalPlot> plots)
+        {
+            if (definition == null)
+                return new ScenarioMapFormat.Plot { index = index };
+            return new ScenarioMapFormat.Plot
+            {
+                index = index,
+                nameTerm = definition.NameLocalised.Term,
+                cost = definition.Cost,
+                color = definition.Color,
+                initiallyOpen = definition.InitiallyOpen,
+                built = definition.Built,
+                instaBuild = definition.InstaBuild,
+                hideUntilAvailable = definition.HideUntilAvailable,
+                notHiddenInSandbox = definition.NotHiddenInSandbox,
+                includePerimiterInNavMesh = definition.IncludePerimiterInNavMesh,
+                useEnergyUI = definition.UseEnergyUI,
+                energyUnitsGenerated = definition.EnergyUnitsGenerated,
+                timeToBuild = definition.TimeToBuild,
+                footprintYOffset = definition.FootprintYOffset,
+                ambulanceBayEntranceSide = (int)definition.AmbulanceBayEntranceSide,
+                buildObjectiveAutoStart = definition.BuildObjectiveAutoStart,
+                buildObjectiveStartOnPrereqsMet = definition.BuildObjectiveStartOnPrereqsMet,
+                mergeInto = GetMergeIndex(plots, definition),
+                prerequisites = SavePrerequisites(plots, definition)
+            };
+        }
+
+        private static ScenarioMapFormat.Plot ClonePlotSettings(ScenarioMapFormat.Plot source)
+        {
+            if (source == null) return new ScenarioMapFormat.Plot();
+            return new ScenarioMapFormat.Plot
+            {
+                index = source.index,
+                nameTerm = source.nameTerm ?? "",
+                cost = source.cost,
+                color = source.color,
+                initiallyOpen = source.initiallyOpen,
+                built = source.built,
+                instaBuild = source.instaBuild,
+                hideUntilAvailable = source.hideUntilAvailable,
+                notHiddenInSandbox = source.notHiddenInSandbox,
+                includePerimiterInNavMesh = source.includePerimiterInNavMesh,
+                useEnergyUI = source.useEnergyUI,
+                energyUnitsGenerated = source.energyUnitsGenerated,
+                timeToBuild = source.timeToBuild,
+                footprintYOffset = source.footprintYOffset,
+                ambulanceBayEntranceSide = source.ambulanceBayEntranceSide,
+                buildObjectiveAutoStart = source.buildObjectiveAutoStart,
+                buildObjectiveStartOnPrereqsMet = source.buildObjectiveStartOnPrereqsMet,
+                mergeInto = source.mergeInto,
+                prerequisites = (source.prerequisites ??
+                    new ScenarioMapFormat.PlotPrerequisite[0]).Select(value =>
+                        new ScenarioMapFormat.PlotPrerequisite
+                        {
+                            anyBought = value?.anyBought == null
+                                ? new int[0] : (int[])value.anyBought.Clone()
+                        }).ToArray()
+            };
+        }
+
+        private static void SetPlotSettings(Level level,
+            IList<ScenarioMapFormat.LoadedPlot> loaded)
+        {
+            _plotSettingsLevel = level;
+            _plotSettings.Clear();
+            if (loaded != null)
+                foreach (var entry in loaded)
+                    _plotSettings.Add(ClonePlotSettings(entry?.Data));
+            SynchronisePlotSettings(level);
         }
 
         private static string CurrentArchitect(Level level)
@@ -432,6 +540,7 @@ namespace UnderPressure.Editor
                 catch (Exception) { /* Los datos de prueba no se importan. */ }
             }
             var worldPlots = level.WorldState.HospitalPlots;
+            var plotSettings = CurrentPlotSettings(level);
             var refs = new List<ScenarioMapFormat.PlotReference>();
             var saved = new List<Tuple<string, ScenarioMapFormat.Plot, string, byte[]>>();
             for (var i = 0; i < worldPlots.Count; ++i)
@@ -440,31 +549,13 @@ namespace UnderPressure.Editor
                 if (definition?.FloorImage == null)
                     throw new InvalidOperationException("Parcela " + i + " sin imagen de suelo.");
                 var filename = "plot_" + i.ToString("D2");
-                var plot = new ScenarioMapFormat.Plot
-                {
-                    index = i,
-                    nameTerm = definition.NameLocalised.Term,
-                    cost = definition.Cost,
-                    color = definition.Color,
-                    initiallyOpen = definition.InitiallyOpen,
-                    built = definition.Built,
-                    instaBuild = definition.InstaBuild,
-                    hideUntilAvailable = definition.HideUntilAvailable,
-                    notHiddenInSandbox = definition.NotHiddenInSandbox,
-                    includePerimiterInNavMesh = definition.IncludePerimiterInNavMesh,
-                    useEnergyUI = definition.UseEnergyUI,
-                    energyUnitsGenerated = definition.EnergyUnitsGenerated,
-                    timeToBuild = definition.TimeToBuild,
-                    footprintYOffset = definition.FootprintYOffset,
-                    ambulanceBayEntranceSide = (int)definition.AmbulanceBayEntranceSide,
-                    buildObjectiveAutoStart = definition.BuildObjectiveAutoStart,
-                    buildObjectiveStartOnPrereqsMet = definition.BuildObjectiveStartOnPrereqsMet,
-                    mergeInto = GetMergeIndex(worldPlots, definition),
-                    prerequisites = SavePrerequisites(worldPlots, definition),
-                    baseItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Base),
-                    builtItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Built),
-                    unbuiltItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Unbuilt)
-                };
+                var plot = ClonePlotSettings(plotSettings[i]);
+                plot.index = i;
+                if (string.IsNullOrEmpty(plot.nameTerm))
+                    plot.nameTerm = definition.NameLocalised.Term;
+                plot.baseItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Base);
+                plot.builtItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Built);
+                plot.unbuiltItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Unbuilt);
                 var jsonName = filename + ".json";
                 var pngName = filename + ".png";
                 byte[] png;
@@ -779,6 +870,7 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
                 SetScenarioSettings(level, map.Header);
+                SetPlotSettings(level, map.Plots);
                 ScenarioEditorFogOfWar.ApplyLoaded(map.Header, map.FogOfWarPng);
                 // Evitar que decoracion original importada vuelva a mezclarse
                 // con objetos de parcelas. Solo permanecen objetos nativos.

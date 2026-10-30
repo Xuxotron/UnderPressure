@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using FullInspector;
-using HarmonyLib;
 using TH20;
 using TMPro;
 using UnityEngine;
@@ -28,13 +26,15 @@ namespace UnderPressure.Editor
         {
             if (_settingsPages == null || _settingsPages.Length <= 3 ||
                 _settingsPages[3] == null) return;
-            var content = _settingsPages[3].transform.Find("Scroll View/Viewport/Content")
-                as RectTransform;
-            if (content == null) return;
+            var page = _settingsPages[3].transform;
+            var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
+            if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
 
-            _settingsPlotRoot = NewImage("UP Plot Settings", content, null,
+            _settingsPlotRoot = NewImage("UP Plot Settings", page, null,
                 Color.clear, false).transform as RectTransform;
             Stretch(_settingsPlotRoot);
+            _settingsPlotRoot.offsetMin = new Vector2(10f, 10f);
+            _settingsPlotRoot.offsetMax = new Vector2(-10f, -10f);
 
             var listPanel = NewImage("Lista de parcelas", _settingsPlotRoot,
                 _style.PanelSprite, _style.PanelColor, false);
@@ -55,33 +55,34 @@ namespace UnderPressure.Editor
             scrollRect.offsetMax = new Vector2(-10f, -PlotListHeaderHeight - 8f);
 
             var viewportObject = new GameObject("Viewport", typeof(RectTransform),
-                typeof(Image), typeof(RectMask2D));
+                typeof(RectMask2D));
             viewportObject.transform.SetParent(scrollRect, false);
             var viewport = viewportObject.transform as RectTransform;
             viewport.anchorMin = Vector2.zero;
             viewport.anchorMax = Vector2.one;
             viewport.offsetMin = Vector2.zero;
             viewport.offsetMax = Vector2.zero;
-            viewportObject.GetComponent<Image>().color = Color.clear;
 
             var listObject = new GameObject("Content", typeof(RectTransform));
             listObject.transform.SetParent(viewport, false);
             _settingsPlotList = listObject.transform as RectTransform;
             _settingsPlotList.anchorMin = new Vector2(0f, 1f);
-            _settingsPlotList.anchorMax = new Vector2(1f, 1f);
+            _settingsPlotList.anchorMax = Vector2.one;
             _settingsPlotList.pivot = new Vector2(.5f, 1f);
             _settingsPlotList.anchoredPosition = Vector2.zero;
-            _settingsPlotList.sizeDelta = Vector2.zero;
+            _settingsPlotList.sizeDelta = new Vector2(0f, 430f);
 
             _settingsPlotScroll = scrollObject.GetComponent<ScrollRect>();
             _settingsPlotScroll.viewport = viewport;
             _settingsPlotScroll.content = _settingsPlotList;
             _settingsPlotScroll.horizontal = false;
             _settingsPlotScroll.vertical = true;
+            _settingsPlotScroll.inertia = true;
             _settingsPlotScroll.movementType = ScrollRect.MovementType.Clamped;
-            _settingsPlotScroll.scrollSensitivity = 45f;
+            _settingsPlotScroll.scrollSensitivity = 120f;
             InstallDiseaseNativeScrollbar(scrollRect, _settingsPlotScroll,
                 "UP Plot Native Scrollbar", 0f, 0f);
+            scrollRect.SetAsLastSibling();
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
                 _style.PanelSprite, _style.PanelColor, false);
@@ -96,7 +97,8 @@ namespace UnderPressure.Editor
         {
             if (_settingsPlotList == null || _settingsPlotDetails == null ||
                 _level?.WorldState?.HospitalPlots == null) return;
-            var plots = _level.WorldState.HospitalPlots;
+            var spatialPlots = _level.WorldState.HospitalPlots;
+            var plots = ScenarioEditorStorage.CurrentPlotSettings(_level);
             _settingsPlotSelectedIndex = Mathf.Clamp(_settingsPlotSelectedIndex, 0,
                 Mathf.Max(0, plots.Count - 1));
 
@@ -121,26 +123,27 @@ namespace UnderPressure.Editor
             _settingsPlotList.anchoredPosition = Vector2.zero;
             _settingsPlotScroll.StopMovement();
             _settingsPlotScroll.verticalNormalizedPosition = 1f;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsPlotList);
 
             ClearPlotChildren(_settingsPlotDetails);
             if (plots.Count == 0) return;
-            var definition = plots[_settingsPlotSelectedIndex]?.Definition;
-            if (definition == null) return;
-            LoadPlotRequirements(definition, plots);
+            var plot = plots[_settingsPlotSelectedIndex];
+            if (plot == null) return;
+            LoadPlotRequirements(plot);
 
             CreatePlotHeader(_settingsPlotDetails,
                 EditorLocalization.Format("editor.scenario_settings.plots.plot",
                     _settingsPlotSelectedIndex + 1), TextAlignmentOptions.MidlineLeft);
 
             CreatePlotIntegerField("editor.scenario_settings.plots.cost",
-                .035f, .335f, 86f, definition.Cost,
-                value => definition.Cost = value);
+                .035f, .335f, 86f, plot.cost,
+                value => plot.cost = value);
             AddPlotToggle("editor.scenario_settings.plots.initially_open",
-                .365f, .655f, 86f, definition.InitiallyOpen,
-                value => definition.InitiallyOpen = value);
+                .365f, .655f, 86f, plot.initiallyOpen,
+                value => plot.initiallyOpen = value);
             AddPlotToggle("editor.scenario_settings.plots.hide_until_available",
-                .685f, .975f, 86f, definition.HideUntilAvailable,
-                value => definition.HideUntilAvailable = value);
+                .685f, .975f, 86f, plot.hideUntilAvailable,
+                value => plot.hideUntilAvailable = value);
 
             AddPlotLabel("editor.scenario_settings.plots.initial_state",
                 .035f, .185f, 158f);
@@ -149,21 +152,21 @@ namespace UnderPressure.Editor
                 {
                     EditorLocalization.Get("editor.scenario_settings.plots.unbuilt"),
                     EditorLocalization.Get("editor.scenario_settings.plots.built")
-                }, definition.Built ? 1 : 0);
+                }, plot.built ? 1 : 0);
             SetPlotControlRect(state.transform as RectTransform, .185f, .335f, 156f, 44f);
-            state.onValueChanged.AddListener(value => definition.Built = value == 1);
+            state.onValueChanged.AddListener(value => plot.built = value == 1);
 
             AddPlotToggle("editor.scenario_settings.plots.instant_build",
-                .365f, .655f, 158f, definition.InstaBuild,
-                value => definition.InstaBuild = value);
+                .365f, .655f, 158f, plot.instaBuild,
+                value => plot.instaBuild = value);
             CreatePlotFloatField("editor.scenario_settings.plots.build_time",
-                .685f, .975f, 158f, definition.TimeToBuild,
-                value => definition.TimeToBuild = value);
+                .685f, .975f, 158f, plot.timeToBuild,
+                value => plot.timeToBuild = value);
 
-            var plotNames = BuildPlotNames(plots);
+            var plotNames = BuildPlotNames(spatialPlots);
             AddPlotLabel("editor.scenario_settings.plots.merge_into",
                 .035f, .185f, 230f);
-            var mergeIndex = FindPlotDefinitionIndex(definition.MergeInto?.Instance, plots);
+            var mergeIndex = plot.mergeInto;
             var merge = CreateDiseaseDropdown(_settingsPlotDetails, plotNames, mergeIndex + 1);
             SetPlotControlRect(merge.transform as RectTransform, .185f, .335f, 228f, 44f);
             merge.onValueChanged.AddListener(value => SetPlotMerge(value - 1));
@@ -180,11 +183,11 @@ namespace UnderPressure.Editor
                     if (selected < 0 || selected == _settingsPlotSelectedIndex ||
                         _settingsPlotRequirements.Contains(selected)) return;
                     _settingsPlotRequirements.Add(selected);
-                    ApplyPlotRequirements(definition, plots);
+                    ApplyPlotRequirements(plot, plots.Count);
                     RefreshPlotSettingsContents();
                 });
             SetPlotControlRect(add.transform as RectTransform, .665f, .71f, 228f, 44f);
-            BuildPlotRequirementChips(definition, plots);
+            BuildPlotRequirementChips(plot, plots.Count);
 
             Canvas.ForceUpdateCanvases();
         }
@@ -298,28 +301,29 @@ namespace UnderPressure.Editor
 
         private void SetPlotMerge(int targetIndex)
         {
-            var plots = _level.WorldState.HospitalPlots;
-            var definition = plots[_settingsPlotSelectedIndex]?.Definition;
-            if (definition == null) return;
+            var plots = ScenarioEditorStorage.CurrentPlotSettings(_level);
+            if (_settingsPlotSelectedIndex < 0 ||
+                _settingsPlotSelectedIndex >= plots.Count) return;
+            var plot = plots[_settingsPlotSelectedIndex];
             if (targetIndex < 0 || targetIndex >= plots.Count ||
                 targetIndex == _settingsPlotSelectedIndex)
             {
-                definition.MergeInto = null;
+                plot.mergeInto = -1;
                 RefreshPlotSettingsContents();
                 return;
             }
 
-            definition.MergeInto = CreatePlotWrapper(plots[targetIndex].Definition);
+            plot.mergeInto = targetIndex;
             if (!_settingsPlotRequirements.Contains(targetIndex))
                 _settingsPlotRequirements.Add(targetIndex);
-            ApplyPlotRequirements(definition, plots);
+            ApplyPlotRequirements(plot, plots.Count);
             RefreshPlotSettingsContents();
         }
 
-        private void BuildPlotRequirementChips(HospitalPlotDefinition definition,
-            IList<HospitalPlot> plots)
+        private void BuildPlotRequirementChips(ScenarioMapFormat.Plot plot,
+            int plotCount)
         {
-            var mergeIndex = FindPlotDefinitionIndex(definition.MergeInto?.Instance, plots);
+            var mergeIndex = plot.mergeInto;
             for (var position = 0; position < _settingsPlotRequirements.Count; ++position)
             {
                 var captured = _settingsPlotRequirements[position];
@@ -328,8 +332,8 @@ namespace UnderPressure.Editor
                     Color.white, () =>
                     {
                         _settingsPlotRequirements.Remove(captured);
-                        if (mergeIndex == captured) definition.MergeInto = null;
-                        ApplyPlotRequirements(definition, plots);
+                        if (mergeIndex == captured) plot.mergeInto = -1;
+                        ApplyPlotRequirements(plot, plotCount);
                         RefreshPlotSettingsContents();
                     });
                 var left = .725f + position * .052f;
@@ -346,61 +350,27 @@ namespace UnderPressure.Editor
             }
         }
 
-        private void LoadPlotRequirements(HospitalPlotDefinition definition,
-            IList<HospitalPlot> plots)
+        private void LoadPlotRequirements(ScenarioMapFormat.Plot plot)
         {
             _settingsPlotRequirements.Clear();
-            if (definition.Prerequisites == null) return;
-            foreach (var prerequisite in definition.Prerequisites)
+            if (plot.prerequisites == null) return;
+            foreach (var prerequisite in plot.prerequisites)
             {
-                var bought = prerequisite as HospitalPlotPrerequisitePlotBought;
-                if (bought == null) continue;
-                var values = AccessTools.Field(typeof(HospitalPlotPrerequisitePlotBought),
-                    "_plot")?.GetValue(bought) as SharedInstance<HospitalPlotDefinition>[];
-                if (values == null) continue;
-                foreach (var item in values)
-                {
-                    var index = FindPlotDefinitionIndex(item?.Instance, plots);
+                if (prerequisite?.anyBought == null) continue;
+                foreach (var index in prerequisite.anyBought)
                     if (index >= 0 && !_settingsPlotRequirements.Contains(index))
                         _settingsPlotRequirements.Add(index);
-                }
             }
         }
 
-        private void ApplyPlotRequirements(HospitalPlotDefinition definition,
-            IList<HospitalPlot> plots)
+        private void ApplyPlotRequirements(ScenarioMapFormat.Plot plot, int plotCount)
         {
-            if (definition.Prerequisites == null)
-                definition.Prerequisites = new List<HospitalPlotPrerequisite>();
-            definition.Prerequisites.Clear();
-            foreach (var index in _settingsPlotRequirements.Distinct())
-            {
-                if (index < 0 || index >= plots.Count) continue;
-                var prerequisite = new HospitalPlotPrerequisitePlotBought();
-                AccessTools.Field(typeof(HospitalPlotPrerequisitePlotBought), "_plot")
-                    ?.SetValue(prerequisite, new SharedInstance<HospitalPlotDefinition>[]
-                    {
-                        CreatePlotWrapper(plots[index].Definition)
-                    });
-                definition.Prerequisites.Add(prerequisite);
-            }
-        }
-
-        private static UnderPressurePlotInstance CreatePlotWrapper(
-            HospitalPlotDefinition definition)
-        {
-            var wrapper = ScriptableObject.CreateInstance<UnderPressurePlotInstance>();
-            wrapper.Instance = definition;
-            return wrapper;
-        }
-
-        private static int FindPlotDefinitionIndex(HospitalPlotDefinition definition,
-            IList<HospitalPlot> plots)
-        {
-            if (definition == null || plots == null) return -1;
-            for (var index = 0; index < plots.Count; ++index)
-                if (ReferenceEquals(plots[index]?.Definition, definition)) return index;
-            return -1;
+            plot.prerequisites = _settingsPlotRequirements.Distinct()
+                .Where(index => index >= 0 && index < plotCount)
+                .Select(index => new ScenarioMapFormat.PlotPrerequisite
+                {
+                    anyBought = new[] { index }
+                }).ToArray();
         }
 
         private static void ClearPlotChildren(Transform root)
