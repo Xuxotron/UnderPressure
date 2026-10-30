@@ -14,8 +14,6 @@ namespace UnderPressure.Editor
     internal sealed partial class ScenarioEditorDockLayout
     {
         private const float PlotListHeaderHeight = 52f;
-        private const float PlotListButtonHeight = 50f;
-        private const float PlotListSpacing = 7f;
 
         private RectTransform _settingsPlotRoot;
         private RectTransform _settingsPlotList;
@@ -55,7 +53,8 @@ namespace UnderPressure.Editor
             viewport.offsetMax = new Vector2(-22f, -PlotListHeaderHeight - 8f);
             viewportObject.GetComponent<Image>().color = Color.clear;
 
-            var listObject = new GameObject("Content", typeof(RectTransform));
+            var listObject = new GameObject("Content", typeof(RectTransform),
+                typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
             listObject.transform.SetParent(viewport, false);
             _settingsPlotList = listObject.transform as RectTransform;
             _settingsPlotList.anchorMin = new Vector2(0f, 1f);
@@ -63,6 +62,14 @@ namespace UnderPressure.Editor
             _settingsPlotList.pivot = new Vector2(.5f, 1f);
             _settingsPlotList.anchoredPosition = Vector2.zero;
             _settingsPlotList.sizeDelta = Vector2.zero;
+            var group = listObject.GetComponent<VerticalLayoutGroup>();
+            group.spacing = 7f;
+            group.childControlHeight = false;
+            group.childControlWidth = true;
+            group.childForceExpandHeight = false;
+            group.childForceExpandWidth = true;
+            var fitter = listObject.GetComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             _settingsPlotScroll = listPanel.AddComponent<ScrollRect>();
             _settingsPlotScroll.viewport = viewport;
@@ -92,21 +99,19 @@ namespace UnderPressure.Editor
                 Mathf.Max(0, plots.Count - 1));
 
             ClearPlotChildren(_settingsPlotList);
-            var contentHeight = plots.Count <= 0 ? 0f :
-                plots.Count * PlotListButtonHeight + (plots.Count - 1) * PlotListSpacing;
-            _settingsPlotList.sizeDelta = new Vector2(0f, contentHeight);
             for (var index = 0; index < plots.Count; ++index)
             {
                 var captured = index;
                 var selected = index == _settingsPlotSelectedIndex;
                 var button = CreateDiseaseButton(_settingsPlotList,
                     EditorLocalization.Format("editor.scenario_settings.plots.plot", index + 1),
-                    selected ? _style.ButtonColor : _style.SelectedColor,
+                    selected ? _style.SelectedColor : _style.ButtonColor,
                     () => SelectPlotSettings(captured));
-                var top = index * (PlotListButtonHeight + PlotListSpacing);
-                SetRect(button.transform as RectTransform, new Vector2(0f, 1f),
-                    new Vector2(1f, 1f), new Vector2(.5f, 1f),
-                    new Vector2(0f, -top), new Vector2(0f, PlotListButtonHeight));
+                var rect = button.transform as RectTransform;
+                var layout = button.gameObject.AddComponent<LayoutElement>();
+                layout.preferredHeight = 50f;
+                layout.minHeight = 50f;
+                rect.sizeDelta = new Vector2(0f, 50f);
             }
 
             ClearPlotChildren(_settingsPlotDetails);
@@ -264,112 +269,15 @@ namespace UnderPressure.Editor
         private void CreatePlotNumberField(string labelKey, float minX, float maxX,
             float top, string value, bool integer, Func<string, bool> accept)
         {
-            const float inputWidth = .105f;
-            var inputMin = maxX - inputWidth;
-            AddPlotLabel(labelKey, minX, inputMin - .01f, top);
-            RectTransform inputRoot;
-            var input = CreatePlotNativeInput(_settingsPlotDetails, integer, out inputRoot);
+            var input = CreateScenarioSettingsInput(_settingsPlotDetails, labelKey,
+                top, 44f, false, integer, minX, maxX, 130f);
             if (input == null) return;
-            SetPlotControlRect(inputRoot, inputMin, maxX, top, 44f);
             input.SetTextWithoutNotify(value);
             input.onEndEdit.AddListener(text =>
             {
                 if (accept(text)) RefreshPlotSettingsContents();
                 else input.SetTextWithoutNotify(value);
             });
-        }
-
-        private TMP_InputField CreatePlotNativeInput(Transform parent, bool integer,
-            out RectTransform inputRoot)
-        {
-            inputRoot = null;
-            GameObject panelTemplate;
-            Component nativeInputTemplate;
-            if (!TryGetWorkshopFieldTemplate(false, out panelTemplate,
-                    out nativeInputTemplate))
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Parcelas: no se encontro el campo de escritura nativo del Workshop.");
-                return null;
-            }
-
-            var titlePanelTemplate = panelTemplate.transform.Find("LayoutGroup/TitlePanel")
-                as RectTransform;
-            if (titlePanelTemplate == null ||
-                !nativeInputTemplate.transform.IsChildOf(titlePanelTemplate))
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Parcelas: la jerarquia del campo nativo del Workshop no coincide.");
-                return null;
-            }
-
-            var titlePanel = Instantiate(titlePanelTemplate.gameObject, parent, false);
-            titlePanel.name = "UP Plot Native Input";
-            titlePanel.SetActive(true);
-            inputRoot = titlePanel.transform as RectTransform;
-            DisableLocalisers(titlePanel.transform);
-
-            var nativeInput = titlePanel
-                .GetComponentsInChildren(nativeInputTemplate.GetType(), true)
-                .OfType<Component>().FirstOrDefault();
-            if (nativeInput == null)
-            {
-                Destroy(titlePanel);
-                inputRoot = null;
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Parcelas: el panel nativo no contiene su campo de escritura.");
-                return null;
-            }
-            var nativeBehaviour = nativeInput as Behaviour;
-            if (nativeBehaviour != null) nativeBehaviour.enabled = false;
-            var fieldObject = nativeInput.gameObject;
-            fieldObject.SetActive(true);
-            foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
-                oldText.gameObject.SetActive(false);
-
-            var editorObject = new GameObject("UP Editor Input", typeof(RectTransform),
-                typeof(Image), typeof(TMP_InputField));
-            editorObject.transform.SetParent(fieldObject.transform, false);
-            var editorRect = editorObject.transform as RectTransform;
-            Stretch(editorRect);
-            var hitArea = editorObject.GetComponent<Image>();
-            hitArea.color = new Color(1f, 1f, 1f, 0f);
-            hitArea.raycastTarget = true;
-
-            var viewportObject = new GameObject("Text Area", typeof(RectTransform),
-                typeof(RectMask2D));
-            viewportObject.transform.SetParent(editorObject.transform, false);
-            var viewport = viewportObject.transform as RectTransform;
-            Stretch(viewport);
-            viewport.offsetMin = new Vector2(9f, 1f);
-            viewport.offsetMax = new Vector2(-9f, -1f);
-
-            var textObject = new GameObject("Text", typeof(RectTransform),
-                typeof(TextMeshProUGUI));
-            textObject.transform.SetParent(viewport, false);
-            var textRect = textObject.transform as RectTransform;
-            Stretch(textRect);
-            var text = textObject.GetComponent<TextMeshProUGUI>();
-            text.fontSize = 18f;
-            text.color = Color.black;
-            text.alignment = TextAlignmentOptions.MidlineLeft;
-            text.enableWordWrapping = false;
-            text.extraPadding = true;
-
-            var input = editorObject.GetComponent<TMP_InputField>();
-            input.targetGraphic = hitArea;
-            input.textViewport = viewport;
-            input.textComponent = text;
-            input.lineType = TMP_InputField.LineType.SingleLine;
-            input.contentType = integer
-                ? TMP_InputField.ContentType.IntegerNumber
-                : TMP_InputField.ContentType.DecimalNumber;
-            input.characterLimit = 24;
-            input.caretColor = _style.HeaderColor;
-            var selection = _style.ButtonColor;
-            selection.a = .35f;
-            input.selectionColor = selection;
-            return input;
         }
 
         private static void SetPlotControlRect(RectTransform rect, float minX,
