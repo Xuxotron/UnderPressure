@@ -13,6 +13,10 @@ namespace UnderPressure.Editor
 {
     internal sealed partial class ScenarioEditorDockLayout
     {
+        private const float PlotListHeaderHeight = 52f;
+        private const float PlotListButtonHeight = 50f;
+        private const float PlotListSpacing = 7f;
+
         private RectTransform _settingsPlotRoot;
         private RectTransform _settingsPlotList;
         private RectTransform _settingsPlotDetails;
@@ -35,40 +39,30 @@ namespace UnderPressure.Editor
             var listPanel = NewImage("Lista de parcelas", _settingsPlotRoot,
                 _style.PanelSprite, _style.PanelColor, false);
             var listRect = listPanel.transform as RectTransform;
-            SetRect(listRect, new Vector2(.01f, .02f), new Vector2(.24f, .98f),
+            SetRect(listRect, new Vector2(.01f, .02f), new Vector2(.235f, .98f),
                 new Vector2(.5f, .5f), Vector2.zero, Vector2.zero);
-
-            var listTitle = CreateDiseaseText(listPanel.transform,
-                EditorLocalization.Get("editor.scenario_settings.plots.list"), 22f,
-                TextAlignmentOptions.Center, Color.white);
-            SetRect(listTitle.rectTransform, new Vector2(0f, 1f), Vector2.one,
-                new Vector2(.5f, 1f), new Vector2(0f, -8f), new Vector2(0f, 48f));
+            CreatePlotHeader(listPanel.transform,
+                EditorLocalization.Get("editor.scenario_settings.plots.list"),
+                TextAlignmentOptions.Center);
 
             var viewportObject = new GameObject("Viewport", typeof(RectTransform),
                 typeof(Image), typeof(RectMask2D));
             viewportObject.transform.SetParent(listPanel.transform, false);
             var viewport = viewportObject.transform as RectTransform;
-            SetRect(viewport, Vector2.zero, Vector2.one, new Vector2(.5f, .5f),
-                new Vector2(8f, 8f), new Vector2(-16f, -62f));
+            viewport.anchorMin = Vector2.zero;
+            viewport.anchorMax = Vector2.one;
+            viewport.offsetMin = new Vector2(10f, 10f);
+            viewport.offsetMax = new Vector2(-22f, -PlotListHeaderHeight - 8f);
             viewportObject.GetComponent<Image>().color = Color.clear;
 
-            var listObject = new GameObject("Content", typeof(RectTransform),
-                typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            var listObject = new GameObject("Content", typeof(RectTransform));
             listObject.transform.SetParent(viewport, false);
             _settingsPlotList = listObject.transform as RectTransform;
             _settingsPlotList.anchorMin = new Vector2(0f, 1f);
-            _settingsPlotList.anchorMax = Vector2.one;
+            _settingsPlotList.anchorMax = new Vector2(1f, 1f);
             _settingsPlotList.pivot = new Vector2(.5f, 1f);
             _settingsPlotList.anchoredPosition = Vector2.zero;
             _settingsPlotList.sizeDelta = Vector2.zero;
-            var group = listObject.GetComponent<VerticalLayoutGroup>();
-            group.spacing = 6f;
-            group.childControlHeight = false;
-            group.childControlWidth = true;
-            group.childForceExpandHeight = false;
-            group.childForceExpandWidth = true;
-            var fitter = listObject.GetComponent<ContentSizeFitter>();
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             _settingsPlotScroll = listPanel.AddComponent<ScrollRect>();
             _settingsPlotScroll.viewport = viewport;
@@ -78,12 +72,12 @@ namespace UnderPressure.Editor
             _settingsPlotScroll.movementType = ScrollRect.MovementType.Clamped;
             _settingsPlotScroll.scrollSensitivity = 45f;
             InstallDiseaseNativeScrollbar(listRect, _settingsPlotScroll,
-                "UP Plot Native Scrollbar", 58f, 8f);
+                "UP Plot Native Scrollbar", PlotListHeaderHeight + 6f, 8f);
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
                 _style.PanelSprite, _style.PanelColor, false);
             _settingsPlotDetails = detailsPanel.transform as RectTransform;
-            SetRect(_settingsPlotDetails, new Vector2(.25f, .02f),
+            SetRect(_settingsPlotDetails, new Vector2(.245f, .02f),
                 new Vector2(.99f, .98f), new Vector2(.5f, .5f),
                 Vector2.zero, Vector2.zero);
             RefreshPlotSettingsContents();
@@ -98,19 +92,21 @@ namespace UnderPressure.Editor
                 Mathf.Max(0, plots.Count - 1));
 
             ClearPlotChildren(_settingsPlotList);
+            var contentHeight = plots.Count <= 0 ? 0f :
+                plots.Count * PlotListButtonHeight + (plots.Count - 1) * PlotListSpacing;
+            _settingsPlotList.sizeDelta = new Vector2(0f, contentHeight);
             for (var index = 0; index < plots.Count; ++index)
             {
                 var captured = index;
                 var selected = index == _settingsPlotSelectedIndex;
                 var button = CreateDiseaseButton(_settingsPlotList,
                     EditorLocalization.Format("editor.scenario_settings.plots.plot", index + 1),
-                    selected ? _style.SelectedColor : _style.ButtonColor,
+                    selected ? _style.ButtonColor : _style.SelectedColor,
                     () => SelectPlotSettings(captured));
-                var rect = button.transform as RectTransform;
-                var layout = button.gameObject.AddComponent<LayoutElement>();
-                layout.preferredHeight = 48f;
-                layout.minHeight = 48f;
-                rect.sizeDelta = new Vector2(0f, 48f);
+                var top = index * (PlotListButtonHeight + PlotListSpacing);
+                SetRect(button.transform as RectTransform, new Vector2(0f, 1f),
+                    new Vector2(1f, 1f), new Vector2(.5f, 1f),
+                    new Vector2(0f, -top), new Vector2(0f, PlotListButtonHeight));
             }
 
             ClearPlotChildren(_settingsPlotDetails);
@@ -119,104 +115,95 @@ namespace UnderPressure.Editor
             if (definition == null) return;
             LoadPlotRequirements(definition, plots);
 
-            var title = CreateDiseaseText(_settingsPlotDetails,
+            CreatePlotHeader(_settingsPlotDetails,
                 EditorLocalization.Format("editor.scenario_settings.plots.plot",
-                    _settingsPlotSelectedIndex + 1), 26f,
-                TextAlignmentOptions.MidlineLeft, Color.white);
-            SetRect(title.rectTransform, new Vector2(.02f, 1f), new Vector2(.98f, 1f),
-                new Vector2(.5f, 1f), new Vector2(0f, -8f), new Vector2(0f, 48f));
+                    _settingsPlotSelectedIndex + 1), TextAlignmentOptions.MidlineLeft);
 
-            var cost = CreateScenarioSettingsInput(_settingsPlotDetails,
-                "editor.scenario_settings.plots.cost", 70f, 48f, false, true,
-                .02f, .32f, 130f);
-            if (cost != null)
-            {
-                cost.SetTextWithoutNotify(definition.Cost.ToString(CultureInfo.InvariantCulture));
-                cost.onEndEdit.AddListener(value =>
-                {
-                    int parsed;
-                    if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture,
-                            out parsed)) definition.Cost = parsed;
-                    cost.SetTextWithoutNotify(definition.Cost.ToString(CultureInfo.InvariantCulture));
-                });
-            }
+            CreatePlotIntegerSpinner("editor.scenario_settings.plots.cost",
+                .035f, .335f, 86f, definition.Cost, 1,
+                value => definition.Cost = value);
+            AddPlotToggle("editor.scenario_settings.plots.initially_open",
+                .365f, .655f, 86f, definition.InitiallyOpen,
+                value => definition.InitiallyOpen = value);
+            AddPlotToggle("editor.scenario_settings.plots.hide_until_available",
+                .685f, .975f, 86f, definition.HideUntilAvailable,
+                value => definition.HideUntilAvailable = value);
 
-            AddPlotToggle("editor.scenario_settings.plots.initially_open", .36f, 70f,
-                definition.InitiallyOpen, value => definition.InitiallyOpen = value);
-            AddPlotToggle("editor.scenario_settings.plots.hide_until_available", .68f, 70f,
-                definition.HideUntilAvailable, value => definition.HideUntilAvailable = value);
-
-            AddPlotLabel("editor.scenario_settings.plots.initial_state", .02f, 142f, .17f);
+            AddPlotLabel("editor.scenario_settings.plots.initial_state",
+                .035f, .185f, 158f);
             var state = CreateDiseaseDropdown(_settingsPlotDetails,
                 new[]
                 {
                     EditorLocalization.Get("editor.scenario_settings.plots.unbuilt"),
                     EditorLocalization.Get("editor.scenario_settings.plots.built")
                 }, definition.Built ? 1 : 0);
-            SetRect(state.transform as RectTransform, new Vector2(.19f, 1f),
-                new Vector2(.34f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -140f), new Vector2(0f, 42f));
+            SetPlotControlRect(state.transform as RectTransform, .185f, .335f, 156f, 44f);
             state.onValueChanged.AddListener(value => definition.Built = value == 1);
 
-            AddPlotToggle("editor.scenario_settings.plots.instant_build", .36f, 142f,
-                definition.InstaBuild, value => definition.InstaBuild = value);
+            AddPlotToggle("editor.scenario_settings.plots.instant_build",
+                .365f, .655f, 158f, definition.InstaBuild,
+                value => definition.InstaBuild = value);
+            CreatePlotFloatSpinner("editor.scenario_settings.plots.build_time",
+                .685f, .975f, 158f, definition.TimeToBuild, 1f,
+                value => definition.TimeToBuild = value);
 
-            var buildTime = CreateScenarioSettingsInput(_settingsPlotDetails,
-                "editor.scenario_settings.plots.build_time", 140f, 48f, false, false,
-                .68f, .98f, 130f);
-            if (buildTime != null)
-            {
-                buildTime.SetTextWithoutNotify(definition.TimeToBuild.ToString("0.##",
-                    CultureInfo.InvariantCulture));
-                buildTime.onEndEdit.AddListener(value =>
-                {
-                    float parsed;
-                    if (float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture,
-                            out parsed)) definition.TimeToBuild = Mathf.Max(0f, parsed);
-                    buildTime.SetTextWithoutNotify(definition.TimeToBuild.ToString("0.##",
-                        CultureInfo.InvariantCulture));
-                });
-            }
-
-            var plotNames = new List<string>
-            {
-                EditorLocalization.Get("editor.scenario_settings.plots.none")
-            };
-            for (var index = 0; index < plots.Count; ++index)
-                plotNames.Add(EditorLocalization.Format(
-                    "editor.scenario_settings.plots.plot", index + 1));
-
-            AddPlotLabel("editor.scenario_settings.plots.merge_into", .02f, 214f, .17f);
+            var plotNames = BuildPlotNames(plots);
+            AddPlotLabel("editor.scenario_settings.plots.merge_into",
+                .035f, .185f, 230f);
             var mergeIndex = FindPlotDefinitionIndex(definition.MergeInto?.Instance, plots);
             var merge = CreateDiseaseDropdown(_settingsPlotDetails, plotNames, mergeIndex + 1);
-            SetRect(merge.transform as RectTransform, new Vector2(.19f, 1f),
-                new Vector2(.42f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -212f), new Vector2(0f, 42f));
+            SetPlotControlRect(merge.transform as RectTransform, .185f, .335f, 228f, 44f);
             merge.onValueChanged.AddListener(value => SetPlotMerge(value - 1));
 
-            AddPlotLabel("editor.scenario_settings.plots.requires", .47f, 214f, .12f);
-            var requirementChoices = new List<string>(plotNames);
-            var requirement = CreateDiseaseDropdown(_settingsPlotDetails,
-                requirementChoices, 0);
-            SetRect(requirement.transform as RectTransform, new Vector2(.59f, 1f),
-                new Vector2(.78f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -212f), new Vector2(0f, 42f));
+            AddPlotLabel("editor.scenario_settings.plots.requires",
+                .365f, .475f, 230f);
+            var requirement = CreateDiseaseDropdown(_settingsPlotDetails, plotNames, 0);
+            SetPlotControlRect(requirement.transform as RectTransform,
+                .475f, .655f, 228f, 44f);
             var add = CreateDiseaseButton(_settingsPlotDetails, "+",
                 new Color32(0, 190, 75, 255), () =>
                 {
                     var selected = requirement.value - 1;
-                    if (selected >= 0 && selected != _settingsPlotSelectedIndex &&
-                        !_settingsPlotRequirements.Contains(selected))
-                    {
-                        _settingsPlotRequirements.Add(selected);
-                        ApplyPlotRequirements(definition, plots);
-                        RefreshPlotSettingsContents();
-                    }
+                    if (selected < 0 || selected == _settingsPlotSelectedIndex ||
+                        _settingsPlotRequirements.Contains(selected)) return;
+                    _settingsPlotRequirements.Add(selected);
+                    ApplyPlotRequirements(definition, plots);
+                    RefreshPlotSettingsContents();
                 });
-            SetRect(add.transform as RectTransform, new Vector2(.79f, 1f),
-                new Vector2(.84f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -212f), new Vector2(0f, 42f));
+            SetPlotControlRect(add.transform as RectTransform, .665f, .71f, 228f, 44f);
             BuildPlotRequirementChips(definition, plots);
+
+            Canvas.ForceUpdateCanvases();
+        }
+
+        private void CreatePlotHeader(Transform parent, string value,
+            TextAlignmentOptions alignment)
+        {
+            var header = NewImage("Cabecera", parent, _style.ButtonSprite,
+                _style.SelectedColor, false);
+            var rect = header.transform as RectTransform;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -4f);
+            rect.sizeDelta = new Vector2(0f, PlotListHeaderHeight - 8f);
+            var title = CreateDiseaseText(header.transform, value, 22f,
+                alignment, Color.white);
+            Stretch(title.rectTransform);
+            title.rectTransform.offsetMin = new Vector2(14f, 0f);
+            title.rectTransform.offsetMax = new Vector2(-14f, 0f);
+        }
+
+        private List<string> BuildPlotNames(IList<HospitalPlot> plots)
+        {
+            var names = new List<string>
+            {
+                EditorLocalization.Get("editor.scenario_settings.plots.none")
+            };
+            for (var index = 0; index < plots.Count; ++index)
+                names.Add(EditorLocalization.Format(
+                    "editor.scenario_settings.plots.plot", index + 1));
+            return names;
         }
 
         private void SelectPlotSettings(int index)
@@ -225,25 +212,171 @@ namespace UnderPressure.Editor
             RefreshPlotSettingsContents();
         }
 
-        private void AddPlotLabel(string key, float x, float top, float width)
+        private void AddPlotLabel(string key, float minX, float maxX, float top)
         {
             var label = CreateDiseaseText(_settingsPlotDetails,
-                EditorLocalization.Get(key), 17f, TextAlignmentOptions.MidlineLeft,
+                EditorLocalization.Get(key), 18f, TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetRect(label.rectTransform, new Vector2(x, 1f),
-                new Vector2(x + width, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -top), new Vector2(0f, 42f));
+            SetPlotControlRect(label.rectTransform, minX, maxX, top, 44f);
         }
 
-        private void AddPlotToggle(string key, float x, float top, bool value,
-            Action<bool> changed)
+        private void AddPlotToggle(string key, float minX, float maxX, float top,
+            bool value, Action<bool> changed)
         {
-            AddPlotLabel(key, x, top, .23f);
+            var toggleWidth = .045f;
+            AddPlotLabel(key, minX, maxX - toggleWidth - .01f, top);
             var toggle = CreateDiseaseToggle(_settingsPlotDetails, value, changed);
             if (toggle == null) return;
-            SetRect(toggle.transform as RectTransform, new Vector2(x + .24f, 1f),
-                new Vector2(x + .285f, 1f), new Vector2(.5f, 1f),
-                new Vector2(0f, -top), new Vector2(0f, 42f));
+            SetPlotControlRect(toggle.transform as RectTransform,
+                maxX - toggleWidth, maxX, top, 44f);
+        }
+
+        private void CreatePlotIntegerSpinner(string labelKey, float minX, float maxX,
+            float top, int value, int step, Action<int> changed)
+        {
+            CreatePlotSpinner(labelKey, minX, maxX, top,
+                value.ToString(CultureInfo.InvariantCulture), true,
+                text =>
+                {
+                    int parsed;
+                    if (!int.TryParse(text, NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out parsed)) return false;
+                    changed(parsed);
+                    return true;
+                }, delta => changed(value + delta * step));
+        }
+
+        private void CreatePlotFloatSpinner(string labelKey, float minX, float maxX,
+            float top, float value, float step, Action<float> changed)
+        {
+            CreatePlotSpinner(labelKey, minX, maxX, top,
+                value.ToString("0.##", CultureInfo.InvariantCulture), false,
+                text =>
+                {
+                    float parsed;
+                    if (!float.TryParse(text, NumberStyles.Float,
+                            CultureInfo.InvariantCulture, out parsed)) return false;
+                    changed(Mathf.Max(0f, parsed));
+                    return true;
+                }, delta => changed(Mathf.Max(0f, value + delta * step)));
+        }
+
+        private void CreatePlotSpinner(string labelKey, float minX, float maxX, float top,
+            string value, bool integer, Func<string, bool> accept,
+            Action<int> changeByStep)
+        {
+            var inputMin = maxX - .145f;
+            AddPlotLabel(labelKey, minX, inputMin - .01f, top);
+            var input = CreatePlotNativeInput(_settingsPlotDetails, integer);
+            if (input == null) return;
+            SetPlotControlRect(input.transform as RectTransform,
+                inputMin, maxX - .035f, top, 44f);
+            input.SetTextWithoutNotify(value);
+            input.onEndEdit.AddListener(text =>
+            {
+                if (accept(text)) RefreshPlotSettingsContents();
+                else input.SetTextWithoutNotify(value);
+            });
+
+            CreatePlotStepButton("▲", maxX - .035f, maxX, top, 22f, () =>
+            {
+                changeByStep(1);
+                RefreshPlotSettingsContents();
+            });
+            CreatePlotStepButton("▼", maxX - .035f, maxX, top + 22f, 22f, () =>
+            {
+                changeByStep(-1);
+                RefreshPlotSettingsContents();
+            });
+        }
+
+        private TMP_InputField CreatePlotNativeInput(Transform parent, bool integer)
+        {
+            GameObject panelTemplate;
+            Component nativeInputTemplate;
+            if (!TryGetWorkshopFieldTemplate(false, out panelTemplate,
+                    out nativeInputTemplate))
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Parcelas: no se encontro el campo de escritura nativo del Workshop.");
+                return null;
+            }
+
+            var fieldObject = Instantiate(nativeInputTemplate.gameObject, parent, false);
+            fieldObject.name = "UP Plot Native Input";
+            fieldObject.SetActive(true);
+            DisableLocalisers(fieldObject.transform);
+            var nativeInput = fieldObject.GetComponent(nativeInputTemplate.GetType()) as Behaviour;
+            if (nativeInput != null) nativeInput.enabled = false;
+            foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
+                oldText.gameObject.SetActive(false);
+
+            var editorObject = new GameObject("UP Editor Input", typeof(RectTransform),
+                typeof(Image), typeof(TMP_InputField));
+            editorObject.transform.SetParent(fieldObject.transform, false);
+            var editorRect = editorObject.transform as RectTransform;
+            Stretch(editorRect);
+            var hitArea = editorObject.GetComponent<Image>();
+            hitArea.color = new Color(1f, 1f, 1f, 0f);
+            hitArea.raycastTarget = true;
+
+            var viewportObject = new GameObject("Text Area", typeof(RectTransform),
+                typeof(RectMask2D));
+            viewportObject.transform.SetParent(editorObject.transform, false);
+            var viewport = viewportObject.transform as RectTransform;
+            Stretch(viewport);
+            viewport.offsetMin = new Vector2(9f, 1f);
+            viewport.offsetMax = new Vector2(-9f, -1f);
+
+            var textObject = new GameObject("Text", typeof(RectTransform),
+                typeof(TextMeshProUGUI));
+            textObject.transform.SetParent(viewport, false);
+            var textRect = textObject.transform as RectTransform;
+            Stretch(textRect);
+            var text = textObject.GetComponent<TextMeshProUGUI>();
+            text.fontSize = 18f;
+            text.color = Color.black;
+            text.alignment = TextAlignmentOptions.MidlineLeft;
+            text.enableWordWrapping = false;
+            text.extraPadding = true;
+
+            var input = editorObject.GetComponent<TMP_InputField>();
+            input.targetGraphic = hitArea;
+            input.textViewport = viewport;
+            input.textComponent = text;
+            input.lineType = TMP_InputField.LineType.SingleLine;
+            input.contentType = integer
+                ? TMP_InputField.ContentType.IntegerNumber
+                : TMP_InputField.ContentType.DecimalNumber;
+            input.characterLimit = 24;
+            input.caretColor = _style.HeaderColor;
+            var selection = _style.ButtonColor;
+            selection.a = .35f;
+            input.selectionColor = selection;
+            return input;
+        }
+
+        private void CreatePlotStepButton(string text, float minX, float maxX, float top,
+            float height, Action clicked)
+        {
+            var button = CreateDiseaseButton(_settingsPlotDetails, text,
+                new Color32(215, 220, 225, 255), clicked);
+            SetPlotControlRect(button.transform as RectTransform,
+                minX, maxX, top, height);
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.color = Color.black;
+                label.fontSize = 14f;
+            }
+        }
+
+        private static void SetPlotControlRect(RectTransform rect, float minX,
+            float maxX, float top, float height)
+        {
+            SetRect(rect, new Vector2(minX, 1f), new Vector2(maxX, 1f),
+                new Vector2(.5f, 1f), new Vector2(0f, -top),
+                new Vector2(0f, height));
         }
 
         private void SetPlotMerge(int targetIndex)
@@ -255,49 +388,44 @@ namespace UnderPressure.Editor
                 targetIndex == _settingsPlotSelectedIndex)
             {
                 definition.MergeInto = null;
+                RefreshPlotSettingsContents();
                 return;
             }
+
             definition.MergeInto = CreatePlotWrapper(plots[targetIndex].Definition);
             if (!_settingsPlotRequirements.Contains(targetIndex))
                 _settingsPlotRequirements.Add(targetIndex);
             ApplyPlotRequirements(definition, plots);
-            HighlightPlotMergeTarget(targetIndex);
             RefreshPlotSettingsContents();
-        }
-
-        private void HighlightPlotMergeTarget(int index)
-        {
-            var plots = _level.WorldState.HospitalPlots;
-            if (index < 0 || index >= plots.Count) return;
-            _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plots[index]);
-            var nativeMenu = _level?.HUD?.FindMenu<EditHospitalMenu>(true);
-            var frame = nativeMenu == null ? null : AccessTools.Field(typeof(EditHospitalMenu),
-                "_editFrame")?.GetValue(nativeMenu) as Graphic;
-            if (frame != null) frame.color = new Color32(235, 52, 188, 255);
         }
 
         private void BuildPlotRequirementChips(HospitalPlotDefinition definition,
             IList<HospitalPlot> plots)
         {
+            var mergeIndex = FindPlotDefinitionIndex(definition.MergeInto?.Instance, plots);
             for (var position = 0; position < _settingsPlotRequirements.Count; ++position)
             {
                 var captured = _settingsPlotRequirements[position];
                 var button = CreateDiseaseButton(_settingsPlotDetails,
                     (captured + 1).ToString(CultureInfo.InvariantCulture),
-                    captured == FindPlotDefinitionIndex(definition.MergeInto?.Instance, plots)
-                        ? new Color32(235, 52, 188, 255) : _style.ButtonColor,
-                    () =>
+                    Color.white, () =>
                     {
                         _settingsPlotRequirements.Remove(captured);
-                        if (FindPlotDefinitionIndex(definition.MergeInto?.Instance, plots) == captured)
-                            definition.MergeInto = null;
+                        if (mergeIndex == captured) definition.MergeInto = null;
                         ApplyPlotRequirements(definition, plots);
                         RefreshPlotSettingsContents();
                     });
-                var left = .85f + position * .055f;
-                SetRect(button.transform as RectTransform, new Vector2(left, 1f),
-                    new Vector2(left + .045f, 1f), new Vector2(.5f, 1f),
-                    new Vector2(0f, -212f), new Vector2(0f, 42f));
+                var left = .725f + position * .052f;
+                SetPlotControlRect(button.transform as RectTransform,
+                    left, left + .042f, 228f, 44f);
+                var label = button.GetComponentInChildren<TMP_Text>(true);
+                if (label != null) label.color = Color.black;
+                if (captured != mergeIndex) continue;
+                var outline = button.gameObject.GetComponent<Outline>() ??
+                    button.gameObject.AddComponent<Outline>();
+                outline.effectColor = new Color32(235, 52, 188, 255);
+                outline.effectDistance = new Vector2(3f, -3f);
+                outline.useGraphicAlpha = false;
             }
         }
 
@@ -313,9 +441,9 @@ namespace UnderPressure.Editor
                 var values = AccessTools.Field(typeof(HospitalPlotPrerequisitePlotBought),
                     "_plot")?.GetValue(bought) as SharedInstance<HospitalPlotDefinition>[];
                 if (values == null) continue;
-                foreach (var value in values)
+                foreach (var item in values)
                 {
-                    var index = FindPlotDefinitionIndex(value?.Instance, plots);
+                    var index = FindPlotDefinitionIndex(item?.Instance, plots);
                     if (index >= 0 && !_settingsPlotRequirements.Contains(index))
                         _settingsPlotRequirements.Add(index);
                 }
