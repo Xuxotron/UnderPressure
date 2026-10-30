@@ -14,6 +14,8 @@ namespace UnderPressure.Editor
     internal sealed partial class ScenarioEditorDockLayout
     {
         private const float PlotListHeaderHeight = 52f;
+        private const float PlotListButtonHeight = 50f;
+        private const float PlotListSpacing = 7f;
 
         private RectTransform _settingsPlotRoot;
         private RectTransform _settingsPlotList;
@@ -53,8 +55,7 @@ namespace UnderPressure.Editor
             viewport.offsetMax = new Vector2(-22f, -PlotListHeaderHeight - 8f);
             viewportObject.GetComponent<Image>().color = Color.clear;
 
-            var listObject = new GameObject("Content", typeof(RectTransform),
-                typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+            var listObject = new GameObject("Content", typeof(RectTransform));
             listObject.transform.SetParent(viewport, false);
             _settingsPlotList = listObject.transform as RectTransform;
             _settingsPlotList.anchorMin = new Vector2(0f, 1f);
@@ -62,14 +63,6 @@ namespace UnderPressure.Editor
             _settingsPlotList.pivot = new Vector2(.5f, 1f);
             _settingsPlotList.anchoredPosition = Vector2.zero;
             _settingsPlotList.sizeDelta = Vector2.zero;
-            var group = listObject.GetComponent<VerticalLayoutGroup>();
-            group.spacing = 7f;
-            group.childControlHeight = false;
-            group.childControlWidth = true;
-            group.childForceExpandHeight = false;
-            group.childForceExpandWidth = true;
-            var fitter = listObject.GetComponent<ContentSizeFitter>();
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             _settingsPlotScroll = listPanel.AddComponent<ScrollRect>();
             _settingsPlotScroll.viewport = viewport;
@@ -99,6 +92,9 @@ namespace UnderPressure.Editor
                 Mathf.Max(0, plots.Count - 1));
 
             ClearPlotChildren(_settingsPlotList);
+            var contentHeight = plots.Count * PlotListButtonHeight +
+                Mathf.Max(0, plots.Count - 1) * PlotListSpacing;
+            _settingsPlotList.sizeDelta = new Vector2(0f, contentHeight);
             for (var index = 0; index < plots.Count; ++index)
             {
                 var captured = index;
@@ -108,10 +104,10 @@ namespace UnderPressure.Editor
                     selected ? _style.SelectedColor : _style.ButtonColor,
                     () => SelectPlotSettings(captured));
                 var rect = button.transform as RectTransform;
-                var layout = button.gameObject.AddComponent<LayoutElement>();
-                layout.preferredHeight = 50f;
-                layout.minHeight = 50f;
-                rect.sizeDelta = new Vector2(0f, 50f);
+                SetRect(rect, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                    new Vector2(.5f, 1f),
+                    new Vector2(0f, -index * (PlotListButtonHeight + PlotListSpacing)),
+                    new Vector2(0f, PlotListButtonHeight));
             }
 
             ClearPlotChildren(_settingsPlotDetails);
