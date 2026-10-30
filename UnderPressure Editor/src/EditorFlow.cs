@@ -1246,8 +1246,13 @@ namespace UnderPressure.Editor
         private static void CloseArchitectDropdown()
         {
             if (_architectDropdown != null) UnityEngine.Object.Destroy(_architectDropdown);
-            _panelRect?.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, PanelWidth);
-            if (_panelRect != null) _panelRect.anchoredPosition = _panelBasePosition;
+            // Unity conserva la referencia administrada después de destruir el objeto.
+            // La comprobación nativa evita acceder al RectTransform destruido al volver al menú.
+            if (_panelRect != null)
+            {
+                _panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, PanelWidth);
+                _panelRect.anchoredPosition = _panelBasePosition;
+            }
             _architectDropdown = null;
             _architectColumn = null;
         }
