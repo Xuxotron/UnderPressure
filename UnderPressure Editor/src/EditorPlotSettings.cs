@@ -45,14 +45,23 @@ namespace UnderPressure.Editor
                 EditorLocalization.Get("editor.scenario_settings.plots.list"),
                 TextAlignmentOptions.Center);
 
+            var scrollObject = new GameObject("Desplazamiento de parcelas",
+                typeof(RectTransform), typeof(ScrollRect));
+            scrollObject.transform.SetParent(listPanel.transform, false);
+            var scrollRect = scrollObject.transform as RectTransform;
+            scrollRect.anchorMin = Vector2.zero;
+            scrollRect.anchorMax = Vector2.one;
+            scrollRect.offsetMin = new Vector2(10f, 10f);
+            scrollRect.offsetMax = new Vector2(-10f, -PlotListHeaderHeight - 8f);
+
             var viewportObject = new GameObject("Viewport", typeof(RectTransform),
                 typeof(Image), typeof(RectMask2D));
-            viewportObject.transform.SetParent(listPanel.transform, false);
+            viewportObject.transform.SetParent(scrollRect, false);
             var viewport = viewportObject.transform as RectTransform;
             viewport.anchorMin = Vector2.zero;
             viewport.anchorMax = Vector2.one;
-            viewport.offsetMin = new Vector2(10f, 10f);
-            viewport.offsetMax = new Vector2(-22f, -PlotListHeaderHeight - 8f);
+            viewport.offsetMin = Vector2.zero;
+            viewport.offsetMax = Vector2.zero;
             viewportObject.GetComponent<Image>().color = Color.clear;
 
             var listObject = new GameObject("Content", typeof(RectTransform));
@@ -64,15 +73,15 @@ namespace UnderPressure.Editor
             _settingsPlotList.anchoredPosition = Vector2.zero;
             _settingsPlotList.sizeDelta = Vector2.zero;
 
-            _settingsPlotScroll = listPanel.AddComponent<ScrollRect>();
+            _settingsPlotScroll = scrollObject.GetComponent<ScrollRect>();
             _settingsPlotScroll.viewport = viewport;
             _settingsPlotScroll.content = _settingsPlotList;
             _settingsPlotScroll.horizontal = false;
             _settingsPlotScroll.vertical = true;
             _settingsPlotScroll.movementType = ScrollRect.MovementType.Clamped;
             _settingsPlotScroll.scrollSensitivity = 45f;
-            InstallDiseaseNativeScrollbar(listRect, _settingsPlotScroll,
-                "UP Plot Native Scrollbar", PlotListHeaderHeight + 6f, 8f);
+            InstallDiseaseNativeScrollbar(scrollRect, _settingsPlotScroll,
+                "UP Plot Native Scrollbar", 0f, 0f);
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
                 _style.PanelSprite, _style.PanelColor, false);
@@ -109,6 +118,9 @@ namespace UnderPressure.Editor
                     new Vector2(0f, -index * (PlotListButtonHeight + PlotListSpacing)),
                     new Vector2(0f, PlotListButtonHeight));
             }
+            _settingsPlotList.anchoredPosition = Vector2.zero;
+            _settingsPlotScroll.StopMovement();
+            _settingsPlotScroll.verticalNormalizedPosition = 1f;
 
             ClearPlotChildren(_settingsPlotDetails);
             if (plots.Count == 0) return;
