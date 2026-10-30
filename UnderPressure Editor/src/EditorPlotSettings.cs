@@ -119,8 +119,8 @@ namespace UnderPressure.Editor
                 EditorLocalization.Format("editor.scenario_settings.plots.plot",
                     _settingsPlotSelectedIndex + 1), TextAlignmentOptions.MidlineLeft);
 
-            CreatePlotIntegerSpinner("editor.scenario_settings.plots.cost",
-                .035f, .335f, 86f, definition.Cost, 1,
+            CreatePlotIntegerField("editor.scenario_settings.plots.cost",
+                .035f, .335f, 86f, definition.Cost,
                 value => definition.Cost = value);
             AddPlotToggle("editor.scenario_settings.plots.initially_open",
                 .365f, .655f, 86f, definition.InitiallyOpen,
@@ -143,8 +143,8 @@ namespace UnderPressure.Editor
             AddPlotToggle("editor.scenario_settings.plots.instant_build",
                 .365f, .655f, 158f, definition.InstaBuild,
                 value => definition.InstaBuild = value);
-            CreatePlotFloatSpinner("editor.scenario_settings.plots.build_time",
-                .685f, .975f, 158f, definition.TimeToBuild, 1f,
+            CreatePlotFloatField("editor.scenario_settings.plots.build_time",
+                .685f, .975f, 158f, definition.TimeToBuild,
                 value => definition.TimeToBuild = value);
 
             var plotNames = BuildPlotNames(plots);
@@ -231,10 +231,10 @@ namespace UnderPressure.Editor
                 maxX - toggleWidth, maxX, top, 44f);
         }
 
-        private void CreatePlotIntegerSpinner(string labelKey, float minX, float maxX,
-            float top, int value, int step, Action<int> changed)
+        private void CreatePlotIntegerField(string labelKey, float minX, float maxX,
+            float top, int value, Action<int> changed)
         {
-            CreatePlotSpinner(labelKey, minX, maxX, top,
+            CreatePlotNumberField(labelKey, minX, maxX, top,
                 value.ToString(CultureInfo.InvariantCulture), true,
                 text =>
                 {
@@ -243,13 +243,13 @@ namespace UnderPressure.Editor
                             CultureInfo.InvariantCulture, out parsed)) return false;
                     changed(parsed);
                     return true;
-                }, delta => changed(value + delta * step));
+                });
         }
 
-        private void CreatePlotFloatSpinner(string labelKey, float minX, float maxX,
-            float top, float value, float step, Action<float> changed)
+        private void CreatePlotFloatField(string labelKey, float minX, float maxX,
+            float top, float value, Action<float> changed)
         {
-            CreatePlotSpinner(labelKey, minX, maxX, top,
+            CreatePlotNumberField(labelKey, minX, maxX, top,
                 value.ToString("0.##", CultureInfo.InvariantCulture), false,
                 text =>
                 {
@@ -258,40 +258,31 @@ namespace UnderPressure.Editor
                             CultureInfo.InvariantCulture, out parsed)) return false;
                     changed(Mathf.Max(0f, parsed));
                     return true;
-                }, delta => changed(Mathf.Max(0f, value + delta * step)));
+                });
         }
 
-        private void CreatePlotSpinner(string labelKey, float minX, float maxX, float top,
-            string value, bool integer, Func<string, bool> accept,
-            Action<int> changeByStep)
+        private void CreatePlotNumberField(string labelKey, float minX, float maxX,
+            float top, string value, bool integer, Func<string, bool> accept)
         {
-            var inputMin = maxX - .145f;
+            const float inputWidth = .105f;
+            var inputMin = maxX - inputWidth;
             AddPlotLabel(labelKey, minX, inputMin - .01f, top);
-            var input = CreatePlotNativeInput(_settingsPlotDetails, integer);
+            RectTransform inputRoot;
+            var input = CreatePlotNativeInput(_settingsPlotDetails, integer, out inputRoot);
             if (input == null) return;
-            SetPlotControlRect(input.transform as RectTransform,
-                inputMin, maxX - .035f, top, 44f);
+            SetPlotControlRect(inputRoot, inputMin, maxX, top, 44f);
             input.SetTextWithoutNotify(value);
             input.onEndEdit.AddListener(text =>
             {
                 if (accept(text)) RefreshPlotSettingsContents();
                 else input.SetTextWithoutNotify(value);
             });
-
-            CreatePlotStepButton("▲", maxX - .035f, maxX, top, 22f, () =>
-            {
-                changeByStep(1);
-                RefreshPlotSettingsContents();
-            });
-            CreatePlotStepButton("▼", maxX - .035f, maxX, top + 22f, 22f, () =>
-            {
-                changeByStep(-1);
-                RefreshPlotSettingsContents();
-            });
         }
 
-        private TMP_InputField CreatePlotNativeInput(Transform parent, bool integer)
+        private TMP_InputField CreatePlotNativeInput(Transform parent, bool integer,
+            out RectTransform inputRoot)
         {
+            inputRoot = null;
             GameObject panelTemplate;
             Component nativeInputTemplate;
             if (!TryGetWorkshopFieldTemplate(false, out panelTemplate,
@@ -302,12 +293,37 @@ namespace UnderPressure.Editor
                 return null;
             }
 
-            var fieldObject = Instantiate(nativeInputTemplate.gameObject, parent, false);
-            fieldObject.name = "UP Plot Native Input";
+            var titlePanelTemplate = panelTemplate.transform.Find("LayoutGroup/TitlePanel")
+                as RectTransform;
+            if (titlePanelTemplate == null ||
+                !nativeInputTemplate.transform.IsChildOf(titlePanelTemplate))
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Parcelas: la jerarquia del campo nativo del Workshop no coincide.");
+                return null;
+            }
+
+            var titlePanel = Instantiate(titlePanelTemplate.gameObject, parent, false);
+            titlePanel.name = "UP Plot Native Input";
+            titlePanel.SetActive(true);
+            inputRoot = titlePanel.transform as RectTransform;
+            DisableLocalisers(titlePanel.transform);
+
+            var nativeInput = titlePanel
+                .GetComponentsInChildren(nativeInputTemplate.GetType(), true)
+                .OfType<Component>().FirstOrDefault();
+            if (nativeInput == null)
+            {
+                Destroy(titlePanel);
+                inputRoot = null;
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Parcelas: el panel nativo no contiene su campo de escritura.");
+                return null;
+            }
+            var nativeBehaviour = nativeInput as Behaviour;
+            if (nativeBehaviour != null) nativeBehaviour.enabled = false;
+            var fieldObject = nativeInput.gameObject;
             fieldObject.SetActive(true);
-            DisableLocalisers(fieldObject.transform);
-            var nativeInput = fieldObject.GetComponent(nativeInputTemplate.GetType()) as Behaviour;
-            if (nativeInput != null) nativeInput.enabled = false;
             foreach (var oldText in fieldObject.GetComponentsInChildren<Text>(true))
                 oldText.gameObject.SetActive(false);
 
@@ -354,21 +370,6 @@ namespace UnderPressure.Editor
             selection.a = .35f;
             input.selectionColor = selection;
             return input;
-        }
-
-        private void CreatePlotStepButton(string text, float minX, float maxX, float top,
-            float height, Action clicked)
-        {
-            var button = CreateDiseaseButton(_settingsPlotDetails, text,
-                new Color32(215, 220, 225, 255), clicked);
-            SetPlotControlRect(button.transform as RectTransform,
-                minX, maxX, top, height);
-            var label = button.GetComponentInChildren<TMP_Text>(true);
-            if (label != null)
-            {
-                label.color = Color.black;
-                label.fontSize = 14f;
-            }
         }
 
         private static void SetPlotControlRect(RectTransform rect, float minX,
