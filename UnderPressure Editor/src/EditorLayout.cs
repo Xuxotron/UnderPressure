@@ -205,9 +205,9 @@ namespace UnderPressure.Editor
             ApplyEditorSelectableVisuals(button, image, sprite, tint);
         }
 
-        // MARCO DE PANEL: reutiliza exactamente el marco exterior de Ajustes.
-        // El panel de las pestanas es interior; el borde blanco pertenece a uno de
-        // sus ancestros. Se clona ese objeto nativo completo y solo se vacian sus hijos.
+        // MARCO DE PANEL: copia solamente los parametros graficos del marco exterior
+        // de Ajustes. El selector conserva un objeto independiente y no incorpora
+        // scripts, eventos, animadores ni hijos de PreferencesScreen.
         internal static GameObject CreateNativePreferencesPanelFrame(Transform parent,
             string name)
         {
@@ -223,37 +223,56 @@ namespace UnderPressure.Editor
                 var nativeFrame = FindNativePreferencesOuterFrame(nativePanel, screen.transform);
                 if (nativeFrame == null) continue;
 
-                var clone = UnityEngine.Object.Instantiate(nativeFrame.gameObject, parent, false);
-                clone.name = name;
-                clone.SetActive(false);
-
-                // Los hijos son las pestanas y opciones. El marco nativo completo
-                // esta en el propio objeto raiz y no se modifica ni se reconstruye.
-                var discarded = new GameObject(name + " - Controles descartados");
-                discarded.SetActive(false);
-                while (clone.transform.childCount > 0)
-                    clone.transform.GetChild(0).SetParent(discarded.transform, false);
-                UnityEngine.Object.Destroy(discarded);
-
-                var rect = clone.transform as RectTransform;
-                if (rect != null)
-                {
-                    rect.anchorMin = Vector2.zero;
-                    rect.anchorMax = Vector2.one;
-                    rect.pivot = new Vector2(.5f, .5f);
-                    rect.offsetMin = Vector2.zero;
-                    rect.offsetMax = Vector2.zero;
-                    rect.localScale = Vector3.one;
-                }
-
-                foreach (var graphic in clone.GetComponents<Graphic>())
-                    graphic.raycastTarget = false;
-                var image = clone.GetComponent<Image>();
-                if (image != null) image.raycastTarget = true;
-                clone.SetActive(true);
-                return clone;
+                return CreateIndependentFrameFromNative(nativeFrame, parent, name);
             }
             return null;
+        }
+
+        private static GameObject CreateIndependentFrameFromNative(
+            RectTransform nativeFrame, Transform parent, string name)
+        {
+            var nativeImage = nativeFrame.GetComponent<Image>();
+            if (nativeImage == null) return null;
+
+            var frame = new GameObject(name, typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image));
+            frame.transform.SetParent(parent, false);
+
+            var rect = (RectTransform)frame.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(.5f, .5f);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            rect.localScale = Vector3.one;
+
+            CopyImageParameters(nativeImage, frame.GetComponent<Image>());
+            foreach (var nativeEffect in nativeFrame.GetComponents<Shadow>())
+            {
+                var effect = frame.AddComponent(nativeEffect.GetType()) as Shadow;
+                if (effect == null) continue;
+                effect.effectColor = nativeEffect.effectColor;
+                effect.effectDistance = nativeEffect.effectDistance;
+                effect.useGraphicAlpha = nativeEffect.useGraphicAlpha;
+            }
+            return frame;
+        }
+
+        private static void CopyImageParameters(Image source, Image target)
+        {
+            target.sprite = source.sprite;
+            target.overrideSprite = source.overrideSprite;
+            target.color = source.color;
+            target.material = source.material;
+            target.type = source.type;
+            target.preserveAspect = source.preserveAspect;
+            target.fillCenter = source.fillCenter;
+            target.fillMethod = source.fillMethod;
+            target.fillAmount = source.fillAmount;
+            target.fillClockwise = source.fillClockwise;
+            target.fillOrigin = source.fillOrigin;
+            target.alphaHitTestMinimumThreshold = source.alphaHitTestMinimumThreshold;
+            target.raycastTarget = true;
         }
 
         private static RectTransform FindNativePreferencesOuterFrame(
