@@ -205,9 +205,9 @@ namespace UnderPressure.Editor
             ApplyEditorSelectableVisuals(button, image, sprite, tint);
         }
 
-        // MARCO DE PANEL: reutiliza exactamente el panel raiz de Ajustes.
-        // El Image, Outline, Shadow y demas efectos nativos permanecen intactos;
-        // solo se retiran sus controles hijos para alojar el selector de escenarios.
+        // MARCO DE PANEL: reutiliza exactamente el marco exterior de Ajustes.
+        // El panel de las pestanas es interior; el borde blanco pertenece a uno de
+        // sus ancestros. Se clona ese objeto nativo completo y solo se vacian sus hijos.
         internal static GameObject CreateNativePreferencesPanelFrame(Transform parent,
             string name)
         {
@@ -217,11 +217,13 @@ namespace UnderPressure.Editor
             {
                 if (screen == null ||
                     !(videoTabField?.GetValue(screen) is Transform videoTab) ||
-                    !(videoTab.parent is RectTransform nativePanel) ||
-                    nativePanel.GetComponent<Image>() == null)
+                    !(videoTab.parent is RectTransform nativePanel))
                     continue;
 
-                var clone = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
+                var nativeFrame = FindNativePreferencesOuterFrame(nativePanel, screen.transform);
+                if (nativeFrame == null) continue;
+
+                var clone = UnityEngine.Object.Instantiate(nativeFrame.gameObject, parent, false);
                 clone.name = name;
                 clone.SetActive(false);
 
@@ -246,9 +248,36 @@ namespace UnderPressure.Editor
 
                 foreach (var graphic in clone.GetComponents<Graphic>())
                     graphic.raycastTarget = false;
-                clone.GetComponent<Image>().raycastTarget = true;
+                var image = clone.GetComponent<Image>();
+                if (image != null) image.raycastTarget = true;
                 clone.SetActive(true);
                 return clone;
+            }
+            return null;
+        }
+
+        private static RectTransform FindNativePreferencesOuterFrame(
+            RectTransform innerPanel, Transform screenRoot)
+        {
+            if (innerPanel == null) return null;
+
+            // El Outline nativo identifica de forma inequívoca el marco exterior.
+            for (var current = innerPanel; current != null; current = current.parent as RectTransform)
+            {
+                if (current.GetComponent<Image>() != null &&
+                    current.GetComponent<Outline>() != null)
+                    return current;
+                if (current == screenRoot) break;
+            }
+
+            // Algunas versiones incorporan el borde en el sprite del Image. En ese
+            // caso el marco es el primer contenedor gráfico exterior al panel interior.
+            for (var current = innerPanel.parent as RectTransform;
+                 current != null;
+                 current = current.parent as RectTransform)
+            {
+                if (current.GetComponent<Image>() != null) return current;
+                if (current == screenRoot) break;
             }
             return null;
         }
