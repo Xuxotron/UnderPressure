@@ -637,7 +637,7 @@ namespace UnderPressure.Editor
 
         private const int VisibleRows = 7;
         private const float RowHeight = 52f;
-        private const float RowSpacing = 1f;
+        private const float RowSpacing = 5f;
         private const float ColumnHeight = 406f;
         private const float RowInset = 6f;
         private const float PanelWidth = 785f;
@@ -1006,7 +1006,7 @@ namespace UnderPressure.Editor
                 "UP Native Vertical Scrollbar", 4f, 4f, false, 24f);
             if (column.Bar == null)
                 throw new InvalidOperationException("No se encontro el Scrollbar vertical nativo.");
-            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             return column;
         }
 

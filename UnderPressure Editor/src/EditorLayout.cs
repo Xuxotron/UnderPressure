@@ -205,9 +205,9 @@ namespace UnderPressure.Editor
             ApplyEditorSelectableVisuals(button, image, sprite, tint);
         }
 
-        // MARCO DE PANEL: copia solamente los parametros graficos del marco exterior
-        // de Ajustes. El selector conserva un objeto independiente y no incorpora
-        // scripts, eventos, animadores ni hijos de PreferencesScreen.
+        // MARCO DE PANEL: reutiliza exactamente el panel raiz de Ajustes.
+        // El Image, Outline, Shadow y demas efectos nativos permanecen intactos;
+        // solo se retiran sus controles hijos para alojar el selector de escenarios.
         internal static GameObject CreateNativePreferencesPanelFrame(Transform parent,
             string name)
         {
@@ -217,86 +217,38 @@ namespace UnderPressure.Editor
             {
                 if (screen == null ||
                     !(videoTabField?.GetValue(screen) is Transform videoTab) ||
-                    !(videoTab.parent is RectTransform nativePanel))
+                    !(videoTab.parent is RectTransform nativePanel) ||
+                    nativePanel.GetComponent<Image>() == null)
                     continue;
 
-                var nativeFrame = FindNativePreferencesOuterFrame(nativePanel, screen.transform);
-                if (nativeFrame == null) continue;
+                var clone = UnityEngine.Object.Instantiate(nativePanel.gameObject, parent, false);
+                clone.name = name;
+                clone.SetActive(false);
 
-                return CreateIndependentFrameFromNative(nativeFrame, parent, name);
-            }
-            return null;
-        }
+                // Los hijos son las pestanas y opciones. El marco nativo completo
+                // esta en el propio objeto raiz y no se modifica ni se reconstruye.
+                var discarded = new GameObject(name + " - Controles descartados");
+                discarded.SetActive(false);
+                while (clone.transform.childCount > 0)
+                    clone.transform.GetChild(0).SetParent(discarded.transform, false);
+                UnityEngine.Object.Destroy(discarded);
 
-        private static GameObject CreateIndependentFrameFromNative(
-            RectTransform nativeFrame, Transform parent, string name)
-        {
-            var nativeImage = nativeFrame.GetComponent<Image>();
-            if (nativeImage == null) return null;
+                var rect = clone.transform as RectTransform;
+                if (rect != null)
+                {
+                    rect.anchorMin = Vector2.zero;
+                    rect.anchorMax = Vector2.one;
+                    rect.pivot = new Vector2(.5f, .5f);
+                    rect.offsetMin = Vector2.zero;
+                    rect.offsetMax = Vector2.zero;
+                    rect.localScale = Vector3.one;
+                }
 
-            var frame = new GameObject(name, typeof(RectTransform),
-                typeof(CanvasRenderer), typeof(Image));
-            frame.transform.SetParent(parent, false);
-
-            var rect = (RectTransform)frame.transform;
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.pivot = new Vector2(.5f, .5f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-            rect.localScale = Vector3.one;
-
-            CopyImageParameters(nativeImage, frame.GetComponent<Image>());
-            foreach (var nativeEffect in nativeFrame.GetComponents<Shadow>())
-            {
-                var effect = frame.AddComponent(nativeEffect.GetType()) as Shadow;
-                if (effect == null) continue;
-                effect.effectColor = nativeEffect.effectColor;
-                effect.effectDistance = nativeEffect.effectDistance;
-                effect.useGraphicAlpha = nativeEffect.useGraphicAlpha;
-            }
-            return frame;
-        }
-
-        private static void CopyImageParameters(Image source, Image target)
-        {
-            target.sprite = source.sprite;
-            target.overrideSprite = source.overrideSprite;
-            target.color = source.color;
-            target.material = source.material;
-            target.type = source.type;
-            target.preserveAspect = source.preserveAspect;
-            target.fillCenter = source.fillCenter;
-            target.fillMethod = source.fillMethod;
-            target.fillAmount = source.fillAmount;
-            target.fillClockwise = source.fillClockwise;
-            target.fillOrigin = source.fillOrigin;
-            target.alphaHitTestMinimumThreshold = source.alphaHitTestMinimumThreshold;
-            target.raycastTarget = true;
-        }
-
-        private static RectTransform FindNativePreferencesOuterFrame(
-            RectTransform innerPanel, Transform screenRoot)
-        {
-            if (innerPanel == null) return null;
-
-            // El Outline nativo identifica de forma inequívoca el marco exterior.
-            for (var current = innerPanel; current != null; current = current.parent as RectTransform)
-            {
-                if (current.GetComponent<Image>() != null &&
-                    current.GetComponent<Outline>() != null)
-                    return current;
-                if (current == screenRoot) break;
-            }
-
-            // Algunas versiones incorporan el borde en el sprite del Image. En ese
-            // caso el marco es el primer contenedor gráfico exterior al panel interior.
-            for (var current = innerPanel.parent as RectTransform;
-                 current != null;
-                 current = current.parent as RectTransform)
-            {
-                if (current.GetComponent<Image>() != null) return current;
-                if (current == screenRoot) break;
+                foreach (var graphic in clone.GetComponents<Graphic>())
+                    graphic.raycastTarget = false;
+                clone.GetComponent<Image>().raycastTarget = true;
+                clone.SetActive(true);
+                return clone;
             }
             return null;
         }
