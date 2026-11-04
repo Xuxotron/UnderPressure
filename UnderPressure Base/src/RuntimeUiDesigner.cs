@@ -431,7 +431,10 @@ namespace UnderPressure
 
                 if (record == null ||
                     string.IsNullOrEmpty(record.path) ||
-                    string.IsNullOrEmpty(record.parentPath))
+                    string.IsNullOrEmpty(record.parentPath) ||
+                    LeavesScenarioSettingsPage(
+                        record.path,
+                        record.parentPath))
                     continue;
 
                 RectTransform rect;
@@ -488,6 +491,50 @@ namespace UnderPressure
             if (parentRect != null)
                 LayoutRebuilder.MarkLayoutForRebuild(
                     parentRect);
+        }
+
+        // Una relacion guardada dentro de una pestana de Ajustes nunca puede
+        // sacar el elemento a otra pestana ni al panel comun. Los cambios de
+        // jerarquia internos siguen permitidos y conservan el layout aprobado.
+        private static bool LeavesScenarioSettingsPage(
+            string path,
+            string parentPath)
+        {
+            var page = ScenarioSettingsPageSegment(path);
+
+            if (string.IsNullOrEmpty(page))
+                return false;
+
+            return !string.Equals(
+                page,
+                ScenarioSettingsPageSegment(parentPath),
+                StringComparison.Ordinal);
+        }
+
+        private static string ScenarioSettingsPageSegment(
+            string path)
+        {
+            const string marker =
+                "/UP Scenario Settings Contents ";
+
+            if (string.IsNullOrEmpty(path))
+                return string.Empty;
+
+            var start = path.IndexOf(
+                marker,
+                StringComparison.Ordinal);
+
+            if (start < 0)
+                return string.Empty;
+
+            start += marker.Length;
+
+            var end = path.IndexOf('#', start);
+
+            if (end <= start)
+                return string.Empty;
+
+            return path.Substring(start, end - start);
         }
 
         private Dictionary<string, RectTransform>
@@ -3433,7 +3480,10 @@ namespace UnderPressure
 
                 if (record == null ||
                     string.IsNullOrEmpty(
-                        record.path))
+                        record.path) ||
+                    LeavesScenarioSettingsPage(
+                        record.path,
+                        record.parentPath))
                     continue;
 
                 RectTransform rect;
