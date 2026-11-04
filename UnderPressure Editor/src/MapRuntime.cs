@@ -70,9 +70,12 @@ namespace UnderPressure.Editor
             var full = Path.GetFullPath(path);
             var folder = Path.GetFullPath(ScenarioEditorStorage.Folder).TrimEnd(Path.DirectorySeparatorChar) +
                          Path.DirectorySeparatorChar;
-            if (!full.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ||
-                !ScenarioMapPackage.IsDirectPackage(full, ScenarioEditorStorage.Folder))
-                throw new InvalidDataException("El mapa no esta en la carpeta maps.");
+            if (!ScenarioWorkshopLibrary.AllowedStartsWith(
+                    full, folder, StringComparison.OrdinalIgnoreCase) ||
+                !ScenarioWorkshopLibrary.AllowedDirectPackage(
+                    full, ScenarioEditorStorage.Folder))
+                throw new InvalidDataException(
+                    "El mapa no pertenece a una fuente local o de Workshop autorizada.");
             var read = ScenarioMapFormat.Read(full);
             if (!string.Equals(read.Header.baseHospitalId, level.UniqueId, StringComparison.Ordinal))
                 throw new InvalidDataException("Este mapa corresponde a otro hospital.");
