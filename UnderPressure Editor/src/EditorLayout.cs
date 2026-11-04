@@ -1467,6 +1467,26 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             }
         }
 
+        // Las paginas que se construyen en caliente solo necesitan restaurar
+        // su propio arbol. Recorrer las seis pestanas en cada entrada provoca
+        // un retardo visible y no aporta ningun cambio fuera de esa pagina.
+        private void ReapplySettingsDesignerStructure(
+            int pageIndex)
+        {
+            if (_settingsPages == null ||
+                pageIndex < 0 ||
+                pageIndex >= _settingsPages.Length)
+                return;
+
+            var page = _settingsPages[pageIndex];
+
+            if (page == null)
+                return;
+
+            UnderPressure.RuntimeUiDesignerPlugin
+                .ReapplyPersistentStructureNow(page.transform);
+        }
+
         private void BuildGeneralSettingsContents()
         {
             if (_settingsPages == null || _settingsPages.Length == 0 ||
