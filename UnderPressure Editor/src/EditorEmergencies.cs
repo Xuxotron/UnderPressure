@@ -195,19 +195,14 @@ namespace UnderPressure.Editor
         {
             if (_emergencyContent == null) return;
 
-            // La UI y sus borradores se conservan mientras Ajustes siga
-            // abierto. Volver a la pestana no debe destruir y recrear todos
-            // sus controles ni volver a recorrer el layout persistido.
-            if (_emergencyBuilt)
-                return;
-
-            BuildEmergencyUi();
+            if (!_emergencyBuilt)
+                BuildEmergencyUi();
 
             ScanEmergencyIllnesses();
             RefreshEmergencyIllnessDropdown();
             RefreshEmergencyList();
             LoadSelectedEmergency();
-            ReapplySettingsDesignerStructure(EmergencyTabIndex);
+            ReapplySettingsDesignerStructure();
         }
 
         private void BuildEmergencyUi()

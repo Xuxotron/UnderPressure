@@ -183,7 +183,7 @@ namespace UnderPressure.Editor
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, top));
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
-            ReapplySettingsDesignerStructure(1);
+            ReapplySettingsDesignerStructure();
         }
 
         private void LoadPatientSettingsFromLevel()
