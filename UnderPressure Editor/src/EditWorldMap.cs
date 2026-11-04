@@ -167,21 +167,20 @@ namespace UnderPressure.Editor
                 "Conflux",
                 "Metagame[0]/Pins[7]/MapPin_Hospital_R1_L1[0]",
                 new Vector3(1.991f, 71.773f, 1026.279f),
-                // Encuadre al seleccionar el Conflux. Punto focal, rotacion y zoom
-                // se pueden copiar desde Ctrl+Alt+F10 y ajustar manualmente aqui.
                 new Vector3(106.0239f, 0.75f, 948.1385f),
                 3f,
                 0f)
         };
 
         // Cada hospital está listo para pegar los tres valores de Ctrl+Alt+F10.
+        //CursorPosition = new Vector3(931.7822f, 71.77335f, 1520.907f);
         // Mientras CameraFocalPoint sea null, ese hospital conserva el enfoque nativo.
         internal static readonly WorldMapHospitalCamera[] HospitalCameras =
         {
             new WorldMapHospitalCamera(
                 levelConfigName: "R1_TutorialHospital",
-                cameraFocalPoint: null,
-                cameraRotation: 0f,
+                cameraFocalPoint: new Vector3(1062.003f, 0.75f, 1399.222f),
+                cameraRotation:-25.4f,
                 cameraZoom: 0f),
             new WorldMapHospitalCamera(
                 levelConfigName: "R1_IntroHospital2",

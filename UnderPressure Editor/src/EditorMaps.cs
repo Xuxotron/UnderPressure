@@ -1,4 +1,4 @@
-// Updated: 2026-10-15 - Alt transfiere sin duplicar y sin alterar Ctrl multiple.
+// Updated: 2026-11-03 - Menu ESC: integrado layout UI Designer sobre fichero actual.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -3977,6 +3977,7 @@ PriorVisibility.Clear();
             if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
                 __instance == null) return;
             __instance.gameObject.name = "UP Editor Pause Menu";
+            ApplySavedPauseLayout(__instance);
             Configure(QuickSaveField?.GetValue(__instance) as Button,
                 "editor.map.save", ScenarioEditorStorageMenu.ShowSaveFromPause);
             Configure(QuickLoadField?.GetValue(__instance) as Button,
@@ -4009,6 +4010,89 @@ PriorVisibility.Clear();
                 __instance.gameObject.AddComponent<ScenarioEditorPauseUiBlocker>();
         }
 
+        private const string PauseTitleSubMeshName =
+            "TMP SubMeshUI [Baloo-Regular SDF Shadow + ARIAL SDF Atlas]";
+
+        private static void ApplySavedPauseLayout(PauseMenu menu)
+        {
+            if (menu == null) return;
+
+            var root = menu.transform as RectTransform;
+            if (root == null) return;
+
+            root.anchorMin = Vector2.zero;
+            root.anchorMax = Vector2.one;
+            root.pivot = new Vector2(.5f, .5f);
+            root.anchoredPosition = Vector2.zero;
+            root.sizeDelta = Vector2.zero;
+            root.SetSiblingIndex(16);
+
+            var fadePanel = root.Find("FadePanel") as RectTransform;
+            if (fadePanel != null)
+            {
+                fadePanel.anchorMin = Vector2.zero;
+                fadePanel.anchorMax = Vector2.one;
+                fadePanel.pivot = new Vector2(.5f, .5f);
+                fadePanel.anchoredPosition = Vector2.zero;
+                fadePanel.sizeDelta = Vector2.zero;
+                fadePanel.SetSiblingIndex(0);
+            }
+
+            var panel = root.Find("Panel") as RectTransform;
+            if (panel == null) return;
+
+            panel.anchorMin = new Vector2(.5f, .5f);
+            panel.anchorMax = new Vector2(.5f, .5f);
+            panel.pivot = new Vector2(.5f, .5f);
+            panel.anchoredPosition = new Vector2(.6000042f, -22.5f);
+            panel.sizeDelta = new Vector2(290.5f, 536.6f);
+            panel.SetSiblingIndex(1);
+
+            var title = panel.Find("Title text") as RectTransform;
+            if (title == null) return;
+
+            title.anchorMin = new Vector2(0f, .7806512f);
+            title.anchorMax = Vector2.one;
+            title.pivot = new Vector2(.5f, .5f);
+            title.anchoredPosition =
+                new Vector2(-1.02288818f, 14.3998566f);
+            title.sizeDelta =
+                new Vector2(-61.845787f, -62.8000031f);
+            title.SetSiblingIndex(0);
+
+            var matchingSubMeshes = new List<RectTransform>();
+            for (var index = 0; index < title.childCount; ++index)
+            {
+                var child = title.GetChild(index) as RectTransform;
+                if (child != null &&
+                    string.Equals(child.name, PauseTitleSubMeshName,
+                        StringComparison.Ordinal))
+                    matchingSubMeshes.Add(child);
+            }
+
+            if (matchingSubMeshes.Count > 0)
+            {
+                var first = matchingSubMeshes[0];
+                first.anchorMin = Vector2.zero;
+                first.anchorMax = Vector2.one;
+                first.pivot = new Vector2(.5f, .5f);
+                first.anchoredPosition = new Vector2(0f, -4.499999f);
+                first.sizeDelta = new Vector2(0f, -9.000002f);
+                first.SetSiblingIndex(0);
+            }
+
+            if (matchingSubMeshes.Count > 1)
+            {
+                var second = matchingSubMeshes[1];
+                second.anchorMin = Vector2.zero;
+                second.anchorMax = Vector2.one;
+                second.pivot = new Vector2(.5f, .5f);
+                second.anchoredPosition = new Vector2(3f, -6.5f);
+                second.sizeDelta = new Vector2(0f, -5f);
+                second.SetSiblingIndex(1);
+            }
+        }
+
         private static void Configure(Button button, string key, Action action)
         {
             if (button == null) return;
@@ -4026,6 +4110,76 @@ PriorVisibility.Clear();
             }
             var ordinary = button.GetComponentInChildren<Text>(true);
             if (ordinary != null) ordinary.text = EditorLocalization.Get(key);
+        }
+    }
+
+    // Publicacion del mapa desde el menu ESC. La logica de Workshop permanece
+    // en EditorWorkshop.cs; aqui solo se integra el acceso en el menu del editor.
+    [HarmonyPatch(typeof(PauseMenu), "Setup")]
+    internal static class ScenarioWorkshopPauseButtonPatch
+    {
+        private const string ButtonName = "UP Workshop Publish Button";
+
+        private static readonly FieldInfo QuickSaveField =
+            AccessTools.Field(typeof(PauseMenu), "_quickSaveButton");
+        private static readonly FieldInfo ResumeField =
+            AccessTools.Field(typeof(PauseMenu), "_resumeButton");
+
+        [HarmonyPriority(-1200)]
+        private static void Postfix(PauseMenu __instance)
+        {
+            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
+                __instance == null) return;
+
+            var quickSave = QuickSaveField?.GetValue(__instance) as Button;
+            if (quickSave == null || quickSave.transform.parent == null) return;
+
+            var existing = quickSave.transform.parent.Find(ButtonName);
+            var button = existing != null ? existing.GetComponent<Button>() : null;
+            if (button == null)
+            {
+                button = UnityEngine.Object.Instantiate(
+                    quickSave, quickSave.transform.parent, false);
+                button.gameObject.name = ButtonName;
+            }
+
+            // Siempre inmediatamente encima de Guardar mapa.
+            button.transform.SetSiblingIndex(
+                Mathf.Max(0, quickSave.transform.GetSiblingIndex()));
+
+            DisableLocalisers(button.transform);
+            SetButtonText(button, "Publicar en Steam");
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() =>
+            {
+                var resume = ResumeField?.GetValue(__instance) as Button;
+                resume?.onClick.Invoke();
+                ScenarioWorkshopPanel.Open(ScenarioEditorSession.Level);
+            });
+            button.interactable = true;
+            ScenarioEditorDockLayout.StyleToolbarButton(button, false);
+        }
+
+        private static void DisableLocalisers(Transform root)
+        {
+            foreach (var component in root.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName != null &&
+                    component.GetType().FullName.StartsWith(
+                        "I2.Loc.", StringComparison.Ordinal))
+                    component.enabled = false;
+        }
+
+        private static void SetButtonText(Button button, string value)
+        {
+            var tmp = button.GetComponentInChildren<TMP_Text>(true);
+            if (tmp != null)
+            {
+                tmp.text = value;
+                return;
+            }
+
+            var text = button.GetComponentInChildren<Text>(true);
+            if (text != null) text.text = value;
         }
     }
 

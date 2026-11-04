@@ -1,4 +1,4 @@
-// Updated: 2026-10-21 - Objetos independiente: no se cierra con Escape ni al abrir otros menus.
+// Updated: 2026-11-04 - Ajustes aislados por pestana; sin reparentados persistentes entre paneles.
 using System;
 using System.Globalization;
 using System.Linq;
@@ -93,6 +93,7 @@ namespace UnderPressure.Editor
         private Transform _settingsCloseButton;
         private bool _settingsClosePending;
         private TMP_InputField _settingsDisplayName;
+        private TMP_InputField _settingsAuthor;
         private TMP_InputField _settingsDescriptionPerStar;
         private TMP_InputField _settingsInitialBalance;
         private TMP_InputField _settingsFailWarning;
@@ -163,6 +164,22 @@ namespace UnderPressure.Editor
         internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
         internal static Color EditorButtonColor => new Color(.14f, .62f, .89f, 1f);
         internal static Color EditorSelectedButtonColor => new Color32(10, 110, 170, 255);
+
+        // AJUSTES DEL ESCENARIO: una sola fuente de color compartida.
+        // Las seis paginas usan exactamente estos mismos valores; no hay un
+        // color independiente por pestana/panel.
+        private static readonly Color SettingsOuterPanelColor =
+            new Color(.06366315f, .373614669f, .5894737f, 1f);
+        private static readonly Color SettingsSharedPageColor =
+            new Color(.105882354f, .407843143f, .6f, 1f);
+        private static readonly Color SettingsNormalBorderColor =
+            new Color(.14f, .62f, .89f, 1f);
+        private static readonly Color SettingsLightBorderColor =
+            new Color(.407843143f, .75686276f, 1f, 1f);
+        private static readonly Color SettingsGeneralTabColor =
+            new Color(.215686277f, .7019608f, 1f, 1f);
+        private static readonly Color SettingsGeneralTabStepColor =
+            new Color(.216000021f, .7029052f, 1f, 1f);
 
         internal static Sprite CreateEditorButtonSprite(out Texture2D texture)
         {
@@ -747,7 +764,7 @@ namespace UnderPressure.Editor
                 "editor.scenario_settings.tab.diseases",
                 "editor.scenario_settings.tab.objectives",
                 "editor.scenario_settings.tab.plots",
-                "editor.scenario_settings.tab.fog",
+                "editor.scenario_settings.tab.characters",
                 "editor.scenario_settings.tab.characters"
             };
             var tabNames = new[]
@@ -823,16 +840,20 @@ namespace UnderPressure.Editor
                 ? characterHolder.GetComponentInChildren<DynamicButton>(true) : null;
             var characterAnimator = characterHolder != null
                 ? characterHolder.GetComponentInChildren<ButtonAnimator>(true) : null;
-            var fogFolder = GetPreferencesField<Transform>(clonedScreen,
+            var emergencyFolder = GetPreferencesField<Transform>(clonedScreen,
                 "_gameTabFolderBackground");
-            fogFolder = fogFolder != null
-                ? Instantiate(fogFolder.gameObject, fogFolder.parent, false).transform : null;
-            if (fogFolder != null) fogFolder.name = "UP Fog Tab";
+            emergencyFolder = emergencyFolder != null
+                ? Instantiate(emergencyFolder.gameObject, emergencyFolder.parent, false).transform : null;
+            if (emergencyFolder != null) emergencyFolder.name = "UP Emergencies Tab";
 
             for (var index = 0; index < tabKeys.Length; ++index)
             {
                 var tabIndex = index;
-                var title = EditorLocalization.Get(tabKeys[index]);
+                var title = index == 4
+                    ? (EditorLocalization.CurrentLanguageCode() == "es"
+                        ? "Emergencias"
+                        : "Emergencies")
+                    : EditorLocalization.Get(tabKeys[index]);
                 var nativeIndex = Mathf.Min(index, tabNames.Length - 1);
                 var root = index < tabNames.Length
                     ? GetPreferencesField<Transform>(clonedScreen, tabNames[nativeIndex])
@@ -847,7 +868,7 @@ namespace UnderPressure.Editor
                 if (index < folderNames.Length)
                     folder = GetPreferencesField<Transform>(clonedScreen, folderNames[index]);
                 else
-                    folder = index == 4 ? fogFolder : languageFolder;
+                    folder = index == 4 ? emergencyFolder : languageFolder;
                 var contents = _settingsPages[index]?.transform;
                 if (root == null || button == null || contents == null) continue;
                 DisableLocalisers(root);
@@ -865,6 +886,7 @@ namespace UnderPressure.Editor
             BuildGeneralSettingsContents();
             BuildDiseaseSettingsContents();
             BuildPlotSettingsContents();
+            BuildEmergencySettingsContents();
 
             var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
             HideSettingsObject(close);
@@ -875,6 +897,8 @@ namespace UnderPressure.Editor
                 settingsPanel != null ? settingsPanel : clone.transform);
             ApplyNativeSettingsPalette(clone.transform);
             ApplySettingsContentFrameColor();
+            ApplyLatestSavedSettingsUi();
+            ReapplySettingsDesignerStructure();
             SetSettingsTab(0);
             clone.SetActive(true);
             _settingsOverlay.SetActive(false);
@@ -886,27 +910,223 @@ namespace UnderPressure.Editor
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
             if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
-            if (_activeSettingsTab == 3) RefreshPlotSettingsContents();
+            if (_activeSettingsTab == 3)
+                RefreshPlotSettingsContents();
+            if (_activeSettingsTab == 4) RefreshEmergencySettingsContents();
+
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
                 var selected = index == _activeSettingsTab;
                 var button = _settingsTabButtons[index];
                 var animator = _settingsTabAnimators[index];
                 var folder = _settingsTabFolderBackgrounds[index];
+
                 if (animator != null)
                 {
                     animator.CurrentState = selected
                         ? (ButtonAnimator.State)1 : (ButtonAnimator.State)0;
                     animator.enabled = false;
                 }
-                if (folder != null) folder.gameObject.SetActive(selected);
+
+                if (folder != null)
+                    folder.gameObject.SetActive(selected);
+
                 if (_settingsPages[index] != null)
                     _settingsPages[index].SetActive(selected);
             }
-            // PreferencesScreen eleva la carpeta activa para que su borde quede encima.
+
             _settingsTabRoots[_activeSettingsTab]?.SetAsLastSibling();
+
             _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
+
             _settingsCloseButton?.SetAsLastSibling();
+        }
+
+        // Estado visual guardado por RuntimeUiDesigner V6.
+        // Conserva el panel y los cortes nativos de las seis pestanas: solo se
+        // tintan sus Images; nunca se sustituyen sus sprites por rectangulos.
+        private void ApplyLatestSavedSettingsUi()
+        {
+            var nativeSettings = _settingsOverlay != null
+                ? _settingsOverlay.transform.Find("UP Native Scenario Settings")
+                : null;
+
+            if (nativeSettings != null)
+            {
+                var backing = nativeSettings.Find("Backing");
+                var backingImage = backing != null
+                    ? backing.GetComponent<Image>()
+                    : null;
+                if (backingImage != null)
+                    backingImage.color = new Color(0f, 0f, 0f, .723f);
+
+                var panel = nativeSettings.Find("Panel");
+                var panelImage = panel != null
+                    ? panel.GetComponent<Image>()
+                    : null;
+                if (panelImage != null)
+                    panelImage.color = SettingsOuterPanelColor;
+
+                var videoTab =
+                    nativeSettings.Find("Panel/VideoTab") as RectTransform;
+
+                if (videoTab != null)
+                {
+                    videoTab.anchorMin = Vector2.zero;
+                    videoTab.anchorMax = Vector2.one;
+                    videoTab.pivot = new Vector2(.5f, .5f);
+                    videoTab.anchoredPosition = new Vector2(-4f, -34f);
+                    videoTab.sizeDelta = new Vector2(-58f, -142f);
+                }
+            }
+
+            if (_settingsTabButtons != null &&
+                _settingsTabButtons.Length > 0 &&
+                _settingsTabButtons[0] != null)
+            {
+                var generalText =
+                    _settingsTabButtons[0]
+                        .GetComponentsInChildren<TMP_Text>(true)
+                        .FirstOrDefault();
+
+                if (generalText != null)
+                {
+                    generalText.fontSize = 30.35f;
+                    generalText.enableAutoSizing = true;
+                    generalText.fontSizeMin = 8f;
+                    generalText.fontSizeMax = 72f;
+                }
+            }
+
+            // Se conserva tambien el ajuste anterior de Enfermedades.
+            if (_settingsTabButtons != null &&
+                _settingsTabButtons.Length > 1 &&
+                _settingsTabButtons[1] != null)
+            {
+                var diseasesText =
+                    _settingsTabButtons[1]
+                        .GetComponentsInChildren<TMP_Text>(true)
+                        .FirstOrDefault();
+
+                if (diseasesText != null)
+                {
+                    diseasesText.fontSize = 26.35f;
+                    diseasesText.enableAutoSizing = true;
+                    diseasesText.fontSizeMin = 8f;
+                    diseasesText.fontSizeMax = 72f;
+                }
+            }
+
+            ApplyVideoTabFolderColorsToAllSettingsTabs();
+        }
+
+        private void ApplySharedSettingsPageStyle(
+            Color sharedColor)
+        {
+            if (_settingsPages == null)
+                return;
+
+            for (var index = 0;
+                 index < _settingsPages.Length;
+                 ++index)
+            {
+                var page = _settingsPages[index];
+                if (page == null)
+                    continue;
+
+                var frame = page.GetComponent<Image>();
+                if (frame != null)
+                    frame.color = sharedColor;
+
+                var viewport =
+                    page.transform.Find("Scroll View/Viewport");
+                var viewportImage =
+                    viewport != null
+                        ? viewport.GetComponent<Image>()
+                        : null;
+
+                if (viewportImage != null)
+                    viewportImage.color = sharedColor;
+            }
+        }
+
+        private bool IsSettingsPanelSurface(
+            Image image)
+        {
+            if (image == null)
+                return false;
+
+            var transform = image.transform;
+
+            if (IsSettingsPageRoot(transform))
+                return true;
+
+            if (transform.name == "Cabecera" ||
+                transform.name == "Header" ||
+                transform.name.IndexOf(
+                    "Scrollbar",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+
+            if (image.GetComponent<Selectable>() != null ||
+                image.GetComponentInParent<Selectable>() != null ||
+                image.GetComponentInParent<InputField>() != null ||
+                image.GetComponentInParent<TMP_InputField>() != null ||
+                IsWorkshopSettingsField(transform) ||
+                IsDiseaseNativeScrollbar(transform))
+                return false;
+
+            var sprite =
+                image.overrideSprite != null
+                    ? image.overrideSprite
+                    : image.sprite;
+
+            if (_style == null ||
+                _style.ButtonSprite == null ||
+                sprite != _style.ButtonSprite)
+                return false;
+
+            // Cualquier superficie no seleccionable que use el sprite
+            // compartido de panel pertenece a la misma familia visual,
+            // independientemente de su alto (filas, bloques y paneles grandes).
+            return true;
+        }
+
+        private void ApplyVideoTabFolderColorsToAllSettingsTabs()
+        {
+            if (_settingsTabFolderBackgrounds == null)
+                return;
+
+            foreach (var folder in _settingsTabFolderBackgrounds)
+            {
+                if (folder == null)
+                    continue;
+
+                foreach (var image in
+                         folder.GetComponentsInChildren<Image>(true))
+                {
+                    if (image == null ||
+                        !IsSettingsTabSliceName(image.gameObject.name))
+                        continue;
+
+                    image.color =
+                        image.gameObject.name == "TabRightStep"
+                            ? SettingsGeneralTabStepColor
+                            : SettingsGeneralTabColor;
+                }
+            }
+        }
+
+        private static bool IsSettingsTabSliceName(
+            string objectName)
+        {
+            return objectName == "TabFlushLeft" ||
+                   objectName == "TabLeft" ||
+                   objectName == "TabLeftStep" ||
+                   objectName == "TabMiddle" ||
+                   objectName == "TabRight" ||
+                   objectName == "TabRightStep" ||
+                   objectName == "TabFlushRight";
         }
 
         private static T GetPreferencesField<T>(PreferencesScreen screen, string name)
@@ -997,7 +1217,7 @@ namespace UnderPressure.Editor
         private void RedistributeNativeSettingsTabs(PreferencesScreen screen)
         {
             if (screen == null || _settingsTabFolderBackgrounds == null ||
-                _settingsTabFolderBackgrounds.Length < 3) return;
+_settingsTabFolderBackgrounds.Length < 3) return;
             var firstFolder = GetPreferencesField<Transform>(screen,
                 "_videoTabFolderBackground");
             var commonFolder = firstFolder != null ? firstFolder.parent as RectTransform : null;
@@ -1108,15 +1328,8 @@ namespace UnderPressure.Editor
                 var interior = IsSettingsInterior(image.transform);
                 if (interior)
                 {
-                    image.color = _style.ButtonColor;
-                    var interiorRect = image.rectTransform.rect;
-                    if (!IsSettingsPageRoot(image.transform) &&
-                        interiorRect.width >= 400f && interiorRect.height >= 120f)
-                    {
-                        image.overrideSprite = null;
-                        image.sprite = null;
-                        image.type = Image.Type.Simple;
-                    }
+                    if (IsSettingsPanelSurface(image))
+                        image.color = SettingsSharedPageColor;
                     continue;
                 }
                 if (image.GetComponent<Selectable>() != null ||
@@ -1128,7 +1341,8 @@ namespace UnderPressure.Editor
                 var tint = _style.HeaderColor;
                 tint.a = color.a;
                 var rect = image.rectTransform.rect;
-                if (rect.width >= 400f && rect.height >= 150f)
+                if (!IsSettingsStructuralImage(image.transform) &&
+                    rect.width >= 400f && rect.height >= 150f)
                 {
                     image.overrideSprite = null;
                     image.sprite = null;
@@ -1139,10 +1353,11 @@ namespace UnderPressure.Editor
             foreach (var outline in root.GetComponentsInChildren<Outline>(true))
             {
                 if (outline == null || !IsSettingsInterior(outline.transform) ||
+                    IsSettingsStructuralImage(outline.transform) ||
                     outline.GetComponentInParent<InputField>() != null ||
                     outline.GetComponentInParent<TMP_InputField>() != null ||
                     IsWorkshopSettingsField(outline.transform)) continue;
-                outline.effectColor = _style.ButtonColor;
+                outline.effectColor = SettingsNormalBorderColor;
             }
         }
 
@@ -1159,6 +1374,32 @@ namespace UnderPressure.Editor
             for (var current = value; current != null; current = current.parent)
                 if (current.name.StartsWith("UP Disease Native Scrollbar",
                         StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private bool IsSettingsStructuralImage(
+            Transform value)
+        {
+            if (value == null)
+                return false;
+
+            if (_settingsTabFolderBackgrounds != null &&
+                _settingsTabFolderBackgrounds.Any(folder =>
+                    folder != null &&
+                    (value == folder ||
+                     value.IsChildOf(folder))))
+                return true;
+
+            if (value.name == "Panel" &&
+                value.parent != null &&
+                value.parent.name == "UP Native Scenario Settings")
+                return true;
+
+            if (value.name == "Image" &&
+                value.parent != null &&
+                value.parent.name == "Panel")
+                return true;
+
             return false;
         }
 
@@ -1181,14 +1422,48 @@ namespace UnderPressure.Editor
 
         private void ApplySettingsContentFrameColor()
         {
-            if (_settingsPages == null) return;
-            // El prefab nativo separa el marco (VideoTabContent) del Viewport.
-            // Se recolorea su Image existente sin alterar sprite ni geometria.
-            var frameColor = new Color32(56, 161, 223, 255);
+            ApplySharedSettingsPageStyle(
+                SettingsSharedPageColor);
+        }
+
+        // Reaplica la persistencia por zonas aisladas.
+        // Nunca se usa todo el overlay como un unico scope: asi un parentPath
+        // guardado en una pestana no puede mover controles a otra pestana.
+        private void ReapplySettingsDesignerStructure()
+        {
+            if (_settingsOverlay == null)
+                return;
+
+            var nativeSettings =
+                _settingsOverlay.transform.Find(
+                    "UP Native Scenario Settings");
+
+            var settingsPanel =
+                nativeSettings != null
+                    ? nativeSettings.Find("Panel")
+                    : null;
+
+            var tabFolder =
+                settingsPanel != null
+                    ? settingsPanel.Find("Tab Folder Background")
+                    : null;
+
+            if (tabFolder != null)
+            {
+                UnderPressure.RuntimeUiDesignerPlugin
+                    .ReapplyPersistentStructureNow(tabFolder);
+            }
+
+            if (_settingsPages == null)
+                return;
+
             foreach (var page in _settingsPages)
             {
-                var frame = page != null ? page.GetComponent<Image>() : null;
-                if (frame != null) frame.color = frameColor;
+                if (page == null)
+                    continue;
+
+                UnderPressure.RuntimeUiDesignerPlugin
+                    .ReapplyPersistentStructureNow(page.transform);
             }
         }
 
@@ -1202,6 +1477,10 @@ namespace UnderPressure.Editor
             _settingsDisplayName = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.display_name", 16f, 48f, false,
                 false, .02f, .50f);
+            _settingsAuthor = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.author", 16f, 48f, false,
+                false, .52f, .98f);
+            SetScenarioSettingsInputLabel(_settingsAuthor, "Autor");
             _settingsDescriptionPerStar = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.description_per_star", 70f, 118f, true,
                 false, .02f, .98f);
@@ -1400,11 +1679,25 @@ namespace UnderPressure.Editor
             }
         }
 
+        private static void SetScenarioSettingsInputLabel(TMP_InputField input, string value)
+        {
+            if (input == null) return;
+            var fieldRoot = input.transform.parent;
+            var row = fieldRoot;
+            while (row != null &&
+                   !row.name.StartsWith("UP Workshop Settings Field ",
+                       StringComparison.Ordinal))
+                row = row.parent;
+            if (row != null) SetWorkshopFieldLabel(row, fieldRoot, value);
+        }
+
         private void RefreshScenarioSettingsFields()
         {
             if (_level == null || _settingsDisplayName == null) return;
             var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
             _settingsDisplayName.SetTextWithoutNotify(settings.DisplayName ?? "");
+            _settingsAuthor?.SetTextWithoutNotify(
+                ScenarioWorkshopMetaStore.Current(_level).author ?? "");
             _settingsDescriptionPerStar.SetTextWithoutNotify(string.Join("\n",
                 settings.DescriptionPerStar ?? new string[0]));
             _settingsInitialBalance.SetTextWithoutNotify(
@@ -1420,6 +1713,7 @@ namespace UnderPressure.Editor
             if (_level == null) return;
             var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
             settings.DisplayName = _settingsDisplayName?.text ?? "";
+            ScenarioWorkshopMetaStore.SetAuthor(_level, _settingsAuthor?.text ?? "");
             var description = (_settingsDescriptionPerStar?.text ?? "")
                 .Replace("\r\n", "\n").Replace('\r', '\n');
             settings.DescriptionPerStar = string.IsNullOrEmpty(description)
@@ -1978,7 +2272,7 @@ namespace UnderPressure.Editor
             }
             var names = new[]
             {
-                "_toggleState", "_toggleVisible", "_toggleLayerBase",
+"_toggleState", "_toggleVisible", "_toggleLayerBase",
                 "_toggleLayerBuilt", "_toggleLayerUnbuilt"
             };
             for (var index = 0; index < names.Length; ++index)
@@ -2978,7 +3272,7 @@ namespace UnderPressure.Editor
                 content.gameObject.AddComponent<GridLayoutGroup>();
             grid.enabled = true;
             grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
             grid.childAlignment = TextAnchor.UpperLeft;
             grid.padding = new RectOffset(0, 0, 6, 8);

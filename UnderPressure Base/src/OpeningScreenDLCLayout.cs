@@ -1,4 +1,4 @@
-// Updated: 2026-10-13
+// Updated: 2026-10-19 - Panel principal con ancho y alto manuales.
 // UnderPressure Base: ordena los iconos DLC y compacta el menu principal.
 using System;
 using System.Collections;
@@ -28,6 +28,11 @@ namespace UnderPressure
 
     internal sealed class OpeningScreenDLCLayoutController : MonoBehaviour
     {
+        // PANEL DEL MENU PRINCIPAL: modifica solo estos dos valores.
+        // Son unidades de interfaz (equivalentes a px con Canvas a escala 1).
+        private const float PanelAncho = 400f;
+        private const float PanelAlto = 150f;
+
         private const float MenuButtonsDown = 27f;
         private const float RowPadding = 7f;
         private const float IconGap = 5f;
@@ -44,13 +49,12 @@ namespace UnderPressure
         private RectTransform _buttonLayout;
         private OpeningScreen _screen;
         private RectTransform _mainBackdrop;
-        private RectTransform _mainLogo;
-        private RectTransform _mainBackdropParent;
-        private readonly Vector3[] _backdropCorners = new Vector3[4];
-        private readonly Vector3[] _logoCorners = new Vector3[4];
         private Vector2 _buttonLayoutOriginalPosition;
         private bool _buttonLayoutCaptured;
         private Coroutine _pending;
+        private bool _reportedMissing;
+        private RectTransform[] _panelGraphics;
+        private bool _panelInitialized;
 
         internal void ApplyWhenReady(OpeningScreen screen)
         {
@@ -182,47 +186,82 @@ namespace UnderPressure
             return index >= 0 ? index : int.MaxValue;
         }
 
+        private static RectTransform FindNestedRect(Transform root, string name)
+        {
+            if (root == null) return null;
+            var direct = root.Find(name) as RectTransform;
+            if (direct != null) return direct;
+            var candidates = root.GetComponentsInChildren<RectTransform>(true);
+            for (var i = 0; i < candidates.Length; ++i)
+                if (candidates[i] != null &&
+                    string.Equals(candidates[i].name, name, StringComparison.Ordinal))
+                    return candidates[i];
+            return null;
+        }
+
         private void FindMainBackdrop(OpeningScreen screen)
         {
             var menu = screen.GetComponentInChildren<OpeningScreenMenu>(true);
-            var root = menu == null ? null : menu.transform;
-            _mainBackdrop = root?.Find("BackPanel_FrostedGlass") as RectTransform;
-            _mainLogo = root?.Find("GameLogo") as RectTransform;
-            _mainBackdropParent = _mainBackdrop == null ? null : _mainBackdrop.parent as RectTransform;
+            var canvas = AccessTools.Field(typeof(OpeningScreen), "_rootCanvas")
+                ?.GetValue(screen) as Canvas;
+            var primary = menu == null ? null : menu.transform;
+            var fullRoot = canvas == null ? screen.transform : canvas.transform;
+            var backdrop = FindNestedRect(primary, "BackPanel_FrostedGlass") ??
+                FindNestedRect(fullRoot, "BackPanel_FrostedGlass");
+            if (backdrop != _mainBackdrop)
+            {
+                _mainBackdrop = backdrop;
+                _panelGraphics = null;
+                _panelInitialized = false;
+            }
+            if (_mainBackdrop == null && !_reportedMissing)
+            {
+                _reportedMissing = true;
+                UnityEngine.Debug.LogWarning(
+                    "Menu UnderPressure: BackPanel_FrostedGlass no encontrado.");
+            }
         }
 
+        // Solo ajustamos el grafico del fondo, no los botones ni el logo.
         private void FitMainBackdropToLogo()
         {
-            if (_mainBackdrop == null || _mainLogo == null || _mainBackdropParent == null) return;
-            _mainBackdrop.GetWorldCorners(_backdropCorners);
-            _mainLogo.GetWorldCorners(_logoCorners);
-            var left = _mainBackdropParent.InverseTransformPoint(_backdropCorners[0]).x;
-            var logoRight = _mainBackdropParent.InverseTransformPoint(_logoCorners[2]).x;
-            var width = Mathf.Max(1f, logoRight - left);
-            _mainBackdrop.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
-            // El gráfico visible es un hijo de tamaño fijo, no una imagen
-            // estirada por el RectTransform padre. Hacerlo seguir al padre es
-            // imprescindible para que el recorte se vea realmente.
-            for (var i = 0; i < _mainBackdrop.childCount; ++i)
+            if (_mainBackdrop == null) return;
+            if (!_panelInitialized)
             {
-                var child = _mainBackdrop.GetChild(i) as RectTransform;
-                if (child == null) continue;
-                child.anchorMin = Vector2.zero;
-                child.anchorMax = Vector2.one;
-                child.offsetMin = Vector2.zero;
-                child.offsetMax = Vector2.zero;
+                var graphics = _mainBackdrop.GetComponentsInChildren<Graphic>(true);
+                var panels = new List<RectTransform>();
+                foreach (var graphic in graphics)
+                {
+                    if (graphic == null || graphic is Text) continue;
+                    var rect = graphic.rectTransform;
+                    if (rect != null && rect.rect.width >= 150f)
+                        panels.Add(rect);
+                }
+                _panelGraphics = panels.ToArray();
+                _panelInitialized = true;
             }
-            _mainBackdrop.GetWorldCorners(_backdropCorners);
-            var currentRight = _mainBackdropParent.InverseTransformPoint(_backdropCorners[2]).x;
-            _mainBackdrop.anchoredPosition += new Vector2(logoRight - currentRight, 0f);
+            if (_panelGraphics == null) return;
+            foreach (var rect in _panelGraphics)
+            {
+                if (rect == null) continue;
+                var oldWidth = rect.rect.width;
+                var oldHeight = rect.rect.height;
+                if (Mathf.Abs(oldWidth - PanelAncho) < .01f &&
+                    Mathf.Abs(oldHeight - PanelAlto) < .01f) continue;
+
+                // Mantener fijas la esquina izquierda y la superior.
+                rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, PanelAncho);
+                rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, PanelAlto);
+                rect.localPosition += new Vector3(
+                    (PanelAncho - oldWidth) * rect.pivot.x,
+                    (oldHeight - PanelAlto) * (1f - rect.pivot.y), 0f);
+            }
         }
 
         private void LateUpdate()
         {
             if (_screen == null || !_screen.IsVisible) return;
             if (_mainBackdrop == null) FindMainBackdrop(_screen);
-            // El Animator del menú restaura el RectTransform durante el frame.
-            // Aplicar el límite después deja el borde derecho bajo el logo.
             FitMainBackdropToLogo();
         }
 

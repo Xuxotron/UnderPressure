@@ -1,3 +1,4 @@
+// Updated: 2026-11-04 - Enfermedades queda contenida dentro de su propia pestana; sin superficie hermana.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -29,6 +30,17 @@ namespace UnderPressure.Editor
         private Sprite _settingsDiseaseStarEmptySprite;
         private bool _settingsDiseaseStarSpritesSearched;
 
+        // Panel superior de pacientes. De momento mantiene un borrador local
+        // cargado desde CharacterManager.Config para poder terminar su diseño
+        // antes de fijar el formato definitivo del mapa.
+        private GameObject _settingsPatientPanel;
+        private bool _settingsPatientValuesLoaded;
+        private int _settingsMaxPatients = 250;
+        private float _settingsPatientSpawnRate = 48f;
+        private bool _settingsNeverSpawnPatients;
+        private bool _settingsUsePatientSelector = true;
+        private float _settingsPatientSelectionRandomJitter = .35f;
+
         private sealed class DiseaseChoice
         {
             internal string Id;
@@ -40,20 +52,30 @@ namespace UnderPressure.Editor
         {
             if (_settingsPages == null || _settingsPages.Length < 2 ||
                 _settingsPages[1] == null) return;
-            var page = _settingsPages[1].transform;
-            var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
-            if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
 
-            // La página clonada conserva animadores y máscaras internas de
-            // PreferencesScreen. Para esta pestaña solo se reutiliza su barra
-            // visual; el área desplazable pertenece enteramente al editor.
-            var surface = new GameObject("UP Disease Scroll", typeof(RectTransform),
+            var page = _settingsPages[1].transform as RectTransform;
+            if (page == null) return;
+
+            var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
+            if (nativeScroll != null)
+                nativeScroll.gameObject.SetActive(false);
+
+            // Raiz transparente propia de Enfermedades.
+            // Todo lo creado por este CS queda dentro de su pestana.
+            var surface = new GameObject(
+                "UP Disease Scroll",
+                typeof(RectTransform),
                 typeof(ScrollRect));
             surface.transform.SetParent(page, false);
-            _settingsDiseaseSurface = (RectTransform)surface.transform;
+
+            _settingsDiseaseSurface =
+                (RectTransform)surface.transform;
+
             Stretch(_settingsDiseaseSurface);
-            _settingsDiseaseSurface.offsetMin = new Vector2(10f, 10f);
-            _settingsDiseaseSurface.offsetMax = new Vector2(-10f, -10f);
+            _settingsDiseaseSurface.offsetMin =
+                new Vector2(10f, 10f);
+            _settingsDiseaseSurface.offsetMax =
+                new Vector2(-10f, -10f);
             var viewport = new GameObject("Viewport", typeof(RectTransform),
                 typeof(RectMask2D));
             viewport.transform.SetParent(surface.transform, false);
@@ -98,6 +120,7 @@ namespace UnderPressure.Editor
                 }
                 return;
             }
+            LoadPatientSettingsFromLevel();
             _settingsDiseaseCatalog = ScenarioDiseaseCatalog.Build(_level);
             _settingsIllnesses.Clear();
             var stored = ScenarioEditorStorage.CurrentScenarioSettings(_level).illnesses ??
@@ -137,8 +160,18 @@ namespace UnderPressure.Editor
             foreach (var section in _settingsDiseaseSections)
                 if (section != null) Destroy(section);
             _settingsDiseaseSections.Clear();
+            if (_settingsPatientPanel != null)
+            {
+                _settingsPatientPanel.SetActive(false);
+                Destroy(_settingsPatientPanel);
+                _settingsPatientPanel = null;
+            }
 
             var top = 12f;
+            _settingsPatientPanel = BuildPatientSettingsPanel(top);
+            if (_settingsPatientPanel != null)
+                top += ((RectTransform)_settingsPatientPanel.transform).sizeDelta.y + 10f;
+
             foreach (var room in _settingsDiseaseCatalog.Rooms)
             {
                 if (!_settingsDiseaseExpanded.ContainsKey(room.Id))
@@ -150,22 +183,315 @@ namespace UnderPressure.Editor
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, top));
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
+            ReapplySettingsDesignerStructure();
+        }
+
+        private void LoadPatientSettingsFromLevel()
+        {
+            if (_settingsPatientValuesLoaded) return;
+            _settingsPatientValuesLoaded = true;
+
+            var config = _level?.Config?.GetCharacterManagerConfig();
+            if (config == null) return;
+
+            _settingsMaxPatients = ReadPatientConfigInt(
+                config, "_maxPatients", _settingsMaxPatients);
+            _settingsPatientSpawnRate = ReadPatientConfigFloat(
+                config, "_patientSpawnRate", _settingsPatientSpawnRate);
+            _settingsNeverSpawnPatients = ReadPatientConfigBool(
+                config, "NeverSpawnPatients", _settingsNeverSpawnPatients);
+            _settingsUsePatientSelector = ReadPatientConfigBool(
+                config, "_usePatientSelector", _settingsUsePatientSelector);
+            _settingsPatientSelectionRandomJitter = ReadPatientConfigFloat(
+                config, "_patientSelectionRandomJitter",
+                _settingsPatientSelectionRandomJitter);
+        }
+
+        private static int ReadPatientConfigInt(
+            CharacterManager.Config config, string fieldName, int fallback)
+        {
+            var field = AccessTools.Field(typeof(CharacterManager.Config), fieldName);
+            if (field == null || config == null) return fallback;
+            var value = field.GetValue(config);
+            return value is int result ? result : fallback;
+        }
+
+        private static float ReadPatientConfigFloat(
+            CharacterManager.Config config, string fieldName, float fallback)
+        {
+            var field = AccessTools.Field(typeof(CharacterManager.Config), fieldName);
+            if (field == null || config == null) return fallback;
+            var value = field.GetValue(config);
+            if (value is float result) return result;
+            if (value is double doubleValue) return (float)doubleValue;
+            return fallback;
+        }
+
+        private static bool ReadPatientConfigBool(
+            CharacterManager.Config config, string fieldName, bool fallback)
+        {
+            var field = AccessTools.Field(typeof(CharacterManager.Config), fieldName);
+            if (field == null || config == null) return fallback;
+            var value = field.GetValue(config);
+            return value is bool result ? result : fallback;
+        }
+
+        private GameObject BuildPatientSettingsPanel(float top)
+        {
+            var panel = NewImage(
+                "UP Patient Settings",
+                _settingsDiseaseContent,
+                _style.ButtonSprite,
+                SettingsSharedPageColor,
+                true);
+            var panelRect = (RectTransform)panel.transform;
+            SetRect(panelRect,
+                new Vector2(.01f, 1f), new Vector2(.99f, 1f),
+                new Vector2(.5f, 1f),
+                new Vector2(0f, -top),
+                new Vector2(0f, 108f));
+
+            var header = NewImage(
+                "Cabecera",
+                panel.transform,
+                _style.ButtonSprite,
+                _style.HeaderColor,
+                false);
+            SetRect((RectTransform)header.transform,
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(.5f, 1f),
+                Vector2.zero,
+                new Vector2(-8f, 42f));
+
+            var title = CreateDiseaseText(
+                header.transform,
+                "Pacientes",
+                22f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            title.fontStyle = FontStyles.Bold;
+            SetTopLeft(title.rectTransform, 16f, 0f, 240f, 42f);
+
+            CreatePatientIntegerField(
+                panel.transform,
+                "Máx. pacientes",
+                _settingsMaxPatients,
+                16f, 135f,
+                154f, 65f,
+                value => _settingsMaxPatients = Mathf.Max(1, value),
+                "UP Patient Max Patients");
+
+            CreatePatientFloatField(
+                panel.transform,
+                "Ritmo de llegada",
+                _settingsPatientSpawnRate,
+                286f, 140f,
+                431f, 60f,
+                value => _settingsPatientSpawnRate = Mathf.Max(0f, value),
+                "UP Patient Spawn Rate");
+
+            CreatePatientFloatField(
+                panel.transform,
+                "Aleatoriedad",
+                _settingsPatientSelectionRandomJitter,
+                556f, 121f,
+                668f, 61f,
+                value => _settingsPatientSelectionRandomJitter =
+                    Mathf.Clamp01(value),
+                "UP Patient Selection Jitter");
+
+            var neverLabel = CreateDiseaseText(
+                panel.transform,
+                "No generar pacientes",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(neverLabel.rectTransform, 781f, 57f, 180f, 38f);
+
+            var never = CreateDiseaseToggle(
+                panel.transform,
+                _settingsNeverSpawnPatients,
+                value => _settingsNeverSpawnPatients = value);
+            if (never != null)
+            {
+                never.gameObject.name = "UP Patient Never Spawn Toggle";
+                SetTopLeft((RectTransform)never.transform, 1022f, 61f, 30f, 30f);
+                ApplyPatientToggleDesignerLayout(never, new Vector2(-60f, 0f));
+            }
+
+            var selectorLabel = CreateDiseaseText(
+                panel.transform,
+                "Selector ponderado",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(selectorLabel.rectTransform, 1036f, 57f, 160f, 38f);
+
+            var selector = CreateDiseaseToggle(
+                panel.transform,
+                _settingsUsePatientSelector,
+                value => _settingsUsePatientSelector = value);
+            if (selector != null)
+            {
+                selector.gameObject.name = "UP Patient Selector Toggle";
+                SetTopLeft((RectTransform)selector.transform, 1225f, 61f, 30f, 30f);
+                ApplyPatientToggleDesignerLayout(selector, new Vector2(-16f, 0f));
+            }
+
+            return panel;
+        }
+
+        private static void ApplyPatientToggleDesignerLayout(
+            Toggle toggle, Vector2 backgroundPosition)
+        {
+            if (toggle == null) return;
+            var background = toggle.transform.Find("Background") as RectTransform;
+            if (background == null) return;
+
+            background.anchorMin = new Vector2(.5f, .5f);
+            background.anchorMax = new Vector2(.5f, .5f);
+            background.pivot = new Vector2(.5f, .5f);
+            background.anchoredPosition = backgroundPosition;
+            background.sizeDelta = new Vector2(40f, 40f);
+
+            var checkmark = background.Find("Checkmark") as RectTransform;
+            if (checkmark == null && toggle.graphic != null)
+                checkmark = toggle.graphic.rectTransform;
+            if (checkmark == null) return;
+
+            checkmark.anchorMin = Vector2.zero;
+            checkmark.anchorMax = Vector2.one;
+            checkmark.pivot = new Vector2(.5f, .5f);
+            checkmark.anchoredPosition = Vector2.zero;
+            checkmark.sizeDelta = new Vector2(-10f, -10f);
+        }
+
+        private void CreatePatientIntegerField(
+            Transform parent, string labelText, int current,
+            float labelX, float labelWidth,
+            float inputX, float inputWidth,
+            Action<int> setter, string objectName)
+        {
+            var label = CreateDiseaseText(
+                parent, labelText, 17f,
+                TextAlignmentOptions.MidlineLeft, Color.white);
+            SetTopLeft(label.rectTransform, labelX, 57f, labelWidth, 38f);
+
+            var input = CreateDiseaseInput(
+                parent, current.ToString(CultureInfo.InvariantCulture));
+            if (input == null) return;
+            input.gameObject.name = objectName;
+            SetTopLeft((RectTransform)input.transform, inputX, 58f, inputWidth, 36f);
+            input.onEndEdit.AddListener(text =>
+            {
+                if (int.TryParse(text, NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var parsed))
+                {
+                    parsed = Mathf.Max(1, parsed);
+                    setter(parsed);
+                    input.SetTextWithoutNotify(
+                        parsed.ToString(CultureInfo.InvariantCulture));
+                }
+                else
+                {
+                    input.SetTextWithoutNotify(
+                        current.ToString(CultureInfo.InvariantCulture));
+                }
+            });
+        }
+
+        private void CreatePatientFloatField(
+            Transform parent, string labelText, float current,
+            float labelX, float labelWidth,
+            float inputX, float inputWidth,
+            Action<float> setter, string objectName)
+        {
+            var label = CreateDiseaseText(
+                parent, labelText, 17f,
+                TextAlignmentOptions.MidlineLeft, Color.white);
+            SetTopLeft(label.rectTransform, labelX, 57f, labelWidth, 38f);
+
+            var input = CreatePatientDecimalInput(
+                parent, current.ToString("0.###", CultureInfo.InvariantCulture));
+            if (input == null) return;
+            input.gameObject.name = objectName;
+            SetTopLeft((RectTransform)input.transform, inputX, 58f, inputWidth, 36f);
+            input.onEndEdit.AddListener(text =>
+            {
+                if (float.TryParse(text, NumberStyles.Float,
+                        CultureInfo.InvariantCulture, out var parsed))
+                {
+                    setter(parsed);
+                }
+                else
+                {
+                    input.SetTextWithoutNotify(
+                        current.ToString("0.###", CultureInfo.InvariantCulture));
+                }
+            });
+        }
+
+        private TMP_InputField CreatePatientDecimalInput(
+            Transform parent, string value)
+        {
+            var root = NewImage(
+                "Entrada decimal",
+                parent,
+                _style.ButtonSprite,
+                new Color32(218, 222, 226, 255),
+                true);
+            var input = root.AddComponent<TMP_InputField>();
+
+            var viewport = new GameObject(
+                "Text Area",
+                typeof(RectTransform),
+                typeof(RectMask2D));
+            viewport.transform.SetParent(root.transform, false);
+            var viewportRect = (RectTransform)viewport.transform;
+            Stretch(viewportRect);
+            viewportRect.offsetMin = new Vector2(8f, 1f);
+            viewportRect.offsetMax = new Vector2(-8f, -1f);
+
+            var text = CreateDiseaseText(
+                viewport.transform,
+                value,
+                16f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.black);
+            text.overflowMode = TextOverflowModes.Overflow;
+
+            input.targetGraphic = root.GetComponent<Image>();
+            input.textViewport = viewportRect;
+            input.textComponent = text;
+            input.contentType = TMP_InputField.ContentType.DecimalNumber;
+            input.lineType = TMP_InputField.LineType.SingleLine;
+            input.interactable = true;
+            input.readOnly = false;
+            input.caretColor = Color.black;
+            input.caretWidth = 2;
+            input.caretBlinkRate = .85f;
+
+            var selection = _style.ButtonColor;
+            selection.a = .35f;
+            input.selectionColor = selection;
+            input.SetTextWithoutNotify(value);
+            return input;
         }
 
         private GameObject BuildDiseaseRoomSection(ScenarioDiseaseCatalog.Room room, float top)
         {
             var values = _settingsIllnesses.Where(value => value.room == room.Id).ToList();
             var expanded = _settingsDiseaseExpanded[room.Id];
-            var height = 76f + (expanded ? values.Count * 122f + 8f : 0f);
+            var height = 76f + (expanded ? values.Count * 64f : 0f);
             var section = NewImage("UP Disease Room " + room.Id, _settingsDiseaseContent,
-                _style.ButtonSprite, new Color32(5, 132, 204, 255), true);
+                _style.ButtonSprite, SettingsSharedPageColor, true);
             var sectionRect = (RectTransform)section.transform;
             SetRect(sectionRect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
             BuildDiseaseRoomHeader(section.transform, room, expanded);
             if (expanded)
                 for (var index = 0; index < values.Count; ++index)
-                    BuildDiseaseRow(section.transform, room, values[index], 68f + index * 122f);
+                    BuildDiseaseRow(section.transform, room, values[index], 68f + index * 64f);
             return section;
         }
 
@@ -184,7 +510,8 @@ namespace UnderPressure.Editor
 
             var replacement = BuildDiseaseRoomSection(room, top);
             _settingsDiseaseSections[index] = replacement;
-            replacement.transform.SetSiblingIndex(index);
+            replacement.transform.SetSiblingIndex(index +
+                (_settingsPatientPanel != null ? 1 : 0));
             var replacementHeight = ((RectTransform)replacement.transform).sizeDelta.y;
             var difference = replacementHeight - previousHeight;
             if (Mathf.Abs(difference) > .01f)
@@ -197,6 +524,7 @@ namespace UnderPressure.Editor
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, _settingsDiseaseContent.rect.height + difference));
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
+            ReapplySettingsDesignerStructure();
         }
 
         private void BuildDiseaseRoomHeader(Transform parent, ScenarioDiseaseCatalog.Room room,
@@ -229,7 +557,7 @@ namespace UnderPressure.Editor
             var selector = CreateDiseaseDropdown(header.transform,
                 choices.Select(choice => choice.Name).ToList(), 0,
                 choices.Select(choice => choice.DlcIcon).ToList());
-            SetTopLeft((RectTransform)selector.transform, 350f, 8f, 590f, 44f);
+            SetTopLeft((RectTransform)selector.transform, 350f, 8f, 274f, 44f);
 
             var add = CreateDiseaseButton(header.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.add"),
@@ -238,7 +566,7 @@ namespace UnderPressure.Editor
                     if (selector.value <= 0 || selector.value >= choices.Count) return;
                     AddDisease(room, choices[selector.value].Id);
                 });
-            SetTopLeft((RectTransform)add.transform, 955f, 8f, 145f, 44f);
+            SetTopLeft((RectTransform)add.transform, 639f, 8f, 116f, 44f);
 
             if (room.Dlc?.Icon != null)
             {
@@ -261,21 +589,32 @@ namespace UnderPressure.Editor
             ScenarioMapFormat.WeightedIllnessData value, float top)
         {
             var panel = NewImage("UP Disease " + value.definition, parent, _style.ButtonSprite,
-                new Color32(22, 154, 221, 255), false);
+                SettingsSharedPageColor, false);
             var rect = (RectTransform)panel.transform;
             SetRect(rect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
-                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, 114f));
+                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, 56f));
 
             _settingsDiseaseCatalog.ById.TryGetValue(value.definition ?? "", out var selected);
-            AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.illness", 16f, 8f, 115f);
+
+            var remove = CreateDiseaseButton(panel.transform,
+                "X",
+                new Color32(232, 38, 46, 255), () =>
+                {
+                    _settingsIllnesses.Remove(value);
+                    RebuildDiseaseSettingsContents();
+                });
+            SetTopRight((RectTransform)remove.transform, 1186f, 9f, 41f, 38f);
+
             var available = AvailableForRoom(room, value.definition);
             var choices = available.Select(disease => new DiseaseChoice
                 { Id = disease.Id, Name = disease.Name, DlcIcon = disease.Dlc?.Icon }).ToList();
-            var currentIndex = Mathf.Max(0, choices.FindIndex(choice => choice.Id == value.definition));
+            var currentIndex = Mathf.Max(0,
+                choices.FindIndex(choice => choice.Id == value.definition));
             var definition = CreateDiseaseDropdown(panel.transform,
                 choices.Select(choice => choice.Name).ToList(), currentIndex,
                 choices.Select(choice => choice.DlcIcon).ToList());
-            SetTopLeft((RectTransform)definition.transform, 130f, 8f, 710f, 38f);
+            SetTopLeft((RectTransform)definition.transform, 66f, 8f, 237f, 38f);
+            ApplyDiseaseDropdownDesignerLayout(definition);
             definition.onValueChanged.AddListener(index =>
             {
                 if (index < 0 || index >= choices.Count) return;
@@ -283,18 +622,65 @@ namespace UnderPressure.Editor
                 RebuildDiseaseSettingsContents();
             });
 
-            AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.deprecated",
-                855f, 8f, 92f);
-            var deprecated = CreateDiseaseToggle(panel.transform, value.deprecated,
-                state => value.deprecated = state);
-            if (deprecated != null)
-                SetTopLeft((RectTransform)deprecated.transform, 947f, 12f, 30f, 30f);
-            AddFieldLabel(panel.transform, "editor.scenario_settings.diseases.unlocked",
-                995f, 8f, 145f);
+            var unlockedLabel = CreateDiseaseText(
+                panel.transform,
+                "Desbloqueada:",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(unlockedLabel.rectTransform, 326f, 11f, 125f, 38f);
+
             var unlocked = CreateDiseaseToggle(panel.transform, value.unlocked,
                 state => value.unlocked = state);
             if (unlocked != null)
+            {
                 SetTopLeft((RectTransform)unlocked.transform, 1140f, 12f, 30f, 30f);
+                ApplyDiseaseUnlockedToggleDesignerLayout(unlocked);
+            }
+
+            var frequencyLabel = CreateDiseaseText(
+                panel.transform,
+                "Frecuencia:",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(frequencyLabel.rectTransform, 542f, 10f, 111f, 38f);
+
+            CreateDiseaseIntegerInput(
+                panel.transform,
+                value.minWeight,
+                638f, 9f, 46f,
+                changed => value.minWeight = changed);
+
+            var frequencySeparator = CreateDiseaseText(
+                panel.transform,
+                "   >",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(frequencySeparator.rectTransform, 684f, 8f, 36f, 38f);
+
+            CreateDiseaseIntegerInput(
+                panel.transform,
+                value.maxWeight,
+                712f, 9f, 48f,
+                changed => value.maxWeight = changed);
+
+            var patientsLabel = CreateDiseaseText(
+                panel.transform,
+                "Pacientes previos:",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(patientsLabel.rectTransform, 817f, 10f, 156f, 38f);
+
+            CreateDiseaseIntegerInput(
+                panel.transform,
+                value.minPatientsSpawned,
+                965f, 8f, 40f,
+                changed => value.minPatientsSpawned = changed);
+
+            CreateDiseaseStarRatingDesigner(panel.transform, value);
 
             if (selected?.Dlc?.Icon != null)
             {
@@ -303,26 +689,115 @@ namespace UnderPressure.Editor
                 SetTopRight((RectTransform)dlcIcon.transform, 10f, 8f, 38f, 38f);
                 dlcIcon.GetComponent<Image>().preserveAspect = true;
             }
+        }
 
-            CreateDiseaseInteger(panel.transform,
-                "editor.scenario_settings.diseases.min_weight", value.minWeight,
-                16f, changed => value.minWeight = changed);
-            CreateDiseaseInteger(panel.transform,
-                "editor.scenario_settings.diseases.max_weight", value.maxWeight,
-                275f, changed => value.maxWeight = changed);
-            CreateDiseaseStarRating(panel.transform, value, 535f);
-            CreateDiseaseInteger(panel.transform,
-                "editor.scenario_settings.diseases.min_spawned", value.minPatientsSpawned,
-                795f, changed => value.minPatientsSpawned = changed);
+        private static void ApplyDiseaseDropdownDesignerLayout(TMP_Dropdown dropdown)
+        {
+            if (dropdown?.captionText == null) return;
+            var caption = dropdown.captionText.rectTransform;
+            caption.anchorMin = Vector2.zero;
+            caption.anchorMax = Vector2.one;
+            caption.pivot = new Vector2(.5f, .5f);
+            caption.anchoredPosition = new Vector2(-29f, 0f);
+            caption.sizeDelta = new Vector2(-78f, 0f);
+        }
 
-            var remove = CreateDiseaseButton(panel.transform,
-                EditorLocalization.Get("editor.scenario_settings.diseases.remove"),
-                new Color32(232, 38, 46, 255), () =>
+        private static void ApplyDiseaseUnlockedToggleDesignerLayout(Toggle toggle)
+        {
+            if (toggle == null) return;
+
+            var background = toggle.transform.Find("Background") as RectTransform;
+            if (background == null) return;
+
+            background.anchorMin = new Vector2(.5f, .5f);background.anchorMax = new Vector2(.5f, .5f);
+            background.pivot = new Vector2(.5f, .5f);
+            background.anchoredPosition = new Vector2(-679f, -1f);
+            background.sizeDelta = new Vector2(40f, 40f);
+
+            var checkmark = background.Find("Checkmark") as RectTransform;
+            if (checkmark == null && toggle.graphic != null)
+                checkmark = toggle.graphic.rectTransform;
+            if (checkmark == null) return;
+
+            checkmark.anchorMin = Vector2.zero;
+            checkmark.anchorMax = Vector2.one;
+            checkmark.pivot = new Vector2(.5f, .5f);
+            checkmark.anchoredPosition = new Vector2(1f, 0f);
+            checkmark.sizeDelta = new Vector2(-10f, -10f);
+        }
+
+        private TMP_InputField CreateDiseaseIntegerInput(
+            Transform parent, int current,
+            float inputX, float inputY, float inputWidth,
+            Action<int> setter)
+        {
+            var input = CreateDiseaseInput(parent,
+                current.ToString(CultureInfo.InvariantCulture));
+            if (input == null) return null;
+
+            SetTopLeft((RectTransform)input.transform,
+                inputX, inputY, inputWidth, 36f);
+            input.onEndEdit.AddListener(text =>
+            {
+                if (int.TryParse(text, NumberStyles.Integer,
+                        CultureInfo.InvariantCulture, out var parsed))
                 {
-                    _settingsIllnesses.Remove(value);
-                    RebuildDiseaseSettingsContents();
+                    setter(parsed);
+                }
+                else
+                {
+                    input.SetTextWithoutNotify(
+                        current.ToString(CultureInfo.InvariantCulture));
+                }
+            });
+            return input;
+        }
+
+        private void CreateDiseaseStarRatingDesigner(
+            Transform parent, ScenarioMapFormat.WeightedIllnessData value)
+        {
+            var starsLabel = CreateDiseaseText(
+                parent,
+                "Estrellas:",
+                17f,
+                TextAlignmentOptions.MidlineLeft,
+                Color.white);
+            SetTopLeft(starsLabel.rectTransform, 1034f, 10f, 87f, 38f);
+
+            value.minStarRating = Mathf.Clamp(value.minStarRating, 0, 3);
+            if (!ResolveNativeDiseaseStarSprites()) return;
+
+            var starX = new[] { 1117f, 1155f, 1193f };
+            var starY = new[] { 10f, 11f, 10f };
+            var images = new Image[3];
+
+            for (var index = 0; index < images.Length; ++index)
+            {
+                var rating = index + 1;
+                var star = NewImage("Estrella minima " + rating, parent,
+                    rating <= value.minStarRating
+                        ? _settingsDiseaseStarFullSprite
+                        : _settingsDiseaseStarEmptySprite,
+                    Color.white, true);
+                var image = star.GetComponent<Image>();
+                image.type = Image.Type.Simple;
+                image.preserveAspect = true;
+                images[index] = image;
+
+                SetTopLeft((RectTransform)star.transform,
+                    starX[index], starY[index], 34f, 34f);
+
+                var button = star.AddComponent<Button>();
+                button.targetGraphic = image;
+                button.transition = Selectable.Transition.None;
+                button.onClick.AddListener(() =>
+                {
+                    var next = value.minStarRating == rating ? 0 : rating;
+                    value.minStarRating = next;
+                    RefreshDiseaseStarRating(images, next);
                 });
-            SetTopRight((RectTransform)remove.transform, 10f, 66f, 125f, 38f);
+                StandardiseClickSound(button);
+            }
         }
 
         private List<ScenarioDiseaseCatalog.Disease> AvailableForRoom(
@@ -355,59 +830,6 @@ namespace UnderPressure.Editor
             _settingsIllnesses.Add(value);
             _settingsDiseaseExpanded[room.Id] = true;
             RebuildDiseaseSettingsContents();
-        }
-
-        private void CreateDiseaseInteger(Transform parent, string key, int current,
-            float x, Action<int> setter)
-        {
-            AddFieldLabel(parent, key, x, 64f, 135f);
-            var input = CreateDiseaseInput(parent,
-                current.ToString(CultureInfo.InvariantCulture));
-            if (input == null) return;
-            SetTopLeft((RectTransform)input.transform, x + 140f, 64f, 100f, 36f);
-            input.onEndEdit.AddListener(text =>
-            {
-                if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture,
-                        out var parsed)) setter(parsed);
-                else input.SetTextWithoutNotify(current.ToString(CultureInfo.InvariantCulture));
-            });
-        }
-
-        private void CreateDiseaseStarRating(Transform parent,
-            ScenarioMapFormat.WeightedIllnessData value, float x)
-        {
-            AddFieldLabel(parent, "editor.scenario_settings.diseases.min_stars",
-                x, 64f, 135f);
-            value.minStarRating = Mathf.Clamp(value.minStarRating, 0, 3);
-            if (!ResolveNativeDiseaseStarSprites()) return;
-
-            var images = new Image[3];
-            for (var index = 0; index < images.Length; ++index)
-            {
-                var rating = index + 1;
-                var star = NewImage("Estrella minima " + rating, parent,
-                    rating <= value.minStarRating ? _settingsDiseaseStarFullSprite :
-                    _settingsDiseaseStarEmptySprite, Color.white, true);
-                var image = star.GetComponent<Image>();
-                image.type = Image.Type.Simple;
-                image.preserveAspect = true;
-                images[index] = image;
-                SetTopLeft((RectTransform)star.transform,
-                    x + 140f + index * 38f, 64f, 34f, 34f);
-
-                var button = star.AddComponent<Button>();
-                button.targetGraphic = image;
-                button.transition = Selectable.Transition.None;
-                button.onClick.AddListener(() =>
-                {
-                    // Pulsar de nuevo la estrella que ya representa el valor
-                    // activo devuelve el selector al estado de cero estrellas.
-                    var next = value.minStarRating == rating ? 0 : rating;
-                    value.minStarRating = next;
-                    RefreshDiseaseStarRating(images, next);
-                });
-                StandardiseClickSound(button);
-            }
         }
 
         private void RefreshDiseaseStarRating(IList<Image> images, int rating)
@@ -746,6 +1168,13 @@ namespace UnderPressure.Editor
             _settingsDiseaseSections.Clear();
             _settingsIllnesses.Clear();
             _settingsDiseaseExpanded.Clear();
+            _settingsPatientPanel = null;
+            _settingsPatientValuesLoaded = false;
+            _settingsMaxPatients = 250;
+            _settingsPatientSpawnRate = 48f;
+            _settingsNeverSpawnPatients = false;
+            _settingsUsePatientSelector = true;
+            _settingsPatientSelectionRandomJitter = .35f;
             _settingsDiseaseCatalog = null;
             _settingsDiseaseSurface = null;
             _settingsDiseaseContent = null;
