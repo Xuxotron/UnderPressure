@@ -899,6 +899,7 @@ namespace UnderPressure.Editor
             ApplySettingsContentFrameColor();
             ApplyLatestSavedSettingsUi();
             ReapplySettingsDesignerStructure();
+            RestoreDiseaseSettingsParent();
             SetSettingsTab(0);
             clone.SetActive(true);
             _settingsOverlay.SetActive(false);
