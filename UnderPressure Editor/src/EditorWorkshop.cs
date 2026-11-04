@@ -18,6 +18,43 @@ using UnityEngine.UI;
 
 namespace UnderPressure.Editor
 {
+    // Los mapas .upmap los instala Steam y los carga ScenarioWorkshopLibrary.
+    // El gestor UGC nativo de TPH espera WorkshopMetaData.json y, al no hallarlo,
+    // intenta descargar estos mismos artículos en cada arranque. Su callback
+    // cierra todos los menús abiertos antes de mostrar el aviso de actualización.
+    [HarmonyPatch(typeof(WorkshopItemDetail), "DoesItemNeedUpdating")]
+    internal static class ScenarioWorkshopExcludeMapsFromNativeUpdaterPatch
+    {
+        private static void Postfix(WorkshopItemDetail __instance, ref bool __result)
+        {
+            if (!__result || __instance == null || !__instance.InstalledInfoValid)
+                return;
+
+            var folder = __instance.InstalledFolderPathSpec;
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+                return;
+
+            try
+            {
+                if (Directory.EnumerateFiles(
+                        folder, "*.upmap", SearchOption.AllDirectories).Any())
+                    __result = false;
+            }
+            catch (IOException exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Workshop: no se pudo identificar el artículo .upmap: " +
+                    exception.Message);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Workshop: no se pudo identificar el artículo .upmap: " +
+                    exception.Message);
+            }
+        }
+    }
+
     internal enum ScenarioWorkshopVisibility
     {
         Public,
