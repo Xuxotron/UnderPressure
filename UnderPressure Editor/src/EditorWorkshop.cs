@@ -1885,7 +1885,7 @@ namespace UnderPressure.Editor
             scroll.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
         }
 
-        // Por ahora Steam recibe una sola imagen previa; la lista admite más.
+        // La imagen elegida genera la miniatura principal; la lista se publica como galería.
         private List<string> GalleryPaths()
         {
             return ScenarioWorkshopMetaStore.GalleryPaths(_level);
@@ -3379,6 +3379,8 @@ namespace UnderPressure.Editor
             string description = null;
             ulong publishedId = 0UL;
             SteamWorkshopAsyncCall createWait = null;
+            SteamWorkshopAsyncCall previewsQueryWait = null;
+            uint existingAdditionalPreviews = 0U;
 
             try
             {
@@ -3459,7 +3461,50 @@ namespace UnderPressure.Editor
                 }
             }
 
+            if (finalError == null && !createNew)
+            {
+                try
+                {
+                    previewsQueryWait =
+                        SteamWorkshopBridge.BeginAdditionalPreviewsQuery(publishedId);
+                }
+                catch (Exception exception)
+                {
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "Workshop: consulta de imágenes adicionales falló: " + exception);
+                    finalError = exception.Message;
+                }
+            }
+
+            if (finalError == null && previewsQueryWait != null)
+            {
+                yield return previewsQueryWait.Waiter;
+
+                try
+                {
+                    if (previewsQueryWait.IoFailure ||
+                        !SteamWorkshopBridge.IsResultOk(previewsQueryWait.Result))
+                        throw new InvalidOperationException(
+                            SteamWorkshopBridge.ResultCode(previewsQueryWait.Result));
+
+                    existingAdditionalPreviews =
+                        SteamWorkshopBridge.GetAdditionalPreviewsCount(
+                            previewsQueryWait.Result);
+                }
+                catch (Exception exception)
+                {
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "Workshop: lectura de imágenes adicionales falló: " + exception);
+                    finalError = exception.Message;
+                }
+                finally
+                {
+                    SteamWorkshopBridge.ReleaseQuery(previewsQueryWait.Result);
+                }
+            }
+
             SteamWorkshopAsyncCall submitWait = null;
+            string steamThumbnailFolder = null;
 
             if (finalError == null)
             {
@@ -3491,7 +3536,21 @@ namespace UnderPressure.Editor
                         throw new FileNotFoundException(
                             "No existe la imagen previa del Workshop.");
 
-                    ok = SteamWorkshopBridge.SetItemPreview(update, preview) && ok;
+                    var steamThumbnail = BuildSteamThumbnailFile(
+                        preview, meta.localId, out steamThumbnailFolder);
+                    ok = SteamWorkshopBridge.SetItemPreview(update, steamThumbnail) && ok;
+
+                    for (var index = existingAdditionalPreviews; index > 0U; --index)
+                        ok = SteamWorkshopBridge.RemoveItemPreview(
+                            update, index - 1U) && ok;
+
+                    var gallery = ScenarioWorkshopMetaStore.GalleryPaths(_level)
+                        .Where(File.Exists)
+                        .Take(ScenarioWorkshopMetaData.MaxImages)
+                        .ToList();
+                    foreach (var image in gallery)
+                        ok = SteamWorkshopBridge.AddItemPreviewFile(update, image) && ok;
+
                     ok = SteamWorkshopBridge.SetItemContent(update, staging) && ok;
 
                     if (!ok)
@@ -3541,6 +3600,8 @@ namespace UnderPressure.Editor
 
             if (!string.IsNullOrEmpty(staging))
                 DeleteDirectory(staging);
+            if (!string.IsNullOrEmpty(steamThumbnailFolder))
+                DeleteDirectory(steamThumbnailFolder);
 
             SetBusy(false);
             Refresh();
@@ -3614,6 +3675,46 @@ namespace UnderPressure.Editor
 
             File.Copy(mapPath, Path.Combine(root, Path.GetFileName(mapPath)), true);
             return root;
+        }
+
+        private static string BuildSteamThumbnailFile(
+            string sourcePath, string localId, out string folder)
+        {
+            folder = Path.Combine(
+                Path.GetTempPath(),
+                "UnderPressureWorkshopPreviews",
+                string.IsNullOrWhiteSpace(localId)
+                    ? Guid.NewGuid().ToString("N")
+                    : localId);
+
+            DeleteDirectory(folder);
+            Directory.CreateDirectory(folder);
+
+            Texture2D source = null;
+            Texture2D thumbnail = null;
+            try
+            {
+                source = ExtContentTextureUtils.LoadTexture2D(sourcePath);
+                if (source == null)
+                    throw new IOException("No existe la imagen previa del Workshop.");
+
+                thumbnail = WorkshopThumbnail.Build(source);
+                if (thumbnail == null)
+                    throw new IOException("No existe la imagen previa del Workshop.");
+
+                var bytes = ImageConversion.EncodeToJPG(thumbnail, 92);
+                if (bytes == null || bytes.Length == 0 || bytes.Length >= 1024 * 1024)
+                    throw new IOException("No existe la imagen previa del Workshop.");
+
+                var path = Path.Combine(folder, "workshop_thumbnail.jpg");
+                File.WriteAllBytes(path, bytes);
+                return path;
+            }
+            finally
+            {
+                if (thumbnail != null) Destroy(thumbnail);
+                if (source != null) Destroy(source);
+            }
         }
 
         private static void DeleteDirectory(string path)
@@ -3720,8 +3821,10 @@ namespace UnderPressure.Editor
         private static Type _eItemState;
         private static Type _eWorkshopFileType;
         private static Type _eVisibility;
+        private static Type _eItemPreviewType;
         private static Type _createItemResult;
         private static Type _submitItemUpdateResult;
+        private static Type _steamUgcQueryCompleted;
         private static Type _waitForCallResultOpen;
 
         private static Type SteamUgc =>
@@ -3749,6 +3852,10 @@ namespace UnderPressure.Editor
             _eVisibility ?? (_eVisibility =
                 Resolve("Steamworks.ERemoteStoragePublishedFileVisibility"));
 
+        private static Type ItemPreviewType =>
+            _eItemPreviewType ?? (_eItemPreviewType =
+                Resolve("Steamworks.EItemPreviewType"));
+
         private static Type CreateItemResultType =>
             _createItemResult ?? (_createItemResult =
                 Resolve("Steamworks.CreateItemResult_t"));
@@ -3756,6 +3863,10 @@ namespace UnderPressure.Editor
         private static Type SubmitItemUpdateResultType =>
             _submitItemUpdateResult ?? (_submitItemUpdateResult =
                 Resolve("Steamworks.SubmitItemUpdateResult_t"));
+
+        private static Type SteamUgcQueryCompletedType =>
+            _steamUgcQueryCompleted ?? (_steamUgcQueryCompleted =
+                Resolve("Steamworks.SteamUGCQueryCompleted_t"));
 
         private static Type WaitForCallResultOpen =>
             _waitForCallResultOpen ?? (_waitForCallResultOpen =
@@ -3791,6 +3902,25 @@ namespace UnderPressure.Editor
                 "StartItemUpdate",
                 GetAppId(),
                 CreatePublishedFileId(publishedFileId));
+        }
+
+        internal static SteamWorkshopAsyncCall BeginAdditionalPreviewsQuery(
+            ulong publishedFileId)
+        {
+            var ids = Array.CreateInstance(PublishedFileIdType, 1);
+            ids.SetValue(CreatePublishedFileId(publishedFileId), 0);
+
+            var query = InvokeStatic(
+                SteamUgc, "CreateQueryUGCDetailsRequest", ids, 1U);
+            if (!Convert.ToBoolean(InvokeStatic(
+                    SteamUgc, "SetReturnAdditionalPreviews", query, true)))
+            {
+                InvokeStatic(SteamUgc, "ReleaseQueryUGCRequest", query);
+                throw new InvalidOperationException();
+            }
+
+            var apiCall = InvokeStatic(SteamUgc, "SendQueryUGCRequest", query);
+            return BuildAsyncCall(SteamUgcQueryCompletedType, apiCall);
         }
 
         internal static bool SetItemTitle(
@@ -3858,6 +3988,22 @@ namespace UnderPressure.Editor
             Convert.ToBoolean(InvokeStatic(
                 SteamUgc, "SetItemPreview",
                 updateHandle, path));
+
+        internal static bool AddItemPreviewFile(
+            object updateHandle, string path)
+        {
+            var imageType = Enum.Parse(
+                ItemPreviewType, "k_EItemPreviewType_Image", false);
+            return Convert.ToBoolean(InvokeStatic(
+                SteamUgc, "AddItemPreviewFile",
+                updateHandle, path, imageType));
+        }
+
+        internal static bool RemoveItemPreview(
+            object updateHandle, uint index) =>
+            Convert.ToBoolean(InvokeStatic(
+                SteamUgc, "RemoveItemPreview",
+                updateHandle, index));
 
         internal static bool SetItemContent(
             object updateHandle, string path) =>
@@ -3977,6 +4123,21 @@ namespace UnderPressure.Editor
                 result,
                 "m_bUserNeedsToAcceptWorkshopLegalAgreement");
             return value != null && Convert.ToBoolean(value);
+        }
+
+        internal static uint GetAdditionalPreviewsCount(object queryResult)
+        {
+            var query = ReadField(queryResult, "m_handle");
+            if (query == null) throw new InvalidOperationException();
+            return Convert.ToUInt32(InvokeStatic(
+                SteamUgc, "GetQueryUGCNumAdditionalPreviews", query, 0U));
+        }
+
+        internal static void ReleaseQuery(object queryResult)
+        {
+            var query = ReadField(queryResult, "m_handle");
+            if (query != null)
+                InvokeStatic(SteamUgc, "ReleaseQueryUGCRequest", query);
         }
 
         private static object GetAppId() =>
