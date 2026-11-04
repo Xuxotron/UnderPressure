@@ -143,6 +143,8 @@ scenario_editor.base_scenario,Base scenario,Escenario base,,,,
 scenario_editor.edit,Edit scenario,Editar escenario,,,,
 scenario_editor.return_to_menu,Return to menu,Volver al menú,,,,
 scenario_editor.architect_name,Architect name:,Nombre del arquitecto:,,,,
+scenario_editor.source.local,Local,Local,,,,
+scenario_editor.source.steam,Steam,Steam,,,,
 editor.map.styles,Map styles,Estilos del mapa,Styles de la carte,Kartenstile,Stili della mappa,Estilos do mapa
 editor.map.style.original,Original,Original,Original,Original,Original,Original
 editor.map.style.none,No perimeter,Sin perímetro,Aucun périmètre,Kein Umfang,Nessun perimetro,Sem perímetro

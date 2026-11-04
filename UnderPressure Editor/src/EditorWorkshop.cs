@@ -328,6 +328,13 @@ namespace UnderPressure.Editor
             return Read(package) ?? ScenarioWorkshopMetaData.NewDefault();
         }
 
+        internal static bool TryReadFromMap(
+            string package, out ScenarioWorkshopMetaData data)
+        {
+            data = Read(package);
+            return data != null;
+        }
+
         private static ScenarioWorkshopMetaData Read(string package)
         {
             if (string.IsNullOrEmpty(package) || !File.Exists(package)) return null;

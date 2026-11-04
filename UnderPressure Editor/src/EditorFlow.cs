@@ -657,10 +657,13 @@ namespace UnderPressure.Editor
         private static ScrollColumn _hospitalsColumn;
         private static ScrollColumn _mapsColumn;
         private static TMP_Text _selectedHospitalTitle;
-        private static InputField _architectInput;
         private static string _currentArchitect;
         private static GameObject _architectDropdown;
         private static ScrollColumn _architectColumn;
+        private static GameObject _localSourceButton;
+        private static GameObject _steamSourceButton;
+        private static bool _showLocalMaps = true;
+        private static bool _showSteamMaps = true;
         private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
         private static string _pendingMap;
         private static string _pendingArchitect;
@@ -712,7 +715,11 @@ namespace UnderPressure.Editor
                 new Vector2(20f, -15f), new Vector2(LeftColumnWidth, 44f));
             _selectedHospitalTitle = CreateHeader(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospital"),
-                new Vector2(RightColumnX, -15f), new Vector2(RightColumnWidth, 44f));
+                new Vector2(RightColumnX, -15f), new Vector2(RightColumnWidth - 50f, 44f));
+            CreateNativeRow(panel.transform, "▼",
+                new Vector2(RightColumnX + RightColumnWidth - 42f, -16f),
+                new Vector2(42f, 42f), () => ToggleArchitectDropdown(panel.transform),
+                false, false);
 
             _hospitalsColumn = CreateColumn(panel.transform,
                 EditorLocalization.Get("scenario_editor.hospitals"),
@@ -728,12 +735,14 @@ namespace UnderPressure.Editor
                     ClearPendingMap();
                     _onCancel?.Invoke();
                 }, false);
-            CreateHeader(panel.transform, EditorLocalization.Get("scenario_editor.architect_name"),
-                new Vector2(340f, -481f), new Vector2(145f, 50f));
-            _architectInput = CreateArchitectInput(panel.transform,
-                new Vector2(490f, -485f), new Vector2(210f, 42f));
-            CreateNativeRow(panel.transform, "▼", new Vector2(708f, -485f),
-                new Vector2(42f, 42f), () => ToggleArchitectDropdown(panel.transform), false, false);
+            _localSourceButton = CreateNativeRow(panel.transform,
+                EditorLocalization.Get("scenario_editor.source.local"),
+                new Vector2(350f, -485f), new Vector2(190f, 42f),
+                () => ToggleMapSource(false), false, _showLocalMaps);
+            _steamSourceButton = CreateNativeRow(panel.transform,
+                EditorLocalization.Get("scenario_editor.source.steam"),
+                new Vector2(550f, -485f), new Vector2(190f, 42f),
+                () => ToggleMapSource(true), false, _showSteamMaps);
 
             foreach (var level in levels.Where(l => l != null).Distinct()
                                         .OrderBy(l => l.GetLocalisedDisplayName(),
@@ -750,6 +759,8 @@ namespace UnderPressure.Editor
             }
 
             RefreshRows(_hospitalsColumn);
+            if (_showSteamMaps)
+                ScenarioWorkshopLibrary.EnumerateSubscribedMaps(true);
             ShowArchitectMaps(UnderPressureEditorPlugin.ArchitectName);
             Canvas.ForceUpdateCanvases();
             return _root;
@@ -909,8 +920,9 @@ namespace UnderPressure.Editor
             _hospitalsColumn = null;
             _mapsColumn = null;
             _selectedHospitalTitle = null;
-            _architectInput = null;
             _currentArchitect = null;
+            _localSourceButton = null;
+            _steamSourceButton = null;
             // La seleccion puede sobrevivir al cierre/recreacion del Canvas
             // mientras se carga el nivel. Solo se borra al aplicarla o cancelar.
             _hospitalChoices.Clear();
@@ -926,36 +938,63 @@ namespace UnderPressure.Editor
         private static List<MapChoice> ReadMaps(string architect, string hospitalId)
         {
             var result = new List<MapChoice>();
-            var folder = ScenarioEditorStorage.FolderForArchitect(architect);
-            if (!Directory.Exists(folder)) return result;
-            foreach (var file in Directory.GetFiles(folder,
-                         ScenarioMapPackage.SearchPattern, SearchOption.TopDirectoryOnly))
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (_showLocalMaps)
             {
-                try
-                {
-                    var header = ScenarioMapFormat.ReadHeader(file);
-                    if (!string.IsNullOrEmpty(hospitalId) &&
-                        !string.Equals(header.baseHospitalId, hospitalId, StringComparison.Ordinal))
-                        continue;
-                    var hospital = _hospitalChoices.FirstOrDefault(choice =>
-                        string.Equals(choice.Level.UniqueId, header.baseHospitalId,
-                            StringComparison.Ordinal));
-                    if (hospital == null) continue;
-                    result.Add(new MapChoice
-                    {
-                        Path = file,
-                        Name = string.IsNullOrWhiteSpace(header.name)
-                            ? Path.GetFileNameWithoutExtension(file) : header.name,
-                        Level = hospital.Level
-                    });
-                }
-                catch (Exception exception)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Mapa omitido: " + file + " - " + exception.Message);
-                }
+                var folder = ScenarioEditorStorage.FolderForArchitect(architect);
+                if (Directory.Exists(folder))
+                    foreach (var file in Directory.GetFiles(folder,
+                                 ScenarioMapPackage.SearchPattern,
+                                 SearchOption.TopDirectoryOnly))
+                        paths.Add(file);
             }
+
+            if (_showSteamMaps)
+                foreach (var file in ScenarioWorkshopLibrary.EnumerateSubscribedMaps())
+                {
+                    ScenarioWorkshopMetaData metadata;
+                    if (!ScenarioWorkshopMetaStore.TryReadFromMap(file, out metadata) ||
+                        metadata == null ||
+                        string.IsNullOrWhiteSpace(metadata.author) ||
+                        !string.Equals(metadata.author.Trim(), architect,
+                            StringComparison.CurrentCultureIgnoreCase))
+                        continue;
+                    paths.Add(file);
+                }
+
+            foreach (var file in paths)
+                TryAddMapChoice(result, file, hospitalId);
+
             return result.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+
+        private static void TryAddMapChoice(
+            ICollection<MapChoice> result, string file, string hospitalId)
+        {
+            try
+            {
+                var header = ScenarioMapFormat.ReadHeader(file);
+                if (!string.IsNullOrEmpty(hospitalId) &&
+                    !string.Equals(header.baseHospitalId, hospitalId, StringComparison.Ordinal))
+                    return;
+                var hospital = _hospitalChoices.FirstOrDefault(choice =>
+                    string.Equals(choice.Level.UniqueId, header.baseHospitalId,
+                        StringComparison.Ordinal));
+                if (hospital == null) return;
+                result.Add(new MapChoice
+                {
+                    Path = file,
+                    Name = string.IsNullOrWhiteSpace(header.name)
+                        ? Path.GetFileNameWithoutExtension(file) : header.name,
+                    Level = hospital.Level
+                });
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Mapa omitido: " + file + " - " + exception.Message);
+            }
         }
 
         private static ScrollColumn CreateColumn(Transform parent, string name, Vector2 pos,
@@ -1141,48 +1180,40 @@ namespace UnderPressure.Editor
             return text;
         }
 
-        private static InputField CreateArchitectInput(
-            Transform parent, Vector2 position, Vector2 size)
+        private static void ToggleMapSource(bool steam)
         {
-            var root = Ui("UP_ArchitectName", parent, typeof(Image));
-            var rect = (RectTransform)root.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = position;
-            rect.sizeDelta = size;
-            var background = root.GetComponent<Image>();
-            background.color = new Color(0.86f, 0.89f, 0.92f, 1f);
-
-            var textObject = Ui("Text", root.transform, typeof(Text));
-            var textRect = (RectTransform)textObject.transform;
-            Stretch(textRect);
-            textRect.offsetMin = new Vector2(10f, 1f);
-            textRect.offsetMax = new Vector2(-10f, -1f);
-            var text = textObject.GetComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            text.fontSize = 20;
-            text.color = new Color(0.07f, 0.10f, 0.12f, 1f);
-            text.alignment = TextAnchor.MiddleLeft;
-            text.supportRichText = false;
-            text.raycastTarget = false;
-            text.resizeTextForBestFit = false;
-
-            var input = root.AddComponent<InputField>();
-            input.targetGraphic = background;
-            input.textComponent = text;
-            input.lineType = InputField.LineType.SingleLine;
-            input.characterLimit = 64;
-            input.text = UnderPressureEditorPlugin.ArchitectName;
-            input.onValueChanged.AddListener(value =>
+            if (steam)
             {
-                var name = (value ?? "").Trim();
-                if (name.Length > 0)
-                {
-                    UnderPressureEditorPlugin.ArchitectNameSetting.Value = name;
-                    ShowArchitectMaps(name);
-                }
-            });
-            return input;
+                _showSteamMaps = !_showSteamMaps;
+                if (_showSteamMaps)
+                    ScenarioWorkshopLibrary.EnumerateSubscribedMaps(true);
+            }
+            else
+                _showLocalMaps = !_showLocalMaps;
+
+            CloseArchitectDropdown();
+            RefreshMapSourceButtons();
+            if (_selectedLevel != null)
+                SelectHospital(_selectedLevel);
+            else
+                ShowArchitectMaps(_currentArchitect);
+        }
+
+        private static void RefreshMapSourceButtons()
+        {
+            ApplyMapSourceButtonState(_localSourceButton, _showLocalMaps);
+            ApplyMapSourceButtonState(_steamSourceButton, _showSteamMaps);
+        }
+
+        private static void ApplyMapSourceButtonState(GameObject root, bool selected)
+        {
+            var button = root?.GetComponentInChildren<DynamicButton>(true);
+            if (button == null) return;
+            ScenarioEditorDockLayout.ApplyEditorButtonVisuals(
+                button, _buttonSprite,
+                selected
+                    ? ScenarioEditorDockLayout.EditorSelectedButtonColor
+                    : ScenarioEditorDockLayout.EditorButtonColor);
         }
 
         private static void ToggleArchitectDropdown(Transform panel)
@@ -1192,16 +1223,7 @@ namespace UnderPressure.Editor
                 CloseArchitectDropdown();
                 return;
             }
-            var root = ScenarioEditorStorage.Folder;
-            var names = Directory.Exists(root)
-                ? Directory.GetDirectories(root, "*", SearchOption.TopDirectoryOnly)
-                    .Select(Path.GetFileName)
-                    .Where(name => !string.IsNullOrWhiteSpace(name) &&
-                                   !name.StartsWith("_", StringComparison.Ordinal))
-                    .Distinct(StringComparer.CurrentCultureIgnoreCase)
-                    .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
-                    .ToList()
-                : new List<string>();
+            var names = GetArchitectNames();
 
             _panelRect?.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
                 PanelWidth + 260f);
@@ -1226,8 +1248,6 @@ namespace UnderPressure.Editor
                         StringComparison.CurrentCultureIgnoreCase),
                     OnClick = () =>
                     {
-                        if (_architectInput != null)
-                            _architectInput.text = selected;
                         UnderPressureEditorPlugin.ArchitectNameSetting.Value = selected;
                         ShowArchitectMaps(selected);
                         CloseArchitectDropdown();
@@ -1241,6 +1261,38 @@ namespace UnderPressure.Editor
                     OnClick = CloseArchitectDropdown
                 });
             RefreshRows(_architectColumn);
+        }
+
+        private static List<string> GetArchitectNames()
+        {
+            var names = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+
+            if (_showLocalMaps)
+            {
+                var root = ScenarioEditorStorage.Folder;
+                if (Directory.Exists(root))
+                    foreach (var folder in Directory.GetDirectories(
+                                 root, "*", SearchOption.TopDirectoryOnly))
+                    {
+                        var name = Path.GetFileName(folder);
+                        if (!string.IsNullOrWhiteSpace(name) &&
+                            !name.StartsWith("_", StringComparison.Ordinal))
+                            names.Add(name);
+                    }
+            }
+
+            if (_showSteamMaps)
+                foreach (var map in ScenarioWorkshopLibrary.EnumerateSubscribedMaps())
+                {
+                    ScenarioWorkshopMetaData metadata;
+                    if (ScenarioWorkshopMetaStore.TryReadFromMap(map, out metadata) &&
+                        metadata != null &&
+                        !string.IsNullOrWhiteSpace(metadata.author))
+                        names.Add(metadata.author.Trim());
+                }
+
+            return names.OrderBy(
+                name => name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
         private static void CloseArchitectDropdown()
