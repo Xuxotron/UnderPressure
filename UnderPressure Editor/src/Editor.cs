@@ -174,6 +174,7 @@ namespace UnderPressure.Editor
             {
                 var name = node.name;
                 if (name.StartsWith("UP_", StringComparison.Ordinal) ||
+                    name.StartsWith("UP ", StringComparison.Ordinal) ||
                     name == "Show New Maps" ||
                     name.StartsWith("Under Pressure - Scenario", StringComparison.Ordinal))
                     return true;

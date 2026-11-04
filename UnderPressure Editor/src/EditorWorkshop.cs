@@ -482,11 +482,10 @@ namespace UnderPressure.Editor
                         var installed = SteamWorkshopBridge.IsInstalled(state);
                         var needsUpdate = SteamWorkshopBridge.NeedsUpdate(state);
 
-                        if (!installed || needsUpdate)
-                        {
-                            SteamWorkshopBridge.DownloadItem(id, true);
-                            if (!installed) continue;
-                        }
+                        // El gestor nativo de TPH ya descarga y confirma las
+                        // actualizaciones. Aquí solo se enumeran instalaciones
+                        // completas para no provocar avisos repetidos.
+                        if (!installed || needsUpdate) continue;
 
                         string folder;
                         if (!SteamWorkshopBridge.TryGetInstallFolder(id, out folder) ||
@@ -1109,9 +1108,12 @@ namespace UnderPressure.Editor
                 ExtContentUIUtils.SetSelectableInteractable(_buttonUpdateOther, false);
             }
 
-            SetNativeButtonText(_buttonSteamWorkshop, "Ver Workshop");
-            SetNativeButtonText(_buttonCreateUpdate, "Actualizar artículo");
-            SetNativeButtonText(_buttonCreateAsNew, "Crear como artículo nuevo");
+            SetNativeButtonText(_buttonSteamWorkshop,
+                EditorLocalization.Get("editor.workshop.view"));
+            SetNativeButtonText(_buttonCreateUpdate,
+                EditorLocalization.Get("editor.workshop.update_item"));
+            SetNativeButtonText(_buttonCreateAsNew,
+                EditorLocalization.Get("editor.workshop.create_new_item"));
 
             SetBusy(false);
             return true;
@@ -1245,10 +1247,12 @@ namespace UnderPressure.Editor
             Transform labelDesc = null;
 
             if (titleSec != null)
-                SetLabelText(titleSec, known, _inputTitle.transform, "Nombre:");
+                SetLabelText(titleSec, known, _inputTitle.transform,
+                    EditorLocalization.Get("editor.workshop.name"));
             if (descSec != null)
                 labelDesc = SetLabelText(
-                    descSec, known, _inputDescription.transform, "Descripción:");
+                    descSec, known, _inputDescription.transform,
+                    EditorLocalization.Get("editor.workshop.description"));
             if (previewSec != null)
             {
                 var obsoletePreviewLabel = SetLabelText(previewSec, known, null, "");
@@ -1257,7 +1261,8 @@ namespace UnderPressure.Editor
             }
 
             var headerText = SetHeaderText(
-                root, known, brandSec, "Compartir mapa en Steam Workshop");
+                root, known, brandSec,
+                EditorLocalization.Get("editor.workshop.share_header"));
             var banner = FindHeaderBannerRect(headerText);
 
             // ---- logo + botón (se hace antes de medir nada más) ----
@@ -1338,7 +1343,8 @@ namespace UnderPressure.Editor
                 }
 
                 SetLabelText(authorSec, known,
-                    _inputAuthor != null ? _inputAuthor.transform : null, "Autor:");
+                    _inputAuthor != null ? _inputAuthor.transform : null,
+                    EditorLocalization.Get("editor.workshop.author"));
 
                 // ---- Nombre sube ----
                 ((RectTransform)titleSec).anchoredPosition +=
@@ -1387,13 +1393,16 @@ namespace UnderPressure.Editor
                     var deleteWidth = usableWidth * .8f / 3.1f;
 
                     _buttonChooseThumbnail = CloneSmallButton(
-                        previewSec, "UP Elegir miniatura", "Elegir Miniatura",
+                        previewSec, "UP Elegir miniatura",
+                        EditorLocalization.Get("editor.workshop.choose_thumbnail"),
                         ChooseSelectedAsThumbnail);
                     _buttonCapture = CloneSmallButton(
                         previewSec, "UP Crear imagen",
                         EditorLocalization.Get("editor.workshop.create_image"), BeginCapture);
                     _buttonDeleteImage = CloneSmallButton(
-                        previewSec, "UP Eliminar", "Eliminar", DeleteSelectedImage);
+                        previewSec, "UP Eliminar",
+                        EditorLocalization.Get("editor.workshop.delete_image"),
+                        DeleteSelectedImage);
 
                     if (_buttonChooseThumbnail != null)
                         SetWorldRect((RectTransform)_buttonChooseThumbnail.transform,
@@ -2119,7 +2128,8 @@ namespace UnderPressure.Editor
             }
             catch (Exception exception)
             {
-                ShowError("No se pudo eliminar la imagen: " + exception.Message);
+                ShowError(EditorLocalization.Format(
+                    "editor.workshop.error.delete_image", exception.Message));
                 return;
             }
 
@@ -2143,7 +2153,8 @@ namespace UnderPressure.Editor
             }
             catch (Exception exception)
             {
-                ShowError("No se pudo elegir la miniatura: " + exception.Message);
+                ShowError(EditorLocalization.Format(
+                    "editor.workshop.error.choose_thumbnail", exception.Message));
                 return;
             }
 
@@ -2701,7 +2712,8 @@ namespace UnderPressure.Editor
             }
 
             Bind(_buttonCapture, BeginCapture);
-            SetNativeButtonText(_buttonCapture, "Capturar imagen");
+            SetNativeButtonText(_buttonCapture,
+                EditorLocalization.Get("editor.workshop.create_image"));
             PlaceRect((RectTransform)clone.transform, LeftX, CaptureY, LeftW, CaptureH);
         }
 
@@ -3370,13 +3382,15 @@ namespace UnderPressure.Editor
             var saveName = ScenarioEditorStorage.NameForSave(_level);
             if (string.IsNullOrWhiteSpace(saveName))
             {
-                ShowError("Guarda primero el mapa.");
+                ShowError(EditorLocalization.Get("editor.workshop.error.save_first"));
                 return;
             }
 
             if (GalleryPaths().Count >= ScenarioWorkshopMetaData.MaxImages)
             {
-                ShowError("Máximo " + ScenarioWorkshopMetaData.MaxImages + " imágenes por mapa.");
+                ShowError(EditorLocalization.Format(
+                    "editor.workshop.error.max_images",
+                    ScenarioWorkshopMetaData.MaxImages));
                 return;
             }
 
@@ -3388,7 +3402,8 @@ namespace UnderPressure.Editor
             }
             catch (Exception exception)
             {
-                ShowError("No se pudo guardar el mapa: " + exception.Message);
+                ShowError(EditorLocalization.Format(
+                    "editor.workshop.error.save_map", exception.Message));
                 return;
             }
 
@@ -3405,21 +3420,23 @@ namespace UnderPressure.Editor
             var saveName = ScenarioEditorStorage.NameForSave(_level);
             if (string.IsNullOrWhiteSpace(saveName))
             {
-                ShowError("Guarda primero el mapa.");
+                ShowError(EditorLocalization.Get("editor.workshop.error.save_first"));
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(
                     (_inputTitle != null ? _inputTitle.text : "").Trim()))
             {
-                ShowError("Escribe un título antes de publicar.");
+                ShowError(EditorLocalization.Get(
+                    "editor.workshop.error.title_required"));
                 return;
             }
 
             var preview = ScenarioWorkshopMetaStore.PreviewPath(_level);
             if (string.IsNullOrEmpty(preview) || !File.Exists(preview))
             {
-                ShowError("Captura primero una imagen previa.");
+                ShowError(EditorLocalization.Get(
+                    "editor.workshop.error.capture_first"));
                 return;
             }
 
@@ -3428,8 +3445,8 @@ namespace UnderPressure.Editor
                 ulong existingId;
                 if (!ScenarioWorkshopMetaStore.TryGetPublishedId(_level, out existingId))
                 {
-                    ShowError(
-                        "Este mapa todavía no tiene artículo. Usa “Crear como artículo nuevo”.");
+                    ShowError(EditorLocalization.Get(
+                        "editor.workshop.error.no_article"));
                     return;
                 }
             }
@@ -3442,7 +3459,8 @@ namespace UnderPressure.Editor
             }
             catch (Exception exception)
             {
-                ShowError("No se pudo guardar el mapa: " + exception.Message);
+                ShowError(EditorLocalization.Format(
+                    "editor.workshop.error.save_map", exception.Message));
                 return;
             }
 
@@ -3468,12 +3486,14 @@ namespace UnderPressure.Editor
             {
                 if (!WorkshopUtils.AreSteamWorkshopFeaturesAvailable())
                     throw new InvalidOperationException(
-                        "Steam Workshop no está disponible en esta sesión.");
+                        EditorLocalization.Get(
+                            "editor.workshop.error.unavailable"));
 
                 mapPath = ScenarioEditorStorage.CurrentMapPath(_level);
                 if (string.IsNullOrEmpty(mapPath) || !File.Exists(mapPath))
                     throw new FileNotFoundException(
-                        "No existe el .upmap actual.", mapPath);
+                        EditorLocalization.Get(
+                            "editor.workshop.error.map_missing"), mapPath);
 
                 meta = ScenarioWorkshopMetaStore.Current(_level);
                 if (string.IsNullOrWhiteSpace(meta.localId))
@@ -3489,7 +3509,8 @@ namespace UnderPressure.Editor
 
                 if (!string.IsNullOrWhiteSpace(meta.author))
                 {
-                    description = "Autor: " + meta.author +
+                    description = EditorLocalization.Format(
+                        "editor.workshop.author_line", meta.author) +
                         (string.IsNullOrWhiteSpace(description)
                             ? ""
                             : "\n\n" + description);
@@ -3530,7 +3551,8 @@ namespace UnderPressure.Editor
                         createWait.Result);
                     if (publishedId == 0UL)
                         throw new InvalidOperationException(
-                            "Steam devolvió un PublishedFileId inválido.");
+                            EditorLocalization.Get(
+                                "editor.workshop.error.invalid_published_id"));
 
                     ScenarioWorkshopMetaStore.SetPublishedFileId(_level, publishedId);
                     meta = ScenarioWorkshopMetaStore.Current(_level);
@@ -3616,7 +3638,8 @@ namespace UnderPressure.Editor
                     var preview = ScenarioWorkshopMetaStore.PreviewPath(_level);
                     if (string.IsNullOrEmpty(preview) || !File.Exists(preview))
                         throw new FileNotFoundException(
-                            "No existe la imagen previa del Workshop.");
+                            EditorLocalization.Get(
+                                "editor.workshop.error.preview_missing"));
 
                     var steamThumbnail = BuildSteamThumbnailFile(
                         preview, meta.localId, out steamThumbnailFolder);
@@ -3639,7 +3662,8 @@ namespace UnderPressure.Editor
 
                     if (!ok)
                         throw new InvalidOperationException(
-                            "Steam rechazó uno o más parámetros de publicación.");
+                            EditorLocalization.Get(
+                                "editor.workshop.error.parameters_rejected"));
 
                     submitWait = SteamWorkshopBridge.BeginSubmitItemUpdate(update, "");
                 }
@@ -3716,7 +3740,8 @@ namespace UnderPressure.Editor
             }
             catch (Exception exception)
             {
-                ShowError("No se pudo abrir Steam: " + exception.Message);
+                ShowError(EditorLocalization.Format(
+                    "editor.workshop.error.open_steam", exception.Message));
             }
         }
 
@@ -3777,15 +3802,18 @@ namespace UnderPressure.Editor
             {
                 source = ExtContentTextureUtils.LoadTexture2D(sourcePath);
                 if (source == null)
-                    throw new IOException("No existe la imagen previa del Workshop.");
+                    throw new IOException(EditorLocalization.Get(
+                        "editor.workshop.error.preview_missing"));
 
                 thumbnail = WorkshopThumbnail.Build(source);
                 if (thumbnail == null)
-                    throw new IOException("No existe la imagen previa del Workshop.");
+                    throw new IOException(EditorLocalization.Get(
+                        "editor.workshop.error.preview_missing"));
 
                 var bytes = ImageConversion.EncodeToJPG(thumbnail, 92);
                 if (bytes == null || bytes.Length == 0 || bytes.Length >= 1024 * 1024)
-                    throw new IOException("No existe la imagen previa del Workshop.");
+                    throw new IOException(EditorLocalization.Get(
+                        "editor.workshop.error.preview_missing"));
 
                 var path = Path.Combine(folder, "workshop_thumbnail.jpg");
                 File.WriteAllBytes(path, bytes);
@@ -4765,7 +4793,7 @@ namespace UnderPressure.Editor
             barRect.sizeDelta = new Vector2(720f, 58f);
 
             var text = NewCaptureText(
-                "Pulsa ESPACIO para capturar · ESC para cancelar",
+                EditorLocalization.Get("editor.workshop.capture_instruction"),
                 23f, Color.white);
             text.transform.SetParent(bar.transform, false);
             Stretch(text.rectTransform);

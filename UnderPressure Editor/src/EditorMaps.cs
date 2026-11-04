@@ -4148,7 +4148,8 @@ PriorVisibility.Clear();
                 Mathf.Max(0, quickSave.transform.GetSiblingIndex()));
 
             DisableLocalisers(button.transform);
-            SetButtonText(button, "Publicar en Steam");
+            SetButtonText(button,
+                EditorLocalization.Get("editor.workshop.publish_menu"));
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(() =>
             {
