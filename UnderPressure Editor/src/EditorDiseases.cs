@@ -183,31 +183,6 @@ namespace UnderPressure.Editor
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, top));
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
-            ReapplySettingsDesignerStructure();
-            RestoreDiseaseSettingsParent();
-        }
-
-        // El layout persistido puede contener una relacion antigua que movia
-        // esta raiz al panel comun. Enfermedades siempre pertenece a su pagina.
-        private void RestoreDiseaseSettingsParent()
-        {
-            if (_settingsDiseaseSurface == null ||
-                _settingsPages == null ||
-                _settingsPages.Length < 2 ||
-                _settingsPages[1] == null)
-                return;
-
-            var page = _settingsPages[1].transform;
-
-            if (_settingsDiseaseSurface.parent != page)
-                _settingsDiseaseSurface.SetParent(page, false);
-
-            Stretch(_settingsDiseaseSurface);
-            _settingsDiseaseSurface.offsetMin =
-                new Vector2(10f, 10f);
-            _settingsDiseaseSurface.offsetMax =
-                new Vector2(-10f, -10f);
-            _settingsDiseaseSurface.SetAsLastSibling();
         }
 
         private void LoadPatientSettingsFromLevel()

@@ -899,7 +899,6 @@ namespace UnderPressure.Editor
             ApplySettingsContentFrameColor();
             ApplyLatestSavedSettingsUi();
             ReapplySettingsDesignerStructure();
-            RestoreDiseaseSettingsParent();
             SetSettingsTab(0);
             clone.SetActive(true);
             _settingsOverlay.SetActive(false);
@@ -932,13 +931,26 @@ namespace UnderPressure.Editor
                 if (folder != null)
                     folder.gameObject.SetActive(selected);
 
-                if (_settingsPages[index] != null)
+                if (index == 1)
+                {
+                    if (_settingsPages[index] != null)
+                        _settingsPages[index].SetActive(false);
+
+                    if (_settingsDiseaseSurface != null)
+                        _settingsDiseaseSurface.gameObject.SetActive(selected);
+                }
+                else if (_settingsPages[index] != null)
+                {
                     _settingsPages[index].SetActive(selected);
+                }
             }
 
             _settingsTabRoots[_activeSettingsTab]?.SetAsLastSibling();
 
-            _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
+            if (_activeSettingsTab == 1)
+                _settingsDiseaseSurface?.SetAsLastSibling();
+            else
+                _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
 
             _settingsCloseButton?.SetAsLastSibling();
         }
@@ -1427,45 +1439,17 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 SettingsSharedPageColor);
         }
 
-        // Reaplica la persistencia por zonas aisladas.
-        // Nunca se usa todo el overlay como un unico scope: asi un parentPath
-        // guardado en una pestana no puede mover controles a otra pestana.
+        // Solo se llama cuando se crea o reconstruye UI de Ajustes.
+        // RuntimeUiDesigner resuelve las rutas guardadas directamente; no
+        // recorre la escena ni se ejecuta por cambiar una pestana ya creada.
         private void ReapplySettingsDesignerStructure()
         {
             if (_settingsOverlay == null)
                 return;
 
-            var nativeSettings =
-                _settingsOverlay.transform.Find(
-                    "UP Native Scenario Settings");
-
-            var settingsPanel =
-                nativeSettings != null
-                    ? nativeSettings.Find("Panel")
-                    : null;
-
-            var tabFolder =
-                settingsPanel != null
-                    ? settingsPanel.Find("Tab Folder Background")
-                    : null;
-
-            if (tabFolder != null)
-            {
-                UnderPressure.RuntimeUiDesignerPlugin
-                    .ReapplyPersistentStructureNow(tabFolder);
-            }
-
-            if (_settingsPages == null)
-                return;
-
-            foreach (var page in _settingsPages)
-            {
-                if (page == null)
-                    continue;
-
-                UnderPressure.RuntimeUiDesignerPlugin
-                    .ReapplyPersistentStructureNow(page.transform);
-            }
+            UnderPressure.RuntimeUiDesignerPlugin
+                .ReapplyPersistentStructureNow(
+                    _settingsOverlay.transform);
         }
 
         private void BuildGeneralSettingsContents()
