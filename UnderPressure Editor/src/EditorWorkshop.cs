@@ -178,6 +178,16 @@ namespace UnderPressure.Editor
                         names.Insert(0, primary);
                 }
 
+                // La miniatura siempre ocupa el primer lugar de la galería.
+                var thumbnail = Path.GetFileName(data.previewFile ?? "");
+                var thumbnailIndex = names.FindIndex(name =>
+                    string.Equals(name, thumbnail, StringComparison.OrdinalIgnoreCase));
+                if (thumbnailIndex > 0)
+                {
+                    names.RemoveAt(thumbnailIndex);
+                    names.Insert(0, thumbnail);
+                }
+
                 foreach (var name in names)
                 {
                     var path = Path.Combine(folder, Path.GetFileName(name));
@@ -253,9 +263,16 @@ namespace UnderPressure.Editor
             if (level == null || string.IsNullOrWhiteSpace(entry)) return;
 
             var data = Current(level);
-            data.images = GalleryPaths(level).Select(path => Path.GetFileName(path)).ToArray();
+            var thumbnail = Path.GetFileName(entry);
+            var images = GalleryPaths(level)
+                .Select(path => Path.GetFileName(path))
+                .Where(name => !string.Equals(
+                    name, thumbnail, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            images.Insert(0, thumbnail);
+            data.images = images.ToArray();
             data.galleryManaged = true;
-            data.previewFile = Path.GetFileName(entry);
+            data.previewFile = thumbnail;
             PersistIfPossible(level);
         }
 
@@ -1226,7 +1243,6 @@ namespace UnderPressure.Editor
 
             // ---- textos sin la palabra "Workshop" (antes de clonar/mover) ----
             Transform labelDesc = null;
-            Transform labelPreview = null;
 
             if (titleSec != null)
                 SetLabelText(titleSec, known, _inputTitle.transform, "Nombre:");
@@ -1234,7 +1250,11 @@ namespace UnderPressure.Editor
                 labelDesc = SetLabelText(
                     descSec, known, _inputDescription.transform, "Descripción:");
             if (previewSec != null)
-                labelPreview = SetLabelText(previewSec, known, null, "Imagen previa:");
+            {
+                var obsoletePreviewLabel = SetLabelText(previewSec, known, null, "");
+                if (obsoletePreviewLabel != null)
+                    obsoletePreviewLabel.gameObject.SetActive(false);
+            }
 
             var headerText = SetHeaderText(
                 root, known, brandSec, "Compartir mapa en Steam Workshop");
@@ -1350,43 +1370,42 @@ namespace UnderPressure.Editor
                 // ---- la imagen ocupa su panel: 16:9 y mismo alto que el campo de descripción ----
                 ApplyPreviewBox();
 
-                // ---- "Imagen previa:" igual que "Descripción:" (misma altura y tamaño) ----
-                if (labelDesc != null && labelPreview != null)
+                // ---- acciones de imagen centradas en la cabecera del panel ----
+                if (labelDesc != null)
                 {
                     StyleFixedLabel(labelDesc);
-                    StyleFixedLabel(labelPreview);
 
                     var descLabelRect = WorldRect(labelDesc);
-                    var visDescNow = VisibleRect(descSec);
-                    var insetX = descLabelRect.xMin - visDescNow.xMin;
-
-                    var previewLabelRect = (RectTransform)labelPreview;
-                    DisableAutoLayout(previewLabelRect.parent);
-                    SetWorldRect(previewLabelRect,
-                        visPreviewNow.xMin + insetX, descLabelRect.yMax,
-                        230f * canvasUnit, descLabelRect.height);
-
-                    // ---- botones junto al rótulo: Eliminar / Elegir Miniatura ----
                     var buttonHeight = descLabelRect.height * .85f;
-                    var rightEdge = visPreviewNow.xMax - 22f * canvasUnit;
-                    var deleteWidth = 112f * canvasUnit;
-                    var chooseWidth = 190f * canvasUnit;
+                    var chooseWidth = 170f * canvasUnit;
+                    var createWidth = 135f * canvasUnit;
+                    var deleteWidth = 100f * canvasUnit;
                     var buttonGap = 10f * canvasUnit;
                     var buttonTop = descLabelRect.center.y + buttonHeight * .5f;
+                    var buttonsWidth = chooseWidth + createWidth + deleteWidth + buttonGap * 2f;
+                    var buttonsLeft = visPreviewNow.center.x - buttonsWidth * .5f;
 
-                    _buttonDeleteImage = CloneSmallButton(
-                        previewSec, "UP Eliminar", "Eliminar", DeleteSelectedImage);
                     _buttonChooseThumbnail = CloneSmallButton(
                         previewSec, "UP Elegir miniatura", "Elegir Miniatura",
                         ChooseSelectedAsThumbnail);
+                    _buttonCapture = CloneSmallButton(
+                        previewSec, "UP Crear imagen",
+                        EditorLocalization.Get("editor.workshop.create_image"), BeginCapture);
+                    _buttonDeleteImage = CloneSmallButton(
+                        previewSec, "UP Eliminar", "Eliminar", DeleteSelectedImage);
 
-                    if (_buttonDeleteImage != null)
-                        SetWorldRect((RectTransform)_buttonDeleteImage.transform,
-                            rightEdge - deleteWidth, buttonTop, deleteWidth, buttonHeight);
                     if (_buttonChooseThumbnail != null)
                         SetWorldRect((RectTransform)_buttonChooseThumbnail.transform,
-                            rightEdge - deleteWidth - buttonGap - chooseWidth, buttonTop,
+                            buttonsLeft, buttonTop,
                             chooseWidth, buttonHeight);
+                    if (_buttonCapture != null)
+                        SetWorldRect((RectTransform)_buttonCapture.transform,
+                            buttonsLeft + chooseWidth + buttonGap, buttonTop,
+                            createWidth, buttonHeight);
+                    if (_buttonDeleteImage != null)
+                        SetWorldRect((RectTransform)_buttonDeleteImage.transform,
+                            buttonsLeft + chooseWidth + buttonGap + createWidth + buttonGap,
+                            buttonTop, deleteWidth, buttonHeight);
                 }
 
                 // ---- panel inferior izquierdo = Imágenes ----
@@ -1838,7 +1857,6 @@ namespace UnderPressure.Editor
             var bottomMargin = 14f;
             var barHeight = 14f;
             var barGap = 10f;
-            var plusGap = 12f;
 
             var viewTop = visible.yMax - topMargin * u;
             var viewBottom = visible.yMin + (bottomMargin + barHeight + barGap) * u;
@@ -1846,33 +1864,9 @@ namespace UnderPressure.Editor
             var left = visible.xMin + margin * u;
             var fullWidth = Mathf.Max(80f * u, visible.width - margin * 2f * u);
 
-            // ---- botón "+" FIJO: no se desplaza, no puede salirse del panel ----
-            var plusObject = new GameObject(
-                "UP Añadir imagen",
-                typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-            plusObject.transform.SetParent(panel, false);
-            plusObject.GetComponent<LayoutElement>().ignoreLayout = true;
-
-            var plusBackground = plusObject.GetComponent<Image>();
-            plusBackground.color = new Color(0f, 0f, 0f, .25f);
-
-            var plusRect = (RectTransform)plusObject.transform;
-            SetWorldRect(plusRect, left, viewTop, viewHeight, viewHeight);
-
-            var plusSide = plusRect.rect.height;
-            var plusLength = plusSide * .42f;
-            var plusThickness = Mathf.Max(4f, plusSide * .09f);
-            CreatePlusBar(plusObject.transform, new Vector2(plusLength, plusThickness));
-            CreatePlusBar(plusObject.transform, new Vector2(plusThickness, plusLength));
-
-            var plusButton = plusObject.GetComponent<Button>();
-            plusButton.transition = Selectable.Transition.None;
-            plusButton.targetGraphic = plusBackground;
-            plusButton.onClick.AddListener(BeginCapture);
-
             // ---- zona de miniaturas: desplazamiento HORIZONTAL con máscara de recorte ----
-            var viewLeft = left + viewHeight + plusGap * u;
-            var viewWidth = Mathf.Max(40f * u, left + fullWidth - viewLeft);
+            var viewLeft = left;
+            var viewWidth = fullWidth;
 
             var view = new GameObject(
                 "UP Miniaturas",
@@ -2108,23 +2102,6 @@ namespace UnderPressure.Editor
             button.onClick.AddListener(() => SelectGallery(captured));
         }
 
-        private static void CreatePlusBar(Transform parent, Vector2 size)
-        {
-            var bar = new GameObject("Barra +", typeof(RectTransform), typeof(Image));
-            bar.transform.SetParent(parent, false);
-
-            var rect = (RectTransform)bar.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(.5f, .5f);
-            rect.pivot = new Vector2(.5f, .5f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = size;
-
-            var image = bar.GetComponent<Image>();
-            image.color = new Color(1f, 1f, 1f, .9f);
-            image.raycastTarget = false;
-        }
-
-        // Miniatura "+" = capturar y AÑADIR una imagen.
         // Elimina la imagen seleccionada.
         private void DeleteSelectedImage()
         {
@@ -2169,6 +2146,7 @@ namespace UnderPressure.Editor
                 return;
             }
 
+            _galleryIndex = 0;
             Refresh();
         }
 
@@ -3233,7 +3211,7 @@ namespace UnderPressure.Editor
 
             if (_buttonSteamWorkshop != null)
                 ExtContentUIUtils.SetSelectableInteractable(
-                    _buttonSteamWorkshop, !_publishing);
+                    _buttonSteamWorkshop, !_publishing && published);
 
             if (_buttonDeleteImage != null)
                 ExtContentUIUtils.SetSelectableInteractable(
@@ -3720,12 +3698,11 @@ namespace UnderPressure.Editor
             try
             {
                 ulong publishedId;
-                var url = ScenarioWorkshopMetaStore.TryGetPublishedId(
-                    _level, out publishedId)
-                    ? "https://steamcommunity.com/sharedfiles/filedetails/?id=" + publishedId
-                    : "https://steamcommunity.com/app/535930/workshop/";
+                if (!ScenarioWorkshopMetaStore.TryGetPublishedId(_level, out publishedId))
+                    return;
 
-                SteamWorkshopBridge.OpenWorkshopPage(url);
+                var url = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + publishedId;
+                Application.OpenURL(url);
             }
             catch (Exception exception)
             {

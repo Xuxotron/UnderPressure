@@ -1,4 +1,5 @@
 key,en,es,fr,de,it,pt
+editor.workshop.create_image,Create image,Crear imagen,,,,
 editor.scenario_settings.plots.list,Plot list,Lista de parcelas,Liste des parcelles,Grundstücksliste,Elenco lotti,Lista de lotes
 editor.scenario_settings.plots.plot,Plot {0},Parcela {0},Parcelle {0},Grundstück {0},Lotto {0},Lote {0}
 editor.scenario_settings.plots.cost,Purchase price,Precio de compra,Prix d'achat,Kaufpreis,Prezzo di acquisto,Preço de compra
