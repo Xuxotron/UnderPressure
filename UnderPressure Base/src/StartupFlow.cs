@@ -604,6 +604,18 @@ namespace UnderPressure
                     nativeMap.InitialiseFromLevel(currentLevel,
                         currentLevel.GameTime, currentLevel.CameraLogic);
 
+                // La carga directa ya habia entrado en un hospital mediante el
+                // puente. El mapa real necesita el mismo estado en su propia
+                // maquina antes de abrirse; de otro modo OpenInternal no ejecuta
+                // OnReturnToMetagameMap y deja HUD, foco y entrada fuera de ciclo.
+                if (currentLevel != null && currentLevel.Config != null)
+                {
+                    var returningState = new MetagameStateInHospital(
+                        nativeMap, currentLevel.Config, false, false);
+                    _hospitalState = returningState;
+                    nativeMap.StateMachine.PushState(returningState);
+                }
+
                 // Mantener los callbacks de audio del hospital activo.
                 nativeMap.OnOpen += _bridge.OnOpen;
                 nativeMap.OnClose += _bridge.OnClose;
@@ -630,9 +642,180 @@ namespace UnderPressure
         }
     }
 
-    // Anula exclusivamente la carga inicial de una partida directa. El editor
-    // conserva el flujo nativo completo para que Carrera, el EventSystem y el
-    // HUD se inicialicen y destruyan siempre en el orden original del juego.
+    // ===== INICIO: carga directa del editor de escenarios =====
+    internal static class StartupDirectScenarioEditor
+    {
+        private static readonly FieldInfo GameModeApp =
+            AccessTools.Field(typeof(GameMode), "<App>k__BackingField");
+        private static readonly MethodInfo NativeLoadInner =
+            AccessTools.Method(typeof(GameMode), "LoadAsyncInner");
+        private static bool _claimed;
+
+        // Base nunca referencia estaticamente la DLL del editor: puede estar
+        // desactivada o no instalada. Reconocer solo la seleccion en curso.
+        private static bool TryGetEditorSelection(out LevelConfig selected)
+        {
+            selected = null;
+            var flow = AccessTools.TypeByName("UnderPressure.Editor.ScenarioEditorFlow");
+            if (flow == null) return false;
+            var state = AccessTools.Field(flow, "_state");
+            var level = AccessTools.Field(flow, "_selectedLevel");
+            if (state == null || level == null ||
+                !string.Equals(state.GetValue(null)?.ToString(), "Loading",
+                    StringComparison.Ordinal))
+                return false;
+            selected = level.GetValue(null) as LevelConfig;
+            return selected != null;
+        }
+
+        internal static bool TryIntercept(GameMode mode, bool ignoreSave,
+            int saveSlotIndex, out IEnumerator replacement)
+        {
+            replacement = null;
+            if (_claimed || !ignoreSave || saveSlotIndex != 0 ||
+                !(mode is GameModeCareer) || StartupDirectHospital.BridgeExists)
+                return false;
+            LevelConfig selected;
+            if (!TryGetEditorSelection(out selected) || GameModeApp == null ||
+                NativeLoadInner == null)
+                return false;
+            _claimed = true;
+            replacement = LoadSelectedEditorLevel(mode, saveSlotIndex, selected);
+            return true;
+        }
+
+        private static IEnumerator NativeEditorLoad(GameMode mode, int slot)
+        {
+            // Ruta de recuperacion normal: incluye Carrera solamente si la
+            // carga directa no se ha podido preparar.
+            var iterator = NativeLoadInner?.Invoke(mode,
+                new object[] { true, slot }) as IEnumerator;
+            if (iterator != null)
+                yield return iterator;
+            else
+                UnderPressurePlugin.Log?.LogError(
+                    "Editor directo: falta el cargador nativo de recuperacion.");
+        }
+
+        private static IEnumerator LoadSelectedEditorLevel(
+            GameMode mode, int slot, LevelConfig selected)
+        {
+            var app = GameModeApp?.GetValue(mode) as App;
+            if (app == null || selected == null || app.SaveSystem == null)
+            {
+                UnderPressurePlugin.Log?.LogWarning(
+                    "Editor directo: no hay App o nivel; se usa el flujo nativo.");
+                _claimed = false;
+                yield return NativeEditorLoad(mode, slot);
+                yield break;
+            }
+
+            // El editor siempre comienza con el selector del menu principal.
+            // Solo llegamos aqui despues de recibir el LevelConfig elegido.
+            UnderPressurePlugin.Log?.LogInfo(
+                "Editor directo: preparando " + selected.UniqueId +
+                " sin escena de Carrera (guardados del hospital ignorados).");
+            app.LoadSaveProgressScreen.Show(null);
+            yield return app.LoadLevelCommon();
+
+            bool prepared = false;
+            try
+            {
+                mode.LoadMetagame(true, slot);
+                if (mode.Metagame == null)
+                    throw new InvalidOperationException(
+                        "No se ha inicializado la metapartida temporal del editor.");
+                StartupDirectHospital.CreateBridge(mode, app);
+                prepared = true;
+            }
+            catch (Exception error)
+            {
+                UnderPressurePlugin.Log?.LogError(
+                    "Editor directo: error de inicializacion: " + error);
+                StartupDirectHospital.DestroyBridge();
+            }
+            if (!prepared)
+            {
+                _claimed = false;
+                yield return NativeEditorLoad(mode, slot);
+                yield break;
+            }
+
+            StartupDirectHospital.HideFrontendAndMetagameVisuals(app);
+
+            bool levelLoaded = false;
+            Action<Level, bool> onLoaded = (level, restored) =>
+            {
+                if (level != null && level.Config != null &&
+                    string.Equals(level.Config.UniqueId, selected.UniqueId,
+                        StringComparison.Ordinal))
+                    levelLoaded = true;
+            };
+            app.OnLevelLoaded += onLoaded;
+            bool requestFailed = false;
+            try
+            {
+                // El editor abre siempre el original. El config.json pendiente
+                // se aplica despues mediante ScenarioEditorMapPicker.
+                app.LoadLevel(selected, null, true, false);
+            }
+            catch (Exception error)
+            {
+                UnderPressurePlugin.Log?.LogError(
+                    "Editor directo: no se pudo iniciar el nivel: " + error);
+                requestFailed = true;
+            }
+            if (requestFailed)
+            {
+                app.OnLevelLoaded -= onLoaded;
+                StartupDirectHospital.DestroyBridge();
+                _claimed = false;
+                yield return NativeEditorLoad(mode, slot);
+                yield break;
+            }
+
+            float startedAt = Time.realtimeSinceStartup;
+            while ((!levelLoaded || app.IsLoading) &&
+                   Time.realtimeSinceStartup - startedAt < 120f)
+            {
+                if (!levelLoaded && Time.realtimeSinceStartup - startedAt > 2f &&
+                    !app.IsLoading && app.Level == null)
+                    break;
+                yield return null;
+            }
+            app.OnLevelLoaded -= onLoaded;
+
+            if (!levelLoaded || app.Level == null)
+            {
+                UnderPressurePlugin.Log?.LogError(
+                    "Editor directo: el nivel no se ha abierto. " +
+                    "No se guardaran datos del hospital ni se borraran partidas.");
+                _claimed = false;
+                if (!app.IsLoading)
+                    app.QuitToMenuDontSave();
+                yield break;
+            }
+
+            try
+            {
+                StartupDirectHospital.SetHospitalState(selected);
+            }
+            catch (Exception error)
+            {
+                UnderPressurePlugin.Log?.LogWarning(
+                    "Editor directo: estado de retorno no inicializado: " + error);
+            }
+            StartupDirectHospital.HideFrontendAndMetagameVisuals(app);
+            UnderPressurePlugin.Log?.LogInfo(
+                "Editor directo: nivel " + selected.UniqueId +
+                " abierto sin cargar Carrera. El config.json lo administra el editor.");
+            _claimed = false;
+        }
+    }
+    // ===== FIN: carga directa del editor de escenarios =====
+
+    // Anula la carga inicial para partidas directas y para el editor. Ambos
+    // conservan un puente de estado que solo materializa Carrera al solicitarla.
     [HarmonyPatch(typeof(GameMode), "LoadAsync", new[] { typeof(bool), typeof(int) })]
     internal static class StartupDirectHospitalLoadPatch
     {
@@ -641,7 +824,9 @@ namespace UnderPressure
             ref IEnumerator __result)
         {
             IEnumerator replacement;
-            if (!StartupDirectHospital.TryIntercept(__instance, ignoreSave,
+            if (!StartupDirectScenarioEditor.TryIntercept(__instance, ignoreSave,
+                    saveSlotIndex, out replacement) &&
+                !StartupDirectHospital.TryIntercept(__instance, ignoreSave,
                     saveSlotIndex, out replacement)) return true;
             __result = replacement;
             return false;
