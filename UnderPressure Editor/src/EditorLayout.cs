@@ -910,6 +910,8 @@ namespace UnderPressure.Editor
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
             if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
+            if (_activeSettingsTab == 3)
+                RefreshPlotSettingsContents();
             if (_activeSettingsTab == 4) RefreshEmergencySettingsContents();
 
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
