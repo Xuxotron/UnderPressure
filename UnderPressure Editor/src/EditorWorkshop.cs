@@ -534,6 +534,86 @@ namespace UnderPressure.Editor
         }
     }
 
+    internal static class ScenarioMapSources
+    {
+        internal static bool LocalEnabled { get; private set; } = true;
+        internal static bool SteamEnabled { get; private set; } = true;
+
+        internal static void ToggleLocal()
+        {
+            LocalEnabled = !LocalEnabled;
+        }
+
+        internal static void ToggleSteam()
+        {
+            SteamEnabled = !SteamEnabled;
+        }
+
+        internal static List<string> EnumerateEnabledMaps(bool forceSteam = false)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (LocalEnabled && Directory.Exists(ScenarioEditorStorage.Folder))
+                foreach (var path in ScenarioMapPackage.Enumerate(
+                             ScenarioEditorStorage.Folder))
+                    result.Add(Path.GetFullPath(path));
+
+            if (SteamEnabled)
+                foreach (var path in ScenarioWorkshopLibrary.EnumerateSubscribedMaps(forceSteam))
+                    result.Add(Path.GetFullPath(path));
+
+            return result.ToList();
+        }
+
+        internal static bool IsLocalMapPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            try
+            {
+                var root = Path.GetFullPath(ScenarioEditorStorage.Folder).TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar;
+                return Path.GetFullPath(path).StartsWith(
+                    root, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal static bool TryGetAuthor(string path, out string author)
+        {
+            author = null;
+            if (string.IsNullOrWhiteSpace(path)) return false;
+
+            if (IsLocalMapPath(path))
+            {
+                var root = Path.GetFullPath(ScenarioEditorStorage.Folder).TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar;
+                var relative = Path.GetFullPath(path).Substring(root.Length);
+                var separator = relative.IndexOfAny(new[]
+                {
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar
+                });
+                author = separator > 0
+                    ? relative.Substring(0, separator)
+                    : UnderPressureEditorPlugin.ArchitectName;
+                return !string.IsNullOrWhiteSpace(author) &&
+                       !author.StartsWith("_", StringComparison.Ordinal);
+            }
+
+            ScenarioWorkshopMetaData metadata;
+            if (!ScenarioWorkshopMetaStore.TryReadFromMap(path, out metadata) ||
+                metadata == null || string.IsNullOrWhiteSpace(metadata.author))
+                return false;
+
+            author = metadata.author.Trim();
+            return author.Length > 0;
+        }
+    }
+
     [HarmonyPatch(typeof(ScenarioEditorStorage), "ListSaved")]
     internal static class ScenarioWorkshopListSavedPatch
     {
@@ -541,6 +621,13 @@ namespace UnderPressure.Editor
         {
             if (__result == null)
                 __result = new List<ScenarioEditorStorage.MapInfo>();
+
+            if (!ScenarioMapSources.LocalEnabled)
+                __result.RemoveAll(item => item != null &&
+                    ScenarioMapSources.IsLocalMapPath(item.Path));
+
+            if (!ScenarioMapSources.SteamEnabled)
+                return;
 
             var existing = new HashSet<string>(
                 __result.Where(item => item != null)

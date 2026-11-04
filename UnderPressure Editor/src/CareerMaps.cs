@@ -124,9 +124,7 @@ namespace UnderPressure.Editor
         private void LoadChoices()
         {
             _choices.Clear();
-            var root = ScenarioEditorStorage.Folder;
-            if (!Directory.Exists(root)) return;
-            foreach (var path in ScenarioMapPackage.Enumerate(root))
+            foreach (var path in ScenarioMapSources.EnumerateEnabledMaps(true))
             {
                 try
                 {

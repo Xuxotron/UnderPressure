@@ -662,8 +662,6 @@ namespace UnderPressure.Editor
         private static ScrollColumn _architectColumn;
         private static GameObject _localSourceButton;
         private static GameObject _steamSourceButton;
-        private static bool _showLocalMaps = true;
-        private static bool _showSteamMaps = true;
         private static readonly List<HospitalChoice> _hospitalChoices = new List<HospitalChoice>();
         private static string _pendingMap;
         private static string _pendingArchitect;
@@ -737,12 +735,12 @@ namespace UnderPressure.Editor
                 }, false);
             _localSourceButton = CreateNativeRow(panel.transform,
                 EditorLocalization.Get("scenario_editor.source.local"),
-                new Vector2(350f, -485f), new Vector2(190f, 42f),
-                () => ToggleMapSource(false), false, _showLocalMaps);
+                new Vector2(482f, -485f), new Vector2(110f, 42f),
+                () => ToggleMapSource(false), false, ScenarioMapSources.LocalEnabled);
             _steamSourceButton = CreateNativeRow(panel.transform,
                 EditorLocalization.Get("scenario_editor.source.steam"),
-                new Vector2(550f, -485f), new Vector2(190f, 42f),
-                () => ToggleMapSource(true), false, _showSteamMaps);
+                new Vector2(604f, -485f), new Vector2(110f, 42f),
+                () => ToggleMapSource(true), false, ScenarioMapSources.SteamEnabled);
 
             foreach (var level in levels.Where(l => l != null).Distinct()
                                         .OrderBy(l => l.GetLocalisedDisplayName(),
@@ -759,7 +757,7 @@ namespace UnderPressure.Editor
             }
 
             RefreshRows(_hospitalsColumn);
-            if (_showSteamMaps)
+            if (ScenarioMapSources.SteamEnabled)
                 ScenarioWorkshopLibrary.EnumerateSubscribedMaps(true);
             ShowArchitectMaps(UnderPressureEditorPlugin.ArchitectName);
             Canvas.ForceUpdateCanvases();
@@ -938,33 +936,15 @@ namespace UnderPressure.Editor
         private static List<MapChoice> ReadMaps(string architect, string hospitalId)
         {
             var result = new List<MapChoice>();
-            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            if (_showLocalMaps)
+            foreach (var file in ScenarioMapSources.EnumerateEnabledMaps())
             {
-                var folder = ScenarioEditorStorage.FolderForArchitect(architect);
-                if (Directory.Exists(folder))
-                    foreach (var file in Directory.GetFiles(folder,
-                                 ScenarioMapPackage.SearchPattern,
-                                 SearchOption.TopDirectoryOnly))
-                        paths.Add(file);
-            }
-
-            if (_showSteamMaps)
-                foreach (var file in ScenarioWorkshopLibrary.EnumerateSubscribedMaps())
-                {
-                    ScenarioWorkshopMetaData metadata;
-                    if (!ScenarioWorkshopMetaStore.TryReadFromMap(file, out metadata) ||
-                        metadata == null ||
-                        string.IsNullOrWhiteSpace(metadata.author) ||
-                        !string.Equals(metadata.author.Trim(), architect,
-                            StringComparison.CurrentCultureIgnoreCase))
-                        continue;
-                    paths.Add(file);
-                }
-
-            foreach (var file in paths)
+                string mapAuthor;
+                if (!ScenarioMapSources.TryGetAuthor(file, out mapAuthor) ||
+                    !string.Equals(mapAuthor, architect,
+                        StringComparison.CurrentCultureIgnoreCase))
+                    continue;
                 TryAddMapChoice(result, file, hospitalId);
+            }
 
             return result.OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
@@ -1184,12 +1164,12 @@ namespace UnderPressure.Editor
         {
             if (steam)
             {
-                _showSteamMaps = !_showSteamMaps;
-                if (_showSteamMaps)
+                ScenarioMapSources.ToggleSteam();
+                if (ScenarioMapSources.SteamEnabled)
                     ScenarioWorkshopLibrary.EnumerateSubscribedMaps(true);
             }
             else
-                _showLocalMaps = !_showLocalMaps;
+                ScenarioMapSources.ToggleLocal();
 
             CloseArchitectDropdown();
             RefreshMapSourceButtons();
@@ -1201,8 +1181,10 @@ namespace UnderPressure.Editor
 
         private static void RefreshMapSourceButtons()
         {
-            ApplyMapSourceButtonState(_localSourceButton, _showLocalMaps);
-            ApplyMapSourceButtonState(_steamSourceButton, _showSteamMaps);
+            ApplyMapSourceButtonState(
+                _localSourceButton, ScenarioMapSources.LocalEnabled);
+            ApplyMapSourceButtonState(
+                _steamSourceButton, ScenarioMapSources.SteamEnabled);
         }
 
         private static void ApplyMapSourceButtonState(GameObject root, bool selected)
@@ -1267,29 +1249,12 @@ namespace UnderPressure.Editor
         {
             var names = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
 
-            if (_showLocalMaps)
+            foreach (var map in ScenarioMapSources.EnumerateEnabledMaps())
             {
-                var root = ScenarioEditorStorage.Folder;
-                if (Directory.Exists(root))
-                    foreach (var folder in Directory.GetDirectories(
-                                 root, "*", SearchOption.TopDirectoryOnly))
-                    {
-                        var name = Path.GetFileName(folder);
-                        if (!string.IsNullOrWhiteSpace(name) &&
-                            !name.StartsWith("_", StringComparison.Ordinal))
-                            names.Add(name);
-                    }
+                string author;
+                if (ScenarioMapSources.TryGetAuthor(map, out author))
+                    names.Add(author);
             }
-
-            if (_showSteamMaps)
-                foreach (var map in ScenarioWorkshopLibrary.EnumerateSubscribedMaps())
-                {
-                    ScenarioWorkshopMetaData metadata;
-                    if (ScenarioWorkshopMetaStore.TryReadFromMap(map, out metadata) &&
-                        metadata != null &&
-                        !string.IsNullOrWhiteSpace(metadata.author))
-                        names.Add(metadata.author.Trim());
-                }
 
             return names.OrderBy(
                 name => name, StringComparer.CurrentCultureIgnoreCase).ToList();
