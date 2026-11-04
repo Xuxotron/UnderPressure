@@ -1377,13 +1377,14 @@ namespace UnderPressure.Editor
 
                     var descLabelRect = WorldRect(labelDesc);
                     var buttonHeight = descLabelRect.height * .85f;
-                    var chooseWidth = 170f * canvasUnit;
-                    var createWidth = 135f * canvasUnit;
-                    var deleteWidth = 100f * canvasUnit;
                     var buttonGap = 10f * canvasUnit;
                     var buttonTop = descLabelRect.center.y + buttonHeight * .5f;
-                    var buttonsWidth = chooseWidth + createWidth + deleteWidth + buttonGap * 2f;
-                    var buttonsLeft = visPreviewNow.center.x - buttonsWidth * .5f;
+                    var buttonsLeft = visPreviewNow.xMin + 14f * canvasUnit;
+                    var buttonsWidth = visPreviewNow.width - 28f * canvasUnit;
+                    var usableWidth = buttonsWidth - buttonGap * 2f;
+                    var chooseWidth = usableWidth * 1.3f / 3.1f;
+                    var createWidth = usableWidth / 3.1f;
+                    var deleteWidth = usableWidth * .8f / 3.1f;
 
                     _buttonChooseThumbnail = CloneSmallButton(
                         previewSec, "UP Elegir miniatura", "Elegir Miniatura",
@@ -2250,9 +2251,18 @@ namespace UnderPressure.Editor
             if (tmp != null)
             {
                 tmp.enableAutoSizing = true;
-                tmp.fontSizeMin = 12f;
-                tmp.fontSizeMax = 24f;
+                tmp.fontSizeMin = 20f;
+                tmp.fontSizeMax = 30f;
                 tmp.enableWordWrapping = false;
+            }
+
+            var text = button.GetComponentInChildren<Text>(true);
+            if (text != null)
+            {
+                text.resizeTextForBestFit = true;
+                text.resizeTextMinSize = 20;
+                text.resizeTextMaxSize = 30;
+                text.horizontalOverflow = HorizontalWrapMode.Overflow;
             }
 
             return button;
