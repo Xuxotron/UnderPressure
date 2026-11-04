@@ -203,7 +203,6 @@ namespace UnderPressure.Editor
             RefreshEmergencyList();
             LoadSelectedEmergency();
             ReapplySettingsDesignerStructure();
-            RestoreEmergencyPanelColors();
         }
 
         private void BuildEmergencyUi()
@@ -290,33 +289,9 @@ namespace UnderPressure.Editor
                 false);
 
             ApplyEmergencyDesignerLayout();
-            RestoreEmergencyPanelColors();
 
             _emergencies.Add(new EmergencyDraft());
             _selectedEmergency = 0;
-        }
-
-        private void RestoreEmergencyPanelColors()
-        {
-            RestoreEmergencyPanelColor(_emergencyListBlock);
-            RestoreEmergencyPanelColor(_emergencyConfigBlock);
-            RestoreEmergencyPanelColor(_emergencyPrerequisiteBlock);
-            RestoreEmergencyPanelColor(_emergencyRewardBlock);
-        }
-
-        private static void RestoreEmergencyPanelColor(
-            RectTransform panel)
-        {
-            var image = panel != null
-                ? panel.GetComponent<Image>()
-                : null;
-
-            if (image == null)
-                return;
-
-            image.enabled = true;
-            image.type = Image.Type.Sliced;
-            image.color = EmergencyPanelColor;
         }
 
         private RectTransform CreateEmergencyBlock(
@@ -2052,7 +2027,7 @@ namespace UnderPressure.Editor
             if (sharedImage != null)
             {
                 sharedImage.enabled = true;
-                sharedImage.color = EmergencyPanelColor;
+                sharedImage.color = Color.white;
                 sharedImage.raycastTarget = false;
             }
 
