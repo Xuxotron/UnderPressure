@@ -3212,15 +3212,15 @@ namespace UnderPressure.Editor
                     return;
                 }
 
-                // La miniatura elegida se ve cuadrada y con icono; el resto, a 512 x 288
-                // con filtrado y mipmaps (sin escalones).
+                // La miniatura elegida se ve cuadrada y con icono; el resto, a 512 x 288.
+                // En esta vista casi 1:1 no se usan mipmaps para conservar la nitidez.
                 var thumbnailPath = ScenarioWorkshopMetaStore.PreviewPath(_level);
                 var isThumbnail = string.Equals(
                     path, thumbnailPath, StringComparison.OrdinalIgnoreCase);
 
                 var display = isThumbnail
                     ? WorkshopThumbnail.BuildLetterboxed(texture, 512, 288)
-                    : WorkshopImageScaler.Scale(texture, 512, 288, true, true, true);
+                    : WorkshopImageScaler.Scale(texture, 512, 288, true, false, true);
                 Destroy(texture);
 
                 if (display == null)
@@ -3546,6 +3546,8 @@ namespace UnderPressure.Editor
 
                     var gallery = ScenarioWorkshopMetaStore.GalleryPaths(_level)
                         .Where(File.Exists)
+                        .Where(image => !string.Equals(
+                            image, preview, StringComparison.OrdinalIgnoreCase))
                         .Take(ScenarioWorkshopMetaData.MaxImages)
                         .ToList();
                     foreach (var image in gallery)
@@ -3616,8 +3618,6 @@ namespace UnderPressure.Editor
             {
                 if (legalAgreementRequired)
                     OpenUserAgreement();
-
-                Close();
             }
         }
 
@@ -4453,11 +4453,11 @@ namespace UnderPressure.Editor
                 }
             }
 
-            var result = new Texture2D(width, height, TextureFormat.RGBA32, true);
+            var result = new Texture2D(width, height, TextureFormat.RGBA32, false);
             result.SetPixels32(pixels);
-            result.Apply(true, false);
+            result.Apply(false, false);
             result.wrapMode = TextureWrapMode.Clamp;
-            result.filterMode = FilterMode.Trilinear;
+            result.filterMode = FilterMode.Bilinear;
             return result;
         }
 
