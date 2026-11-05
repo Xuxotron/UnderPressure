@@ -4732,15 +4732,15 @@ namespace UnderPressure.Editor
         private static Texture2D _icon;
         private static bool _iconWarned;
 
-        // <carpeta del juego>/Mods/Assets/MapIcon.png (ruta relativa a TPH).
+        // El icono pertenece al paquete que ha cargado esta DLL: puede ser la
+        // carpeta local Mods o la carpeta numerada del articulo de Workshop.
         internal static string IconPath()
         {
-            var root = Directory.GetParent(Application.dataPath);
-            if (root == null) return null;
-
-            return Path.Combine(
-                Path.Combine(Path.Combine(root.FullName, "Mods"), "Assets"),
-                "MapIcon.png");
+            var assemblyDirectory = Path.GetDirectoryName(
+                typeof(WorkshopThumbnail).Assembly.Location);
+            return string.IsNullOrEmpty(assemblyDirectory)
+                ? null
+                : Path.Combine(assemblyDirectory, "Assets", "MapIcon.png");
         }
 
         private static Texture2D LoadIcon()
