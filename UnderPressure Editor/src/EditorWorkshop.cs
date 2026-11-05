@@ -3788,7 +3788,7 @@ namespace UnderPressure.Editor
                     return;
 
                 var url = "https://steamcommunity.com/sharedfiles/filedetails/?id=" + publishedId;
-                Application.OpenURL(url);
+                SteamWorkshopBridge.OpenWorkshopPage(url);
             }
             catch (Exception exception)
             {
