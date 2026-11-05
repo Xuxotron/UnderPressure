@@ -277,6 +277,7 @@ namespace UnderPressure
             AccessTools.Field(typeof(OpeningScreen), "_sceneContent");
 
         private static MetagameMap _bridge;
+        private static MetagameMap _materializedMap;
         private static MetagameStateInHospital _hospitalState;
         private static GameMode _mode;
         private static bool _launchClaimed;
@@ -299,6 +300,37 @@ namespace UnderPressure
 
         internal static bool IsHospitalState(MetagameStateInHospital state) =>
             state != null && ReferenceEquals(state, _hospitalState);
+
+        internal static void CloseMaterializedMapBeforeQuit(App app)
+        {
+            var map = _materializedMap;
+            if (app == null || map == null ||
+                !ReferenceEquals(app.MetagameMap, map) || !map.IsVisible)
+                return;
+
+            try
+            {
+                // QuitToMenu descarga primero el hospital y despues destruye Carrera.
+                // MetagameMap.Destroy no ejecuta CloseInternal: si el mapa sigue abierto,
+                // deja desactivados los menus, la entrada y la camara del hospital para
+                // la siguiente carga. Cerrarlo ahora conserva el orden nativo completo.
+                map.CloseAfterLoad();
+                UnderPressurePlugin.Log?.LogInfo(
+                    "Autocarga directa: mapamundi cerrado antes de volver al menu.");
+            }
+            catch (Exception error)
+            {
+                UnderPressurePlugin.Log?.LogError(
+                    "Autocarga directa: no se pudo cerrar el mapamundi antes del menu: " +
+                    error);
+            }
+        }
+
+        internal static void ForgetMaterializedMap(MetagameMap map)
+        {
+            if (map != null && ReferenceEquals(map, _materializedMap))
+                _materializedMap = null;
+        }
 
         internal static bool TryIntercept(GameMode mode, bool ignoreSave, int slot,
             out IEnumerator replacement)
@@ -626,6 +658,7 @@ namespace UnderPressure
                     if (listener != null) AudioMap?.SetValue(listener, nativeMap);
                 }
                 GameModeMap.SetValue(_mode, nativeMap);
+                _materializedMap = nativeMap;
                 DestroyBridge();
                 _openingCareer = false;
                 nativeMap.Open();
@@ -868,5 +901,24 @@ namespace UnderPressure
             StartupDirectHospital.DestroyBridge();
             return false;
         }
+
+        private static void Postfix(MetagameMap __instance) =>
+            StartupDirectHospital.ForgetMaterializedMap(__instance);
+    }
+
+    [HarmonyPatch(typeof(App), "QuitToMenu")]
+    internal static class StartupDirectHospitalQuitToMenuPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix(App __instance) =>
+            StartupDirectHospital.CloseMaterializedMapBeforeQuit(__instance);
+    }
+
+    [HarmonyPatch(typeof(App), "QuitToMenuDontSave")]
+    internal static class StartupDirectHospitalQuitToMenuDontSavePatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static void Prefix(App __instance) =>
+            StartupDirectHospital.CloseMaterializedMapBeforeQuit(__instance);
     }
 }
