@@ -4843,21 +4843,16 @@ namespace UnderPressure.Editor
                 new Vector2(0f, 0f),
                 new Vector2(border, 0f), cyan);
 
-            var bar = NewCaptureImage(
-                "Instruction Background",
-                new Color(0f, .30f, .48f, .86f));
-            var barRect = (RectTransform)bar.transform;
-            barRect.anchorMin = new Vector2(.5f, 1f);
-            barRect.anchorMax = new Vector2(.5f, 1f);
-            barRect.pivot = new Vector2(.5f, 1f);
-            barRect.anchoredPosition = new Vector2(0f, -18f);
-            barRect.sizeDelta = new Vector2(720f, 58f);
-
             var text = NewCaptureText(
                 EditorLocalization.Get("editor.workshop.capture_instruction"),
                 23f, Color.white);
-            text.transform.SetParent(bar.transform, false);
-            Stretch(text.rectTransform);
+            text.transform.SetParent(_overlayCanvas.transform, false);
+            var textRect = text.rectTransform;
+            textRect.anchorMin = new Vector2(.5f, 0f);
+            textRect.anchorMax = new Vector2(.5f, 0f);
+            textRect.pivot = new Vector2(.5f, 0f);
+            textRect.anchoredPosition = new Vector2(0f, 24f);
+            textRect.sizeDelta = new Vector2(900f, 48f);
         }
 
         private IEnumerator CaptureCoroutine()
