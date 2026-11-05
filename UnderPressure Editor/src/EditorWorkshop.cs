@@ -12,6 +12,7 @@ using TH20;
 using TH20.ExtContent;
 using TH20.UI;
 using TMPro;
+using UnderPressure.LoaderRuntime;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -64,9 +65,9 @@ namespace UnderPressure.Editor
 
     internal sealed class ScenarioWorkshopMetaData
     {
-        internal const int CurrentVersion = 1;
+        internal const int CurrentVersion = 2;
         internal const string EntryName = "workshop.json";
-        internal const string PreviewEntryName = "workshop_preview.jpg";
+        internal const string PreviewEntryName = "0.jpg";
         internal const string SteamMetadataPrefix = "UnderPressure.UpMap.v1:";
 
         public int version = CurrentVersion;
@@ -95,6 +96,7 @@ namespace UnderPressure.Editor
 
     internal static class ScenarioWorkshopMetaStore
     {
+        private const string WorkshopFolderName = "Workshop";
         private static Level _level;
         private static string _path;
         private static ScenarioWorkshopMetaData _data;
@@ -120,9 +122,8 @@ namespace UnderPressure.Editor
                          _path ?? "", path ?? "",
                          StringComparison.OrdinalIgnoreCase))
             {
-                // Al guardar por primera vez, conservar Autor/LocalId pendientes
-                // y asociarlos al nuevo .upmap. Para cualquier otro cambio de
-                // ruta se relee la metadata del mapa realmente cargado.
+                // Solo el primer guardado enlaza los datos recién introducidos.
+                // Los mapas anteriores no se migran ni conservan automáticamente.
                 if (string.IsNullOrEmpty(_path) &&
                     !string.IsNullOrEmpty(path) &&
                     _data != null)
@@ -174,13 +175,13 @@ namespace UnderPressure.Editor
                 throw new ArgumentException("Vista previa vacía.");
 
             EnsureSavedIdentity(level);
-            var committed = ScenarioEditorStorage.CommitCurrentMapFile(
-                level, ScenarioWorkshopMetaData.PreviewEntryName, jpg);
-            if (string.IsNullOrEmpty(committed))
-                throw new IOException("No se pudo guardar la vista previa dentro del .upmap.");
+            var folder = RequireStorageFolder(level);
+            File.WriteAllBytes(Path.Combine(folder, ScenarioWorkshopMetaData.PreviewEntryName), jpg);
 
             var data = Current(level);
             data.previewFile = ScenarioWorkshopMetaData.PreviewEntryName;
+            data.images = new[] { ScenarioWorkshopMetaData.PreviewEntryName };
+            data.galleryManaged = true;
             PersistIfPossible(level);
         }
 
@@ -196,7 +197,8 @@ namespace UnderPressure.Editor
             try
             {
                 var data = Current(level);
-                var folder = ScenarioMapPackage.Materialize(package);
+                var folder = StorageFolder(package, false);
+                if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return result;
 
                 var names = new List<string>();
                 if (data.images != null)
@@ -204,16 +206,6 @@ namespace UnderPressure.Editor
                         if (!string.IsNullOrWhiteSpace(name) &&
                             !names.Contains(name, StringComparer.OrdinalIgnoreCase))
                             names.Add(name);
-
-                // Compatibilidad: mapas con una sola vista previa antigua.
-                if (!data.galleryManaged)
-                {
-                    var primary = string.IsNullOrWhiteSpace(data.previewFile)
-                        ? ScenarioWorkshopMetaData.PreviewEntryName
-                        : data.previewFile;
-                    if (!names.Contains(primary, StringComparer.OrdinalIgnoreCase))
-                        names.Insert(0, primary);
-                }
 
                 // La miniatura siempre ocupa el primer lugar de la galería.
                 var thumbnail = Path.GetFileName(data.previewFile ?? "");
@@ -246,24 +238,18 @@ namespace UnderPressure.Editor
 
             EnsureSavedIdentity(level);
 
-            var existing = GalleryPaths(level)
-                .Select(path => Path.GetFileName(path)).ToList();
-
-            var entry = "workshop_image_" +
-                        Guid.NewGuid().ToString("N").Substring(0, 8) + ".jpg";
-
-            var committed = ScenarioEditorStorage.CommitCurrentMapFile(level, entry, jpg);
-            if (string.IsNullOrEmpty(committed))
-                throw new IOException("No se pudo guardar la imagen dentro del .upmap.");
-
-            existing.Add(entry);
+            var existing = GalleryPaths(level);
+            var folder = RequireStorageFolder(level);
+            var entry = existing.Count.ToString() + ".jpg";
+            File.WriteAllBytes(Path.Combine(folder, entry), jpg);
 
             var data = Current(level);
-            data.images = existing.ToArray();
+            data.images = existing.Select(Path.GetFileName)
+                .Concat(new[] { entry }).ToArray();
             data.galleryManaged = true;
 
             // La primera imagen es la miniatura de Steam hasta que se elija otra.
-            if (string.IsNullOrEmpty(PreviewPath(level)))
+            if (data.images.Length == 1)
                 data.previewFile = entry;
 
             PersistIfPossible(level);
@@ -274,23 +260,14 @@ namespace UnderPressure.Editor
         {
             if (level == null || string.IsNullOrWhiteSpace(entry)) return;
 
-            var names = GalleryPaths(level).Select(path => Path.GetFileName(path)).ToList();
-            names.RemoveAll(name => string.Equals(name, entry, StringComparison.OrdinalIgnoreCase));
+            var paths = GalleryPaths(level);
+            paths.RemoveAll(path => string.Equals(
+                Path.GetFileName(path), Path.GetFileName(entry),
+                StringComparison.OrdinalIgnoreCase));
 
             var data = Current(level);
-            data.images = names.ToArray();
             data.galleryManaged = true;
-
-            // Si era la miniatura, pasa a ser la primera que quede (o ninguna).
-            if (string.Equals(Path.GetFileName(data.previewFile ?? ""), entry,
-                    StringComparison.OrdinalIgnoreCase))
-                data.previewFile = names.Count > 0 ? names[0] : "";
-
-            if (!TryDeleteMapFile(level, entry))
-                UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Workshop: imagen retirada de la lista; el archivo '" + entry +
-                    "' queda dentro del .upmap (no hay API de borrado).");
-
+            RenumberGallery(level, paths, data);
             PersistIfPossible(level);
         }
 
@@ -301,46 +278,51 @@ namespace UnderPressure.Editor
 
             var data = Current(level);
             var thumbnail = Path.GetFileName(entry);
-            var images = GalleryPaths(level)
-                .Select(path => Path.GetFileName(path))
-                .Where(name => !string.Equals(
-                    name, thumbnail, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            images.Insert(0, thumbnail);
-            data.images = images.ToArray();
+            var images = GalleryPaths(level);
+            var selected = images.FirstOrDefault(path => string.Equals(
+                Path.GetFileName(path), thumbnail, StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrEmpty(selected)) return;
+            images.Remove(selected);
+            images.Insert(0, selected);
             data.galleryManaged = true;
-            data.previewFile = thumbnail;
+            RenumberGallery(level, images, data);
             PersistIfPossible(level);
         }
 
-        private static bool TryDeleteMapFile(Level level, string entry)
+        private static void RenumberGallery(
+            Level level, IList<string> orderedPaths, ScenarioWorkshopMetaData data)
         {
+            var folder = RequireStorageFolder(level);
+            var temporary = new List<string>();
             try
             {
-                foreach (var method in typeof(ScenarioEditorStorage).GetMethods(
-                             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                foreach (var source in orderedPaths)
                 {
-                    var name = method.Name;
-                    if (name.IndexOf("CurrentMapFile", StringComparison.Ordinal) < 0) continue;
-                    if (name.IndexOf("Delete", StringComparison.Ordinal) < 0 &&
-                        name.IndexOf("Remove", StringComparison.Ordinal) < 0)
-                        continue;
-
-                    var parameters = method.GetParameters();
-                    if (parameters.Length != 2 ||
-                        parameters[0].ParameterType != typeof(Level) ||
-                        parameters[1].ParameterType != typeof(string))
-                        continue;
-
-                    method.Invoke(null, new object[] { level, entry });
-                    return true;
+                    if (!File.Exists(source)) continue;
+                    var copy = Path.Combine(folder, ".gallery_" + Guid.NewGuid().ToString("N") + ".tmp");
+                    File.Copy(source, copy, true);
+                    temporary.Add(copy);
                 }
-            }
-            catch
-            {
-            }
 
-            return false;
+                foreach (var path in Directory.GetFiles(folder, "*", SearchOption.TopDirectoryOnly))
+                    if (IsNumberedImage(Path.GetFileName(path))) File.Delete(path);
+
+                var names = new List<string>();
+                for (var index = 0; index < temporary.Count; ++index)
+                {
+                    var name = index + ".jpg";
+                    File.Move(temporary[index], Path.Combine(folder, name));
+                    names.Add(name);
+                }
+
+                data.images = names.ToArray();
+                data.previewFile = names.Count > 0 ? names[0] : "";
+            }
+            finally
+            {
+                foreach (var path in temporary)
+                    if (File.Exists(path)) File.Delete(path);
+            }
         }
 
         internal static string PreviewPath(Level level)
@@ -354,7 +336,8 @@ namespace UnderPressure.Editor
 
             try
             {
-                var folder = ScenarioMapPackage.Materialize(package);
+                var folder = StorageFolder(package, false);
+                if (string.IsNullOrEmpty(folder)) return null;
                 var name = string.IsNullOrWhiteSpace(data.previewFile)
                     ? ScenarioWorkshopMetaData.PreviewEntryName
                     : Path.GetFileName(data.previewFile);
@@ -392,19 +375,7 @@ namespace UnderPressure.Editor
         private static ScenarioWorkshopMetaData Read(string package)
         {
             if (string.IsNullOrEmpty(package) || !File.Exists(package)) return null;
-            try
-            {
-                var json = ScenarioMapPackage.ReadText(
-                    package, ScenarioWorkshopMetaData.EntryName, 64 * 1024);
-                var data = JsonUtility.FromJson<ScenarioWorkshopMetaData>(json);
-                if (data == null) return null;
-                if (data.version <= 0) data.version = ScenarioWorkshopMetaData.CurrentVersion;
-                return data;
-            }
-            catch
-            {
-                return null;
-            }
+            return ReadExternal(package);
         }
 
         private static void PersistIfPossible(Level level)
@@ -416,14 +387,99 @@ namespace UnderPressure.Editor
             if (string.IsNullOrWhiteSpace(data.localId))
                 data.localId = Guid.NewGuid().ToString("N");
 
-            var json = JsonUtility.ToJson(data, true);
-            var bytes = new UTF8Encoding(false).GetBytes(json);
-            var committed = ScenarioEditorStorage.CommitCurrentMapFile(
-                level, ScenarioWorkshopMetaData.EntryName, bytes);
-            if (string.IsNullOrEmpty(committed))
-                throw new IOException("No se pudo actualizar workshop.json dentro del .upmap.");
+            data.version = ScenarioWorkshopMetaData.CurrentVersion;
+            WriteMetadata(StorageFolder(package, true), data);
 
             _path = ScenarioEditorStorage.CurrentMapPath(level);
+        }
+
+        internal static string StorageFolderForMap(string package)
+        {
+            return StorageFolder(package, false);
+        }
+
+        private static string RequireStorageFolder(Level level)
+        {
+            var package = ScenarioEditorStorage.CurrentMapPath(level);
+            if (string.IsNullOrEmpty(package) || !File.Exists(package))
+                throw new IOException("Guarda el mapa antes de administrar sus imágenes.");
+            return StorageFolder(package, true);
+        }
+
+        private static string StorageFolder(string package, bool create)
+        {
+            if (string.IsNullOrWhiteSpace(package)) return null;
+            var full = Path.GetFullPath(package);
+            string folder;
+            if (ScenarioMapSources.IsLocalMapPath(full))
+            {
+                var mapsRoot = Path.GetFullPath(ScenarioEditorStorage.Folder).TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                    Path.DirectorySeparatorChar;
+                var relative = full.Substring(mapsRoot.Length);
+                var relativeFolder = Path.Combine(
+                    Path.GetDirectoryName(relative) ?? "",
+                    Path.GetFileNameWithoutExtension(relative));
+                folder = Path.Combine(Paths.PluginPath, WorkshopFolderName, relativeFolder);
+            }
+            else
+            {
+                folder = Path.Combine(
+                    Path.GetDirectoryName(full) ?? "",
+                    Path.GetFileNameWithoutExtension(full));
+            }
+
+            if (create) Directory.CreateDirectory(folder);
+            return folder;
+        }
+
+        private static ScenarioWorkshopMetaData ReadExternal(string package)
+        {
+            try
+            {
+                var folder = StorageFolder(package, false);
+                var path = string.IsNullOrEmpty(folder)
+                    ? null : Path.Combine(folder, ScenarioWorkshopMetaData.EntryName);
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+                var data = JsonUtility.FromJson<ScenarioWorkshopMetaData>(
+                    File.ReadAllText(path, Encoding.UTF8));
+                if (data == null) return null;
+                if (data.version <= 0) data.version = ScenarioWorkshopMetaData.CurrentVersion;
+                return data;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WriteMetadata(string folder, ScenarioWorkshopMetaData data)
+        {
+            Directory.CreateDirectory(folder);
+            var target = Path.Combine(folder, ScenarioWorkshopMetaData.EntryName);
+            var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporary, JsonUtility.ToJson(data, true),
+                    new UTF8Encoding(false));
+                if (File.Exists(target)) File.Replace(temporary, target, null);
+                else File.Move(temporary, target);
+            }
+            finally
+            {
+                if (File.Exists(temporary)) File.Delete(temporary);
+            }
+        }
+
+        private static bool IsNumberedImage(string name)
+        {
+            int index;
+            return int.TryParse(Path.GetFileNameWithoutExtension(name), out index) &&
+                   index >= 0 &&
+                   (string.Equals(Path.GetExtension(name), ".jpg",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetExtension(name), ".png",
+                        StringComparison.OrdinalIgnoreCase));
         }
     }
 
@@ -3860,7 +3916,39 @@ namespace UnderPressure.Editor
             Directory.CreateDirectory(root);
 
             File.Copy(mapPath, Path.Combine(root, Path.GetFileName(mapPath)), true);
+
+            var source = ScenarioWorkshopMetaStore.StorageFolderForMap(mapPath);
+            if (string.IsNullOrEmpty(source) || !Directory.Exists(source))
+                throw new DirectoryNotFoundException(
+                    "No existe la carpeta externa del mapa para Workshop.");
+
+            var sidecar = Path.Combine(root, Path.GetFileNameWithoutExtension(mapPath));
+            Directory.CreateDirectory(sidecar);
+            foreach (var path in Directory.GetFiles(source, "*", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileName(path);
+                if (!string.Equals(name, ScenarioWorkshopMetaData.EntryName,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    !IsNumberedWorkshopImage(name))
+                    continue;
+                File.Copy(path, Path.Combine(sidecar, name), true);
+            }
+
+            if (!File.Exists(Path.Combine(sidecar, ScenarioWorkshopMetaData.EntryName)))
+                throw new FileNotFoundException(
+                    "No existe workshop.json en la carpeta externa del mapa.");
             return root;
+        }
+
+        private static bool IsNumberedWorkshopImage(string name)
+        {
+            int index;
+            return int.TryParse(Path.GetFileNameWithoutExtension(name), out index) &&
+                   index >= 0 &&
+                   (string.Equals(Path.GetExtension(name), ".jpg",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetExtension(name), ".png",
+                        StringComparison.OrdinalIgnoreCase));
         }
 
         private static string BuildSteamThumbnailFile(
