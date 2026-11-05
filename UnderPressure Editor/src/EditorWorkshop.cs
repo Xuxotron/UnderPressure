@@ -4707,6 +4707,7 @@ namespace UnderPressure.Editor
                 "UP Workshop Capture",
                 typeof(RectTransform),
                 typeof(Canvas),
+                typeof(CanvasScaler),
                 typeof(GraphicRaycaster),
                 typeof(ScenarioWorkshopCapture));
 
@@ -4807,9 +4808,17 @@ namespace UnderPressure.Editor
             }
 
             _overlayCanvas = GetComponent<Canvas>();
+            _overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _overlayCanvas.worldCamera = null;
             _overlayCanvas.overrideSorting = true;
             _overlayCanvas.sortingOrder = 10000;
             _overlayCanvas.enabled = true;
+
+            var scaler = GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = .5f;
 
             // Capa invisible a pantalla completa: ningún clic llega a la interfaz del juego.
             var blocker = NewCaptureImage("Input Blocker", new Color(0f, 0f, 0f, 0f));
