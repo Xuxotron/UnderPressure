@@ -14,9 +14,24 @@ namespace UnderPressure
     {
         private static readonly HashSet<int> PreparedTrees = new HashSet<int>();
 
+        private static bool IsSuppressed()
+        {
+            if (UnderPressurePlugin.ShouldDisableTutorial)
+                return true;
+
+            // La DLL base no referencia estaticamente al editor. Mientras su
+            // flujo este activo, el tutorial debe permanecer siempre anulado.
+            var flow = AccessTools.TypeByName(
+                "UnderPressure.Editor.ScenarioEditorFlow");
+            var state = flow != null ? AccessTools.Field(flow, "_state") : null;
+            return state != null &&
+                   !string.Equals(state.GetValue(null)?.ToString(), "None",
+                       StringComparison.Ordinal);
+        }
+
         internal static bool ShouldSkip(Task task)
         {
-            if (!UnderPressurePlugin.ShouldDisableTutorial || task == null) return false;
+            if (!IsSuppressed() || task == null) return false;
             var tree = task.Owner as LevelScriptBehaviorTree;
             return tree != null && tree.Level != null && tree.Level.Config != null &&
                    tree.Level.Config.UniqueId == "901";
@@ -24,14 +39,14 @@ namespace UnderPressure
 
         internal static bool ShouldSkip(Behavior behavior)
         {
-            if (!UnderPressurePlugin.ShouldDisableTutorial) return false;
+            if (!IsSuppressed()) return false;
             var tree = behavior as LevelScriptBehaviorTree;
             return tree != null && tree.Level != null && tree.Level.Config != null &&
                    tree.Level.Config.UniqueId == "901";
         }
 
         internal static bool ShouldSkip(TH20.Level level) =>
-            UnderPressurePlugin.ShouldDisableTutorial && level != null &&
+            IsSuppressed() && level != null &&
             level.Config != null && level.Config.UniqueId == "901";
 
         internal static bool ShouldSkipButtonPopup(TH20.TutorialButtonClickedMessage button)
