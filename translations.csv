@@ -26,6 +26,7 @@ editor.workshop.error.preview_missing,The Workshop preview image does not exist.
 editor.workshop.error.capture_first,Capture an image first.,Captura primero una imagen.,,,,
 editor.workshop.error.parameters_rejected,Steam rejected one or more publication parameters.,Steam rechazó uno o más parámetros de publicación.,,,,
 editor.workshop.error.open_steam,Could not open Steam: {0},No se pudo abrir Steam: {0},,,,
+editor.workshop.error.dependency,Could not add the main mod as a required Workshop item: {0},No se pudo añadir el mod principal como artículo requerido de Workshop: {0},,,,
 editor.scenario_settings.plots.list,Plot list,Lista de parcelas,Liste des parcelles,Grundstücksliste,Elenco lotti,Lista de lotes
 editor.scenario_settings.plots.plot,Plot {0},Parcela {0},Parcelle {0},Grundstück {0},Lotto {0},Lote {0}
 editor.scenario_settings.plots.cost,Purchase price,Precio de compra,Prix d'achat,Kaufpreis,Prezzo di acquisto,Preço de compra

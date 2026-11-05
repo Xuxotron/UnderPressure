@@ -26,6 +26,7 @@ editor.workshop.error.preview_missing,,,,,
 editor.workshop.error.capture_first,,,,,
 editor.workshop.error.parameters_rejected,,,,,
 editor.workshop.error.open_steam,,,,,
+editor.workshop.error.dependency,,,,,
 editor.scenario_settings.plots.list,Список участков,Lista działek,부지 목록,地块列表,地塊列表
 editor.scenario_settings.plots.plot,Участок {0},Działka {0},부지 {0},地块 {0},地塊 {0}
 editor.scenario_settings.plots.cost,Цена покупки,Cena zakupu,구매 가격,购买价格,購買價格

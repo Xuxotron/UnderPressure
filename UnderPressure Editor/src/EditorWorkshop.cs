@@ -545,6 +545,7 @@ namespace UnderPressure.Editor
     // ================================================================
     internal static class ScenarioWorkshopLibrary
     {
+        private const string WorkshopAppId = "535930";
         private static readonly object Sync = new object();
         private static readonly HashSet<string> WorkshopMaps =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -562,48 +563,32 @@ namespace UnderPressure.Editor
 
                 try
                 {
-                    if (!WorkshopUtils.AreSteamWorkshopFeaturesAvailable())
-                        return WorkshopMaps.ToList();
+                    // La carpeta instalada es la fuente de verdad para los mapas.
+                    // No depender de que Steamworks ya haya inicializado o devuelva
+                    // estados de suscripción mientras se construye el menú.
+                    var workshopRoot = FindWorkshopContentRoot();
+                    AddMapsFromFolder(workshopRoot);
 
-                    var ids = SteamWorkshopBridge.GetSubscribedItems();
-                    if (ids.Length == 0) return WorkshopMaps.ToList();
-
-                    for (var index = 0; index < ids.Length; ++index)
+                    // Steamworks sigue aportando rutas válidas si una biblioteca
+                    // futura no conserva la jerarquía steamapps habitual.
+                    if (WorkshopUtils.AreSteamWorkshopFeaturesAvailable())
                     {
-                        var id = ids[index];
-                        var state = SteamWorkshopBridge.GetItemState(id);
-                        var installed = SteamWorkshopBridge.IsInstalled(state);
-                        var needsUpdate = SteamWorkshopBridge.NeedsUpdate(state);
-
-                        // El gestor nativo de TPH ya descarga y confirma las
-                        // actualizaciones. Aquí solo se enumeran instalaciones
-                        // completas para no provocar avisos repetidos.
-                        if (!installed || needsUpdate) continue;
-
-                        string folder;
-                        if (!SteamWorkshopBridge.TryGetInstallFolder(id, out folder) ||
-                            string.IsNullOrWhiteSpace(folder) ||
-                            !Directory.Exists(folder))
-                            continue;
-
-                        foreach (var map in Directory.GetFiles(
-                                     folder, "*" + ScenarioMapPackage.Extension,
-                                     SearchOption.AllDirectories))
+                        var ids = SteamWorkshopBridge.GetSubscribedItems();
+                        for (var index = 0; index < ids.Length; ++index)
                         {
-                            try
-                            {
-                                var full = Path.GetFullPath(map);
-                                ScenarioMapFormat.ReadHeader(full);
-                                WorkshopMaps.Add(full);
-                            }
-                            catch (Exception exception)
-                            {
-                                UnderPressureEditorPlugin.Log?.LogWarning(
-                                    "Workshop: .upmap ignorado " + map + ": " +
-                                    exception.Message);
-                            }
+                            string folder;
+                            if (SteamWorkshopBridge.TryGetInstallFolder(
+                                    ids[index], out folder))
+                                AddMapsFromFolder(folder);
                         }
                     }
+
+                    UnderPressureEditorPlugin.Log?.LogInfo(
+                        "Workshop: mapas instalados encontrados: " +
+                        WorkshopMaps.Count +
+                        (string.IsNullOrEmpty(workshopRoot)
+                            ? ""
+                            : " en " + workshopRoot));
                 }
                 catch (Exception exception)
                 {
@@ -613,6 +598,71 @@ namespace UnderPressure.Editor
                 }
 
                 return WorkshopMaps.ToList();
+            }
+        }
+
+        private static string FindWorkshopContentRoot()
+        {
+            try
+            {
+                var gameRoot = Path.GetDirectoryName(Application.dataPath);
+                var common = string.IsNullOrWhiteSpace(gameRoot)
+                    ? null
+                    : Directory.GetParent(gameRoot);
+                var steamApps = common?.Parent;
+                if (common == null || steamApps == null ||
+                    !string.Equals(common.Name, "common",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(steamApps.Name, "steamapps",
+                        StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                var root = Path.Combine(
+                    steamApps.FullName, "workshop", "content", WorkshopAppId);
+                return Directory.Exists(root) ? root : null;
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Workshop: no se pudo localizar steamapps: " +
+                    exception.Message);
+                return null;
+            }
+        }
+
+        private static void AddMapsFromFolder(string folder)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+                return;
+
+            try
+            {
+                foreach (var map in Directory.GetFiles(
+                             folder, "*" + ScenarioMapPackage.Extension,
+                             SearchOption.AllDirectories))
+                    AddMap(map);
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Workshop: no se pudo recorrer " + folder + ": " +
+                    exception.Message);
+            }
+        }
+
+        private static void AddMap(string map)
+        {
+            try
+            {
+                var full = Path.GetFullPath(map);
+                ScenarioMapFormat.ReadHeader(full);
+                WorkshopMaps.Add(full);
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Workshop: .upmap ignorado " + map + ": " +
+                    exception.Message);
             }
         }
 
@@ -859,6 +909,7 @@ namespace UnderPressure.Editor
     // ================================================================
     internal sealed class ScenarioWorkshopPanel : MonoBehaviour
     {
+        private const ulong MainModPublishedFileId = 3823463218UL;
         private static ScenarioWorkshopPanel _active;
 
         private static readonly FieldInfo UiParentField =
@@ -3813,6 +3864,7 @@ namespace UnderPressure.Editor
 
             var legalAgreementRequired = false;
             var publishedSuccessfully = false;
+            SteamWorkshopAsyncCall dependencyWait = null;
 
             if (finalError == null && submitWait != null)
             {
@@ -3830,6 +3882,29 @@ namespace UnderPressure.Editor
 
                     legalAgreementRequired =
                         SteamWorkshopBridge.ResultNeedsLegalAgreement(submitWait.Result);
+                    dependencyWait = SteamWorkshopBridge.BeginAddDependency(
+                        publishedId, MainModPublishedFileId);
+                }
+                catch (Exception exception)
+                {
+                    UnderPressureEditorPlugin.Log?.LogError(
+                        "Workshop: SubmitItemUpdate falló: " + exception);
+                    finalError = exception.Message;
+                }
+            }
+
+            if (finalError == null && dependencyWait != null)
+            {
+                yield return dependencyWait.Waiter;
+
+                try
+                {
+                    if (dependencyWait.IoFailure ||
+                        !SteamWorkshopBridge.IsResultOk(dependencyWait.Result))
+                        throw new InvalidOperationException(
+                            EditorLocalization.Format(
+                                "editor.workshop.error.dependency",
+                                SteamWorkshopBridge.ResultCode(dependencyWait.Result)));
 
                     publishedSuccessfully = true;
                     ScenarioWorkshopLibrary.EnumerateSubscribedMaps(true);
@@ -3837,7 +3912,7 @@ namespace UnderPressure.Editor
                 catch (Exception exception)
                 {
                     UnderPressureEditorPlugin.Log?.LogError(
-                        "Workshop: SubmitItemUpdate falló: " + exception);
+                        "Workshop: AddDependency falló: " + exception);
                     finalError = exception.Message;
                 }
             }
@@ -4100,6 +4175,7 @@ namespace UnderPressure.Editor
         private static Type _eItemPreviewType;
         private static Type _createItemResult;
         private static Type _submitItemUpdateResult;
+        private static Type _addUgcDependencyResult;
         private static Type _steamUgcQueryCompleted;
         private static Type _waitForCallResultOpen;
 
@@ -4137,6 +4213,10 @@ namespace UnderPressure.Editor
             _submitItemUpdateResult ?? (_submitItemUpdateResult =
                 Resolve("Steamworks.SubmitItemUpdateResult_t"));
 
+        private static Type AddUgcDependencyResultType =>
+            _addUgcDependencyResult ?? (_addUgcDependencyResult =
+                Resolve("Steamworks.AddUGCDependencyResult_t"));
+
         private static Type SteamUgcQueryCompletedType =>
             _steamUgcQueryCompleted ?? (_steamUgcQueryCompleted =
                 Resolve("Steamworks.SteamUGCQueryCompleted_t"));
@@ -4166,6 +4246,16 @@ namespace UnderPressure.Editor
                 updateHandle, changeNote ?? "");
             return BuildAsyncCall(
                 SubmitItemUpdateResultType, apiCall);
+        }
+
+        internal static SteamWorkshopAsyncCall BeginAddDependency(
+            ulong publishedFileId, ulong dependencyPublishedFileId)
+        {
+            var apiCall = InvokeStatic(
+                SteamUgc, "AddDependency",
+                CreatePublishedFileId(publishedFileId),
+                CreatePublishedFileId(dependencyPublishedFileId));
+            return BuildAsyncCall(AddUgcDependencyResultType, apiCall);
         }
 
         internal static object StartItemUpdate(ulong publishedFileId)
