@@ -763,13 +763,7 @@ namespace UnderPressure.Editor
                        !author.StartsWith("_", StringComparison.Ordinal);
             }
 
-            ScenarioWorkshopMetaData metadata;
-            if (!ScenarioWorkshopMetaStore.TryReadFromMap(path, out metadata) ||
-                metadata == null || string.IsNullOrWhiteSpace(metadata.author))
-                return false;
-
-            author = metadata.author.Trim();
-            return author.Length > 0;
+            return false;
         }
     }
 
