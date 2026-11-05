@@ -3829,42 +3829,6 @@ rect.pivot = new Vector2(1f, 1f);
         }
     }
 
-    internal static class ScenarioEditorFreeCameraZoom
-    {
-        private static readonly FieldInfo BoundCameraField =
-            AccessTools.Field(typeof(TopDownCameraLogic), "_boundCamera");
-        private static readonly FieldInfo CameraConfigField =
-            AccessTools.Field(typeof(TopDownCameraLogic), "_config");
-
-        internal static bool AppliesTo(TopDownCameraLogic camera, out float zoom)
-        {
-            zoom = 0f;
-            if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
-                camera == null || camera != ScenarioEditorSession.Level?.CameraLogic ||
-                BoundCameraField?.GetValue(camera) is not bool bounded || bounded)
-                return false;
-
-            var config = CameraConfigField?.GetValue(camera) as TopDownCameraLogic.Config;
-            var max = config == null ? 1f : Mathf.Max(0.001f, config.MaxZoomScalar);
-            zoom = Mathf.Clamp01(camera.CurrentZoomScalar / max);
-            return true;
-        }
-    }
-
-    [HarmonyPatch(typeof(TopDownCameraLogic), "GetOffset")]
-    internal static class ScenarioEditorFreeCameraZoomPatch
-    {
-        private static void Postfix(TopDownCameraLogic __instance, ref Vector3 __result)
-        {
-            if (!ScenarioEditorFreeCameraZoom.AppliesTo(__instance, out var zoom)) return;
-
-            // Conserva el recorrido nativo y amplía únicamente su extremo lejano.
-            var farFactor = Mathf.SmoothStep(0f, 1f,
-                Mathf.InverseLerp(0.75f, 1f, zoom));
-            __result *= Mathf.Lerp(1f, 1.20f, farFactor);
-        }
-    }
-
     // Los atajos de juego son acciones de Rewired: bloquearlas solo en los
     // fotogramas de nuestros atajos evita abrir menus de hospital en paralelo.
     [HarmonyPatch(typeof(InputManager), "GetButtonDown")]
