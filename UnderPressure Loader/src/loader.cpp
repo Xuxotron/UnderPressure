@@ -1,5 +1,5 @@
-// Updated: 2026-10-12
-// Change: Core DLLs preload automatically before all [Mods] entries.
+// Updated: 2026-11-05
+// Change: el articulo oficial de Workshop tiene prioridad y Mods es el respaldo local.
 // UnderPressure Loader for TPH.exe (Windows x64, Unity Mono).
 // Native WinHTTP proxy: based on TPM-Mod-Loader architecture, with author's permission.
 // Original independent mod loader: no fixed mod assembly filenames.
@@ -29,6 +29,8 @@ namespace {
     std::vector<std::wstring> g_core;
     std::vector<std::wstring> g_mods;
     constexpr UINT kStartMessage = WM_APP + 0x472;
+    constexpr const wchar_t* kWorkshopAppId = L"535930";
+    constexpr const wchar_t* kWorkshopItemId = L"3823463218";
 
     void Log(const std::wstring& message) {
         OutputDebugStringW((message + L"\n").c_str());
@@ -100,6 +102,72 @@ namespace {
             if (c < 32 || wcschr(L"/\\:*?\"<>|", c)) return false;
         return true;
     }
+    bool ExistingFile(const std::wstring& path) {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES &&
+            !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }
+    std::wstring WithoutTrailingSeparators(std::wstring path) {
+        while (path.length() > 3 && (path.back() == L'\\' || path.back() == L'/'))
+            path.pop_back();
+        return path;
+    }
+    std::wstring ParentDirectory(const std::wstring& path) {
+        std::wstring value = WithoutTrailingSeparators(path);
+        const size_t separator = value.find_last_of(L"\\/");
+        if (separator == std::wstring::npos) return L"";
+        return value.substr(0, separator);
+    }
+    std::wstring FileNameOf(const std::wstring& path) {
+        const std::wstring value = WithoutTrailingSeparators(path);
+        const size_t separator = value.find_last_of(L"\\/");
+        return separator == std::wstring::npos ? value : value.substr(separator + 1);
+    }
+    bool FindSteamAppsDirectory(std::wstring path, std::wstring& steamApps) {
+        path = WithoutTrailingSeparators(path);
+        while (!path.empty()) {
+            if (_wcsicmp(FileNameOf(path).c_str(), L"steamapps") == 0) {
+                steamApps = path;
+                return true;
+            }
+            const std::wstring parent = ParentDirectory(path);
+            if (parent.empty() || parent == path) break;
+            path = parent;
+        }
+        return false;
+    }
+    bool FindWorkshopPackage(std::wstring& folder, std::wstring& reason) {
+        std::wstring steamApps;
+        if (!FindSteamAppsDirectory(g_baseDir, steamApps)) {
+            reason = L"no se encontro el ancestro steamapps desde TPH.exe";
+            return false;
+        }
+        folder = steamApps + L"\\workshop\\content\\" +
+            kWorkshopAppId + L"\\" + kWorkshopItemId;
+        const std::wstring mainAssembly = folder + L"\\UnderPressure.dll";
+        const std::wstring harmony = folder + L"\\Core\\0Harmony.dll";
+        if (!ExistingFile(mainAssembly)) {
+            reason = L"falta UnderPressure.dll en " + folder;
+            return false;
+        }
+        if (!ExistingFile(harmony)) {
+            reason = L"falta Core\\0Harmony.dll en " + folder;
+            return false;
+        }
+        return true;
+    }
+    int ModLoadPriority(const std::wstring& name) {
+        if (_wcsicmp(name.c_str(), L"UnderPressure.dll") == 0) return 0;
+        if (_wcsicmp(name.c_str(), L"UnderPressure.Editor.dll") == 0) return 1;
+        if (_wcsicmp(name.c_str(), L"UnderPressure.Energy.dll") == 0) return 2;
+        return 100;
+    }
+    bool ModNameLess(const std::wstring& a, const std::wstring& b) {
+        const int priorityA = ModLoadPriority(a);
+        const int priorityB = ModLoadPriority(b);
+        if (priorityA != priorityB) return priorityA < priorityB;
+        return _wcsicmp(a.c_str(), b.c_str()) < 0;
+    }
     bool ContainsMod(const std::vector<std::wstring>& list, const std::wstring& name) {
         for (const auto& existing : list)
             if (_wcsicmp(existing.c_str(), name.c_str()) == 0) return true;
@@ -168,9 +236,7 @@ namespace {
             } while (FindNextFileW(search, &file));
             FindClose(search);
         }
-        std::sort(discovered.begin(), discovered.end(), [](const std::wstring& a, const std::wstring& b) {
-            return _wcsicmp(a.c_str(), b.c_str()) < 0;
-        });
+        std::sort(discovered.begin(), discovered.end(), ModNameLess);
         g_mods.insert(g_mods.end(), discovered.begin(), discovered.end());
         Log(L"INI mod entries: " + std::to_wstring(named) +
             L"; additionally discovered DLLs: " + std::to_wstring(discovered.size()));
@@ -456,9 +522,6 @@ namespace {
         if (!GameDirectory()) return 2;
         const std::wstring mods = std::wstring(g_baseDir) + L"Mods";
         CreateDirectoryW(mods.c_str(),nullptr);
-        wcscpy_s(g_modsDir, (mods + L"\\").c_str());
-        const std::wstring core = mods + L"\\Core";
-        wcscpy_s(g_coreDir, (core + L"\\").c_str());
         // Shared log: native loader and the managed modules append to the same file.
         wcscpy_s(g_logPath, (mods + L"\\mods.log").c_str());
         Log(L"UnderPressure Loader - native WinHTTP proxy initialized");
@@ -470,8 +533,24 @@ namespace {
         InitOnceExecuteOnce(&g_realOnce,SetupForwarding,nullptr,nullptr);
         if (!g_realWinHttp) {Log(L"ERROR: Windows WinHTTP forwarding unavailable"); return 3;}
         Log(L"Windows WinHTTP forwarding ready");
+
+        std::wstring source = mods;
+        std::wstring workshop;
+        std::wstring workshopReason;
+        if (FindWorkshopPackage(workshop, workshopReason)) {
+            source = workshop;
+            Log(L"MOD SOURCE: Steam Workshop app=" + std::wstring(kWorkshopAppId) +
+                L" item=" + std::wstring(kWorkshopItemId));
+            Log(L"MOD SOURCE PATH: " + workshop);
+        } else {
+            Log(L"MOD SOURCE: local Mods fallback; Workshop unavailable: " + workshopReason);
+        }
+
+        wcscpy_s(g_modsDir, (source + L"\\").c_str());
+        const std::wstring core = source + L"\\Core";
+        wcscpy_s(g_coreDir, (core + L"\\").c_str());
         if (!CreateDirectoryW(core.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
-            LogError(L"WARNING: cannot create Mods\\Core", GetLastError());
+            LogError(L"WARNING: cannot create selected Core directory", GetLastError());
         // Native dependencies may be resolved from Core when loading any mod.
         if (!AddDllDirectory(core.c_str()))
             LogError(L"WARNING: cannot register Core as a native DLL directory", GetLastError());
