@@ -289,7 +289,6 @@ namespace UnderPressure.Editor
                 EmergencyRewardTypes,
                 false);
 
-            ApplyEmergencyDesignerLayout();
             RestoreEmergencyPanelColors();
 
             _emergencies.Add(new EmergencyDraft());
