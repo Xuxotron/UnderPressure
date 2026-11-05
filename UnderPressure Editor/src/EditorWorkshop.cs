@@ -1348,6 +1348,11 @@ namespace UnderPressure.Editor
                 var authorSec = UnityEngine.Object.Instantiate(
                     titleSec.gameObject, previewSec.parent, false).transform;
                 authorSec.name = "UP Autor";
+                PlaceBelowBusyOverlay(
+                    authorSec,
+                    _imageBusyModeInputBlocker != null
+                        ? _imageBusyModeInputBlocker.transform
+                        : null);
 
                 var authorRect = (RectTransform)authorSec;
                 DisableAutoLayout(authorRect);
@@ -3168,6 +3173,26 @@ namespace UnderPressure.Editor
             }
 
             return null;
+        }
+
+        private static void PlaceBelowBusyOverlay(Transform content, Transform overlay)
+        {
+            if (content == null || overlay == null) return;
+
+            var common = FindNearestCommonAncestor(new[] { content, overlay });
+            if (common == null) return;
+
+            var contentBranch = content;
+            while (contentBranch.parent != null && contentBranch.parent != common)
+                contentBranch = contentBranch.parent;
+
+            var overlayBranch = overlay;
+            while (overlayBranch.parent != null && overlayBranch.parent != common)
+                overlayBranch = overlayBranch.parent;
+
+            if (ReferenceEquals(contentBranch, overlayBranch)) return;
+            if (contentBranch.GetSiblingIndex() > overlayBranch.GetSiblingIndex())
+                contentBranch.SetSiblingIndex(overlayBranch.GetSiblingIndex());
         }
 
         private static bool IsDescendantOrSelf(Transform child, Transform ancestor)
