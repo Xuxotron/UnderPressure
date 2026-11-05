@@ -3408,6 +3408,9 @@ namespace UnderPressure.Editor
         {
             _publishing = value;
 
+            if (_inputAuthor != null)
+                _inputAuthor.interactable = !value;
+
             if (_imageWorkshopBusyIcon != null)
                 _imageWorkshopBusyIcon.gameObject.SetActive(value);
 
@@ -3977,7 +3980,6 @@ namespace UnderPressure.Editor
 
         private static Type _steamUgc;
         private static Type _steamUtils;
-        private static Type _steamFriends;
         private static Type _publishedFileId;
         private static Type _eItemState;
         private static Type _eWorkshopFileType;
@@ -3993,9 +3995,6 @@ namespace UnderPressure.Editor
 
         private static Type SteamUtilsType =>
             _steamUtils ?? (_steamUtils = Resolve("Steamworks.SteamUtils"));
-
-        private static Type SteamFriendsType =>
-            _steamFriends ?? (_steamFriends = Resolve("Steamworks.SteamFriends"));
 
         private static Type PublishedFileIdType =>
             _publishedFileId ?? (_publishedFileId =
@@ -4252,10 +4251,7 @@ namespace UnderPressure.Editor
 
         internal static void OpenWorkshopPage(string url)
         {
-            InvokeStatic(
-                SteamFriendsType,
-                "ActivateGameOverlayToWebPage",
-                url ?? "");
+            WorkshopUtils.OpenSteamOverlay(url ?? "", "");
         }
 
         internal static bool IsResultOk(object result) =>
