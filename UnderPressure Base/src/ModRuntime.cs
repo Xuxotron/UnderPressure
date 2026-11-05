@@ -84,6 +84,7 @@ namespace UnderPressure.LoaderRuntime.Logging
 {
     public sealed class ModLogSource
     {
+        private const long MaximumLogBytes = 2L * 1024L * 1024L;
         private static readonly object Sync = new object();
         private static readonly UTF8Encoding Utf8NoBom = new UTF8Encoding(false);
         private static bool _unityCaptureInstalled;
@@ -127,14 +128,49 @@ namespace UnderPressure.LoaderRuntime.Logging
             var bytes = Utf8NoBom.GetBytes(line + Environment.NewLine);
             lock (Sync)
             {
+                var path = Path.Combine(
+                    UnderPressure.LoaderRuntime.Paths.PluginPath, "mods.log");
+                RotateLogIfNeeded(path, bytes.Length);
+
                 // Compatible with CreateFile(FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE)
                 // in the native loader. Both writers append without holding the file open.
                 using (var stream = new FileStream(
-                    Path.Combine(UnderPressure.LoaderRuntime.Paths.PluginPath, "mods.log"),
+                    path,
                     FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
                 {
                     stream.Write(bytes, 0, bytes.Length);
                 }
+            }
+        }
+
+        private static void RotateLogIfNeeded(string path, int incomingBytes)
+        {
+            try
+            {
+                if (!File.Exists(path)) return;
+
+                var length = new FileInfo(path).Length;
+                if (length + incomingBytes <= MaximumLogBytes)
+                    return;
+
+                var backup = Path.Combine(
+                    Path.GetDirectoryName(path) ?? "", "mods.previous.log");
+                // El registro anterior a este límite puede ser enorme. Se descarta
+                // una sola vez; las rotaciones posteriores conservan un tramo previo.
+                if (length > MaximumLogBytes * 2L)
+                {
+                    if (File.Exists(backup)) File.Delete(backup);
+                    File.Delete(path);
+                    return;
+                }
+
+                if (File.Exists(backup)) File.Delete(backup);
+                File.Move(path, backup);
+            }
+            catch
+            {
+                // El cargador nativo puede estar escribiendo en ese instante.
+                // El siguiente mensaje volverá a intentar la rotación.
             }
         }
 

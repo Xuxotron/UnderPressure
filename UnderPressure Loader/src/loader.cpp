@@ -31,13 +31,42 @@ namespace {
     constexpr UINT kStartMessage = WM_APP + 0x472;
     constexpr const wchar_t* kWorkshopAppId = L"535930";
     constexpr const wchar_t* kWorkshopItemId = L"3823463218";
+    constexpr ULONGLONG kMaximumLogBytes = 2ULL * 1024ULL * 1024ULL;
+
+    void RotateLogIfNeeded(DWORD incomingBytes) {
+        if (!g_logPath[0]) return;
+
+        WIN32_FILE_ATTRIBUTE_DATA attributes{};
+        if (!GetFileAttributesExW(g_logPath, GetFileExInfoStandard, &attributes)) return;
+
+        const ULONGLONG length =
+            (static_cast<ULONGLONG>(attributes.nFileSizeHigh) << 32) |
+            attributes.nFileSizeLow;
+        if (length + incomingBytes <= kMaximumLogBytes) return;
+
+        std::wstring backup = g_logPath;
+        const size_t separator = backup.find_last_of(L"\\/");
+        backup = (separator == std::wstring::npos
+                ? std::wstring()
+                : backup.substr(0, separator + 1)) +
+            L"mods.previous.log";
+
+        // No conservar como copia un registro antiguo que ya creció sin límite.
+        // A partir de aquí las rotaciones normales sí mantienen un único tramo previo.
+        if (length > kMaximumLogBytes * 2ULL) {
+            DeleteFileW(backup.c_str());
+            DeleteFileW(g_logPath);
+            return;
+        }
+
+        DeleteFileW(backup.c_str());
+        MoveFileExW(g_logPath, backup.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    }
 
     void Log(const std::wstring& message) {
         OutputDebugStringW((message + L"\n").c_str());
         if (!g_logPath[0]) return;
-        HANDLE f = CreateFileW(g_logPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (f == INVALID_HANDLE_VALUE) return;
         SYSTEMTIME now{}; GetLocalTime(&now);
         wchar_t prefix[80] = {};
         swprintf_s(prefix, L"[%02u:%02u:%02u.%03u] ", now.wHour, now.wMinute,
@@ -47,11 +76,16 @@ namespace {
         if (size > 1) {
             std::vector<char> utf8(size);
             if (WideCharToMultiByte(CP_UTF8, 0, line.c_str(), -1, utf8.data(), size, nullptr, nullptr)) {
+                RotateLogIfNeeded(static_cast<DWORD>(size - 1));
+                HANDLE f = CreateFileW(g_logPath, FILE_APPEND_DATA,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (f == INVALID_HANDLE_VALUE) return;
                 DWORD written = 0;
                 WriteFile(f, utf8.data(), static_cast<DWORD>(size - 1), &written, nullptr);
+                CloseHandle(f);
             }
         }
-        CloseHandle(f);
     }
     void LogError(const wchar_t* subject, DWORD error) {
         Log(std::wstring(subject) + L"; Win32 error=" + std::to_wstring(error));
