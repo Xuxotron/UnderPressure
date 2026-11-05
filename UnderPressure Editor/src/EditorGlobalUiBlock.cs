@@ -298,7 +298,8 @@ namespace UnderPressure.Editor
         [HarmonyPriority(Priority.First)]
         private static bool Prefix()
         {
-            return !ScenarioEditorGlobalUiBlock.PointerBlocksWorld();
+            return ScenarioWorkshopCapture.IsActive ||
+                   !ScenarioEditorGlobalUiBlock.PointerBlocksWorld();
         }
     }
 
@@ -371,7 +372,8 @@ namespace UnderPressure.Editor
         [HarmonyPriority(Priority.First)]
         private static bool Prefix()
         {
-            return !ScenarioEditorGlobalUiBlock.PointerBlocksWorld();
+            return ScenarioWorkshopCapture.IsActive ||
+                   !ScenarioEditorGlobalUiBlock.PointerBlocksWorld();
         }
     }
 
