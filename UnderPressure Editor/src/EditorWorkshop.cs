@@ -4788,6 +4788,15 @@ namespace UnderPressure.Editor
                 StartCoroutine(CaptureCoroutine());
         }
 
+        private void LateUpdate()
+        {
+            if (!IsActive) return;
+
+            // La deteccion puede continuar con normalidad. Se vacia unicamente
+            // la lista visual nativa antes de que el postproceso dibuje el contorno.
+            HighlightRendererProxy.Instance.Clear();
+        }
+
         private void HideUiAndBuildGuide()
         {
             foreach (var canvas in Resources.FindObjectsOfTypeAll<Canvas>())
