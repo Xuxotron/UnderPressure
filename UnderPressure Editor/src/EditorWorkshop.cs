@@ -1648,7 +1648,22 @@ namespace UnderPressure.Editor
                     nativeH + "); sin escalar.");
             }
 
+            RemoveWorkshopTooltips(root);
             LayoutRebuilder.ForceRebuildLayoutImmediate(root);
+        }
+
+        private static void RemoveWorkshopTooltips(Transform root)
+        {
+            if (root == null) return;
+
+            foreach (var tooltip in root.GetComponentsInChildren<TooltipSpawner>(true))
+            {
+                if (tooltip == null) continue;
+                // Los botones clonados heredan el tooltip del boton de publicar.
+                // Se invalida de inmediato y se desregistra al terminar el frame.
+                tooltip.SetShouldShowFunc(() => false);
+                UnityEngine.Object.Destroy(tooltip);
+            }
         }
 
         private static Rect MeasureWorldRect(Transform[] sections)
