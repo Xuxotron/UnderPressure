@@ -24,7 +24,7 @@ namespace UnderPressure.Editor
             new Color32(232, 38, 46, 255);
         // Valores tomados del catálogo UI.
         private static readonly Color EmergencyPanelColor =
-            SettingsSharedPageColor;
+            new Color32(27, 104, 153, 255);
         private static readonly Color EmergencyFieldColor =
             Color.white;
         private static readonly Color EmergencyDropdownListColor =
@@ -202,7 +202,6 @@ namespace UnderPressure.Editor
             RefreshEmergencyIllnessDropdown();
             RefreshEmergencyList();
             LoadSelectedEmergency();
-            ReapplySettingsDesignerStructure();
             RestoreEmergencyPanelColors();
         }
 
@@ -480,9 +479,9 @@ namespace UnderPressure.Editor
         private void BuildEmergencyConfigurationChildren()
         {
             const float margin = 14f;
-            const float selectorTop = 48f;
+            const float selectorTop = 76f;
             const float selectorHeight = 36f;
-            const float columnsTop = 92f;
+            const float columnsTop = 122f;
             const float rowHeight = 40f;
 
             CreateEmergencyLabel(
@@ -648,6 +647,20 @@ namespace UnderPressure.Editor
             if (rowOutline != null)
                 rowOutline.enabled = false;
 
+            foreach (var image in
+                     row.GetComponentsInChildren<Image>(true))
+            {
+                if (image == null)
+                    continue;
+
+                if (fieldRoot != null &&
+                    (image.transform == fieldRoot ||
+                     image.transform.IsChildOf(fieldRoot)))
+                    continue;
+
+                image.enabled = false;
+            }
+
             foreach (var outline in
                      row.GetComponentsInChildren<Outline>(true))
             {
@@ -660,16 +673,6 @@ namespace UnderPressure.Editor
                     continue;
 
                 outline.enabled = false;
-            }
-
-            // El label queda sin placa/fondo, como en la referencia.
-            var labelHolder =
-                row.Find("LayoutGroup/TitleLabelTextHolder");
-            if (labelHolder != null)
-            {
-                foreach (var image in
-                         labelHolder.GetComponentsInChildren<Image>(true))
-                    image.enabled = false;
             }
 
             var label = row.GetComponentsInChildren<TMP_Text>(true)
@@ -699,7 +702,7 @@ namespace UnderPressure.Editor
                 "editor.scenario_settings.emergency." +
                     label.Replace(" ", "_").Replace(":", "").ToLowerInvariant(),
                 top, height, false, integer,
-                .01f, .99f, 132f);
+                .01f, .99f, 160f);
 
             if (input == null)
                 return null;
@@ -788,7 +791,7 @@ namespace UnderPressure.Editor
             SetWorkshopFieldLabel(
                 row.transform, fieldObject.transform, label);
             ArrangeNativeWorkshopColumns(
-                row.transform, fieldObject.transform, 188f);
+                row.transform, fieldObject.transform, 220f);
             RemoveEmergencyRowChrome(
                 row.transform, fieldObject.transform);
 
@@ -875,6 +878,14 @@ namespace UnderPressure.Editor
                 row.transform, fieldObject.transform, 56f);
             RemoveEmergencyRowChrome(
                 row.transform, fieldObject.transform);
+
+            foreach (var image in
+                     fieldObject.GetComponentsInChildren<Image>(true))
+                image.enabled = false;
+
+            foreach (var outline in
+                     fieldObject.GetComponentsInChildren<Outline>(true))
+                outline.enabled = false;
 
             foreach (var oldText in
                      fieldObject.GetComponentsInChildren<Text>(true))
