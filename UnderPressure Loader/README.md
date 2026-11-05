@@ -8,8 +8,9 @@ Base: [TPM-Mod-Loader](https://github.com/SeanB-Mod/TPM-Mod-Loader), cuyo autor 
 - `winhttp.dll` situado junto a `TPH.exe`, que reenvía las 92 funciones de WinHTTP a Windows.
 - `Mods/loader.ini` conserva `[Loader] Enabled=1` como interruptor local.
 - En cada arranque se deriva `steamapps` desde la ubicación real de `TPH.exe`; no existe una unidad de Steam fijada en el código.
-- La fuente prioritaria es el artículo oficial `steamapps/workshop/content/535930/3823463218`.
-- Workshop se acepta únicamente cuando contiene `UnderPressure.dll` y `Core/0Harmony.dll`. Si falta cualquiera, se usa `TPH/Mods` como respaldo completo; nunca se mezclan DLL de ambas fuentes.
+- Para probar una compilación local, `TPH/Mods` tiene prioridad cuando contiene `UnderPressure.dll` y `Core/0Harmony.dll`.
+- Al renombrar o retirar esa carpeta, se usa el artículo oficial `steamapps/workshop/content/535930/3823463218`.
+- Ambas fuentes se aceptan únicamente cuando contienen `UnderPressure.dll` y `Core/0Harmony.dll`; nunca se mezclan DLL de ambas fuentes.
 - En la fuente elegida se respetan primero las entradas numeradas de `loader.ini`. Cualquier DLL adicional se incluye después. Las tres DLL de Under Pressure conservan Base → Editor → Energy aunque el INI no exista.
 - El `winhttp.dll` que pueda acompañar al artículo de Workshop se ignora: solo se ejecuta la copia instalada junto a `TPH.exe`.
 - Diagnósticos compartidos en **`TPH/Mods/mods.log`**, incluida la fuente y ruta elegidas.

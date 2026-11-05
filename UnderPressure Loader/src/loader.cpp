@@ -141,6 +141,26 @@ namespace {
         return attributes != INVALID_FILE_ATTRIBUTES &&
             !(attributes & FILE_ATTRIBUTE_DIRECTORY);
     }
+    bool ExistingDirectory(const std::wstring& path) {
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        return attributes != INVALID_FILE_ATTRIBUTES &&
+            (attributes & FILE_ATTRIBUTE_DIRECTORY);
+    }
+    bool FindLocalPackage(const std::wstring& folder, std::wstring& reason) {
+        if (!ExistingDirectory(folder)) {
+            reason = L"no existe la carpeta Mods";
+            return false;
+        }
+        if (!ExistingFile(folder + L"\\UnderPressure.dll")) {
+            reason = L"falta UnderPressure.dll en Mods";
+            return false;
+        }
+        if (!ExistingFile(folder + L"\\Core\\0Harmony.dll")) {
+            reason = L"falta Core\\0Harmony.dll en Mods";
+            return false;
+        }
+        return true;
+    }
     std::wstring WithoutTrailingSeparators(std::wstring path) {
         while (path.length() > 3 && (path.back() == L'\\' || path.back() == L'/'))
             path.pop_back();
@@ -555,36 +575,43 @@ namespace {
                                 reinterpret_cast<LPCWSTR>(&Worker),&pinned)) return 1;
         if (!GameDirectory()) return 2;
         const std::wstring mods = std::wstring(g_baseDir) + L"Mods";
-        CreateDirectoryW(mods.c_str(),nullptr);
-        // Shared log: native loader and the managed modules append to the same file.
-        wcscpy_s(g_logPath, (mods + L"\\mods.log").c_str());
+        const bool modsDirectoryExists = ExistingDirectory(mods);
+        // No crear Mods aquí: renombrar esa carpeta selecciona la versión de Workshop.
+        wcscpy_s(g_logPath, (modsDirectoryExists
+            ? mods + L"\\mods.log"
+            : std::wstring(g_baseDir) + L"underpressure-loader.log").c_str());
         Log(L"UnderPressure Loader - native WinHTTP proxy initialized");
         if (!IsHospital()) {Log(L"SKIP: host is not TPH.exe"); return 0;}
-        const std::wstring ini = mods + L"\\loader.ini";
-        if (!GetPrivateProfileIntW(L"Loader",L"Enabled",1,ini.c_str())) {
-            Log(L"Disabled by Mods\\loader.ini"); return 0;
-        }
         InitOnceExecuteOnce(&g_realOnce,SetupForwarding,nullptr,nullptr);
         if (!g_realWinHttp) {Log(L"ERROR: Windows WinHTTP forwarding unavailable"); return 3;}
         Log(L"Windows WinHTTP forwarding ready");
 
         std::wstring source = mods;
+        std::wstring localReason;
         std::wstring workshop;
         std::wstring workshopReason;
-        if (FindWorkshopPackage(workshop, workshopReason)) {
+        if (FindLocalPackage(mods, localReason)) {
+            Log(L"MOD SOURCE: local Mods testing package");
+            Log(L"MOD SOURCE PATH: " + mods);
+        } else if (FindWorkshopPackage(workshop, workshopReason)) {
             source = workshop;
             Log(L"MOD SOURCE: Steam Workshop app=" + std::wstring(kWorkshopAppId) +
                 L" item=" + std::wstring(kWorkshopItemId));
             Log(L"MOD SOURCE PATH: " + workshop);
         } else {
-            Log(L"MOD SOURCE: local Mods fallback; Workshop unavailable: " + workshopReason);
+            Log(L"ERROR: no usable mod package; local: " + localReason +
+                L"; Workshop: " + workshopReason);
+            return 6;
+        }
+
+        const std::wstring ini = source + L"\\loader.ini";
+        if (!GetPrivateProfileIntW(L"Loader",L"Enabled",1,ini.c_str())) {
+            Log(L"Disabled by selected loader.ini"); return 0;
         }
 
         wcscpy_s(g_modsDir, (source + L"\\").c_str());
         const std::wstring core = source + L"\\Core";
         wcscpy_s(g_coreDir, (core + L"\\").c_str());
-        if (!CreateDirectoryW(core.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
-            LogError(L"WARNING: cannot create selected Core directory", GetLastError());
         // Native dependencies may be resolved from Core when loading any mod.
         if (!AddDllDirectory(core.c_str()))
             LogError(L"WARNING: cannot register Core as a native DLL directory", GetLastError());
