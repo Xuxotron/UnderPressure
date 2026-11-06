@@ -162,7 +162,7 @@ namespace UnderPressure.Editor
 
         internal static bool ClosePlotMapIfOpen()
         {
-            return _active != null && _active.ReturnFromPlotMap();
+            return false;
         }
 
         // Referencia cromatica de Build.
@@ -969,7 +969,9 @@ namespace UnderPressure.Editor
 
             if (_activeSettingsTab == 5)
                 ScenarioCharacterViewer.OpenEmbedded(
-                    _settingsPages[5].transform as RectTransform);
+                    _settingsPages[5].transform as RectTransform,
+                    _style.ButtonSprite, _style.PanelColor,
+                    _style.ButtonColor, _style.SelectedColor);
 
             _settingsCloseButton?.SetAsLastSibling();
         }
@@ -1505,7 +1507,92 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
                 .68f, .98f, 130f);
+            BuildGeneralStyleSettings(content);
             RefreshScenarioSettingsFields();
+        }
+
+        private void BuildGeneralStyleSettings(Transform content)
+        {
+            var contentRect = content as RectTransform;
+            if (contentRect != null)
+                contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x,
+                    Mathf.Max(contentRect.sizeDelta.y, 520f));
+            var catalog = ScenarioHospitalStyles.Build(_level,
+                EditorLocalization.Get("editor.map.style.original"),
+                EditorLocalization.Get("editor.map.style.none"));
+            CreateGeneralStyleRow(content, "editor.map.style.perimeter", 278f,
+                catalog.Perimeters.Select(choice => choice.Label).ToList(),
+                () =>
+                {
+                    var current = ScenarioEditorStorage.CurrentStyles(_level);
+                    return catalog.Perimeters.FindIndex(choice =>
+                        choice.Mode == current.plotPerimeter &&
+                        (choice.Mode != ScenarioMapFormat.PerimeterCustom ||
+                         choice.PrefabNames.SequenceEqual(current.perimeterPrefabs)));
+                }, index =>
+                {
+                    var choice = catalog.Perimeters[index];
+                    var current = ScenarioEditorStorage.CurrentStyles(_level);
+                    current.plotPerimeter = choice.Mode;
+                    current.perimeterPrefabs = choice.PrefabNames ?? new string[0];
+                    ScenarioEditorStorage.SetStyles(_level, current);
+                });
+            CreateGeneralRoomStyleRow(content, "editor.map.style.built", 334f,
+                catalog.Built, map => map.builtRoomStyle,
+                (map, value) => map.builtRoomStyle = value);
+            CreateGeneralRoomStyleRow(content, "editor.map.style.building", 390f,
+                catalog.Building, map => map.buildingRoomStyle,
+                (map, value) => map.buildingRoomStyle = value);
+            CreateGeneralRoomStyleRow(content, "editor.map.style.unbuilt", 446f,
+                catalog.Unbuilt, map => map.unbuiltRoomStyle,
+                (map, value) => map.unbuiltRoomStyle = value);
+        }
+
+        private void CreateGeneralRoomStyleRow(Transform content, string labelKey, float top,
+            IList<ScenarioHospitalStyles.RoomChoice> choices,
+            Func<ScenarioMapFormat.Map, string> get,
+            Action<ScenarioMapFormat.Map, string> set)
+        {
+            CreateGeneralStyleRow(content, labelKey, top,
+                choices.Select(choice => choice.Label).ToList(),
+                () => choices.ToList().FindIndex(choice =>
+                    string.Equals(choice.Id,
+                        get(ScenarioEditorStorage.CurrentStyles(_level)),
+                        StringComparison.Ordinal)),
+                index =>
+                {
+                    var current = ScenarioEditorStorage.CurrentStyles(_level);
+                    set(current, choices[index].Id);
+                    ScenarioEditorStorage.SetStyles(_level, current);
+                });
+        }
+
+        private void CreateGeneralStyleRow(Transform content, string labelKey, float top,
+            IList<string> labels, Func<int> currentIndex, Action<int> select)
+        {
+            if (labels == null || labels.Count == 0) return;
+            var label = CreateDiseaseText(content,
+                EditorLocalization.Get(labelKey) + ":", 18f,
+                TextAlignmentOptions.MidlineLeft, Color.white);
+            (label.gameObject.GetComponent<LayoutElement>() ??
+                label.gameObject.AddComponent<LayoutElement>()).ignoreLayout = true;
+            SetRect(label.rectTransform, new Vector2(.02f, 1f), new Vector2(.34f, 1f),
+                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, 44f));
+            var index = Mathf.Clamp(currentIndex(), 0, labels.Count - 1);
+            Button button = null;
+            button = CreateDiseaseButton(content, labels[index], _style.ButtonColor, () =>
+            {
+                index = (index + 1) % labels.Count;
+                select(index);
+                var text = button.GetComponentInChildren<TMP_Text>(true);
+                if (text != null) text.text = labels[index];
+            });
+            (button.gameObject.GetComponent<LayoutElement>() ??
+                button.gameObject.AddComponent<LayoutElement>()).ignoreLayout = true;
+            AddPlotButtonOutline(button);
+            SetRect(button.transform as RectTransform,
+                new Vector2(.36f, 1f), new Vector2(.98f, 1f), new Vector2(.5f, 1f),
+                new Vector2(0f, -top), new Vector2(0f, 44f));
         }
 
         private TMP_InputField CreateScenarioSettingsInput(Transform parent, string labelKey,
@@ -2313,14 +2400,10 @@ _settingsTabFolderBackgrounds.Length < 3) return;
 
         // BARRA SUPERIOR: Baldosas queda junto al panel izquierdo, seguida
         // inmediatamente por el icono compacto de Camara. Ajustes permanece
-        // junto a Historial; Personajes y Estilos ocupan el centro.
+        // junto a Historial; Personajes y Estilos viven en Ajustes.
         private void PlaceTopButtons(float canvasWidth)
         {
-            var middleButtons = new[]
-            {
-                ScenarioCharacterViewer.ToggleButton,
-                _storage?.StylesButton
-            }.Where(button => button != null).ToArray();
+            var middleButtons = new Button[0];
             var build = _storage?.BuildButton;
             var camera = _storage?.CameraButton;
             var settings = _settingsToggle;

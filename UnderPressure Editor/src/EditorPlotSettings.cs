@@ -122,8 +122,9 @@ namespace UnderPressure.Editor
                 _level?.WorldState?.HospitalPlots == null) return;
             var spatialPlots = _level.WorldState.HospitalPlots;
             var plots = ScenarioEditorStorage.CurrentPlotSettings(_level);
-            _settingsPlotSelectedIndex = Mathf.Clamp(_settingsPlotSelectedIndex, 0,
-                Mathf.Max(0, plots.Count - 1));
+            if (!_settingsPlotMapSelected)
+                _settingsPlotSelectedIndex = Mathf.Clamp(_settingsPlotSelectedIndex, 0,
+                    Mathf.Max(0, plots.Count - 1));
 
             ClearPlotChildren(_settingsPlotList);
             var contentHeight = plots.Count * PlotListButtonHeight +
@@ -132,7 +133,8 @@ namespace UnderPressure.Editor
             for (var index = 0; index < plots.Count; ++index)
             {
                 var captured = index;
-                var selected = index == _settingsPlotSelectedIndex;
+                var selected = !_settingsPlotMapSelected &&
+                    index == _settingsPlotSelectedIndex;
                 var button = CreateDiseaseButton(_settingsPlotList,
                     EditorLocalization.Format("editor.scenario_settings.plots.plot", index + 1),
                     selected ? _style.ButtonColor : _style.SelectedColor,
@@ -279,6 +281,7 @@ namespace UnderPressure.Editor
         private void SelectPlotMap()
         {
             _settingsPlotMapSelected = true;
+            _settingsPlotSelectedIndex = -1;
             RefreshPlotSettingsContents();
         }
 
@@ -532,6 +535,7 @@ namespace UnderPressure.Editor
         private static bool _plotsEnabled;
         private static bool _alphaEnabled = true;
         private static bool _workingTextureInstalled;
+        private static bool _hasPendingEdits;
 
         internal static bool IsOpen => _overlay != null;
         internal static Button ToggleButton => null;
@@ -664,10 +668,12 @@ namespace UnderPressure.Editor
                 byte[] savedPng;
                 if (TryReadSavedFog(out savedHeader, out savedPng))
                 {
-                    _workingTexture = DecodePng(savedPng, savedHeader,
-                        "UP_FogOfWarWorking");
                     _resetTexture = DecodePng(savedPng, savedHeader,
                         "UP_FogOfWarReset");
+                    var active = ScenarioEditorFogOfWar.CurrentDefinition;
+                    _workingTexture = _hasPendingEdits && active?.FogOfWarTexture != null
+                        ? CloneExact(active.FogOfWarTexture, "UP_FogOfWarWorking")
+                        : DecodePng(savedPng, savedHeader, "UP_FogOfWarWorking");
                     try
                     {
                         if (savedHeader.fogMaxDistance > 0)
@@ -697,27 +703,17 @@ namespace UnderPressure.Editor
                     }
                 }
 
-                _overlay = Ui("UP_FogViewerEmbedded", host, typeof(Image));
+                _overlay = Ui("UP_FogViewerEmbedded", host);
                 Stretch((RectTransform)_overlay.transform);
-                var rootImage = _overlay.GetComponent<Image>();
-                rootImage.sprite = _panelSprite;
-                rootImage.type = _panelSprite != null ? Image.Type.Sliced : Image.Type.Simple;
-                rootImage.color = _panelColor;
-                _overlay.GetComponent<Image>().raycastTarget = true;
                 _overlay.transform.SetAsLastSibling();
 
                 var panel = _overlay;
-                var controls = Ui("Controles del mapa", panel.transform, typeof(Image));
+                var controls = Ui("Controles del mapa", panel.transform);
                 var controlsRect = (RectTransform)controls.transform;
                 controlsRect.anchorMin = Vector2.zero;
                 controlsRect.anchorMax = Vector2.one;
                 controlsRect.offsetMin = new Vector2(PreviewSize + 24f, 8f);
                 controlsRect.offsetMax = new Vector2(-8f, -8f);
-                var controlsImage = controls.GetComponent<Image>();
-                controlsImage.sprite = _panelSprite;
-                controlsImage.type = _panelSprite != null ? Image.Type.Sliced : Image.Type.Simple;
-                controlsImage.color = _panelColor;
-                AddOutline(controls, Color.white, 2f);
 
                 _addButton = CreateButton(controls.transform, "Add", T("editor.fog.add"),
                     new Vector2(112f, 42f), _selectedColor,
@@ -883,7 +879,7 @@ namespace UnderPressure.Editor
                 _strokeDirty = false;
                 RefreshBrushCursorSize();
                 RebuildPreview();
-                PersistWorkingTexture();
+                _hasPendingEdits = false;
             }
             catch (Exception exception)
             {
@@ -971,7 +967,6 @@ namespace UnderPressure.Editor
         private static void EndStroke()
         {
             FlushStroke();
-            PersistWorkingTexture();
             _strokeOriginalPixels = null;
             _strokePixels = null;
             _strokeInfluence = null;
@@ -1059,34 +1054,19 @@ namespace UnderPressure.Editor
                         exception.Message);
                 }
             }
+            _hasPendingEdits = true;
             RebuildPreview();
         }
 
-        // Cada trazo terminado se escribe en el paquete actual. La definición
-        // activa sigue siendo la fuente usada por el guardado general del mapa,
-        // pero reabrir Mapa ya no puede restaurar el PNG anterior y perderlo.
-        private static void PersistWorkingTexture()
+        internal static void MarkFogSaved()
         {
-            if (_workingTexture == null || _level == null) return;
-            try
-            {
-                var png = ImageConversion.EncodeToPNG(_workingTexture);
-                if (png == null || png.Length < 24)
-                    throw new InvalidDataException("El PNG Fog editado esta vacio.");
-                ScenarioMapFormat.Map header;
-                byte[] previous;
-                var entryName = ScenarioEditorFogOfWar.FileName;
-                if (TryReadSavedFog(out header, out previous) &&
-                    !string.IsNullOrEmpty(header.fogOfWarFile))
-                    entryName = header.fogOfWarFile;
-                ScenarioEditorStorage.CommitCurrentMapFile(_level, entryName, png);
-            }
-            catch (Exception exception)
-            {
-                UnderPressureEditorPlugin.Log?.LogWarning(
-                    "Fog of War: no se pudo guardar el trazo: " + exception.Message);
-            }
+            _hasPendingEdits = false;
+            if (_workingTexture == null) return;
+            if (_resetTexture != null) UnityEngine.Object.Destroy(_resetTexture);
+            _resetTexture = CloneExact(_workingTexture, "UP_FogOfWarReset");
         }
+
+        internal static void NotifyFogLoaded() => _hasPendingEdits = false;
 
         private static void RebuildPreview()
         {

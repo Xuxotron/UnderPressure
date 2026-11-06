@@ -38,9 +38,10 @@ namespace UnderPressure.Editor
     {
         private const int PreviewLayer = 30;
         private static readonly Vector3 PreviewOrigin = new Vector3(15000f, -15000f, 15000f);
-        private static readonly Color PanelColor = new Color(0.135f, 0.165f, 0.195f, 0.98f);
-        private static readonly Color ButtonColor = new Color(0.24f, 0.31f, 0.36f, 1f);
-        private static readonly Color HighlightColor = new Color(0.24f, 0.46f, 0.49f, 1f);
+        private static Color _panelColor;
+        private static Color _buttonColor;
+        private static Color _selectedColor;
+        private static Sprite _buttonSprite;
         private static readonly Color ToggleInactiveColor = new Color(.58f, .68f, .74f, 1f);
         private static readonly Color ToggleActiveColor = new Color(.02f, .55f, .90f, 1f);
         private static readonly string[] CharacterTypeKeys =
@@ -73,33 +74,9 @@ namespace UnderPressure.Editor
         {
             Detach();
             if (menu == null || level == null) return;
-            var canvas = menu.GetComponentInParent<Canvas>();
-            if (canvas == null) return;
             _level = level;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
-                .GetValue(menu) as Button;
-            if (template == null) return;
-            var button = UnityEngine.Object.Instantiate(template,
-                ScenarioEditorUiHierarchy.ParentFor(canvas), false);
-            button.gameObject.name = "UP_CharacterViewerToggle";
-            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
-                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
-                    component.enabled = false;
-            button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(Toggle);
-            button.interactable = true;
-            button.gameObject.SetActive(true);
-            var rt = (RectTransform)button.transform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(110f, -12f);
-            rt.sizeDelta = new Vector2(208f, 40f);
-            _toggleRoot = button.gameObject;
-            _toggleText = button.GetComponentInChildren<TMP_Text>(true);
-            if (_toggleText != null) _toggleText.text = T("editor.character.button");
-            RefreshToggleVisual();
-            UnderPressureEditorPlugin.Log?.LogInfo("Visor: boton Personajes instalado en el editor.");
+            UnderPressureEditorPlugin.Log?.LogInfo("Visor: Personajes integrado en Ajustes.");
         }
 
         private static void Toggle()
@@ -133,11 +110,16 @@ namespace UnderPressure.Editor
             }
         }
 
-        internal static void OpenEmbedded(RectTransform host)
+        internal static void OpenEmbedded(RectTransform host, Sprite buttonSprite,
+            Color panelColor, Color buttonColor, Color selectedColor)
         {
             if (host == null || _level == null) return;
             if (_overlay != null && _embedded && _overlay.transform.parent == host) return;
             Close();
+            _buttonSprite = buttonSprite;
+            _panelColor = panelColor;
+            _buttonColor = buttonColor;
+            _selectedColor = selectedColor;
             ScenarioEditorStorageMenu.DeactivateNativeTools();
             ScenarioEditorTerrainPainter.DisableTools();
             try
@@ -178,7 +160,7 @@ namespace UnderPressure.Editor
                 titleRect.anchoredPosition = new Vector2(0f, -8f);
             }
 
-            var panel = UI("UP_CharacterViewerPanel", _overlay.transform, typeof(Image));
+            var panel = UI("UP_CharacterViewerPanel", _overlay.transform);
             var panelRect = (RectTransform)panel.transform;
             GameObject viewport;
             if (embedded)
@@ -187,8 +169,6 @@ namespace UnderPressure.Editor
                 panelRect.pivot = new Vector2(0f, 1f);
                 panelRect.anchoredPosition = new Vector2(755f, -365f);
                 panelRect.sizeDelta = new Vector2(482f, 400f);
-                panel.GetComponent<Image>().color = PanelColor;
-
                 var previewFrame = UI("UP_PortraitFrame", _overlay.transform, typeof(Image));
                 var frameRect = (RectTransform)previewFrame.transform;
                 frameRect.anchorMin = frameRect.anchorMax = new Vector2(0f, 1f);
@@ -197,7 +177,11 @@ namespace UnderPressure.Editor
                 // Mantener la proporcion vertical del RenderTexture (512x720)
                 // evita que el personaje aparezca achatado en el panel ancho.
                 frameRect.sizeDelta = new Vector2(528f, 730f);
-                previewFrame.GetComponent<Image>().color = PanelColor;
+                var frameImage = previewFrame.GetComponent<Image>();
+                frameImage.sprite = _buttonSprite;
+                frameImage.type = _buttonSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+                frameImage.color = _panelColor;
+                AddOutline(previewFrame, Color.white, 2f);
                 viewport = UI("UP_PortraitViewport", previewFrame.transform, typeof(RawImage));
                 var embeddedViewport = (RectTransform)viewport.transform;
                 Stretch(embeddedViewport);
@@ -210,7 +194,7 @@ namespace UnderPressure.Editor
                 panelRect.pivot = new Vector2(0.5f, 0.5f);
                 panelRect.anchoredPosition = Vector2.zero;
                 panelRect.sizeDelta = new Vector2(470f, 825f);
-                panel.GetComponent<Image>().color = PanelColor;
+                panel.AddComponent<Image>().color = _panelColor;
                 CreateText(panel.transform, T("editor.character.title"), 25,
                     new Vector2(0f, -12f), new Vector2(420f, 34f), TextAnchor.MiddleCenter);
                 viewport = UI("UP_PortraitViewport", panel.transform, typeof(RawImage));
@@ -234,26 +218,26 @@ namespace UnderPressure.Editor
             var statusY = embedded ? -302f : -740f;
 
             var typePrevious = CreateButton(panel.transform, "PacienteAnterior", "◀",
-                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveType(-1));
+                new Vector2(43f, 37f), _buttonColor, () => _component?.MoveType(-1));
             SetTop(typePrevious.transform, -178f, rowOne);
             var typeNext = CreateButton(panel.transform, "PacienteSiguiente", "▶",
-                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveType(1));
+                new Vector2(43f, 37f), _buttonColor, () => _component?.MoveType(1));
             SetTop(typeNext.transform, 178f, rowOne);
             var typeButton = CreateButton(panel.transform, "TipoDesplegable",
-                CharacterTypeName(0) + " ▼", new Vector2(302f, 37f), ButtonColor,
+                CharacterTypeName(0) + " ▼", new Vector2(302f, 37f), _buttonColor,
                 () => _component?.OpenTypeDropdown());
             SetTop(typeButton.transform, 0f, rowOne);
             var typeText = typeButton.GetComponentInChildren<Text>();
 
             var illnessPrevious = CreateButton(panel.transform, "EnfermedadAnterior", "◀",
-                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveIllness(-1));
+                new Vector2(43f, 37f), _buttonColor, () => _component?.MoveIllness(-1));
             SetTop(illnessPrevious.transform, -178f, rowTwo);
             var illnessNext = CreateButton(panel.transform, "EnfermedadSiguiente", "▶",
-                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveIllness(1));
+                new Vector2(43f, 37f), _buttonColor, () => _component?.MoveIllness(1));
             SetTop(illnessNext.transform, 178f, rowTwo);
             var illnessButton = CreateButton(panel.transform, "EnfermedadDesplegable",
                 T("editor.character.illness.none") + " ▼", new Vector2(302f, 37f),
-                ButtonColor, () => _component?.OpenIllnessDropdown());
+                _buttonColor, () => _component?.OpenIllnessDropdown());
             SetTop(illnessButton.transform, 0f, rowTwo);
             var illnessText = illnessButton.GetComponentInChildren<Text>();
 
@@ -261,14 +245,14 @@ namespace UnderPressure.Editor
                 new Vector2(0f, animationTitle), new Vector2(395f, 22f),
                 TextAnchor.MiddleCenter);
             var clipPrevious = CreateButton(panel.transform, "AnimacionAnterior", "◀",
-                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveClip(-1));
+                new Vector2(43f, 37f), _buttonColor, () => _component?.MoveClip(-1));
             SetTop(clipPrevious.transform, -178f, animationRow);
             var clipNext = CreateButton(panel.transform, "AnimacionSiguiente", "▶",
-                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveClip(1));
+                new Vector2(43f, 37f), _buttonColor, () => _component?.MoveClip(1));
             SetTop(clipNext.transform, 178f, animationRow);
             var clipButton = CreateButton(panel.transform, "AnimacionDesplegable",
                 T("editor.character.animations") + "... ▼", new Vector2(302f, 37f),
-                ButtonColor, () => _component?.OpenClipDropdown());
+                _buttonColor, () => _component?.OpenClipDropdown());
             SetTop(clipButton.transform, 0f, animationRow);
             var clipText = clipButton.GetComponentInChildren<Text>();
 
@@ -278,15 +262,15 @@ namespace UnderPressure.Editor
             search.onValueChanged.AddListener(value => _component?.SetAnimationSearch(value));
 
             var random = CreateButton(panel.transform, "PersonajeAleatorio",
-                T("editor.character.random"), new Vector2(132f, 42f), ButtonColor,
+                T("editor.character.random"), new Vector2(132f, 42f), _buttonColor,
                 () => _component?.Regenerate());
             SetTop(random.transform, -145f, actionsY);
             var play = CreateButton(panel.transform, "Reproducir",
-                T("editor.character.play"), new Vector2(132f, 42f), ButtonColor,
+                T("editor.character.play"), new Vector2(132f, 42f), _buttonColor,
                 () => _component?.Play());
             SetTop(play.transform, 0f, actionsY);
             var pause = CreateButton(panel.transform, "Pausar",
-                T("editor.character.pause"), new Vector2(132f, 42f), ButtonColor,
+                T("editor.character.pause"), new Vector2(132f, 42f), _buttonColor,
                 () => _component?.Pause());
             SetTop(pause.transform, 145f, actionsY);
             var status = CreateText(panel.transform, "", 14,
@@ -343,9 +327,13 @@ namespace UnderPressure.Editor
         {
             var go = UI(name, parent, typeof(Image), typeof(Button));
             ((RectTransform)go.transform).sizeDelta = size;
-            go.GetComponent<Image>().color = color;
+            var image = go.GetComponent<Image>();
+            image.sprite = _buttonSprite;
+            image.type = _buttonSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            image.color = color;
+            AddOutline(go, Color.white, 2f);
             var b = go.GetComponent<Button>();
-            b.targetGraphic = go.GetComponent<Image>();
+            b.targetGraphic = image;
             b.onClick.AddListener(() => action());
             CreateText(go.transform, label, 18, Vector2.zero, size, TextAnchor.MiddleCenter);
             return go;
@@ -414,6 +402,14 @@ namespace UnderPressure.Editor
             field.textComponent = value;
             field.placeholder = hint;
             return field;
+        }
+
+        private static void AddOutline(GameObject root, Color color, float distance)
+        {
+            var outline = root.GetComponent<Outline>() ?? root.AddComponent<Outline>();
+            outline.effectColor = color;
+            outline.effectDistance = new Vector2(distance, -distance);
+            outline.useGraphicAlpha = false;
         }
 
         private static void SetTop(Transform transform, float x, float y)
@@ -750,7 +746,11 @@ namespace UnderPressure.Editor
                 rect.pivot = new Vector2(0.5f, 1f);
                 rect.sizeDelta = new Vector2(425f, 505f);
                 rect.anchoredPosition = new Vector2(0f, -135f);
-                _dropdown.GetComponent<Image>().color = new Color(0.09f, 0.13f, 0.16f, 1f);
+                var dropdownImage = _dropdown.GetComponent<Image>();
+                dropdownImage.sprite = _buttonSprite;
+                dropdownImage.type = _buttonSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+                dropdownImage.color = _panelColor;
+                AddOutline(_dropdown, Color.white, 2f);
                 _dropdown.transform.SetAsLastSibling();
 
                 var heading = T(kind == DropdownKind.Type ? "editor.character.type" :
@@ -759,7 +759,7 @@ namespace UnderPressure.Editor
                 CreateText(_dropdown.transform, heading, 19,
                     new Vector2(-8f, -10f), new Vector2(355f, 30f), TextAnchor.MiddleCenter);
                 var close = CreateButton(_dropdown.transform, "CerrarLista", "×",
-                    new Vector2(32f, 30f), ButtonColor, CloseDropdown);
+                    new Vector2(32f, 30f), _selectedColor, CloseDropdown);
                 SetTop(close.transform, 191f, -10f);
                 var input = CreateSearchInput(_dropdown.transform,
                     T("editor.character.search_list"),
@@ -799,7 +799,7 @@ namespace UnderPressure.Editor
                 for (var i = 0; i < 15; i++)
                 {
                     var row = CreateButton(_dropdownContent, "Option" + i, "",
-                        new Vector2(380f, 33f), ButtonColor, () => { });
+                        new Vector2(380f, 33f), _buttonColor, () => { });
                     var index = i;
                     var rowButton = row.GetComponent<Button>();
                     rowButton.onClick.RemoveAllListeners();

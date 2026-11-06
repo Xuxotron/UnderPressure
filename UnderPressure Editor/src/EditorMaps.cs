@@ -695,6 +695,7 @@ namespace UnderPressure.Editor
             ScenarioMapPackage.Publish(folder, package, candidate => ScenarioMapFormat.Read(candidate));
             UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + package + " (" + refs.Count + " parcelas)");
             MarkCurrentMap(level, name, package);
+            ScenarioPlotMapEditor.MarkFogSaved();
             return package;
             }
             finally { ScenarioMapPackage.DeleteDirectory(folder); }
@@ -917,6 +918,7 @@ namespace UnderPressure.Editor
                 SetScenarioSettings(level, map.Header);
                 SetPlotSettings(level, map.Plots);
                 ScenarioEditorFogOfWar.ApplyLoaded(map.Header, map.FogOfWarPng);
+                ScenarioPlotMapEditor.NotifyFogLoaded();
                 // Evitar que decoracion original importada vuelva a mezclarse
                 // con objetos de parcelas. Solo permanecen objetos nativos.
                 ScenarioEditorFixedGeometry.Scan(level, true);
@@ -2374,7 +2376,6 @@ namespace UnderPressure.Editor
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             ApplyNativeLayerPalette();
             AddLayerButtons();
-            AddStylesToolbarButton();
             AddPlotIsolationButton();
             InitialisePlotActions();
             _selectedPlot = level.WorldState.HospitalPlots.Count > 0
@@ -4334,12 +4335,6 @@ PriorVisibility.Clear();
         {
             if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning ||
                 !Input.GetKeyDown(KeyCode.Escape)) return true;
-            if (ScenarioCharacterViewer.IsOpen)
-            {
-                ScenarioCharacterViewer.Close();
-                return false;
-            }
-            if (ScenarioEditorDockLayout.ClosePlotMapIfOpen()) return false;
             if (ScenarioEditorDockLayout.CloseSettingsPanelIfOpen()) return false;
             if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
             if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;
