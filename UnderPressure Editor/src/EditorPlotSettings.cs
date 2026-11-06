@@ -11,11 +11,11 @@ namespace UnderPressure.Editor
 {
     internal sealed partial class ScenarioEditorDockLayout
     {
-        private const float PlotListHeaderHeight = 52f;
-        private const float PlotListButtonHeight = 54f;
-        private const float PlotListSpacing = 6f;
-        private const float PlotListWidth = 300f;
-        private const float PlotColumnGap = 18f;
+        private const float PlotListHeaderHeight = 48f;
+        private const float PlotListButtonHeight = 48f;
+        private const float PlotListSpacing = 4f;
+        private const float PlotListWidth = 245f;
+        private const float PlotColumnGap = 10f;
 
         private RectTransform _settingsPlotRoot;
         private RectTransform _settingsPlotList;
@@ -40,6 +40,7 @@ namespace UnderPressure.Editor
 
             var listPanel = NewImage("Lista de parcelas", _settingsPlotRoot,
                 _style.ButtonSprite, _style.PanelColor, false);
+            ApplyPlotSettingsPanelStyle(listPanel);
             var listRect = listPanel.transform as RectTransform;
             listRect.anchorMin = new Vector2(0f, 0f);
             listRect.anchorMax = new Vector2(0f, 1f);
@@ -91,6 +92,7 @@ namespace UnderPressure.Editor
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
                 _style.ButtonSprite, _style.PanelColor, false);
+            ApplyPlotSettingsPanelStyle(detailsPanel);
             _settingsPlotDetails = detailsPanel.transform as RectTransform;
             _settingsPlotDetails.anchorMin = Vector2.zero;
             _settingsPlotDetails.anchorMax = Vector2.one;
@@ -144,46 +146,46 @@ namespace UnderPressure.Editor
                 _style.SelectedColor);
 
             CreatePlotIntegerField("editor.scenario_settings.plots.cost",
-                .025f, .335f, 86f, plot.cost,
+                .025f, .325f, 72f, plot.cost,
                 value => plot.cost = value);
             AddPlotToggle("editor.scenario_settings.plots.initially_open",
-                .35f, .66f, 86f, plot.initiallyOpen,
+                .345f, .655f, 72f, plot.initiallyOpen,
                 value => plot.initiallyOpen = value);
             AddPlotToggle("editor.scenario_settings.plots.hide_until_available",
-                .675f, .985f, 86f, plot.hideUntilAvailable,
+                .675f, .985f, 72f, plot.hideUntilAvailable,
                 value => plot.hideUntilAvailable = value);
 
             AddPlotLabel("editor.scenario_settings.plots.initial_state",
-                .025f, .17f, 158f);
+                .025f, .16f, 128f);
             var state = CreateDiseaseDropdown(_settingsPlotDetails,
                 new[]
                 {
                     EditorLocalization.Get("editor.scenario_settings.plots.unbuilt"),
                     EditorLocalization.Get("editor.scenario_settings.plots.built")
                 }, plot.built ? 1 : 0);
-            SetPlotControlRect(state.transform as RectTransform, .175f, .335f, 156f, 44f);
+            SetPlotControlRect(state.transform as RectTransform, .165f, .325f, 126f, 40f);
             state.onValueChanged.AddListener(value => plot.built = value == 1);
 
             AddPlotToggle("editor.scenario_settings.plots.instant_build",
-                .35f, .66f, 158f, plot.instaBuild,
+                .345f, .655f, 128f, plot.instaBuild,
                 value => plot.instaBuild = value);
             CreatePlotFloatField("editor.scenario_settings.plots.build_time",
-                .675f, .985f, 158f, plot.timeToBuild,
+                .675f, .985f, 128f, plot.timeToBuild,
                 value => plot.timeToBuild = value);
 
             var plotNames = BuildPlotNames(spatialPlots);
             AddPlotLabel("editor.scenario_settings.plots.merge_into",
-                .025f, .17f, 230f);
+                .025f, .16f, 184f);
             var mergeIndex = plot.mergeInto;
             var merge = CreateDiseaseDropdown(_settingsPlotDetails, plotNames, mergeIndex + 1);
-            SetPlotControlRect(merge.transform as RectTransform, .175f, .335f, 228f, 44f);
+            SetPlotControlRect(merge.transform as RectTransform, .165f, .325f, 182f, 40f);
             merge.onValueChanged.AddListener(value => SetPlotMerge(value - 1));
 
             AddPlotLabel("editor.scenario_settings.plots.requires",
-                .35f, .495f, 230f);
+                .345f, .48f, 184f);
             var requirement = CreateDiseaseDropdown(_settingsPlotDetails, plotNames, 0);
             SetPlotControlRect(requirement.transform as RectTransform,
-                .50f, .66f, 228f, 44f);
+                .485f, .655f, 182f, 40f);
             var add = CreateDiseaseButton(_settingsPlotDetails, "+",
                 new Color32(0, 190, 75, 255), () =>
                 {
@@ -194,7 +196,7 @@ namespace UnderPressure.Editor
                     ApplyPlotRequirements(plot, plots.Count);
                     RefreshPlotSettingsContents();
                 });
-            SetPlotControlRect(add.transform as RectTransform, .675f, .72f, 228f, 44f);
+            SetPlotControlRect(add.transform as RectTransform, .675f, .72f, 182f, 40f);
             BuildPlotRequirementChips(plot, plots.Count);
 
             Canvas.ForceUpdateCanvases();
@@ -216,6 +218,16 @@ namespace UnderPressure.Editor
             Stretch(title.rectTransform);
             title.rectTransform.offsetMin = new Vector2(14f, 0f);
             title.rectTransform.offsetMax = new Vector2(-14f, 0f);
+        }
+
+        private static void ApplyPlotSettingsPanelStyle(GameObject panel)
+        {
+            if (panel == null) return;
+            var outline = panel.GetComponent<Outline>() ??
+                          panel.AddComponent<Outline>();
+            outline.effectColor = Color.white;
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = false;
         }
 
         private List<string> BuildPlotNames(IList<HospitalPlot> plots)
@@ -293,7 +305,7 @@ namespace UnderPressure.Editor
             int characterLimit, Func<string, bool> accept)
         {
             var input = CreateScenarioSettingsInput(_settingsPlotDetails, labelKey,
-                top, 48f, false, integer, minX, maxX, inputWidth);
+                top, 44f, false, integer, minX, maxX, inputWidth);
             if (input == null) return;
             ConfigurePlotNativeField(input, labelKey, characterLimit);
             input.SetTextWithoutNotify(value);
@@ -373,7 +385,7 @@ namespace UnderPressure.Editor
                     });
                 var left = .735f + position * .052f;
                 SetPlotControlRect(button.transform as RectTransform,
-                    left, left + .042f, 228f, 44f);
+                    left, left + .042f, 182f, 40f);
                 var label = button.GetComponentInChildren<TMP_Text>(true);
                 if (label != null) label.color = Color.black;
                 if (captured != mergeIndex) continue;

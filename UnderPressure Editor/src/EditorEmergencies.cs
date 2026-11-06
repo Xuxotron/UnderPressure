@@ -1,4 +1,4 @@
-// Updated: 2026-11-04 - Emergencias recupera una raiz transparente propia directamente dentro de su pestana.
+// Updated: 2026-11-06 - Filas visibles y controles compactos uniformes.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -697,34 +697,34 @@ namespace UnderPressure.Editor
             float height,
             bool integer)
         {
-            var input = CreateScenarioSettingsInput(
-                parent,
-                "editor.scenario_settings.emergency." +
-                    label.Replace(" ", "_").Replace(":", "").ToLowerInvariant(),
-                top, height, false, integer,
-                .01f, .99f, 160f);
-
-            if (input == null)
-                return null;
-
-            SetScenarioSettingsInputLabel(input, label);
-
-            var row = input.transform;
-            while (row != null &&
-                   !row.name.StartsWith(
-                       "UP Workshop Settings Field ",
-                       StringComparison.Ordinal))
-                row = row.parent;
-
-            RemoveEmergencyRowChrome(
+            var rowObject = new GameObject(
+                "UP Emergency Compact Input " + label,
+                typeof(RectTransform));
+            rowObject.transform.SetParent(parent, false);
+            var row = rowObject.transform as RectTransform;
+            SetRect(
                 row,
-                input.transform);
+                new Vector2(.01f, 1f),
+                new Vector2(.99f, 1f),
+                new Vector2(.5f, 1f),
+                new Vector2(0f, -top),
+                new Vector2(0f, height));
+
+            CreateEmergencyLabel(
+                row, label,
+                0f, 0f, -172f, height,
+                18f, TextAlignmentOptions.MidlineLeft);
+
+            var input = CreateEmergencyInput(
+                row, "UP Emergency Compact Input Control",
+                0f, 3f, 160f, Mathf.Max(30f, height - 6f),
+                "", integer);
+            SetTopRight(
+                input.transform as RectTransform,
+                0f, 3f, 160f, Mathf.Max(30f, height - 6f));
 
             if (input.textComponent != null)
-            {
-                input.textComponent.fontSize = 18f;
-                input.textComponent.fontStyle = FontStyles.Bold;
-            }
+                input.textComponent.fontSize = 17f;
 
             input.contentType = integer
                 ? TMP_InputField.ContentType.IntegerNumber
@@ -740,21 +740,11 @@ namespace UnderPressure.Editor
             float height,
             IEnumerable<string> options)
         {
-            GameObject panelTemplate;
-            Component nativeInputTemplate;
-            if (!TryGetWorkshopFieldTemplate(
-                    false, out panelTemplate, out nativeInputTemplate))
-            {
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Emergencias: no se encontró el campo nativo usado por General.");
-                return null;
-            }
-
-            var row = Instantiate(panelTemplate, parent, false);
-            row.name = "UP Emergency Native Dropdown " + label;
-            row.SetActive(true);
-
-            var rowRect = row.transform as RectTransform;
+            var rowObject = new GameObject(
+                "UP Emergency Compact Dropdown " + label,
+                typeof(RectTransform));
+            rowObject.transform.SetParent(parent, false);
+            var rowRect = rowObject.transform as RectTransform;
             SetRect(
                 rowRect,
                 new Vector2(.01f, 1f),
@@ -763,59 +753,22 @@ namespace UnderPressure.Editor
                 new Vector2(0f, -top),
                 new Vector2(0f, height));
 
-            var layout = row.GetComponent<LayoutElement>() ??
-                         row.AddComponent<LayoutElement>();
-            layout.ignoreLayout = true;
-            DisableLocalisers(row.transform);
+            CreateEmergencyLabel(
+                rowRect, label,
+                0f, 0f, -232f, height,
+                18f, TextAlignmentOptions.MidlineLeft);
 
-            var nativeInput = row
-                .GetComponentsInChildren(nativeInputTemplate.GetType(), true)
-                .OfType<Component>()
-                .FirstOrDefault();
-
-            if (nativeInput == null)
-            {
-                Destroy(row);
-                UnderPressureEditorPlugin.Log?.LogError(
-                    "Emergencias: el panel nativo de General no contiene su campo.");
+            var dropdown = CreateObjectiveNativeDropdown(
+                rowRect,
+                "UP Emergency Compact Dropdown Control",
+                0f, 3f, 220f, Mathf.Max(30f, height - 6f),
+                options);
+            if (dropdown == null)
                 return null;
-            }
 
-            var nativeBehaviour = nativeInput as Behaviour;
-            if (nativeBehaviour != null)
-                nativeBehaviour.enabled = false;
-
-            var fieldObject = nativeInput.gameObject;
-            fieldObject.SetActive(true);
-
-            SetWorkshopFieldLabel(
-                row.transform, fieldObject.transform, label);
-            ArrangeNativeWorkshopColumns(
-                row.transform, fieldObject.transform, 220f);
-            RemoveEmergencyRowChrome(
-                row.transform, fieldObject.transform);
-
-            foreach (var oldText in
-                     fieldObject.GetComponentsInChildren<Text>(true))
-                oldText.gameObject.SetActive(false);
-            foreach (var oldText in
-                     fieldObject.GetComponentsInChildren<TMP_Text>(true))
-                oldText.gameObject.SetActive(false);
-
-            var dropdown = CreateEmergencyDropdown(
-                fieldObject.transform,
-                "UP Emergency Native Dropdown Control",
-                0f, 0f, 1f, 1f, options);
-
-            var dropdownRect = dropdown.transform as RectTransform;
-            Stretch(dropdownRect);
-
-            var image = dropdown.GetComponent<Image>();
-            if (image != null)
-            {
-                image.color = Color.white;
-                image.type = Image.Type.Sliced;
-            }
+            SetTopRight(
+                dropdown.transform as RectTransform,
+                0f, 3f, 220f, Mathf.Max(30f, height - 6f));
 
             return dropdown;
         }
@@ -1765,13 +1718,11 @@ namespace UnderPressure.Editor
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 10f;
 
-            var viewportObject = NewImage(
-                "Viewport", root.transform, null,
-                new Color(0f, 0f, 0f, .001f), true);
+            var viewportObject = new GameObject(
+                "Viewport", typeof(RectTransform), typeof(RectMask2D));
+            viewportObject.transform.SetParent(root.transform, false);
             var viewport = viewportObject.transform as RectTransform;
             Stretch(viewport);
-            var mask = viewportObject.AddComponent<Mask>();
-            mask.showMaskGraphic = false;
 
             var contentObject = new GameObject(
                 "Content", typeof(RectTransform));
