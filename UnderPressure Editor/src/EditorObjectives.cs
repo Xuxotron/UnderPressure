@@ -13,6 +13,12 @@ namespace UnderPressure.Editor
         private const int ObjectiveTabIndex = 2;
         private const float ObjectiveLeftWidth = 238f;
         private const float ObjectiveGap = 10f;
+        private static readonly Color ObjectivePanelColor =
+            new Color(.105882354f, .407843143f, .6f, 1f);
+        private static readonly Color ObjectiveRaisedPanelColor =
+            new Color(.16f, .49f, .69f, 1f);
+        private static readonly Color ObjectiveDropdownBorderColor =
+            new Color(.407843143f, .75686276f, 1f, 1f);
 
         private static readonly string[] ObjectiveRequirementTypes =
         {
@@ -29,6 +35,9 @@ namespace UnderPressure.Editor
         private RectTransform _objectiveRoot;
         private RectTransform _objectiveListBlock;
         private RectTransform _objectiveConfigurationBlock;
+        private RectTransform _objectiveStarPanel;
+        private RectTransform _objectiveChallengePanel;
+        private TMP_Dropdown _settingsNativeDropdownTemplate;
         private ScrollRect _objectiveChallengeScroll;
         private RectTransform _objectiveChallengeContent;
         private RectTransform _objectiveRequirementContent;
@@ -91,6 +100,8 @@ namespace UnderPressure.Editor
                 if (found != null) continue;
                 _objectiveDrafts.Insert(star - 1, CreateObjectiveDraft(true, star));
             }
+            if (_objectiveDrafts.All(value => value.isStar))
+                _objectiveDrafts.Add(CreateObjectiveDraft(false));
             _objectiveDrafts.Sort((left, right) =>
             {
                 if (left.isStar != right.isStar) return left.isStar ? -1 : 1;
@@ -141,13 +152,13 @@ namespace UnderPressure.Editor
             _objectiveRoot.offsetMin = new Vector2(10f, 10f);
             _objectiveRoot.offsetMax = new Vector2(-10f, -10f);
 
-            _objectiveListBlock = CreateEmergencyBlock(
-                "UP Objectives List", _objectiveRoot);
+            _objectiveListBlock = CreateObjectivePanel(
+                "UP Objectives List", _objectiveRoot, SettingsOuterPanelColor);
             SetTopLeft(_objectiveListBlock, 0f, 0f, ObjectiveLeftWidth,
                 pageHeight - 20f);
 
-            _objectiveConfigurationBlock = CreateEmergencyBlock(
-                "UP Objective Configuration", _objectiveRoot);
+            _objectiveConfigurationBlock = CreateObjectivePanel(
+                "UP Objective Configuration", _objectiveRoot, SettingsOuterPanelColor);
             _objectiveConfigurationBlock.anchorMin = new Vector2(0f, 0f);
             _objectiveConfigurationBlock.anchorMax = new Vector2(1f, 1f);
             _objectiveConfigurationBlock.offsetMin =
@@ -165,17 +176,33 @@ namespace UnderPressure.Editor
                 12f, 8f, ObjectiveLeftWidth - 24f, 28f, 20f,
                 TextAlignmentOptions.MidlineLeft);
 
+            _objectiveStarPanel = CreateObjectivePanel(
+                "UP Objective Stars Panel", _objectiveListBlock, ObjectivePanelColor);
+            SetTopLeft(_objectiveStarPanel, 8f, 38f,
+                ObjectiveLeftWidth - 16f, 142f);
+
             CreateEmergencyLabel(_objectiveListBlock,
                 EditorLocalization.Get("editor.objectives.challenges"),
                 12f, 190f, ObjectiveLeftWidth - 24f, 32f, 21f,
                 TextAlignmentOptions.MidlineLeft);
 
+            _objectiveChallengePanel = CreateObjectivePanel(
+                "UP Objective Challenges Panel", _objectiveListBlock,
+                ObjectivePanelColor);
+            _objectiveChallengePanel.anchorMin = Vector2.zero;
+            _objectiveChallengePanel.anchorMax = Vector2.one;
+            _objectiveChallengePanel.offsetMin = new Vector2(8f, 58f);
+            _objectiveChallengePanel.offsetMax = new Vector2(-8f, -226f);
+
             _objectiveChallengeScroll = CreateEmergencyVerticalScroll(
-                _objectiveListBlock, "UP Objective Challenge Scroll",
-                12f, 228f, 12f, 60f, out _objectiveChallengeContent);
-            InstallNativeVerticalScrollbar(_objectiveListBlock,
+                _objectiveChallengePanel, "UP Objective Challenge Scroll",
+                8f, 8f, 8f, 8f, out _objectiveChallengeContent);
+            _objectiveChallengeScroll.scrollSensitivity = 44f;
+            InstallNativeVerticalScrollbar(_objectiveChallengePanel,
                 _objectiveChallengeScroll, "UP Objective Challenge Scrollbar",
-                228f, 60f, false, 12f);
+                8f, 8f, false, 12f);
+            _objectiveChallengeScroll.verticalScrollbarVisibility =
+                ScrollRect.ScrollbarVisibility.Permanent;
 
             CreateEmergencyButton(_objectiveListBlock, "UP Objective Add",
                 EditorLocalization.Get("editor.objectives.new_challenge"),
@@ -196,7 +223,7 @@ namespace UnderPressure.Editor
             _objectiveNameInput = CreateObjectiveField(
                 "editor.objectives.name", 14f, 44f, 0f, false, false);
             _objectiveDurationInput = CreateObjectiveField(
-                "editor.objectives.duration", 14f, 88f, .25f, true, true);
+                "editor.objectives.duration", .02f, 88f, .25f, true, true);
             _objectiveProbabilityInput = CreateObjectiveField(
                 "editor.objectives.probability", .25f, 88f, .5f, false, true);
             _objectiveDifficultyInput = CreateObjectiveField(
@@ -204,14 +231,15 @@ namespace UnderPressure.Editor
             _objectiveCooldownInput = CreateObjectiveField(
                 "editor.objectives.cooldown", .75f, 88f, 1f, false, true);
 
-            var requirements = CreateEmergencyBlock(
-                "UP Objective Requirements", _objectiveConfigurationBlock);
+            var requirements = CreateObjectivePanel(
+                "UP Objective Requirements", _objectiveConfigurationBlock,
+                ObjectiveRaisedPanelColor);
             SetObjectiveStretchRect(requirements, 14f, 140f, 14f, 330f);
             CreateEmergencyLabel(requirements,
                 EditorLocalization.Get("editor.objectives.requirements"),
                 12f, 7f, 190f, 30f, 20f,
                 TextAlignmentOptions.MidlineLeft);
-            _objectiveRequirementTypeDropdown = CreateEmergencyDropdown(
+            _objectiveRequirementTypeDropdown = CreateObjectiveNativeDropdown(
                 requirements, "UP Objective Requirement Type",
                 205f, 6f, 310f, 34f,
                 ObjectiveRequirementTypes.Select(ObjectiveRequirementLabel));
@@ -220,15 +248,17 @@ namespace UnderPressure.Editor
             _objectiveRequirementScroll = CreateEmergencyVerticalScroll(
                 requirements, "UP Objective Requirements Scroll",
                 12f, 48f, 12f, 12f, out _objectiveRequirementContent);
+            _objectiveRequirementScroll.scrollSensitivity = 44f;
             InstallNativeVerticalScrollbar(requirements,
                 _objectiveRequirementScroll, "UP Objective Requirements Scrollbar",
                 48f, 12f, false, 12f);
 
-            var results = CreateEmergencyBlock(
-                "UP Objective Results", _objectiveConfigurationBlock);
+            var results = CreateObjectivePanel(
+                "UP Objective Results", _objectiveConfigurationBlock,
+                ObjectiveRaisedPanelColor);
             SetObjectiveBottomStretchRect(results, 14f, 340f, 14f, 14f);
             BuildObjectiveResultHeader(results);
-            _objectiveResultTypeDropdown = CreateEmergencyDropdown(
+            _objectiveResultTypeDropdown = CreateObjectiveNativeDropdown(
                 results, "UP Objective Result Type",
                 12f, 50f, 310f, 34f,
                 ObjectiveResultTypes.Select(ObjectiveResultLabel));
@@ -237,6 +267,7 @@ namespace UnderPressure.Editor
             _objectiveResultScroll = CreateEmergencyVerticalScroll(
                 results, "UP Objective Results Scroll",
                 12f, 92f, 12f, 12f, out _objectiveResultContent);
+            _objectiveResultScroll.scrollSensitivity = 44f;
             InstallNativeVerticalScrollbar(results,
                 _objectiveResultScroll, "UP Objective Results Scrollbar",
                 92f, 12f, false, 12f);
@@ -248,47 +279,108 @@ namespace UnderPressure.Editor
             BindObjectiveInput(_objectiveCooldownInput, value => CurrentObjective.cooldownSeconds = value);
         }
 
+        private RectTransform CreateObjectivePanel(string name, Transform parent, Color color)
+        {
+            var panel = NewImage(name, parent, _style.ButtonSprite, color, false);
+            foreach (var outline in panel.GetComponents<Outline>())
+                Destroy(outline);
+            var image = panel.GetComponent<Image>();
+            if (image != null)
+            {
+                image.type = Image.Type.Sliced;
+                image.raycastTarget = false;
+            }
+            return panel.transform as RectTransform;
+        }
+
+        private TMP_Dropdown CreateObjectiveNativeDropdown(Transform parent, string name,
+            float x, float y, float width, float height, IEnumerable<string> options)
+        {
+            if (_settingsNativeDropdownTemplate == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Objetivos: no se encontro el desplegable nativo de Ajustes.");
+                return null;
+            }
+
+            var dropdown = Instantiate(_settingsNativeDropdownTemplate, parent, false);
+            dropdown.gameObject.name = name;
+            dropdown.gameObject.SetActive(true);
+            DisableLocalisers(dropdown.transform);
+            var layout = dropdown.GetComponent<LayoutElement>() ??
+                dropdown.gameObject.AddComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+            SetTopLeft(dropdown.transform as RectTransform, x, y, width, height);
+
+            dropdown.onValueChanged.RemoveAllListeners();
+            dropdown.ClearOptions();
+            dropdown.AddOptions((options ?? Enumerable.Empty<string>()).ToList());
+            dropdown.SetValueWithoutNotify(0);
+            dropdown.RefreshShownValue();
+
+            var rootImage = dropdown.GetComponent<Image>();
+            if (rootImage != null)
+            {
+                rootImage.color = Color.white;
+                dropdown.targetGraphic = rootImage;
+            }
+            var colors = dropdown.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(.92f, .97f, 1f, 1f);
+            colors.pressedColor = new Color(.82f, .92f, .98f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(.72f, .76f, .79f, 1f);
+            colors.colorMultiplier = 1f;
+            dropdown.colors = colors;
+
+            var border = dropdown.GetComponent<Outline>() ??
+                dropdown.gameObject.AddComponent<Outline>();
+            border.effectColor = ObjectiveDropdownBorderColor;
+            border.effectDistance = new Vector2(1f, -1f);
+            border.useGraphicAlpha = true;
+
+            if (dropdown.template != null)
+            {
+                foreach (var scroll in dropdown.template.GetComponentsInChildren<ScrollRect>(true))
+                    scroll.scrollSensitivity = 35f;
+                foreach (var image in dropdown.template.GetComponentsInChildren<Image>(true))
+                {
+                    if (image.GetComponentInParent<Scrollbar>() != null) continue;
+                    image.color = image.name.IndexOf("check", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? Color.black : new Color(.97f, .985f, 1f, 1f);
+                }
+                foreach (var selectable in dropdown.template.GetComponentsInChildren<Selectable>(true))
+                {
+                    if (selectable is Scrollbar) continue;
+                    var itemColors = selectable.colors;
+                    itemColors.normalColor = Color.white;
+                    itemColors.highlightedColor = new Color(.88f, .95f, 1f, 1f);
+                    itemColors.pressedColor = new Color(.78f, .9f, .98f, 1f);
+                    itemColors.selectedColor = new Color(.9f, .96f, 1f, 1f);
+                    itemColors.disabledColor = new Color(.72f, .76f, .79f, 1f);
+                    itemColors.colorMultiplier = 1f;
+                    selectable.colors = itemColors;
+                }
+            }
+            foreach (var text in dropdown.GetComponentsInChildren<TMP_Text>(true))
+                text.color = Color.black;
+            return dropdown;
+        }
+
         private TMP_InputField CreateObjectiveField(string labelKey, float xOrAnchor,
             float top, float rightAnchor, bool integer, bool challengeOnly)
         {
-            var parent = _objectiveConfigurationBlock;
-            var width = rightAnchor <= 0f ? -14f : 0f;
-            float left;
-            float right;
-            if (rightAnchor <= 0f)
-            {
-                left = 14f;
-                right = 14f;
-            }
-            else
-            {
-                var rectWidth = Mathf.Max(800f, parent.rect.width);
-                left = xOrAnchor * rectWidth + 8f;
-                right = (1f - rightAnchor) * rectWidth + 8f;
-            }
-
-            var row = new GameObject("UP Objective Field", typeof(RectTransform));
-            row.transform.SetParent(parent, false);
-            var rowRect = row.transform as RectTransform;
-            rowRect.anchorMin = new Vector2(rightAnchor > 0f ? xOrAnchor : 0f, 1f);
-            rowRect.anchorMax = new Vector2(rightAnchor > 0f ? rightAnchor : 1f, 1f);
-            rowRect.pivot = new Vector2(.5f, 1f);
-            rowRect.anchoredPosition = new Vector2(0f, -top);
-            rowRect.sizeDelta = new Vector2(-16f, 38f);
-
-            CreateEmergencyLabel(row.transform, EditorLocalization.Get(labelKey),
-                0f, 0f, 106f, 38f, 15f, TextAlignmentOptions.MidlineLeft);
-            var input = CreateEmergencyInput(row.transform, labelKey,
-                108f, 1f, -4f, 36f, "", integer);
-            var inputRect = input.transform as RectTransform;
-            inputRect.anchorMin = new Vector2(0f, 1f);
-            inputRect.anchorMax = new Vector2(1f, 1f);
-            inputRect.pivot = new Vector2(.5f, 1f);
-            inputRect.anchoredPosition = new Vector2(52f, -1f);
-            inputRect.sizeDelta = new Vector2(-112f, 36f);
-            if (!integer) input.contentType = TMP_InputField.ContentType.DecimalNumber;
+            var minimum = rightAnchor > 0f ? xOrAnchor : .02f;
+            var maximum = rightAnchor > 0f ? rightAnchor : .98f;
+            var input = CreateScenarioSettingsInput(_objectiveConfigurationBlock,
+                labelKey, top, 38f, false, integer, minimum, maximum,
+                rightAnchor > 0f ? 102f : -1f);
+            if (input == null) return null;
+            if (!integer && challengeOnly)
+                input.contentType = TMP_InputField.ContentType.DecimalNumber;
             if (!challengeOnly)
                 input.contentType = TMP_InputField.ContentType.Standard;
+            input.characterLimit = challengeOnly ? 16 : 120;
             return input;
         }
 
@@ -313,10 +405,10 @@ namespace UnderPressure.Editor
 
         private void RefreshObjectiveList()
         {
-            if (_objectiveListBlock == null || _objectiveChallengeContent == null) return;
-            for (var index = _objectiveListBlock.childCount - 1; index >= 0; --index)
+            if (_objectiveStarPanel == null || _objectiveChallengeContent == null) return;
+            for (var index = _objectiveStarPanel.childCount - 1; index >= 0; --index)
             {
-                var child = _objectiveListBlock.GetChild(index);
+                var child = _objectiveStarPanel.GetChild(index);
                 if (child.name.StartsWith("UP Objective Star ", StringComparison.Ordinal))
                     Destroy(child.gameObject);
             }
@@ -326,10 +418,10 @@ namespace UnderPressure.Editor
             for (var row = 0; row < stars.Length; ++row)
             {
                 var captured = stars[row].index;
-                CreateEmergencyButton(_objectiveListBlock,
+                CreateEmergencyButton(_objectiveStarPanel,
                     "UP Objective Star " + stars[row].value.starIndex,
                     EditorLocalization.Format("editor.objectives.star", stars[row].value.starIndex),
-                    12f, 42f + row * 46f, ObjectiveLeftWidth - 24f, 40f,
+                    8f, 7f + row * 44f, ObjectiveLeftWidth - 32f, 38f,
                     captured == _selectedObjective ? LayerBuildOrange : _style.ButtonColor,
                     () => SelectObjective(captured));
             }
@@ -398,6 +490,7 @@ namespace UnderPressure.Editor
 
         private void BindObjectiveInput(TMP_InputField input, Action<string> setter)
         {
+            if (input == null || setter == null) return;
             input.onEndEdit.AddListener(value =>
             {
                 if (CurrentObjective == null || !input.interactable) return;
@@ -529,7 +622,7 @@ namespace UnderPressure.Editor
                 var labels = canonical.Select(requirement
                     ? (Func<string, string>)ObjectiveRequirementLabel
                     : ObjectiveResultLabel).ToArray();
-                var dropdown = CreateEmergencyDropdown(row, "Type", 6f, 4f,
+                var dropdown = CreateObjectiveNativeDropdown(row, "Type", 6f, 4f,
                     typeWidth, 34f, labels);
                 dropdown.SetValueWithoutNotify(Mathf.Max(0, Array.IndexOf(canonical, rule.type)));
                 dropdown.onValueChanged.AddListener(value =>
@@ -544,7 +637,7 @@ namespace UnderPressure.Editor
                 if (refWidth > 0f)
                 {
                     var rooms = ObjectiveRoomOptions();
-                    var reference = CreateEmergencyDropdown(row, "Reference", x, 4f,
+                    var reference = CreateObjectiveNativeDropdown(row, "Reference", x, 4f,
                         refWidth - 6f, 34f, rooms);
                     reference.SetValueWithoutNotify(Mathf.Max(0, Array.IndexOf(rooms, rule.reference)));
                     reference.onValueChanged.AddListener(value =>

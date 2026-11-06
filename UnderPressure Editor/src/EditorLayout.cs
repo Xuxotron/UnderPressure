@@ -700,6 +700,9 @@ namespace UnderPressure.Editor
 
             _settingsDiseaseNativeToggleTemplate =
                 GetPreferencesField<Toggle>(native, "_fullScreenToggle");
+            _settingsNativeDropdownTemplate =
+                GetPreferencesField<TMP_Dropdown>(native, "_qualitySettingDropdown") ??
+                GetPreferencesField<TMP_Dropdown>(native, "_resolutionDropdown");
             _settingsDiseaseNativeScrollbarTemplate = native
                 .GetComponentsInChildren<Scrollbar>(true)
                 .Where(candidate => candidate != null &&
