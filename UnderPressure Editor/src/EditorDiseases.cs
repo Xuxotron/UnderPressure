@@ -1,4 +1,4 @@
-// Updated: 2026-11-04 - Enfermedades queda contenida dentro de su propia pestana; sin superficie hermana.
+// Updated: 2026-11-06 - Panel superior de pacientes adaptado al BGSolid redondeado y al ultimo layout guardado.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -40,6 +40,10 @@ namespace UnderPressure.Editor
         private bool _settingsNeverSpawnPatients;
         private bool _settingsUsePatientSelector = true;
         private float _settingsPatientSelectionRandomJitter = .35f;
+        private readonly List<TextMeshProUGUI> _settingsFrequencyTexts =
+            new List<TextMeshProUGUI>();
+        private readonly List<TMP_InputField> _settingsFrequencyInputs =
+            new List<TMP_InputField>();
 
         private sealed class DiseaseChoice
         {
@@ -160,6 +164,8 @@ namespace UnderPressure.Editor
             foreach (var section in _settingsDiseaseSections)
                 if (section != null) Destroy(section);
             _settingsDiseaseSections.Clear();
+            _settingsFrequencyTexts.Clear();
+            _settingsFrequencyInputs.Clear();
             if (_settingsPatientPanel != null)
             {
                 _settingsPatientPanel.SetActive(false);
@@ -167,7 +173,7 @@ namespace UnderPressure.Editor
                 _settingsPatientPanel = null;
             }
 
-            var top = 12f;
+            var top = 8f;
             _settingsPatientPanel = BuildPatientSettingsPanel(top);
             if (_settingsPatientPanel != null)
                 top += ((RectTransform)_settingsPatientPanel.transform).sizeDelta.y + 10f;
@@ -182,7 +188,9 @@ namespace UnderPressure.Editor
             }
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, top));
+            ApplyDiseaseFrequencyVisualState();
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
+            ReapplySettingsDesignerStructure();
         }
 
         private void LoadPatientSettingsFromLevel()
@@ -237,75 +245,98 @@ namespace UnderPressure.Editor
 
         private GameObject BuildPatientSettingsPanel(float top)
         {
-            var panel = NewImage(
-                "UP Patient Settings",
-                _settingsDiseaseContent,
-                _style.ButtonSprite,
-                SettingsSharedPageColor,
-                true);
-            var panelRect = (RectTransform)panel.transform;
-            SetRect(panelRect,
-                new Vector2(.01f, 1f), new Vector2(.99f, 1f),
-                new Vector2(.5f, 1f),
-                new Vector2(0f, -top),
-                new Vector2(0f, 108f));
+            GameObject workshopFieldTemplate;
+            Component nativeInputTemplate;
+            if (!TryGetWorkshopFieldTemplate(
+                    false,
+                    out workshopFieldTemplate,
+                    out nativeInputTemplate) ||
+                workshopFieldTemplate == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Enfermedades: no se encontro el panel nativo del Workshop para el bloque de pacientes.");
+                return null;
+            }
 
-            var header = NewImage(
-                "Cabecera",
-                panel.transform,
-                _style.ButtonSprite,
-                _style.HeaderColor,
+            var backgroundSource =
+                workshopFieldTemplate.transform.Find("BGSolid");
+            if (backgroundSource == null)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Enfermedades: no se encontro BGSolid en el panel nativo del Workshop.");
+                return null;
+            }
+
+            // El layout guardado sustituyo el panel anterior por una copia exacta
+            // del BGSolid redondeado del campo nativo del Workshop.
+            var panel = Instantiate(
+                backgroundSource.gameObject,
+                _settingsDiseaseContent,
                 false);
-            SetRect((RectTransform)header.transform,
+            panel.name = "UP Patient Settings";
+            panel.SetActive(true);
+            panel.transform.localScale = Vector3.one;
+            DisableLocalisers(panel.transform);
+
+            var panelRect = panel.transform as RectTransform;
+            if (panelRect == null)
+            {
+                Destroy(panel);
+                return null;
+            }
+
+            // Geometria equivalente al BGSolid Copy del V7 guardado:
+            // 7.1549707 px desde arriba, 60 px de alto y 11 px menos de ancho.
+            SetRect(panelRect,
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(.5f, 1f),
-                Vector2.zero,
-                new Vector2(-8f, 42f));
+                new Vector2(1.5f, -(top - .8450293f)),
+                new Vector2(-11f, 60f));
 
-            var title = CreateDiseaseText(
-                header.transform,
-                "Pacientes",
-                22f,
-                TextAlignmentOptions.MidlineLeft,
-                Color.white);
-            title.fontStyle = FontStyles.Bold;
-            SetTopLeft(title.rectTransform, 16f, 0f, 240f, 42f);
+            var panelImage = panel.GetComponent<Image>();
+            if (panelImage != null)
+                panelImage.color = Color.white;
 
             CreatePatientIntegerField(
                 panel.transform,
-                "Máx. pacientes",
+                EditorLocalization.Get(
+                    "editor.scenario_settings.diseases.max_patients"),
                 _settingsMaxPatients,
-                16f, 135f,
-                154f, 65f,
+                20.8800049f, 164f,
+                180.88f, 49f,
                 value => _settingsMaxPatients = Mathf.Max(1, value),
                 "UP Patient Max Patients");
 
             CreatePatientFloatField(
                 panel.transform,
-                "Ritmo de llegada",
+                EditorLocalization.Get(
+                    "editor.scenario_settings.diseases.arrival_rate"),
                 _settingsPatientSpawnRate,
-                286f, 140f,
-                431f, 60f,
+                301.88f, 140f,
+                443.88f, 47f,
                 value => _settingsPatientSpawnRate = Mathf.Max(0f, value),
                 "UP Patient Spawn Rate");
 
             CreatePatientFloatField(
                 panel.transform,
-                "Aleatoriedad",
+                EditorLocalization.Get(
+                    "editor.scenario_settings.diseases.randomness"),
                 _settingsPatientSelectionRandomJitter,
-                556f, 121f,
-                668f, 61f,
+                568.88f, 121f,
+                680.88f, 49f,
                 value => _settingsPatientSelectionRandomJitter =
                     Mathf.Clamp01(value),
                 "UP Patient Selection Jitter");
 
             var neverLabel = CreateDiseaseText(
                 panel.transform,
-                "No generar pacientes",
+                EditorLocalization.Get(
+                    "editor.scenario_settings.diseases.never_spawn_patients"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(neverLabel.rectTransform, 781f, 57f, 180f, 38f);
+            SetTopLeft(neverLabel.rectTransform,
+                793.88f, 10.8449707f, 180f, 38f);
 
             var never = CreateDiseaseToggle(
                 panel.transform,
@@ -314,27 +345,42 @@ namespace UnderPressure.Editor
             if (never != null)
             {
                 never.gameObject.name = "UP Patient Never Spawn Toggle";
-                SetTopLeft((RectTransform)never.transform, 1022f, 61f, 30f, 30f);
-                ApplyPatientToggleDesignerLayout(never, new Vector2(-60f, 0f));
+                SetTopLeft((RectTransform)never.transform,
+                    1034.88f, 14.8449707f, 30f, 30f);
+                ApplyPatientToggleDesignerLayout(
+                    never,
+                    new Vector2(-60f, 0f));
             }
 
-            var selectorLabel = CreateDiseaseText(
+            var ignoreFrequencyLabel = CreateDiseaseText(
                 panel.transform,
-                "Selector ponderado",
+                EditorLocalization.Get(
+                    "editor.scenario_settings.diseases.ignore_frequency"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(selectorLabel.rectTransform, 1036f, 57f, 160f, 38f);
+            SetTopLeft(ignoreFrequencyLabel.rectTransform,
+                1050.88f, 10.8449707f, 160f, 38f);
 
-            var selector = CreateDiseaseToggle(
+            // El dato nativo significa "usar selector ponderado".
+            // La interfaz expone la intencion inversa: activado = ignorar
+            // los pesos/frecuencias.
+            var ignoreFrequency = CreateDiseaseToggle(
                 panel.transform,
-                _settingsUsePatientSelector,
-                value => _settingsUsePatientSelector = value);
-            if (selector != null)
+                !_settingsUsePatientSelector,
+                value =>
+                {
+                    _settingsUsePatientSelector = !value;
+                    ApplyDiseaseFrequencyVisualState();
+                });
+            if (ignoreFrequency != null)
             {
-                selector.gameObject.name = "UP Patient Selector Toggle";
-                SetTopLeft((RectTransform)selector.transform, 1225f, 61f, 30f, 30f);
-                ApplyPatientToggleDesignerLayout(selector, new Vector2(-16f, 0f));
+                ignoreFrequency.gameObject.name = "UP Patient Selector Toggle";
+                SetTopLeft((RectTransform)ignoreFrequency.transform,
+                    1237.88f, 14.8449707f, 30f, 30f);
+                ApplyPatientToggleDesignerLayout(
+                    ignoreFrequency,
+                    new Vector2(-16f, 0f));
             }
 
             return panel;
@@ -374,13 +420,17 @@ namespace UnderPressure.Editor
             var label = CreateDiseaseText(
                 parent, labelText, 17f,
                 TextAlignmentOptions.MidlineLeft, Color.white);
-            SetTopLeft(label.rectTransform, labelX, 57f, labelWidth, 38f);
+            SetTopLeft(
+                label.rectTransform,
+                labelX, 10.8449707f, labelWidth, 38f);
 
             var input = CreateDiseaseInput(
                 parent, current.ToString(CultureInfo.InvariantCulture));
             if (input == null) return;
             input.gameObject.name = objectName;
-            SetTopLeft((RectTransform)input.transform, inputX, 58f, inputWidth, 36f);
+            SetTopLeft(
+                (RectTransform)input.transform,
+                inputX, 11.8449707f, inputWidth, 36f);
             input.onEndEdit.AddListener(text =>
             {
                 if (int.TryParse(text, NumberStyles.Integer,
@@ -408,13 +458,17 @@ namespace UnderPressure.Editor
             var label = CreateDiseaseText(
                 parent, labelText, 17f,
                 TextAlignmentOptions.MidlineLeft, Color.white);
-            SetTopLeft(label.rectTransform, labelX, 57f, labelWidth, 38f);
+            SetTopLeft(
+                label.rectTransform,
+                labelX, 10.8449707f, labelWidth, 38f);
 
             var input = CreatePatientDecimalInput(
                 parent, current.ToString("0.###", CultureInfo.InvariantCulture));
             if (input == null) return;
             input.gameObject.name = objectName;
-            SetTopLeft((RectTransform)input.transform, inputX, 58f, inputWidth, 36f);
+            SetTopLeft(
+                (RectTransform)input.transform,
+                inputX, 11.8449707f, inputWidth, 36f);
             input.onEndEdit.AddListener(text =>
             {
                 if (float.TryParse(text, NumberStyles.Float,
@@ -481,12 +535,37 @@ namespace UnderPressure.Editor
         {
             var values = _settingsIllnesses.Where(value => value.room == room.Id).ToList();
             var expanded = _settingsDiseaseExpanded[room.Id];
-            var height = 76f + (expanded ? values.Count * 64f : 0f);
-            var section = NewImage("UP Disease Room " + room.Id, _settingsDiseaseContent,
-                _style.ButtonSprite, SettingsSharedPageColor, true);
+            var height = 69f + (expanded ? values.Count * 64f : 0f);
+            var section = NewImage(
+                "UP Disease Room " + room.Id,
+                _settingsDiseaseContent,
+                _style.ButtonSprite,
+                new Color(
+                    .3725474f,
+                    .657146931f,
+                    .83157897f,
+                    1f),
+                true);
             var sectionRect = (RectTransform)section.transform;
-            SetRect(sectionRect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
-                new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
+            SetRect(sectionRect,
+                new Vector2(.01f, 1f), new Vector2(.99f, 1f),
+                new Vector2(.5f, 1f),
+                new Vector2(0f, -top),
+                new Vector2(0f, height));
+
+            var sectionOutline =
+                section.GetComponent<Outline>() ??
+                section.AddComponent<Outline>();
+            sectionOutline.enabled = true;
+            sectionOutline.effectColor =
+                new Color(
+                    .637768447f,
+                    .8525625f,
+                    .984210551f,
+                    1f);
+            sectionOutline.effectDistance =
+                new Vector2(3f, -3f);
+            sectionOutline.useGraphicAlpha = true;
             BuildDiseaseRoomHeader(section.transform, room, expanded);
             if (expanded)
                 for (var index = 0; index < values.Count; ++index)
@@ -523,17 +602,29 @@ namespace UnderPressure.Editor
             _settingsDiseaseContent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
                 Mathf.Max(430f, _settingsDiseaseContent.rect.height + difference));
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
+            ApplyDiseaseFrequencyVisualState();
             ReapplySettingsDesignerStructure();
         }
 
         private void BuildDiseaseRoomHeader(Transform parent, ScenarioDiseaseCatalog.Room room,
             bool expanded)
         {
-            var header = NewImage("Cabecera", parent, _style.ButtonSprite,
-                _style.HeaderColor, false);
+            var header = NewImage(
+                "Cabecera",
+                parent,
+                _style.ButtonSprite,
+                new Color(
+                    .07343159f,
+                    .355086446f,
+                    .5736842f,
+                    1f),
+                false);
             var headerRect = (RectTransform)header.transform;
-            SetRect(headerRect, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(.5f, 1f), Vector2.zero, new Vector2(-8f, 60f));
+            SetRect(headerRect,
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(.5f, 1f),
+                new Vector2(0f, -3f),
+                new Vector2(-8f, 60f));
 
             if (room.Icon != null)
             {
@@ -543,7 +634,7 @@ namespace UnderPressure.Editor
             }
             var roomName = CreateDiseaseText(header.transform, room.Name, 22f,
                 TextAlignmentOptions.MidlineLeft, Color.white);
-            SetTopLeft(roomName.rectTransform, 70f, 5f, 280f, 50f);
+            SetTopLeft(roomName.rectTransform, 70f, -5f, 280f, 50f);
 
             var available = AvailableForRoom(room, null);
             var choices = new List<DiseaseChoice>
@@ -593,8 +684,6 @@ namespace UnderPressure.Editor
             SetRect(rect, new Vector2(.01f, 1f), new Vector2(.99f, 1f),
                 new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, 56f));
 
-            _settingsDiseaseCatalog.ById.TryGetValue(value.definition ?? "", out var selected);
-
             var remove = CreateDiseaseButton(panel.transform,
                 "X",
                 new Color32(232, 38, 46, 255), () =>
@@ -612,7 +701,7 @@ namespace UnderPressure.Editor
             var definition = CreateDiseaseDropdown(panel.transform,
                 choices.Select(choice => choice.Name).ToList(), currentIndex,
                 choices.Select(choice => choice.DlcIcon).ToList());
-            SetTopLeft((RectTransform)definition.transform, 66f, 8f, 237f, 38f);
+            SetTopLeft((RectTransform)definition.transform, 60f, 8f, 270f, 38f);
             ApplyDiseaseDropdownDesignerLayout(definition);
             definition.onValueChanged.AddListener(index =>
             {
@@ -627,7 +716,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(unlockedLabel.rectTransform, 326f, 11f, 125f, 38f);
+            SetTopLeft(unlockedLabel.rectTransform, 350f, 11f, 125f, 38f);
 
             var unlocked = CreateDiseaseToggle(panel.transform, value.unlocked,
                 state => value.unlocked = state);
@@ -643,13 +732,16 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(frequencyLabel.rectTransform, 542f, 10f, 111f, 38f);
+            SetTopLeft(frequencyLabel.rectTransform, 552f, 10f, 111f, 38f);
+            _settingsFrequencyTexts.Add(frequencyLabel);
 
-            CreateDiseaseIntegerInput(
+            var minimumFrequency = CreateDiseaseIntegerInput(
                 panel.transform,
                 value.minWeight,
-                638f, 9f, 46f,
+                648f, 9f, 46f,
                 changed => value.minWeight = changed);
+            if (minimumFrequency != null)
+                _settingsFrequencyInputs.Add(minimumFrequency);
 
             var frequencySeparator = CreateDiseaseText(
                 panel.transform,
@@ -657,13 +749,16 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(frequencySeparator.rectTransform, 684f, 8f, 36f, 38f);
+            SetTopLeft(frequencySeparator.rectTransform, 694f, 8f, 36f, 38f);
+            _settingsFrequencyTexts.Add(frequencySeparator);
 
-            CreateDiseaseIntegerInput(
+            var maximumFrequency = CreateDiseaseIntegerInput(
                 panel.transform,
                 value.maxWeight,
-                712f, 9f, 48f,
+                722f, 9f, 48f,
                 changed => value.maxWeight = changed);
+            if (maximumFrequency != null)
+                _settingsFrequencyInputs.Add(maximumFrequency);
 
             var patientsLabel = CreateDiseaseText(
                 panel.transform,
@@ -681,13 +776,6 @@ namespace UnderPressure.Editor
 
             CreateDiseaseStarRatingDesigner(panel.transform, value);
 
-            if (selected?.Dlc?.Icon != null)
-            {
-                var dlcIcon = NewImage("Icono DLC enfermedad", panel.transform,
-                    selected.Dlc.Icon, Color.white, false);
-                SetTopRight((RectTransform)dlcIcon.transform, 10f, 8f, 38f, 38f);
-                dlcIcon.GetComponent<Image>().preserveAspect = true;
-            }
         }
 
         private static void ApplyDiseaseDropdownDesignerLayout(TMP_Dropdown dropdown)
@@ -710,7 +798,7 @@ namespace UnderPressure.Editor
 
             background.anchorMin = new Vector2(.5f, .5f);background.anchorMax = new Vector2(.5f, .5f);
             background.pivot = new Vector2(.5f, .5f);
-            background.anchoredPosition = new Vector2(-679f, -1f);
+            background.anchoredPosition = new Vector2(-658f, -1f);
             background.sizeDelta = new Vector2(40f, 40f);
 
             var checkmark = background.Find("Checkmark") as RectTransform;
@@ -750,6 +838,44 @@ namespace UnderPressure.Editor
                 }
             });
             return input;
+        }
+
+        private void ApplyDiseaseFrequencyVisualState()
+        {
+            var ignored = !_settingsUsePatientSelector;
+            var textColor = ignored
+                ? new Color(.55f, .58f, .62f, 1f)
+                : Color.white;
+            var inputBackground = ignored
+                ? new Color32(160, 166, 172, 255)
+                : new Color32(218, 222, 226, 255);
+            var inputText = ignored
+                ? new Color(.32f, .32f, .32f, 1f)
+                : Color.black;
+
+            for (var index = 0;
+                 index < _settingsFrequencyTexts.Count;
+                 ++index)
+            {
+                var text = _settingsFrequencyTexts[index];
+                if (text != null)
+                    text.color = textColor;
+            }
+
+            for (var index = 0;
+                 index < _settingsFrequencyInputs.Count;
+                 ++index)
+            {
+                var input = _settingsFrequencyInputs[index];
+                if (input == null)
+                    continue;
+
+                if (input.targetGraphic != null)
+                    input.targetGraphic.color = inputBackground;
+
+                if (input.textComponent != null)
+                    input.textComponent.color = inputText;
+            }
         }
 
         private void CreateDiseaseStarRatingDesigner(
@@ -1174,6 +1300,8 @@ namespace UnderPressure.Editor
             _settingsNeverSpawnPatients = false;
             _settingsUsePatientSelector = true;
             _settingsPatientSelectionRandomJitter = .35f;
+            _settingsFrequencyTexts.Clear();
+            _settingsFrequencyInputs.Clear();
             _settingsDiseaseCatalog = null;
             _settingsDiseaseSurface = null;
             _settingsDiseaseContent = null;
