@@ -2296,6 +2296,11 @@ namespace UnderPressure.Editor
         private Button _deletePlotButton;
         private Button _cameraButton;
         private TMP_Text _cameraButtonText;
+        private Image _cameraButtonIcon;
+        private Texture2D _cameraOnTexture;
+        private Texture2D _cameraOffTexture;
+        private Sprite _cameraOnSprite;
+        private Sprite _cameraOffSprite;
         private Button _objectsButton;
         private Button _buildButton;
         private Button _stylesButton;
@@ -2480,6 +2485,7 @@ namespace UnderPressure.Editor
                 });
                 _cameraButton.gameObject.name = "UP Camera Toolbar Button";
                 _cameraButtonText = _cameraButton.GetComponentInChildren<TMP_Text>(true);
+                CreateCameraButtonIcon();
                 _nativeCameraButton.gameObject.SetActive(false);
                 RefreshCameraButton();
             }
@@ -2518,11 +2524,61 @@ namespace UnderPressure.Editor
 
         private void RefreshCameraButton()
         {
-            if (_cameraButtonText == null || _level?.CameraLogic == null) return;
+            if (_level?.CameraLogic == null) return;
             var field = AccessTools.Field(_level.CameraLogic.GetType(), "_boundCamera");
             var bounded = field?.GetValue(_level.CameraLogic) as bool?;
-            _cameraButtonText.text = T(bounded == false
-                ? "editor.toolbar.free_camera" : "editor.toolbar.fixed_camera");
+            if (_cameraButtonText != null) _cameraButtonText.text = string.Empty;
+            if (_cameraButtonIcon != null)
+                _cameraButtonIcon.sprite = bounded == false
+                    ? _cameraOnSprite : _cameraOffSprite;
+        }
+
+        private void CreateCameraButtonIcon()
+        {
+            _cameraOffSprite = LoadCameraIcon("CameraOFF.png", out _cameraOffTexture);
+            _cameraOnSprite = LoadCameraIcon("CameraON.png", out _cameraOnTexture);
+            var icon = AddUi("Icono de cámara", _cameraButton.transform);
+            var rect = icon.GetComponent<RectTransform>();
+            rect.anchorMin = rect.anchorMax = new Vector2(.5f, .5f);
+            rect.pivot = new Vector2(.5f, .5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(32f, 32f);
+            _cameraButtonIcon = icon.AddComponent<Image>();
+            _cameraButtonIcon.preserveAspect = true;
+            _cameraButtonIcon.raycastTarget = false;
+            _cameraButtonIcon.color = Color.white;
+        }
+
+        private static Sprite LoadCameraIcon(string fileName, out Texture2D texture)
+        {
+            texture = null;
+            var path = Path.Combine(Paths.PluginPath, "Assets", fileName);
+            if (!File.Exists(path))
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Icono de cámara no encontrado: " + path);
+                return null;
+            }
+            texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, false)
+            {
+                name = "UP_" + Path.GetFileNameWithoutExtension(fileName),
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.DontSave
+            };
+            if (!ImageConversion.LoadImage(texture, File.ReadAllBytes(path), false))
+            {
+                UnityEngine.Object.Destroy(texture);
+                texture = null;
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "No se pudo decodificar el icono de cámara: " + path);
+                return null;
+            }
+            var sprite = Sprite.Create(texture,
+                new Rect(0f, 0f, texture.width, texture.height),
+                new Vector2(.5f, .5f), 100f);
+            sprite.name = texture.name;
+            return sprite;
         }
 
         private void SetNativeButtonLabel(string fieldName, string key)
@@ -3829,6 +3885,10 @@ rect.pivot = new Vector2(1f, 1f);
             foreach (var button in _buttons)
                 if (button != null) UnityEngine.Object.Destroy(button);
             _buttons.Clear();
+            if (_cameraOnSprite != null) UnityEngine.Object.Destroy(_cameraOnSprite);
+            if (_cameraOffSprite != null) UnityEngine.Object.Destroy(_cameraOffSprite);
+            if (_cameraOnTexture != null) UnityEngine.Object.Destroy(_cameraOnTexture);
+            if (_cameraOffTexture != null) UnityEngine.Object.Destroy(_cameraOffTexture);
         }
     }
 

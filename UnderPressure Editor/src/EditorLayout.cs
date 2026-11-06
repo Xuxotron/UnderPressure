@@ -2296,34 +2296,38 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             skin.Initialise(row, sprite, normal, selected);
         }
 
-        // BARRA SUPERIOR: Baldosas queda junto al panel izquierdo y Ajustes
-        // junto a Historial; Camara, Personajes y Estilos ocupan el centro.
+        // BARRA SUPERIOR: Baldosas queda junto al panel izquierdo, seguida
+        // inmediatamente por el icono compacto de Camara. Ajustes permanece
+        // junto a Historial; Personajes y Estilos ocupan el centro.
         private void PlaceTopButtons(float canvasWidth)
         {
             var middleButtons = new[]
             {
-                _storage?.CameraButton,
                 ScenarioCharacterViewer.ToggleButton,
                 _storage?.StylesButton
             }.Where(button => button != null).ToArray();
             var build = _storage?.BuildButton;
+            var camera = _storage?.CameraButton;
             var settings = _settingsToggle;
             var buttonCount = middleButtons.Length + (build != null ? 1 : 0) +
-                (settings != null ? 1 : 0);
+                (camera != null ? 1 : 0) + (settings != null ? 1 : 0);
             if (buttonCount == 0) return;
             var centralWidth = Mathf.Max(1f, canvasWidth - PanelWidth * 2f);
             var gap = 8f;
-            var buttonWidth = Mathf.Min(208f,
-                (centralWidth - gap * (buttonCount - 1)) / buttonCount);
+            var cameraWidth = camera != null ? 40f : 0f;
+            var standardCount = buttonCount - (camera != null ? 1 : 0);
+            var buttonWidth = Mathf.Min(208f, (centralWidth - cameraWidth -
+                gap * Mathf.Max(0, buttonCount - 1)) / Mathf.Max(1, standardCount));
             var left = PanelWidth;
             var right = canvasWidth - PanelWidth - buttonWidth;
-            var middleStart = left + buttonWidth + gap;
+            var cameraX = left + (build != null ? buttonWidth + gap : 0f);
+            var middleStart = cameraX + (camera != null ? cameraWidth + gap : 0f);
             var middleEnd = right - gap;
             var middleGap = middleButtons.Length > 1
                 ? Mathf.Max(gap, (middleEnd - middleStart -
                     buttonWidth * middleButtons.Length) / (middleButtons.Length - 1))
                 : 0f;
-            var buttons = new[] { build }.Concat(middleButtons)
+            var buttons = new[] { build, camera }.Concat(middleButtons)
                 .Concat(new[] { settings }).Where(button => button != null).ToArray();
             var middleIndex = 0;
             foreach (var button in buttons)
@@ -2336,6 +2340,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 rect.pivot = new Vector2(0f, 1f);
                 float buttonX;
                 if (ReferenceEquals(button, build)) buttonX = left;
+                else if (ReferenceEquals(button, camera)) buttonX = cameraX;
                 else if (ReferenceEquals(button, settings)) buttonX = right;
                 else
                 {
@@ -2343,10 +2348,31 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                     ++middleIndex;
                 }
                 rect.anchoredPosition = new Vector2(buttonX, 0f);
-                rect.sizeDelta = new Vector2(buttonWidth, 40f);
+                rect.sizeDelta = new Vector2(ReferenceEquals(button, camera)
+                    ? cameraWidth : buttonWidth, 40f);
                 ApplyButtonStyle(button);
+                if (ReferenceEquals(button, camera))
+                    MakeCameraButtonTransparent(button);
                 button.transform.SetAsLastSibling();
             }
+        }
+
+        // El boton de camara conserva su zona clicable, sonido y estado, pero
+        // visualmente muestra solo el icono ON/OFF sin panel ni contorno.
+        private static void MakeCameraButtonTransparent(Button button)
+        {
+            if (button == null) return;
+            var image = button.image ?? button.GetComponent<Image>();
+            if (image != null)
+            {
+                image.overrideSprite = null;
+                image.sprite = null;
+                image.color = Color.clear;
+                image.raycastTarget = true;
+            }
+            var outline = (image != null ? image.gameObject : button.gameObject)
+                .GetComponent<Outline>();
+            if (outline != null) outline.enabled = false;
         }
 
         // El submenu nativo de Baldosas conserva su jerarquia y eventos;

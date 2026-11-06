@@ -113,6 +113,12 @@
     <None Include="..\Assets\UnderMapsON.png" Link="Assets\UnderMapsON.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Assets\CameraOFF.png" Link="Assets\CameraOFF.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Assets\CameraON.png" Link="Assets\CameraON.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\Assets\T_Portal_Whirl2.png" Link="Assets\T_Portal_Whirl2.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
