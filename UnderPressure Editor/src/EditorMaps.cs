@@ -47,6 +47,8 @@ namespace UnderPressure.Editor
         private static int _failStateBalanceGameOver = -300000;
         private static ScenarioMapFormat.WeightedIllnessData[] _illnesses =
             new ScenarioMapFormat.WeightedIllnessData[0];
+        private static ScenarioMapFormat.ObjectiveData[] _objectives =
+            new ScenarioMapFormat.ObjectiveData[0];
         private static Level _plotSettingsLevel;
         private static readonly List<ScenarioMapFormat.Plot> _plotSettings =
             new List<ScenarioMapFormat.Plot>();
@@ -302,7 +304,9 @@ namespace UnderPressure.Editor
                 FailStateBalanceGameOver = _failStateBalanceGameOver,
                 scenarioSettingsConfigured = true,
                 illnessesConfigured = true,
-                illnesses = CloneIllnesses(_illnesses)
+                illnesses = CloneIllnesses(_illnesses),
+                objectivesConfigured = true,
+                objectives = CloneObjectives(_objectives)
             };
         }
 
@@ -325,6 +329,9 @@ namespace UnderPressure.Editor
                 ? CloneIllnesses(source.illnesses)
                 : ScenarioDiseaseCatalog.Capture(
                     level?.Config?.GetCharacterManagerConfig()?._weightedIllnesses);
+            _objectives = source.objectivesConfigured
+                ? CloneObjectives(source.objectives)
+                : new ScenarioMapFormat.ObjectiveData[0];
         }
 
         private static void EnsureScenarioSettings(Level level)
@@ -348,6 +355,7 @@ namespace UnderPressure.Editor
             if (finance == null) _initialBalance = 1000000;
             _illnesses = ScenarioDiseaseCatalog.Capture(
                 config?.GetCharacterManagerConfig()?._weightedIllnesses);
+            _objectives = new ScenarioMapFormat.ObjectiveData[0];
         }
 
         private static ScenarioMapFormat.WeightedIllnessData[] CloneIllnesses(
@@ -355,6 +363,41 @@ namespace UnderPressure.Editor
         {
             if (values == null) return new ScenarioMapFormat.WeightedIllnessData[0];
             return values.Select(ScenarioDiseaseCatalog.Clone).Where(value => value != null).ToArray();
+        }
+
+        internal static ScenarioMapFormat.ObjectiveData[] CloneObjectives(
+            ScenarioMapFormat.ObjectiveData[] values)
+        {
+            if (values == null) return new ScenarioMapFormat.ObjectiveData[0];
+            return values.Where(value => value != null).Select(value =>
+                new ScenarioMapFormat.ObjectiveData
+                {
+                    id = value.id ?? "",
+                    name = value.name ?? "",
+                    isStar = value.isStar,
+                    starIndex = value.starIndex,
+                    durationDays = value.durationDays ?? "30",
+                    probability = value.probability ?? "1",
+                    difficulty = value.difficulty ?? "0",
+                    cooldownSeconds = value.cooldownSeconds ?? "20",
+                    requirements = CloneObjectiveRules(value.requirements),
+                    completion = CloneObjectiveRules(value.completion),
+                    failure = CloneObjectiveRules(value.failure),
+                    abandon = CloneObjectiveRules(value.abandon)
+                }).ToArray();
+        }
+
+        private static ScenarioMapFormat.ObjectiveRuleData[] CloneObjectiveRules(
+            ScenarioMapFormat.ObjectiveRuleData[] values)
+        {
+            if (values == null) return new ScenarioMapFormat.ObjectiveRuleData[0];
+            return values.Where(value => value != null).Select(value =>
+                new ScenarioMapFormat.ObjectiveRuleData
+                {
+                    type = value.type ?? "",
+                    value = value.value ?? "",
+                    reference = value.reference ?? ""
+                }).ToArray();
         }
 
         private static T ReadField<T>(object owner, string name)
@@ -612,6 +655,8 @@ namespace UnderPressure.Editor
             header.scenarioSettingsConfigured = true;
             header.illnessesConfigured = true;
             header.illnesses = settings.illnesses;
+            header.objectivesConfigured = true;
+            header.objectives = settings.objectives;
             var styles = CurrentStyles(level);
             header.plotPerimeter = styles.plotPerimeter;
             header.perimeterPrefabs = styles.perimeterPrefabs;

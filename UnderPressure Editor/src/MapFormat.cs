@@ -42,6 +42,8 @@ namespace UnderPressure.Editor
             public bool scenarioSettingsConfigured;
             public bool illnessesConfigured;
             public WeightedIllnessData[] illnesses = new WeightedIllnessData[0];
+            public bool objectivesConfigured;
+            public ObjectiveData[] objectives = new ObjectiveData[0];
             public string terrainManifest = "";
             public string fogOfWarFile = "";
             public int fogTileWidth;
@@ -72,6 +74,31 @@ namespace UnderPressure.Editor
             public int maxWeight = 100;
             public int minStarRating;
             public int minPatientsSpawned;
+        }
+
+        [Serializable]
+        internal sealed class ObjectiveData
+        {
+            public string id = "";
+            public string name = "";
+            public bool isStar;
+            public int starIndex;
+            public string durationDays = "30";
+            public string probability = "1";
+            public string difficulty = "0";
+            public string cooldownSeconds = "20";
+            public ObjectiveRuleData[] requirements = new ObjectiveRuleData[0];
+            public ObjectiveRuleData[] completion = new ObjectiveRuleData[0];
+            public ObjectiveRuleData[] failure = new ObjectiveRuleData[0];
+            public ObjectiveRuleData[] abandon = new ObjectiveRuleData[0];
+        }
+
+        [Serializable]
+        internal sealed class ObjectiveRuleData
+        {
+            public string type = "";
+            public string value = "";
+            public string reference = "";
         }
 
         [Serializable]
