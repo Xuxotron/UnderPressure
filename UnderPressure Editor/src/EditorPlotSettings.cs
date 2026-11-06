@@ -593,6 +593,11 @@ namespace UnderPressure.Editor
                 {
                     // Las texturas nativas pueden ser no legibles.
                 }
+                catch (ArgumentException)
+                {
+                    // Unity 2021 lanza ArgumentException cuando la textura
+                    // nativa existe pero no permite lectura desde CPU.
+                }
             }
             return ScenarioEditorFogOfWar.CloneForEditing(source, name);
         }
