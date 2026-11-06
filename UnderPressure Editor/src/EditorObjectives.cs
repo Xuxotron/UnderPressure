@@ -196,7 +196,7 @@ namespace UnderPressure.Editor
             _objectiveChallengePanel.offsetMin = new Vector2(8f, 58f);
             _objectiveChallengePanel.offsetMax = new Vector2(-8f, -218f);
 
-            _objectiveChallengeScroll = CreateEmergencyVerticalScroll(
+            _objectiveChallengeScroll = CreateObjectiveVerticalScroll(
                 _objectiveChallengePanel, "UP Objective Challenge Scroll",
                 8f, 8f, 8f, 8f, out _objectiveChallengeContent);
             _objectiveChallengeScroll.scrollSensitivity = 44f;
@@ -248,7 +248,7 @@ namespace UnderPressure.Editor
                 ObjectiveRequirementTypes.Select(ObjectiveRequirementLabel));
             CreateEmergencyButton(requirements, "UP Objective Requirement Add", "+",
                 734f, 6f, 40f, 36f, EmergencyAddColor, AddObjectiveRequirement);
-            _objectiveRequirementScroll = CreateEmergencyVerticalScroll(
+            _objectiveRequirementScroll = CreateObjectiveVerticalScroll(
                 requirements, "UP Objective Requirements Scroll",
                 12f, 52f, 12f, 12f, out _objectiveRequirementContent);
             _objectiveRequirementScroll.scrollSensitivity = 44f;
@@ -267,7 +267,7 @@ namespace UnderPressure.Editor
                 ObjectiveResultTypes.Select(ObjectiveResultLabel));
             CreateEmergencyButton(results, "UP Objective Result Add", "+",
                 344f, 52f, 40f, 36f, EmergencyAddColor, AddObjectiveResult);
-            _objectiveResultScroll = CreateEmergencyVerticalScroll(
+            _objectiveResultScroll = CreateObjectiveVerticalScroll(
                 results, "UP Objective Results Scroll",
                 12f, 96f, 12f, 12f, out _objectiveResultContent);
             _objectiveResultScroll.scrollSensitivity = 44f;
@@ -301,6 +301,44 @@ namespace UnderPressure.Editor
                 outline.useGraphicAlpha = true;
             }
             return panel.transform as RectTransform;
+        }
+
+        private ScrollRect CreateObjectiveVerticalScroll(Transform parent, string name,
+            float left, float top, float right, float bottom,
+            out RectTransform content)
+        {
+            var root = NewImage(name, parent, null,
+                new Color(0f, 0f, 0f, .001f), true);
+            var rootRect = root.transform as RectTransform;
+            rootRect.anchorMin = Vector2.zero;
+            rootRect.anchorMax = Vector2.one;
+            rootRect.offsetMin = new Vector2(left, bottom);
+            rootRect.offsetMax = new Vector2(-right, -top);
+
+            var scroll = root.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 44f;
+
+            var viewportObject = new GameObject("Viewport",
+                typeof(RectTransform), typeof(RectMask2D));
+            viewportObject.transform.SetParent(root.transform, false);
+            var viewport = viewportObject.transform as RectTransform;
+            Stretch(viewport);
+
+            var contentObject = new GameObject("Content", typeof(RectTransform));
+            contentObject.transform.SetParent(viewportObject.transform, false);
+            content = contentObject.transform as RectTransform;
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = Vector2.zero;
+
+            scroll.viewport = viewport;
+            scroll.content = content;
+            return scroll;
         }
 
         private TMP_InputField CreateObjectiveCompactField(Transform parent, string labelKey,
