@@ -35,6 +35,7 @@ namespace UnderPressure.Editor
         private RectTransform _objectiveRoot;
         private RectTransform _objectiveListBlock;
         private RectTransform _objectiveConfigurationBlock;
+        private RectTransform _objectiveHeaderBlock;
         private RectTransform _objectiveStarPanel;
         private RectTransform _objectiveChallengePanel;
         private TMP_Dropdown _settingsNativeDropdownTemplate;
@@ -46,7 +47,7 @@ namespace UnderPressure.Editor
         private ScrollRect _objectiveResultScroll;
         private TMP_Dropdown _objectiveRequirementTypeDropdown;
         private TMP_Dropdown _objectiveResultTypeDropdown;
-        private TMP_InputField _objectiveNameInput;
+        private TMP_Text _objectiveSelectionTitle;
         private TMP_InputField _objectiveDurationInput;
         private TMP_InputField _objectiveProbabilityInput;
         private TMP_InputField _objectiveDifficultyInput;
@@ -171,28 +172,29 @@ namespace UnderPressure.Editor
 
         private void BuildObjectiveListChildren(float height)
         {
-            CreateEmergencyLabel(_objectiveListBlock,
-                EditorLocalization.Get("editor.objectives.stars"),
-                12f, 8f, ObjectiveLeftWidth - 24f, 28f, 20f,
-                TextAlignmentOptions.MidlineLeft);
-
             _objectiveStarPanel = CreateObjectivePanel(
-                "UP Objective Stars Panel", _objectiveListBlock, ObjectivePanelColor);
-            SetTopLeft(_objectiveStarPanel, 8f, 38f,
-                ObjectiveLeftWidth - 16f, 142f);
+                "UP Objective Stars Panel", _objectiveListBlock,
+                SettingsOuterPanelColor, false);
+            SetTopLeft(_objectiveStarPanel, 6f, 6f,
+                ObjectiveLeftWidth - 12f, 142f);
 
-            CreateEmergencyLabel(_objectiveListBlock,
+            var challengesHeader = CreateObjectivePanel(
+                "UP Objective Challenges Header", _objectiveListBlock,
+                ObjectivePanelColor, true);
+            SetTopLeft(challengesHeader, 6f, 154f,
+                ObjectiveLeftWidth - 12f, 58f);
+            CreateEmergencyLabel(challengesHeader,
                 EditorLocalization.Get("editor.objectives.challenges"),
-                12f, 190f, ObjectiveLeftWidth - 24f, 32f, 21f,
+                14f, 0f, ObjectiveLeftWidth - 40f, 58f, 25f,
                 TextAlignmentOptions.MidlineLeft);
 
             _objectiveChallengePanel = CreateObjectivePanel(
                 "UP Objective Challenges Panel", _objectiveListBlock,
-                ObjectivePanelColor);
+                ObjectivePanelColor, true);
             _objectiveChallengePanel.anchorMin = Vector2.zero;
             _objectiveChallengePanel.anchorMax = Vector2.one;
             _objectiveChallengePanel.offsetMin = new Vector2(8f, 58f);
-            _objectiveChallengePanel.offsetMax = new Vector2(-8f, -226f);
+            _objectiveChallengePanel.offsetMax = new Vector2(-8f, -218f);
 
             _objectiveChallengeScroll = CreateEmergencyVerticalScroll(
                 _objectiveChallengePanel, "UP Objective Challenge Scroll",
@@ -215,71 +217,72 @@ namespace UnderPressure.Editor
 
         private void BuildObjectiveConfigurationChildren()
         {
-            CreateEmergencyLabel(_objectiveConfigurationBlock,
-                EditorLocalization.Get("editor.objectives.configuration"),
-                14f, 8f, 240f, 30f, 21f,
+            _objectiveHeaderBlock = CreateObjectivePanel(
+                "UP Objective Header", _objectiveConfigurationBlock,
+                ObjectivePanelColor, true);
+            SetObjectiveStretchRect(_objectiveHeaderBlock, 0f, 0f, 0f, 116f);
+            _objectiveSelectionTitle = CreateEmergencyLabel(_objectiveHeaderBlock,
+                "", 14f, 4f, -14f, 38f, 24f,
                 TextAlignmentOptions.MidlineLeft);
 
-            _objectiveNameInput = CreateObjectiveField(
-                "editor.objectives.name", 14f, 44f, 0f, false, false);
-            _objectiveDurationInput = CreateObjectiveField(
-                "editor.objectives.duration", .02f, 88f, .25f, true, true);
-            _objectiveProbabilityInput = CreateObjectiveField(
-                "editor.objectives.probability", .25f, 88f, .5f, false, true);
-            _objectiveDifficultyInput = CreateObjectiveField(
-                "editor.objectives.difficulty", .5f, 88f, .75f, true, true);
-            _objectiveCooldownInput = CreateObjectiveField(
-                "editor.objectives.cooldown", .75f, 88f, 1f, false, true);
+            _objectiveDurationInput = CreateObjectiveCompactField(
+                _objectiveHeaderBlock, "editor.objectives.duration", .015f, .25f, true);
+            _objectiveProbabilityInput = CreateObjectiveCompactField(
+                _objectiveHeaderBlock, "editor.objectives.probability", .255f, .50f, false);
+            _objectiveDifficultyInput = CreateObjectiveCompactField(
+                _objectiveHeaderBlock, "editor.objectives.difficulty", .505f, .75f, true);
+            _objectiveCooldownInput = CreateObjectiveCompactField(
+                _objectiveHeaderBlock, "editor.objectives.cooldown", .755f, .99f, false);
 
             var requirements = CreateObjectivePanel(
                 "UP Objective Requirements", _objectiveConfigurationBlock,
-                ObjectiveRaisedPanelColor);
-            SetObjectiveStretchRect(requirements, 14f, 140f, 14f, 330f);
+                ObjectiveRaisedPanelColor, true);
+            SetObjectiveStretchRect(requirements, 0f, 126f, 0f, 316f);
             CreateEmergencyLabel(requirements,
                 EditorLocalization.Get("editor.objectives.requirements"),
-                12f, 7f, 190f, 30f, 20f,
+                14f, 5f, 280f, 38f, 24f,
                 TextAlignmentOptions.MidlineLeft);
             _objectiveRequirementTypeDropdown = CreateObjectiveNativeDropdown(
                 requirements, "UP Objective Requirement Type",
-                205f, 6f, 310f, 34f,
+                404f, 6f, 320f, 36f,
                 ObjectiveRequirementTypes.Select(ObjectiveRequirementLabel));
             CreateEmergencyButton(requirements, "UP Objective Requirement Add", "+",
-                525f, 6f, 36f, 34f, EmergencyAddColor, AddObjectiveRequirement);
+                734f, 6f, 40f, 36f, EmergencyAddColor, AddObjectiveRequirement);
             _objectiveRequirementScroll = CreateEmergencyVerticalScroll(
                 requirements, "UP Objective Requirements Scroll",
-                12f, 48f, 12f, 12f, out _objectiveRequirementContent);
+                12f, 52f, 12f, 12f, out _objectiveRequirementContent);
             _objectiveRequirementScroll.scrollSensitivity = 44f;
             InstallNativeVerticalScrollbar(requirements,
                 _objectiveRequirementScroll, "UP Objective Requirements Scrollbar",
-                48f, 12f, false, 12f);
+                52f, 12f, false, 12f);
 
             var results = CreateObjectivePanel(
                 "UP Objective Results", _objectiveConfigurationBlock,
-                ObjectiveRaisedPanelColor);
-            SetObjectiveBottomStretchRect(results, 14f, 340f, 14f, 14f);
+                ObjectiveRaisedPanelColor, true);
+            SetObjectiveBottomStretchRect(results, 0f, 452f, 0f, 0f);
             BuildObjectiveResultHeader(results);
             _objectiveResultTypeDropdown = CreateObjectiveNativeDropdown(
                 results, "UP Objective Result Type",
-                12f, 50f, 310f, 34f,
+                14f, 52f, 320f, 36f,
                 ObjectiveResultTypes.Select(ObjectiveResultLabel));
             CreateEmergencyButton(results, "UP Objective Result Add", "+",
-                332f, 50f, 36f, 34f, EmergencyAddColor, AddObjectiveResult);
+                344f, 52f, 40f, 36f, EmergencyAddColor, AddObjectiveResult);
             _objectiveResultScroll = CreateEmergencyVerticalScroll(
                 results, "UP Objective Results Scroll",
-                12f, 92f, 12f, 12f, out _objectiveResultContent);
+                12f, 96f, 12f, 12f, out _objectiveResultContent);
             _objectiveResultScroll.scrollSensitivity = 44f;
             InstallNativeVerticalScrollbar(results,
                 _objectiveResultScroll, "UP Objective Results Scrollbar",
-                92f, 12f, false, 12f);
+                96f, 12f, false, 12f);
 
-            BindObjectiveInput(_objectiveNameInput, value => CurrentObjective.name = value);
             BindObjectiveInput(_objectiveDurationInput, value => CurrentObjective.durationDays = value);
             BindObjectiveInput(_objectiveProbabilityInput, value => CurrentObjective.probability = value);
             BindObjectiveInput(_objectiveDifficultyInput, value => CurrentObjective.difficulty = value);
             BindObjectiveInput(_objectiveCooldownInput, value => CurrentObjective.cooldownSeconds = value);
         }
 
-        private RectTransform CreateObjectivePanel(string name, Transform parent, Color color)
+        private RectTransform CreateObjectivePanel(string name, Transform parent, Color color,
+            bool outlined = false)
         {
             var panel = NewImage(name, parent, _style.ButtonSprite, color, false);
             foreach (var outline in panel.GetComponents<Outline>())
@@ -290,7 +293,39 @@ namespace UnderPressure.Editor
                 image.type = Image.Type.Sliced;
                 image.raycastTarget = false;
             }
+            if (outlined)
+            {
+                var outline = panel.AddComponent<Outline>();
+                outline.effectColor = Color.white;
+                outline.effectDistance = new Vector2(2f, -2f);
+                outline.useGraphicAlpha = true;
+            }
             return panel.transform as RectTransform;
+        }
+
+        private TMP_InputField CreateObjectiveCompactField(Transform parent, string labelKey,
+            float anchorMinX, float anchorMaxX, bool integer)
+        {
+            var rowObject = new GameObject("UP Objective Compact Field " + labelKey,
+                typeof(RectTransform));
+            rowObject.transform.SetParent(parent, false);
+            var row = rowObject.transform as RectTransform;
+            row.anchorMin = new Vector2(anchorMinX, 1f);
+            row.anchorMax = new Vector2(anchorMaxX, 1f);
+            row.pivot = new Vector2(.5f, 1f);
+            row.anchoredPosition = new Vector2(0f, -48f);
+            row.sizeDelta = new Vector2(-8f, 58f);
+
+            const float inputWidth = 104f;
+            CreateEmergencyLabel(row, EditorLocalization.Get(labelKey),
+                0f, 0f, -(inputWidth + 8f), 58f, 18f,
+                TextAlignmentOptions.MidlineLeft);
+            var input = CreateEmergencyInput(row, labelKey, 0f, 11f,
+                inputWidth, 36f, "", integer);
+            SetTopRight(input.transform as RectTransform, 0f, 11f, inputWidth, 36f);
+            if (!integer) input.contentType = TMP_InputField.ContentType.DecimalNumber;
+            input.characterLimit = 16;
+            return input;
         }
 
         private TMP_Dropdown CreateObjectiveNativeDropdown(Transform parent, string name,
@@ -367,25 +402,12 @@ namespace UnderPressure.Editor
             return dropdown;
         }
 
-        private TMP_InputField CreateObjectiveField(string labelKey, float xOrAnchor,
-            float top, float rightAnchor, bool integer, bool challengeOnly)
-        {
-            var minimum = rightAnchor > 0f ? xOrAnchor : .02f;
-            var maximum = rightAnchor > 0f ? rightAnchor : .98f;
-            var input = CreateScenarioSettingsInput(_objectiveConfigurationBlock,
-                labelKey, top, 38f, false, integer, minimum, maximum,
-                rightAnchor > 0f ? 102f : -1f);
-            if (input == null) return null;
-            if (!integer && challengeOnly)
-                input.contentType = TMP_InputField.ContentType.DecimalNumber;
-            if (!challengeOnly)
-                input.contentType = TMP_InputField.ContentType.Standard;
-            input.characterLimit = challengeOnly ? 16 : 120;
-            return input;
-        }
-
         private void BuildObjectiveResultHeader(Transform parent)
         {
+            CreateEmergencyLabel(parent,
+                EditorLocalization.Get("editor.objectives.results"),
+                14f, 4f, 210f, 40f, 24f,
+                TextAlignmentOptions.MidlineLeft);
             _objectiveResultTabButtons = new Button[3];
             var keys = new[]
             {
@@ -398,7 +420,7 @@ namespace UnderPressure.Editor
                 _objectiveResultTabButtons[index] = CreateEmergencyButton(
                     parent, "UP Objective Result Tab " + index,
                     EditorLocalization.Get(keys[index]),
-                    12f + index * 126f, 7f, 118f, 34f,
+                    220f + index * 142f, 6f, 132f, 36f,
                     _style.ButtonColor, () => SelectObjectiveResult(captured));
             }
         }
@@ -429,20 +451,26 @@ namespace UnderPressure.Editor
             ClearEmergencyChildren(_objectiveChallengeContent);
             var challenges = _objectiveDrafts.Select((value, index) => new { value, index })
                 .Where(pair => !pair.value.isStar).ToArray();
+            if (challenges.Length == 0)
+            {
+                _objectiveDrafts.Add(CreateObjectiveDraft(false));
+                SaveObjectiveDrafts();
+                challenges = _objectiveDrafts.Select((value, index) => new { value, index })
+                    .Where(pair => !pair.value.isStar).ToArray();
+            }
             Canvas.ForceUpdateCanvases();
             var height = Mathf.Max(100f, _objectiveChallengeScroll.viewport.rect.height);
+            var width = Mathf.Max(160f, _objectiveChallengeScroll.viewport.rect.width - 2f);
             const float rowHeight = 44f;
             _objectiveChallengeContent.SetSizeWithCurrentAnchors(
                 RectTransform.Axis.Vertical, Mathf.Max(height, challenges.Length * rowHeight));
             for (var row = 0; row < challenges.Length; ++row)
             {
                 var captured = challenges[row].index;
-                var label = string.IsNullOrWhiteSpace(challenges[row].value.name)
-                    ? EditorLocalization.Format("editor.objectives.challenge", row + 1)
-                    : challenges[row].value.name;
+                var label = EditorLocalization.Format("editor.objectives.challenge", row + 1);
                 var button = CreateEmergencyButton(_objectiveChallengeContent,
                     "UP Objective Challenge " + row, label,
-                    0f, row * rowHeight, -2f, rowHeight - 4f,
+                    0f, row * rowHeight, width, rowHeight - 4f,
                     captured == _selectedObjective ? LayerBuildOrange : _style.ButtonColor,
                     () => SelectObjective(captured));
                 var rect = button.transform as RectTransform;
@@ -458,10 +486,14 @@ namespace UnderPressure.Editor
         {
             var draft = CurrentObjective;
             if (draft == null || _objectiveConfigurationBlock == null) return;
-            SetObjectiveInput(_objectiveNameInput,
-                draft.isStar
+            if (_objectiveSelectionTitle != null)
+            {
+                var challengeIndex = _objectiveDrafts.Take(_selectedObjective + 1)
+                    .Count(value => !value.isStar);
+                _objectiveSelectionTitle.text = draft.isStar
                     ? EditorLocalization.Format("editor.objectives.star", draft.starIndex)
-                    : draft.name, !draft.isStar);
+                    : EditorLocalization.Format("editor.objectives.challenge", challengeIndex);
+            }
             SetObjectiveInput(_objectiveDurationInput, draft.durationDays, !draft.isStar);
             SetObjectiveInput(_objectiveProbabilityInput, draft.probability, !draft.isStar);
             SetObjectiveInput(_objectiveDifficultyInput, draft.difficulty, !draft.isStar);
@@ -604,7 +636,11 @@ namespace UnderPressure.Editor
                 var captured = index;
                 var rule = rules[index];
                 var rowObject = NewImage("UP Objective Rule " + index, content,
-                    _style.ButtonSprite, SettingsSharedPageColor, false);
+                    _style.ButtonSprite, SettingsOuterPanelColor, false);
+                var rowOutline = rowObject.AddComponent<Outline>();
+                rowOutline.effectColor = new Color(1f, 1f, 1f, .7f);
+                rowOutline.effectDistance = new Vector2(1f, -1f);
+                rowOutline.useGraphicAlpha = true;
                 var row = rowObject.transform as RectTransform;
                 row.anchorMin = new Vector2(0f, 1f);
                 row.anchorMax = new Vector2(1f, 1f);
@@ -679,7 +715,10 @@ namespace UnderPressure.Editor
         private void CreateObjectiveLockedStarRow(Transform parent, int star, float top, float height)
         {
             var row = NewImage("UP Objective Star Reward", parent, _style.ButtonSprite,
-                SettingsSharedPageColor, false).transform as RectTransform;
+                SettingsOuterPanelColor, false).transform as RectTransform;
+            var rowOutline = row.gameObject.AddComponent<Outline>();
+            rowOutline.effectColor = new Color(1f, 1f, 1f, .7f);
+            rowOutline.effectDistance = new Vector2(1f, -1f);
             row.anchorMin = new Vector2(0f, 1f);
             row.anchorMax = new Vector2(1f, 1f);
             row.pivot = new Vector2(.5f, 1f);
