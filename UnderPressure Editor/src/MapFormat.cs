@@ -68,28 +68,21 @@ namespace UnderPressure.Editor
         {
             public int version = Version;
             public string name = "";
-            public BaseHospitalData baseHospital = new BaseHospitalData();
             public string description = "";
-            public BalanceData balance = new BalanceData();
-            public WeightedIllnessData[] illnesses = new WeightedIllnessData[0];
             public string terrainManifest = "";
-            public FogData fog = new FogData();
-            public PerimeterData perimeter = new PerimeterData();
-            public RoomStylesData roomStyles = new RoomStylesData();
             public string sceneFile = "";
             public string landscapeFile = "";
-            public PlotReference[] plots = new PlotReference[0];
         }
 
         [Serializable]
-        private sealed class BaseHospitalData
+        internal sealed class BaseHospitalData
         {
             public string id = "";
             public string name = "";
         }
 
         [Serializable]
-        private sealed class BalanceData
+        internal sealed class BalanceData
         {
             public int initial = 1000000;
             public int warning = -150000;
@@ -97,7 +90,7 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        private sealed class FogData
+        internal sealed class FogData
         {
             public string file = "";
             public int width;
@@ -108,14 +101,14 @@ namespace UnderPressure.Editor
         }
 
         [Serializable]
-        private sealed class PerimeterData
+        internal sealed class PerimeterData
         {
             public string type = PerimeterNone;
             public string[] prefabs = new string[0];
         }
 
         [Serializable]
-        private sealed class RoomStylesData
+        internal sealed class RoomStylesData
         {
             public string built = "";
             public string building = "";
@@ -282,37 +275,42 @@ namespace UnderPressure.Editor
         private static Map ParseHeader(string json)
         {
             var document = JsonUtility.FromJson<MapDocument>(json);
+            var hospital = ParseObject<BaseHospitalData>(json, "baseHospital");
+            var balance = ParseObject<BalanceData>(json, "balance");
+            var fog = ParseObject<FogData>(json, "fog");
+            var perimeter = ParseObject<PerimeterData>(json, "perimeter");
+            var roomStyles = ParseObject<RoomStylesData>(json, "roomStyles");
             var header = document == null ? null : new Map
             {
                 version = document.version,
                 name = document.name ?? "",
-                baseHospitalId = document.baseHospital?.id ?? "",
-                baseHospitalName = document.baseHospital?.name ?? "",
+                baseHospitalId = hospital.id ?? "",
+                baseHospitalName = hospital.name ?? "",
                 description = document.description ?? "",
                 DisplayName = document.name ?? "",
                 DescriptionPerStar = string.IsNullOrEmpty(document.description)
                     ? new string[0] : new[] { document.description },
-                InitialBalance = document.balance?.initial ?? 1000000,
-                FailStateBalanceWarning = document.balance?.warning ?? -150000,
-                FailStateBalanceGameOver = document.balance?.gameOver ?? -300000,
+                InitialBalance = balance.initial,
+                FailStateBalanceWarning = balance.warning,
+                FailStateBalanceGameOver = balance.gameOver,
                 scenarioSettingsConfigured = true,
                 illnessesConfigured = true,
                 illnesses = ParseObjects<WeightedIllnessData>(json, "illnesses"),
                 objectivesConfigured = false,
                 objectives = new ObjectiveData[0],
                 terrainManifest = document.terrainManifest ?? "",
-                fogOfWarFile = document.fog?.file ?? "",
-                fogTileWidth = document.fog?.width ?? 0,
-                fogTileHeight = document.fog?.height ?? 0,
-                fogMaxDistance = document.fog?.maxDistance ?? 0,
-                fogAnchorX = document.fog?.anchorX ?? 0,
-                fogAnchorY = document.fog?.anchorY ?? 0,
+                fogOfWarFile = fog.file ?? "",
+                fogTileWidth = fog.width,
+                fogTileHeight = fog.height,
+                fogMaxDistance = fog.maxDistance,
+                fogAnchorX = fog.anchorX,
+                fogAnchorY = fog.anchorY,
                 fogUseCameraBoundingBoxExtents = false,
-                plotPerimeter = document.perimeter?.type ?? PerimeterNone,
-                perimeterPrefabs = document.perimeter?.prefabs ?? new string[0],
-                builtRoomStyle = document.roomStyles?.built ?? "",
-                buildingRoomStyle = document.roomStyles?.building ?? "",
-                unbuiltRoomStyle = document.roomStyles?.unbuilt ?? "",
+                plotPerimeter = perimeter.type ?? PerimeterNone,
+                perimeterPrefabs = perimeter.prefabs ?? new string[0],
+                builtRoomStyle = roomStyles.built ?? "",
+                buildingRoomStyle = roomStyles.building ?? "",
+                unbuiltRoomStyle = roomStyles.unbuilt ?? "",
                 sceneFile = document.sceneFile ?? "",
                 landscapeFile = document.landscapeFile ?? "",
                 plots = ParseObjects<PlotReference>(json, "plots")
@@ -668,9 +666,12 @@ namespace UnderPressure.Editor
             AppendMapLine(text, "version", map.version.ToString(
                 System.Globalization.CultureInfo.InvariantCulture), true);
             AppendMapLine(text, "name", SerializeString(map.name), true);
-            AppendMapLine(text, "baseHospital", JsonUtility.ToJson(hospital, false), true);
+            AppendMapLine(text, "baseHospital", "{\"id\":" + SerializeString(hospital.id) +
+                ",\"name\":" + SerializeString(hospital.name) + "}", true);
             AppendMapLine(text, "description", SerializeString(map.description), true);
-            AppendMapLine(text, "balance", JsonUtility.ToJson(balance, false), true);
+            AppendMapLine(text, "balance", "{\"initial\":" + Integer(balance.initial) +
+                ",\"warning\":" + Integer(balance.warning) +
+                ",\"gameOver\":" + Integer(balance.gameOver) + "}", true);
             text.AppendLine("    \"illnesses\": [");
             var illnesses = map.illnesses ?? new WeightedIllnessData[0];
             for (var i = 0; i < illnesses.Length; i++)
@@ -683,9 +684,17 @@ namespace UnderPressure.Editor
             }
             text.AppendLine("    ],");
             AppendMapLine(text, "terrainManifest", SerializeString(map.terrainManifest), true);
-            AppendMapLine(text, "fog", JsonUtility.ToJson(fog, false), true);
-            AppendMapLine(text, "perimeter", JsonUtility.ToJson(perimeter, false), true);
-            AppendMapLine(text, "roomStyles", JsonUtility.ToJson(roomStyles, false), true);
+            AppendMapLine(text, "fog", "{\"file\":" + SerializeString(fog.file) +
+                ",\"width\":" + Integer(fog.width) +
+                ",\"height\":" + Integer(fog.height) +
+                ",\"maxDistance\":" + Integer(fog.maxDistance) +
+                ",\"anchorX\":" + Integer(fog.anchorX) +
+                ",\"anchorY\":" + Integer(fog.anchorY) + "}", true);
+            AppendMapLine(text, "perimeter", "{\"type\":" + SerializeString(perimeter.type) +
+                ",\"prefabs\":" + SerializeStrings(perimeter.prefabs) + "}", true);
+            AppendMapLine(text, "roomStyles", "{\"built\":" + SerializeString(roomStyles.built) +
+                ",\"building\":" + SerializeString(roomStyles.building) +
+                ",\"unbuilt\":" + SerializeString(roomStyles.unbuilt) + "}", true);
             AppendMapLine(text, "sceneFile", SerializeString(map.sceneFile), true);
             AppendMapLine(text, "landscapeFile", SerializeString(map.landscapeFile), true);
             AppendMapLine(text, "plots", SerializeObjects(map.plots), false);
@@ -708,6 +717,68 @@ namespace UnderPressure.Editor
             if (colon < 0 || json.Length < colon + 3)
                 throw new InvalidDataException("Unity no pudo serializar un texto del mapa.");
             return json.Substring(colon + 1, json.Length - colon - 2);
+        }
+
+        private static string Integer(int value)
+        {
+            return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static string SerializeStrings(string[] values)
+        {
+            var text = new StringBuilder("[");
+            if (values != null)
+                for (var i = 0; i < values.Length; i++)
+                {
+                    if (i > 0) text.Append(',');
+                    text.Append(SerializeString(values[i]));
+                }
+            return text.Append(']').ToString();
+        }
+
+        private static T ParseObject<T>(string json, string key) where T : class
+        {
+            var source = ExtractObject(json, key);
+            var value = JsonUtility.FromJson<T>(source);
+            if (value == null)
+                throw new InvalidDataException("Objeto JSON incorrecto: " + key);
+            return value;
+        }
+
+        private static string ExtractObject(string json, string key)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                throw new InvalidDataException("JSON vacio: " + key);
+            var label = "\"" + key + "\"";
+            var at = json.IndexOf(label, StringComparison.Ordinal);
+            if (at < 0) throw new InvalidDataException("Falta el objeto JSON: " + key);
+            at += label.Length;
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at++] != ':')
+                throw new InvalidDataException("Campo JSON incorrecto: " + key);
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at] != '{')
+                throw new InvalidDataException("El campo JSON no es un objeto: " + key);
+            var start = at;
+            var depth = 0;
+            var quoted = false;
+            var escaped = false;
+            for (; at < json.Length; at++)
+            {
+                var current = json[at];
+                if (quoted)
+                {
+                    if (escaped) escaped = false;
+                    else if (current == '\\') escaped = true;
+                    else if (current == '"') quoted = false;
+                    continue;
+                }
+                if (current == '"') quoted = true;
+                else if (current == '{') depth++;
+                else if (current == '}' && --depth == 0)
+                    return json.Substring(start, at - start + 1);
+            }
+            throw new InvalidDataException("Objeto JSON sin cerrar: " + key);
         }
 
         [Serializable]
