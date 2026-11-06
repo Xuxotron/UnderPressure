@@ -117,7 +117,7 @@ namespace UnderPressure.Editor
             if (_toggleRoot == null || _overlay != null) return;
             var canvas = _toggleRoot.GetComponentInParent<Canvas>();
             if (canvas == null) return;
-            ScenarioFogViewer.Close();
+            ScenarioPlotMapEditor.Close();
             ScenarioEditorStorageMenu.DeactivateNativeTools();
             ScenarioEditorTerrainPainter.DisableTools();
             try

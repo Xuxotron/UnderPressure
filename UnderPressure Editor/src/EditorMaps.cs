@@ -2488,7 +2488,7 @@ namespace UnderPressure.Editor
         private static void ActivateNativeTool(Button native)
         {
             ScenarioCharacterViewer.Close();
-            ScenarioFogViewer.Close();
+            ScenarioPlotMapEditor.Close();
             native?.onClick.Invoke();
         }
 
@@ -3122,7 +3122,7 @@ rect.pivot = new Vector2(1f, 1f);
                 _cameraButton.interactable = _nativeCameraButton.interactable;
             if (_movePlotButton != null && _nativeMoveButton != null)
                 _movePlotButton.interactable = _nativeMoveButton.interactable;
-            var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioFogViewer.IsOpen;
+            var customToolOpen = ScenarioCharacterViewer.IsOpen || ScenarioPlotMapEditor.IsOpen;
             var cursor = _level.CursorManager;
             ScenarioEditorObjectDock.EnsureDefaultSelection(_level);
             SetToolButtonSelected(_objectsButton,
@@ -4279,11 +4279,7 @@ PriorVisibility.Clear();
                 ScenarioCharacterViewer.Close();
                 return false;
             }
-            if (ScenarioFogViewer.IsOpen)
-            {
-                ScenarioFogViewer.Close();
-                return false;
-            }
+            if (ScenarioEditorDockLayout.ClosePlotMapIfOpen()) return false;
             if (ScenarioEditorDockLayout.CloseSettingsPanelIfOpen()) return false;
             if (ScenarioEditorStorageMenu.CloseOpenDialog()) return false;
             if (ScenarioEditorTerrainPainter.CloseDialogIfOpen()) return false;

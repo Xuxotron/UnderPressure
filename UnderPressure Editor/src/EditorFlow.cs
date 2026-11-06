@@ -439,7 +439,7 @@ namespace UnderPressure.Editor
             ScenarioEditorStorageMenu.Shutdown();
             ScenarioEditorDockLayout.Shutdown();
             ScenarioCharacterViewer.Detach();
-            ScenarioFogViewer.Detach();
+            ScenarioPlotMapEditor.Detach();
             ScenarioEditorTerrainPainter.Cleanup();
             ScenarioEditorHistory.StopHistory();
             ScenarioEditorUiHierarchy.Destroy();

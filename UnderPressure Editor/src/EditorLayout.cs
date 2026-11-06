@@ -160,6 +160,11 @@ namespace UnderPressure.Editor
             return true;
         }
 
+        internal static bool ClosePlotMapIfOpen()
+        {
+            return _active != null && _active.ReturnFromPlotMap();
+        }
+
         // Referencia cromatica de Build.
         internal static Color LayerBuildOrange => new Color(1f, .59f, .08f, 1f);
         internal static Color EditorButtonColor => new Color(.14f, .62f, .89f, 1f);
@@ -676,7 +681,7 @@ namespace UnderPressure.Editor
         private void CloseSettingsPanel()
         {
             _settingsClosePending = false;
-            ScenarioFogViewer.Close();
+            ScenarioPlotMapEditor.Close();
             if (_settingsOverlay != null) _settingsOverlay.SetActive(false);
             SetSelected(_settingsToggle, false);
         }
@@ -912,7 +917,7 @@ namespace UnderPressure.Editor
         private void SetSettingsTab(int selectedIndex)
         {
             if (_settingsTabButtons == null || _settingsPages == null) return;
-            if (selectedIndex != 3) ScenarioFogViewer.Close();
+            if (selectedIndex != 3) ScenarioPlotMapEditor.Close();
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
             if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
@@ -3216,7 +3221,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
                 level == null || !ReferenceEquals(level, ScenarioEditorSession.Level) ||
                 ScenarioEditorTerrainPainter.BrushEnabled || ScenarioCharacterViewer.IsOpen ||
-                ScenarioFogViewer.IsOpen || ScenarioLandscape.IsActive) return;
+                ScenarioPlotMapEditor.IsOpen || ScenarioLandscape.IsActive) return;
             var cursor = level.CursorManager;
             if (cursor == null || ContainsMode(cursor, typeof(CursorEditHospitalItem))) return;
             var current = CursorModeField?.GetValue(cursor);
