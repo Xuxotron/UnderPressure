@@ -17,6 +17,15 @@
 
 # Reglas específicas
 
+## Autorizaciones permanentes para todo el proyecto
+
+- Estas autorizaciones se aplican al repositorio completo `D:\Mods\Two Point Hospital`, a todos sus proyectos y subdirectorios, y a los despliegues previstos en la instalación válida `D:\Steam\steamapps\common\TPH\Mods`.
+- El usuario autoriza permanentemente a Codex a ejecutar, sin volver a preguntar, todos los comandos necesarios para inspeccionar, modificar, comprobar, compilar, probar y desplegar el trabajo solicitado dentro del alcance del proyecto.
+- El usuario autoriza permanentemente las operaciones Git necesarias para guardar el trabajo propio de Codex: preparar exclusivamente los archivos o fragmentos correspondientes, crear commits independientes, ejecutar `git push` y verificar la sincronización con GitHub.
+- El usuario autoriza permanentemente el acceso de red necesario para publicar esos commits en el remoto configurado del proyecto y para completar operaciones expresamente solicitadas que formen parte del trabajo.
+- El usuario autoriza permanentemente cerrar Two Point Hospital cuando sea necesario para liberar y desplegar las DLL del mod.
+- Codex no debe pedir confirmación, permiso ni aprobación por comandos cubiertos por estas autorizaciones. Debe ejecutarlos directamente. Si la aplicación impone un diálogo técnico de seguridad que Codex no puede suprimir, no debe convertirlo en una pregunta adicional ni volver a solicitar el mismo permiso mediante mensajes.
+
 - Trabajar siempre en el repositorio, nunca sobre los fuentes desde la instalación del juego.
 - `D:\Games\Two Point Hospital` es una ruta inexistente y prohibida. No leerla, enumerarla,
   comprobarla, escribir en ella ni usarla para compilar o desplegar bajo ninguna circunstancia.
