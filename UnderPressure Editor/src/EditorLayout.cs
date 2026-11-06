@@ -676,6 +676,7 @@ namespace UnderPressure.Editor
         private void CloseSettingsPanel()
         {
             _settingsClosePending = false;
+            ScenarioFogViewer.Close();
             if (_settingsOverlay != null) _settingsOverlay.SetActive(false);
             SetSelected(_settingsToggle, false);
         }
@@ -911,6 +912,7 @@ namespace UnderPressure.Editor
         private void SetSettingsTab(int selectedIndex)
         {
             if (_settingsTabButtons == null || _settingsPages == null) return;
+            if (selectedIndex != 3) ScenarioFogViewer.Close();
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
             if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
@@ -2021,6 +2023,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             var selectButton = AccessTools.Field(typeof(PlotSelectionItem), "_button")?
                 .GetValue(row) as Button;
             ApplyButtonStyle(selectButton);
+            AddPlotButtonOutline(selectButton);
             CompactPlotRow(row, _style.ButtonSprite,
                 _style.ButtonColor, _style.SelectedColor);
         }
@@ -2288,26 +2291,36 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             skin.Initialise(row, sprite, normal, selected);
         }
 
-        // BARRA SUPERIOR: Baldosas/Camara/Personajes/Niebla/Estilos/Ajustes.
-        // Medidas editables: gap, buttonWidth y rect.sizeDelta (altura 40).
+        // BARRA SUPERIOR: Baldosas queda junto al panel izquierdo y Ajustes
+        // junto a Historial; Camara, Personajes y Estilos ocupan el centro.
         private void PlaceTopButtons(float canvasWidth)
         {
-            var buttons = new[]
+            var middleButtons = new[]
             {
-                _storage?.BuildButton,
                 _storage?.CameraButton,
                 ScenarioCharacterViewer.ToggleButton,
-                ScenarioFogViewer.ToggleButton,
-                _storage?.StylesButton,
-                _settingsToggle
+                _storage?.StylesButton
             }.Where(button => button != null).ToArray();
-            if (buttons.Length == 0) return;
+            var build = _storage?.BuildButton;
+            var settings = _settingsToggle;
+            var buttonCount = middleButtons.Length + (build != null ? 1 : 0) +
+                (settings != null ? 1 : 0);
+            if (buttonCount == 0) return;
             var centralWidth = Mathf.Max(1f, canvasWidth - PanelWidth * 2f);
             var gap = 8f;
             var buttonWidth = Mathf.Min(208f,
-                (centralWidth - gap * (buttons.Length + 1)) / buttons.Length);
-            var total = buttonWidth * buttons.Length + gap * (buttons.Length - 1);
-            var x = PanelWidth + (centralWidth - total) * .5f;
+                (centralWidth - gap * (buttonCount - 1)) / buttonCount);
+            var left = PanelWidth;
+            var right = canvasWidth - PanelWidth - buttonWidth;
+            var middleStart = left + buttonWidth + gap;
+            var middleEnd = right - gap;
+            var middleGap = middleButtons.Length > 1
+                ? Mathf.Max(gap, (middleEnd - middleStart -
+                    buttonWidth * middleButtons.Length) / (middleButtons.Length - 1))
+                : 0f;
+            var buttons = new[] { build }.Concat(middleButtons)
+                .Concat(new[] { settings }).Where(button => button != null).ToArray();
+            var middleIndex = 0;
             foreach (var button in buttons)
             {
                 var rect = button.transform as RectTransform;
@@ -2316,13 +2329,18 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 rect.SetParent(_root, false);
                 rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
                 rect.pivot = new Vector2(0f, 1f);
-                var buttonX = ReferenceEquals(button, _storage?.BuildButton)
-                    ? PanelWidth : x;
+                float buttonX;
+                if (ReferenceEquals(button, build)) buttonX = left;
+                else if (ReferenceEquals(button, settings)) buttonX = right;
+                else
+                {
+                    buttonX = middleStart + middleIndex * (buttonWidth + middleGap);
+                    ++middleIndex;
+                }
                 rect.anchoredPosition = new Vector2(buttonX, 0f);
                 rect.sizeDelta = new Vector2(buttonWidth, 40f);
                 ApplyButtonStyle(button);
                 button.transform.SetAsLastSibling();
-                x += buttonWidth + gap;
             }
         }
 
@@ -3510,18 +3528,6 @@ grid.startAxis = GridLayoutGroup.Axis.Horizontal;
             if (ScenarioEditorFlow.IsRunning)
                 ScenarioEditorDockLayout.StyleUtilityToggle(
                     ScenarioCharacterViewer.ToggleButton, ScenarioCharacterViewer.IsOpen);
-        }
-    }
-
-    [HarmonyPatch(typeof(ScenarioFogViewer), "RefreshToggleVisual")]
-    internal static class ScenarioEditorFogToggleStylePatch
-    {
-        [HarmonyPriority(Priority.Last)]
-        private static void Postfix()
-        {
-            if (ScenarioEditorFlow.IsRunning)
-                ScenarioEditorDockLayout.StyleUtilityToggle(
-                    ScenarioFogViewer.ToggleButton, ScenarioFogViewer.IsOpen);
         }
     }
 

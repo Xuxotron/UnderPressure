@@ -16,12 +16,15 @@ namespace UnderPressure.Editor
         private const float PlotListSpacing = 4f;
         private const float PlotListWidth = 245f;
         private const float PlotColumnGap = 10f;
+        private const float PlotMapButtonHeight = 48f;
 
         private RectTransform _settingsPlotRoot;
         private RectTransform _settingsPlotList;
         private RectTransform _settingsPlotDetails;
         private ScrollRect _settingsPlotScroll;
+        private Button _settingsPlotMapButton;
         private int _settingsPlotSelectedIndex;
+        private bool _settingsPlotMapSelected;
         private readonly List<int> _settingsPlotRequirements = new List<int>();
 
         private void BuildPlotSettingsContents()
@@ -57,7 +60,7 @@ namespace UnderPressure.Editor
             var scrollRect = scrollObject.transform as RectTransform;
             scrollRect.anchorMin = Vector2.zero;
             scrollRect.anchorMax = Vector2.one;
-            scrollRect.offsetMin = new Vector2(10f, 10f);
+            scrollRect.offsetMin = new Vector2(10f, PlotMapButtonHeight + 20f);
             scrollRect.offsetMax = new Vector2(-10f, -PlotListHeaderHeight - 8f);
 
             var viewportObject = new GameObject("Viewport", typeof(RectTransform),
@@ -89,6 +92,15 @@ namespace UnderPressure.Editor
             InstallDiseaseNativeScrollbar(scrollRect, _settingsPlotScroll,
                 "UP Plot Native Scrollbar", 0f, 0f);
             scrollRect.SetAsLastSibling();
+
+            _settingsPlotMapButton = CreateDiseaseButton(listPanel.transform,
+                EditorLocalization.Get("editor.scenario_settings.plots.map"),
+                _style.SelectedColor, SelectPlotMap);
+            var mapRect = _settingsPlotMapButton.transform as RectTransform;
+            SetRect(mapRect, new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(.5f, 0f), new Vector2(0f, 10f),
+                new Vector2(-20f, PlotMapButtonHeight));
+            AddPlotButtonOutline(_settingsPlotMapButton);
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
                 _style.ButtonSprite, _style.PanelColor, false);
@@ -123,6 +135,7 @@ namespace UnderPressure.Editor
                     EditorLocalization.Format("editor.scenario_settings.plots.plot", index + 1),
                     selected ? _style.ButtonColor : _style.SelectedColor,
                     () => SelectPlotSettings(captured));
+                AddPlotButtonOutline(button);
                 var rect = button.transform as RectTransform;
                 SetRect(rect, new Vector2(0f, 1f), new Vector2(1f, 1f),
                     new Vector2(.5f, 1f),
@@ -134,7 +147,19 @@ namespace UnderPressure.Editor
             _settingsPlotScroll.verticalNormalizedPosition = 1f;
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsPlotList);
 
+            ScenarioFogViewer.Close();
             ClearPlotChildren(_settingsPlotDetails);
+            if (_settingsPlotMapButton != null)
+                ScenarioEditorDockLayout.ApplyEditorButtonVisuals(_settingsPlotMapButton,
+                    _style.ButtonSprite, _settingsPlotMapSelected
+                        ? _style.ButtonColor : _style.SelectedColor);
+            if (_settingsPlotMapSelected)
+            {
+                ScenarioFogViewer.OpenEmbedded(_settingsPlotDetails,
+                    _style.PanelSprite, _style.ButtonSprite, _style.PanelColor,
+                    _style.ButtonColor, _style.SelectedColor);
+                return;
+            }
             if (plots.Count == 0) return;
             var plot = plots[_settingsPlotSelectedIndex];
             if (plot == null) return;
@@ -244,8 +269,24 @@ namespace UnderPressure.Editor
 
         private void SelectPlotSettings(int index)
         {
+            _settingsPlotMapSelected = false;
             _settingsPlotSelectedIndex = index;
             RefreshPlotSettingsContents();
+        }
+
+        private void SelectPlotMap()
+        {
+            _settingsPlotMapSelected = true;
+            RefreshPlotSettingsContents();
+        }
+
+        private static void AddPlotButtonOutline(Button button)
+        {
+            if (button == null) return;
+            var outline = button.GetComponent<Outline>() ?? button.gameObject.AddComponent<Outline>();
+            outline.effectColor = Color.white;
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = false;
         }
 
         private void AddPlotLabel(string key, float minX, float maxX, float top)
@@ -429,12 +470,15 @@ namespace UnderPressure.Editor
 
         private void ReleasePlotSettingsContents()
         {
+            ScenarioFogViewer.Close();
             _settingsPlotRequirements.Clear();
             _settingsPlotRoot = null;
             _settingsPlotList = null;
             _settingsPlotDetails = null;
             _settingsPlotScroll = null;
+            _settingsPlotMapButton = null;
             _settingsPlotSelectedIndex = 0;
+            _settingsPlotMapSelected = false;
         }
     }
 }

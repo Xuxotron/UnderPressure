@@ -31,17 +31,13 @@ namespace UnderPressure.Editor
     internal static class ScenarioFogViewer
     {
         private const float PreviewSize = 768f;  // 6x128; 3x256 (unidades de interfaz)
-        private const float PanelWidth = 864f;
-        private const float PanelHeight = 910f;
-        private static readonly Color PanelColor = new Color(0.135f, 0.165f, 0.195f, 0.98f);
-        private static readonly Color ButtonColor = new Color(0.24f, 0.31f, 0.36f, 1f);
-        private static readonly Color HighlightColor = new Color(0.24f, 0.46f, 0.49f, 1f);
-        private static readonly Color ToggleInactiveColor = new Color(.58f, .68f, .74f, 1f);
-        private static readonly Color ToggleActiveColor = new Color(.02f, .55f, .90f, 1f);
-        private static GameObject _toggleRoot;
         private static GameObject _overlay;
-        private static TMP_Text _toggleText;
         private static Font _font;
+        private static Sprite _panelSprite;
+        private static Sprite _buttonSprite;
+        private static Color _panelColor;
+        private static Color _buttonColor;
+        private static Color _selectedColor;
         private static Texture2D _workingTexture;
         private static Texture2D _resetTexture;
         private static RawImage _preview;
@@ -74,8 +70,7 @@ namespace UnderPressure.Editor
         private static bool _workingTextureInstalled;
 
         internal static bool IsOpen => _overlay != null;
-        internal static Button ToggleButton => _toggleRoot == null
-            ? null : _toggleRoot.GetComponent<Button>();
+        internal static Button ToggleButton => null;
         internal static int BrushSizeForStroke => _brushSize;
         internal static int BrushTextureWidth => _workingTexture != null ? _workingTexture.width : 128;
         internal static int BrushTextureHeight => _workingTexture != null ? _workingTexture.height : 128;
@@ -85,39 +80,8 @@ namespace UnderPressure.Editor
         {
             Detach();
             if (menu == null || level == null) return;
-            var canvas = menu.GetComponentInParent<Canvas>();
-            if (canvas == null) return;
             _level = level;
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
-                .GetValue(menu) as Button;
-            if (template == null) return;
-            var button = UnityEngine.Object.Instantiate(template,
-                ScenarioEditorUiHierarchy.ParentFor(canvas), false);
-            button.gameObject.name = "UP_FogViewerToggle";
-            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
-                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
-                    component.enabled = false;
-            button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(Toggle);
-            button.interactable = true;
-            button.gameObject.SetActive(true);
-            var rect = (RectTransform)button.transform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.anchoredPosition = new Vector2(330f, -12f);
-            rect.sizeDelta = new Vector2(208f, 40f);
-            _toggleRoot = button.gameObject;
-            _toggleText = button.GetComponentInChildren<TMP_Text>(true);
-            if (_toggleText != null) _toggleText.text = T("editor.fog.button");
-            RefreshToggleVisual();
-        }
-
-        private static void Toggle()
-        {
-            if (_overlay != null) { Close(); return; }
-            if (!ScenarioEditorSession.Active || !ScenarioEditorFlow.IsRunning) return;
-            Open();
         }
 
         // El paquete actual es la unica fuente de verdad para la niebla guardada.
@@ -208,11 +172,15 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void Open()
+        internal static void OpenEmbedded(RectTransform host, Sprite panelSprite,
+            Sprite buttonSprite, Color panelColor, Color buttonColor, Color selectedColor)
         {
-            if (_toggleRoot == null || _overlay != null) return;
-            var canvas = _toggleRoot.GetComponentInParent<Canvas>();
-            if (canvas == null) return;
+            if (host == null || _level == null || _overlay != null) return;
+            _panelSprite = panelSprite;
+            _buttonSprite = buttonSprite;
+            _panelColor = panelColor;
+            _buttonColor = buttonColor;
+            _selectedColor = selectedColor;
             ScenarioCharacterViewer.Close();
             ScenarioEditorStorageMenu.DeactivateNativeTools();
             ScenarioEditorTerrainPainter.DisableTools();
@@ -266,63 +234,71 @@ namespace UnderPressure.Editor
                     }
                 }
 
-                _overlay = Ui("UP_FogViewerOverlay",
-                    ScenarioEditorUiHierarchy.ParentFor(canvas), typeof(Image));
+                _overlay = Ui("UP_FogViewerEmbedded", host, typeof(Image));
                 Stretch((RectTransform)_overlay.transform);
-                _overlay.GetComponent<Image>().color = new Color(0.01f, 0.02f, 0.035f, 0.64f);
+                var rootImage = _overlay.GetComponent<Image>();
+                rootImage.sprite = _panelSprite;
+                rootImage.type = _panelSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+                rootImage.color = _panelColor;
                 _overlay.GetComponent<Image>().raycastTarget = true;
                 _overlay.transform.SetAsLastSibling();
 
-                var panel = Ui("UP_FogViewerPanel", _overlay.transform, typeof(Image));
-                var panelRect = (RectTransform)panel.transform;
-                panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-                panelRect.pivot = new Vector2(0.5f, 0.5f);
-                panelRect.anchoredPosition = Vector2.zero;
-                panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-                panel.GetComponent<Image>().color = PanelColor;
+                var panel = _overlay;
+                var controls = Ui("Controles del mapa", panel.transform, typeof(Image));
+                var controlsRect = (RectTransform)controls.transform;
+                controlsRect.anchorMin = Vector2.zero;
+                controlsRect.anchorMax = Vector2.one;
+                controlsRect.offsetMin = new Vector2(PreviewSize + 24f, 8f);
+                controlsRect.offsetMax = new Vector2(-8f, -8f);
+                var controlsImage = controls.GetComponent<Image>();
+                controlsImage.sprite = _panelSprite;
+                controlsImage.type = _panelSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+                controlsImage.color = _panelColor;
+                AddOutline(controls, Color.white, 2f);
 
-                _addButton = CreateButton(panel.transform, "Add", T("editor.fog.add"),
-                    new Vector2(112f, 42f), HighlightColor,
+                _addButton = CreateButton(controls.transform, "Add", T("editor.fog.add"),
+                    new Vector2(112f, 42f), _selectedColor,
                     () => SelectPaintMode(1)).GetComponent<Button>();
-                SetTop(_addButton.transform, -358f, -16f);
+                SetTop(_addButton.transform, -62f, -16f);
 
-                _sizeText = CreateText(panel.transform, "", 14,
-                    new Vector2(-112f, -3f), new Vector2(145f, 20f), TextAnchor.MiddleCenter);
-                var size = CreateSlider(panel.transform, "BrushSize", new Vector2(145f, 20f),
+                _removeButton = CreateButton(controls.transform, "Remove", T("editor.fog.remove"),
+                    new Vector2(112f, 42f), _buttonColor,
+                    () => SelectPaintMode(-1)).GetComponent<Button>();
+                SetTop(_removeButton.transform, 62f, -16f);
+
+                _sizeText = CreateText(controls.transform, "", 16,
+                    new Vector2(0f, -76f), new Vector2(250f, 24f), TextAnchor.MiddleCenter);
+                var size = CreateSlider(controls.transform, "BrushSize", new Vector2(220f, 22f),
                     1f, 50f, _brushSize, Slider.Direction.LeftToRight, value =>
                     {
                         _brushSize = Mathf.RoundToInt(value);
                         RefreshControlTexts();
                         RefreshBrushCursorSize();
                     });
-                SetTop(size.transform, -112f, -31f);
+                SetTop(size.transform, 0f, -106f);
 
-                _pressureText = CreateText(panel.transform, "", 14,
-                    new Vector2(112f, -3f), new Vector2(145f, 20f), TextAnchor.MiddleCenter);
-                var maxOpacity = CreateSlider(panel.transform, "BrushMaxOpacity", new Vector2(145f, 20f),
+                _pressureText = CreateText(controls.transform, "", 16,
+                    new Vector2(0f, -158f), new Vector2(250f, 24f), TextAnchor.MiddleCenter);
+                var maxOpacity = CreateSlider(controls.transform, "BrushMaxOpacity", new Vector2(220f, 22f),
                     0f, 100f, _brushMaxOpacity, Slider.Direction.LeftToRight, value =>
                     {
                         _brushMaxOpacity = Mathf.RoundToInt(value);
                         RefreshControlTexts();
                     });
-                SetTop(maxOpacity.transform, 112f, -31f);
-
-                _removeButton = CreateButton(panel.transform, "Remove", T("editor.fog.remove"),
-                    new Vector2(112f, 42f), ButtonColor,
-                    () => SelectPaintMode(-1)).GetComponent<Button>();
-                SetTop(_removeButton.transform, 358f, -16f);
+                SetTop(maxOpacity.transform, 0f, -188f);
 
                 var previewBack = Ui("PreviewBackground", panel.transform, typeof(Image));
                 var backRect = (RectTransform)previewBack.transform;
-                backRect.anchorMin = backRect.anchorMax = new Vector2(0.5f, 1f);
-                backRect.pivot = new Vector2(0.5f, 1f);
-                backRect.anchoredPosition = new Vector2(0f, -63f);
+                backRect.anchorMin = backRect.anchorMax = new Vector2(0f, 1f);
+                backRect.pivot = new Vector2(0f, 1f);
+                backRect.anchoredPosition = new Vector2(8f, -8f);
                 backRect.sizeDelta = new Vector2(PreviewSize, PreviewSize);
                 // El PNG tiene RGB negro y el alfa contiene la mascara.
                 // Sobre blanco, el centro transparente parecia blanco: no es
                 // el aspecto del PNG original. Fondo de cuadros OSCURO separado.
                 _previewBackground = previewBack.GetComponent<Image>();
                 _previewBackground.color = Color.black;
+                AddOutline(previewBack, Color.white, 2f);
                 _checkerTexture = BuildCheckerTexture();
                 var checkerLayer = Ui("AlphaCheckerboard", previewBack.transform,
                     typeof(RawImage));
@@ -353,34 +329,32 @@ namespace UnderPressure.Editor
                     CreateBrushCursor(previewRoot.transform);
                 }
 
-                var reset = CreateButton(panel.transform, "Reset", T("editor.fog.reset"),
-                    new Vector2(150f, 42f), HighlightColor, ResetToLastSaved);
-                SetTop(reset.transform, -300f, -847f);
+                var plots = CreateButton(controls.transform, "Plots", "",
+                    new Vector2(220f, 46f), _buttonColor, TogglePlots);
+                SetBottom(plots.transform, 0f, 184f);
+                _plotText = plots.GetComponentInChildren<Text>();
 
-                var alpha = CreateButton(panel.transform, "Alpha", "",
-                    new Vector2(150f, 42f), ButtonColor, ToggleAlpha);
-                SetTop(alpha.transform, -100f, -847f);
-                _alphaText = alpha.GetComponentInChildren<Text>();
-
-                var fog = CreateButton(panel.transform, "Fog", "",
-                    new Vector2(150f, 42f), ButtonColor, ToggleSceneFog);
-                SetTop(fog.transform, 100f, -847f);
+                var fog = CreateButton(controls.transform, "Fog", "",
+                    new Vector2(220f, 46f), _buttonColor, ToggleSceneFog);
+                SetBottom(fog.transform, 0f, 128f);
                 _fogText = fog.GetComponentInChildren<Text>();
 
-                var plots = CreateButton(panel.transform, "Plots", "",
-                    new Vector2(150f, 42f), ButtonColor, TogglePlots);
-                SetTop(plots.transform, 300f, -847f);
-                _plotText = plots.GetComponentInChildren<Text>();
+                var alpha = CreateButton(controls.transform, "Alpha", "",
+                    new Vector2(220f, 46f), _buttonColor, ToggleAlpha);
+                SetBottom(alpha.transform, 0f, 72f);
+                _alphaText = alpha.GetComponentInChildren<Text>();
+
+                var reset = CreateButton(controls.transform, "Reset", T("editor.fog.reset"),
+                    new Vector2(220f, 46f), _selectedColor, ResetToLastSaved);
+                SetBottom(reset.transform, 0f, 16f);
                 RefreshAlphaBackground();
                 RefreshControlTexts();
-                _toggleRoot.transform.SetAsLastSibling();
-                RefreshToggleVisual();
                 GenerateMap();
             }
             catch (Exception exception)
             {
                 UnderPressureEditorPlugin.Log?.LogError(
-                    "Fog of War: no se pudo abrir el editor: " + exception);
+                    "Fog of War: no se pudo abrir el editor integrado: " + exception);
                 Close();
             }
         }
@@ -391,10 +365,10 @@ namespace UnderPressure.Editor
             _paintDirection = direction;
             if (_addButton != null)
                 _addButton.GetComponent<Image>().color = direction > 0
-                    ? HighlightColor : ButtonColor;
+                    ? _selectedColor : _buttonColor;
             if (_removeButton != null)
                 _removeButton.GetComponent<Image>().color = direction < 0
-                    ? HighlightColor : ButtonColor;
+                    ? _selectedColor : _buttonColor;
         }
 
         private static void ResetToLastSaved()
@@ -877,24 +851,11 @@ namespace UnderPressure.Editor
             _checkerLayer = null;
             _sizeText = null;
             _pressureText = null;
-            if (_toggleText != null) _toggleText.text = T("editor.fog.button");
-            RefreshToggleVisual();
-        }
-
-        private static void RefreshToggleVisual()
-        {
-            if (_toggleRoot == null) return;
-            var image = _toggleRoot.GetComponent<Button>()?.image;
-            var color = IsOpen ? ToggleActiveColor : ToggleInactiveColor;
-            if (image != null) image.color = color;
         }
 
         internal static void Detach()
         {
             Close();
-            if (_toggleRoot != null) UnityEngine.Object.Destroy(_toggleRoot);
-            _toggleRoot = null;
-            _toggleText = null;
             _level = null;
         }
 
@@ -911,9 +872,13 @@ namespace UnderPressure.Editor
         {
             var root = Ui(name, parent, typeof(Image), typeof(Button));
             ((RectTransform)root.transform).sizeDelta = size;
-            root.GetComponent<Image>().color = color;
+            var image = root.GetComponent<Image>();
+            image.sprite = _buttonSprite;
+            image.type = _buttonSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            image.color = color;
+            AddOutline(root, Color.white, 2f);
             var button = root.GetComponent<Button>();
-            button.targetGraphic = root.GetComponent<Image>();
+            button.targetGraphic = image;
             button.onClick.AddListener(() => action());
             CreateText(root.transform, label, 18, Vector2.zero, size, TextAnchor.MiddleCenter);
             return root;
@@ -924,7 +889,7 @@ namespace UnderPressure.Editor
         {
             var root = Ui(name, parent, typeof(Image), typeof(Slider));
             ((RectTransform)root.transform).sizeDelta = size;
-            root.GetComponent<Image>().color = new Color(0.18f, 0.27f, 0.33f, 1f);
+            root.GetComponent<Image>().color = _selectedColor;
             var fill = Ui("Fill", root.transform, typeof(Image));
             var fillRect = (RectTransform)fill.transform;
             Stretch(fillRect);
@@ -985,6 +950,22 @@ namespace UnderPressure.Editor
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
             rect.anchoredPosition = new Vector2(x, y);
+        }
+
+        private static void SetBottom(Transform transform, float x, float y)
+        {
+            var rect = (RectTransform)transform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(x, y);
+        }
+
+        private static void AddOutline(GameObject root, Color color, float distance)
+        {
+            var outline = root.GetComponent<Outline>() ?? root.AddComponent<Outline>();
+            outline.effectColor = color;
+            outline.effectDistance = new Vector2(distance, -distance);
+            outline.useGraphicAlpha = false;
         }
 
         private static void Stretch(RectTransform rect)

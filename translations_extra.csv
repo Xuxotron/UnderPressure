@@ -40,6 +40,7 @@ editor.scenario_settings.plots.build_time,Время строительства,
 editor.scenario_settings.plots.merge_into,Объединить с,Scal z,병합 대상,合并到,合併到
 editor.scenario_settings.plots.requires,Требует,Wymaga,필요 조건,需要,需要
 editor.scenario_settings.plots.none,Нет,Brak,없음,无,無
+editor.scenario_settings.plots.map,Карта,Mapa,지도,地图,地圖
 hud.variables.title,Активные параметры,Aktywne parametry,활성 변수,当前生效的参数,目前生效的參數
 hud.variables.adjustment,Настройка,Ustawienie,설정,设置,設定
 hud.variables.economy,Экономика (баланс),Ekonomia (saldo),경제 (잔액),经济（余额）,經濟（餘額）

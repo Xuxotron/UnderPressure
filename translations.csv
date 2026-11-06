@@ -40,6 +40,7 @@ editor.scenario_settings.plots.build_time,Construction time,Tiempo de construcci
 editor.scenario_settings.plots.merge_into,Merge with,Fusionar con,Fusionner avec,Zusammenführen mit,Unisci con,Fundir com
 editor.scenario_settings.plots.requires,Requires,Requiere,Nécessite,Benötigt,Richiede,Requer
 editor.scenario_settings.plots.none,None,Ninguna,Aucun,Keine,Nessuna,Nenhuma
+editor.scenario_settings.plots.map,Map,Mapa,Carte,Karte,Mappa,Mapa
 hud.variables.title,Active variables,Variables activas,Variables actives,Aktive Variablen,Variabili attive,Variáveis ativas
 hud.variables.adjustment,Setting,Ajuste,Réglage,Einstellung,Impostazione,Definição
 hud.variables.economy,Economy (balance),Economía (saldo),Économie (solde),Wirtschaft (Kontostand),Economia (saldo),Economia (saldo)
