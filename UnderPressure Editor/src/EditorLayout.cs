@@ -682,6 +682,7 @@ namespace UnderPressure.Editor
         {
             _settingsClosePending = false;
             ScenarioPlotMapEditor.Close();
+            ScenarioCharacterViewer.CloseEmbedded();
             if (_settingsOverlay != null) _settingsOverlay.SetActive(false);
             SetSelected(_settingsToggle, false);
         }
@@ -897,6 +898,7 @@ namespace UnderPressure.Editor
             BuildObjectiveSettingsContents();
             BuildPlotSettingsContents();
             BuildEmergencySettingsContents();
+            BuildCharacterSettingsContents();
 
             var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
             HideSettingsObject(close);
@@ -918,6 +920,7 @@ namespace UnderPressure.Editor
         {
             if (_settingsTabButtons == null || _settingsPages == null) return;
             if (selectedIndex != 3) ScenarioPlotMapEditor.Close();
+            if (selectedIndex != 5) ScenarioCharacterViewer.CloseEmbedded();
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
             if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
@@ -964,7 +967,19 @@ namespace UnderPressure.Editor
             else
                 _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
 
+            if (_activeSettingsTab == 5)
+                ScenarioCharacterViewer.OpenEmbedded(
+                    _settingsPages[5].transform as RectTransform);
+
             _settingsCloseButton?.SetAsLastSibling();
+        }
+
+        private void BuildCharacterSettingsContents()
+        {
+            if (_settingsPages == null || _settingsPages.Length <= 5 ||
+                _settingsPages[5] == null) return;
+            var nativeScroll = _settingsPages[5].GetComponentInChildren<ScrollRect>(true);
+            if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
         }
 
         // Estado visual guardado por RuntimeUiDesigner V6.

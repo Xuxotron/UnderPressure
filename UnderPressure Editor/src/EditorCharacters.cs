@@ -57,8 +57,10 @@ namespace UnderPressure.Editor
         private static Level _level;
         private static TMP_Text _toggleText;
         private static Font _font;
+        private static bool _embedded;
 
         internal static bool IsOpen => _overlay != null;
+        internal static bool IsEmbedded => _overlay != null && _embedded;
         internal static Button ToggleButton => _toggleRoot == null
             ? null : _toggleRoot.GetComponent<Button>();
 
@@ -122,100 +124,7 @@ namespace UnderPressure.Editor
             ScenarioEditorTerrainPainter.DisableTools();
             try
             {
-                _overlay = UI("UP_CharacterViewerOverlay",
-                    ScenarioEditorUiHierarchy.ParentFor(canvas), typeof(Image));
-                Stretch((RectTransform)_overlay.transform);
-                _overlay.GetComponent<Image>().color = new Color(0.01f, 0.02f, 0.035f, 0.64f);
-                _overlay.transform.SetAsLastSibling();
-
-                var panel = UI("UP_CharacterViewerPanel", _overlay.transform, typeof(Image));
-                var pr = (RectTransform)panel.transform;
-                pr.anchorMin = pr.anchorMax = new Vector2(0.5f, 0.5f);
-                pr.pivot = new Vector2(0.5f, 0.5f);
-                pr.anchoredPosition = Vector2.zero;
-                pr.sizeDelta = new Vector2(470f, 825f);
-                panel.GetComponent<Image>().color = PanelColor;
-
-                CreateText(panel.transform, T("editor.character.title"), 25,
-                    new Vector2(0f, -12f), new Vector2(420f, 34f), TextAnchor.MiddleCenter);
-
-                var viewport = UI("UP_PortraitViewport", panel.transform, typeof(RawImage));
-                var vr = (RectTransform)viewport.transform;
-                vr.anchorMin = vr.anchorMax = new Vector2(0.5f, 1f);
-                vr.pivot = new Vector2(0.5f, 1f);
-                vr.sizeDelta = new Vector2(414f, 386f);
-                vr.anchoredPosition = new Vector2(0f, -50f);
-                viewport.GetComponent<RawImage>().color = Color.white;
-
-                CreateText(panel.transform, T("editor.character.controls"), 14,
-                    new Vector2(0f, -440f), new Vector2(412f, 25f), TextAnchor.MiddleCenter);
-
-                var typePrevious = CreateButton(panel.transform, "PacienteAnterior", "◀",
-                    new Vector2(43f, 37f), ButtonColor, () => _component?.MoveType(-1));
-                SetTop(typePrevious.transform, -178f, -481f);
-                var typeNext = CreateButton(panel.transform, "PacienteSiguiente", "▶",
-                    new Vector2(43f, 37f), ButtonColor, () => _component?.MoveType(1));
-                SetTop(typeNext.transform, 178f, -481f);
-                var typeButton = CreateButton(panel.transform, "TipoDesplegable",
-                    CharacterTypeName(0) + " ▼",
-                    new Vector2(302f, 37f), ButtonColor, () => _component?.OpenTypeDropdown());
-                SetTop(typeButton.transform, 0f, -481f);
-                var typeText = typeButton.GetComponentInChildren<Text>();
-
-                var illnessPrevious = CreateButton(panel.transform, "EnfermedadAnterior", "◀",
-                    new Vector2(43f, 37f), ButtonColor, () => _component?.MoveIllness(-1));
-                SetTop(illnessPrevious.transform, -178f, -529f);
-                var illnessNext = CreateButton(panel.transform, "EnfermedadSiguiente", "▶",
-                    new Vector2(43f, 37f), ButtonColor, () => _component?.MoveIllness(1));
-                SetTop(illnessNext.transform, 178f, -529f);
-                var illnessButton = CreateButton(panel.transform, "EnfermedadDesplegable",
-                    T("editor.character.illness.none") + " ▼",
-                    new Vector2(302f, 37f), ButtonColor, () => _component?.OpenIllnessDropdown());
-                SetTop(illnessButton.transform, 0f, -529f);
-                var illnessText = illnessButton.GetComponentInChildren<Text>();
-
-                CreateText(panel.transform, T("editor.character.animation"), 16,
-                    new Vector2(0f, -568f), new Vector2(395f, 22f), TextAnchor.MiddleCenter);
-                var clipPrevious = CreateButton(panel.transform, "AnimacionAnterior", "◀",
-                    new Vector2(43f, 37f), ButtonColor, () => _component?.MoveClip(-1));
-                SetTop(clipPrevious.transform, -178f, -590f);
-                var clipNext = CreateButton(panel.transform, "AnimacionSiguiente", "▶",
-                    new Vector2(43f, 37f), ButtonColor, () => _component?.MoveClip(1));
-                SetTop(clipNext.transform, 178f, -590f);
-                var clipButton = CreateButton(panel.transform, "AnimacionDesplegable",
-                    T("editor.character.animations") + "... ▼",
-                    new Vector2(302f, 37f), ButtonColor, () => _component?.OpenClipDropdown());
-                SetTop(clipButton.transform, 0f, -590f);
-                var clipText = clipButton.GetComponentInChildren<Text>();
-
-                var search = CreateSearchInput(panel.transform,
-                    T("editor.character.search_animation"),
-                    new Vector2(410f, 36f), new Vector2(0f, -638f));
-                search.onValueChanged.AddListener(value => _component?.SetAnimationSearch(value));
-
-                var random = CreateButton(panel.transform, "PersonajeAleatorio",
-                    T("editor.character.random"),
-                    new Vector2(132f, 42f), ButtonColor, () => _component?.Regenerate());
-                SetTop(random.transform, -145f, -686f);
-                var play = CreateButton(panel.transform, "Reproducir",
-                    T("editor.character.play"),
-                    new Vector2(132f, 42f), ButtonColor, () => _component?.Play());
-                SetTop(play.transform, 0f, -686f);
-                var pause = CreateButton(panel.transform, "Pausar",
-                    T("editor.character.pause"),
-                    new Vector2(132f, 42f), ButtonColor, () => _component?.Pause());
-                SetTop(pause.transform, 145f, -686f);
-
-                var status = CreateText(panel.transform, "", 14,
-                    new Vector2(0f, -740f), new Vector2(425f, 55f), TextAnchor.MiddleCenter);
-
-                _component = _overlay.AddComponent<ScenarioCharacterViewerBehaviour>();
-                _component.Initialise(_level, panel.transform, viewport.GetComponent<RawImage>(),
-                    typeText, illnessText, clipText, status);
-                var drag = viewport.AddComponent<ScenarioCharacterViewerDrag>();
-                drag.Target = _component;
-                _toggleRoot.transform.SetAsLastSibling();
-                RefreshToggleVisual();
+                BuildViewer(ScenarioEditorUiHierarchy.ParentFor(canvas), false);
             }
             catch (Exception e)
             {
@@ -224,11 +133,181 @@ namespace UnderPressure.Editor
             }
         }
 
+        internal static void OpenEmbedded(RectTransform host)
+        {
+            if (host == null || _level == null) return;
+            if (_overlay != null && _embedded && _overlay.transform.parent == host) return;
+            Close();
+            ScenarioEditorStorageMenu.DeactivateNativeTools();
+            ScenarioEditorTerrainPainter.DisableTools();
+            try
+            {
+                BuildViewer(host, true);
+            }
+            catch (Exception e)
+            {
+                UnderPressureEditorPlugin.Log?.LogError(
+                    "Visor: no pudo integrarse en Personajes: " + e);
+                Close();
+            }
+        }
+
+        internal static void CloseEmbedded()
+        {
+            if (_embedded) Close();
+        }
+
+        private static void BuildViewer(Transform parent, bool embedded)
+        {
+            _embedded = embedded;
+            _overlay = UI(embedded ? "UP_CharacterViewerEmbedded" :
+                "UP_CharacterViewerOverlay", parent, typeof(Image));
+            Stretch((RectTransform)_overlay.transform);
+            _overlay.GetComponent<Image>().color = embedded ? Color.clear :
+                new Color(0.01f, 0.02f, 0.035f, 0.64f);
+            _overlay.GetComponent<Image>().raycastTarget = !embedded;
+            _overlay.transform.SetAsLastSibling();
+
+            if (embedded)
+            {
+                var title = CreateText(_overlay.transform, T("editor.character.title"), 25,
+                    Vector2.zero, new Vector2(360f, 34f), TextAnchor.MiddleLeft);
+                var titleRect = title.rectTransform;
+                titleRect.anchorMin = titleRect.anchorMax = new Vector2(0f, 1f);
+                titleRect.pivot = new Vector2(0f, 1f);
+                titleRect.anchoredPosition = new Vector2(0f, -8f);
+            }
+
+            var panel = UI("UP_CharacterViewerPanel", _overlay.transform, typeof(Image));
+            var panelRect = (RectTransform)panel.transform;
+            GameObject viewport;
+            if (embedded)
+            {
+                panelRect.anchorMin = panelRect.anchorMax = new Vector2(0f, 1f);
+                panelRect.pivot = new Vector2(0f, 1f);
+                panelRect.anchoredPosition = new Vector2(755f, -365f);
+                panelRect.sizeDelta = new Vector2(482f, 400f);
+                panel.GetComponent<Image>().color = PanelColor;
+
+                var previewFrame = UI("UP_PortraitFrame", _overlay.transform, typeof(Image));
+                var frameRect = (RectTransform)previewFrame.transform;
+                frameRect.anchorMin = frameRect.anchorMax = new Vector2(0f, 1f);
+                frameRect.pivot = new Vector2(0f, 1f);
+                frameRect.anchoredPosition = new Vector2(104f, -68f);
+                // Mantener la proporcion vertical del RenderTexture (512x720)
+                // evita que el personaje aparezca achatado en el panel ancho.
+                frameRect.sizeDelta = new Vector2(528f, 730f);
+                previewFrame.GetComponent<Image>().color = PanelColor;
+                viewport = UI("UP_PortraitViewport", previewFrame.transform, typeof(RawImage));
+                var embeddedViewport = (RectTransform)viewport.transform;
+                Stretch(embeddedViewport);
+                embeddedViewport.offsetMin = new Vector2(14f, 14f);
+                embeddedViewport.offsetMax = new Vector2(-14f, -14f);
+            }
+            else
+            {
+                panelRect.anchorMin = panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+                panelRect.pivot = new Vector2(0.5f, 0.5f);
+                panelRect.anchoredPosition = Vector2.zero;
+                panelRect.sizeDelta = new Vector2(470f, 825f);
+                panel.GetComponent<Image>().color = PanelColor;
+                CreateText(panel.transform, T("editor.character.title"), 25,
+                    new Vector2(0f, -12f), new Vector2(420f, 34f), TextAnchor.MiddleCenter);
+                viewport = UI("UP_PortraitViewport", panel.transform, typeof(RawImage));
+                var viewportRect = (RectTransform)viewport.transform;
+                viewportRect.anchorMin = viewportRect.anchorMax = new Vector2(0.5f, 1f);
+                viewportRect.pivot = new Vector2(0.5f, 1f);
+                viewportRect.sizeDelta = new Vector2(414f, 386f);
+                viewportRect.anchoredPosition = new Vector2(0f, -50f);
+            }
+            viewport.GetComponent<RawImage>().color = Color.white;
+
+            var controlsY = embedded ? -12f : -440f;
+            CreateText(panel.transform, T("editor.character.controls"), 14,
+                new Vector2(0f, controlsY), new Vector2(412f, 25f), TextAnchor.MiddleCenter);
+            var rowOne = embedded ? -48f : -481f;
+            var rowTwo = embedded ? -96f : -529f;
+            var animationTitle = embedded ? -130f : -568f;
+            var animationRow = embedded ? -152f : -590f;
+            var searchY = embedded ? -200f : -638f;
+            var actionsY = embedded ? -248f : -686f;
+            var statusY = embedded ? -302f : -740f;
+
+            var typePrevious = CreateButton(panel.transform, "PacienteAnterior", "◀",
+                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveType(-1));
+            SetTop(typePrevious.transform, -178f, rowOne);
+            var typeNext = CreateButton(panel.transform, "PacienteSiguiente", "▶",
+                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveType(1));
+            SetTop(typeNext.transform, 178f, rowOne);
+            var typeButton = CreateButton(panel.transform, "TipoDesplegable",
+                CharacterTypeName(0) + " ▼", new Vector2(302f, 37f), ButtonColor,
+                () => _component?.OpenTypeDropdown());
+            SetTop(typeButton.transform, 0f, rowOne);
+            var typeText = typeButton.GetComponentInChildren<Text>();
+
+            var illnessPrevious = CreateButton(panel.transform, "EnfermedadAnterior", "◀",
+                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveIllness(-1));
+            SetTop(illnessPrevious.transform, -178f, rowTwo);
+            var illnessNext = CreateButton(panel.transform, "EnfermedadSiguiente", "▶",
+                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveIllness(1));
+            SetTop(illnessNext.transform, 178f, rowTwo);
+            var illnessButton = CreateButton(panel.transform, "EnfermedadDesplegable",
+                T("editor.character.illness.none") + " ▼", new Vector2(302f, 37f),
+                ButtonColor, () => _component?.OpenIllnessDropdown());
+            SetTop(illnessButton.transform, 0f, rowTwo);
+            var illnessText = illnessButton.GetComponentInChildren<Text>();
+
+            CreateText(panel.transform, T("editor.character.animation"), 16,
+                new Vector2(0f, animationTitle), new Vector2(395f, 22f),
+                TextAnchor.MiddleCenter);
+            var clipPrevious = CreateButton(panel.transform, "AnimacionAnterior", "◀",
+                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveClip(-1));
+            SetTop(clipPrevious.transform, -178f, animationRow);
+            var clipNext = CreateButton(panel.transform, "AnimacionSiguiente", "▶",
+                new Vector2(43f, 37f), ButtonColor, () => _component?.MoveClip(1));
+            SetTop(clipNext.transform, 178f, animationRow);
+            var clipButton = CreateButton(panel.transform, "AnimacionDesplegable",
+                T("editor.character.animations") + "... ▼", new Vector2(302f, 37f),
+                ButtonColor, () => _component?.OpenClipDropdown());
+            SetTop(clipButton.transform, 0f, animationRow);
+            var clipText = clipButton.GetComponentInChildren<Text>();
+
+            var search = CreateSearchInput(panel.transform,
+                T("editor.character.search_animation"), new Vector2(410f, 36f),
+                new Vector2(0f, searchY));
+            search.onValueChanged.AddListener(value => _component?.SetAnimationSearch(value));
+
+            var random = CreateButton(panel.transform, "PersonajeAleatorio",
+                T("editor.character.random"), new Vector2(132f, 42f), ButtonColor,
+                () => _component?.Regenerate());
+            SetTop(random.transform, -145f, actionsY);
+            var play = CreateButton(panel.transform, "Reproducir",
+                T("editor.character.play"), new Vector2(132f, 42f), ButtonColor,
+                () => _component?.Play());
+            SetTop(play.transform, 0f, actionsY);
+            var pause = CreateButton(panel.transform, "Pausar",
+                T("editor.character.pause"), new Vector2(132f, 42f), ButtonColor,
+                () => _component?.Pause());
+            SetTop(pause.transform, 145f, actionsY);
+            var status = CreateText(panel.transform, "", 14,
+                new Vector2(0f, statusY), new Vector2(425f, 55f),
+                TextAnchor.MiddleCenter);
+
+            _component = _overlay.AddComponent<ScenarioCharacterViewerBehaviour>();
+            _component.Initialise(_level, panel.transform, viewport.GetComponent<RawImage>(),
+                typeText, illnessText, clipText, status);
+            var drag = viewport.AddComponent<ScenarioCharacterViewerDrag>();
+            drag.Target = _component;
+            if (!embedded && _toggleRoot != null) _toggleRoot.transform.SetAsLastSibling();
+            RefreshToggleVisual();
+        }
+
         internal static void Close()
         {
             _component = null;
             if (_overlay != null) UnityEngine.Object.Destroy(_overlay);
             _overlay = null;
+            _embedded = false;
             if (_toggleText != null) _toggleText.text = T("editor.character.button");
             RefreshToggleVisual();
         }
