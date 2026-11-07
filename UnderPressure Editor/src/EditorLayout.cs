@@ -680,15 +680,6 @@ namespace UnderPressure.Editor
 
         private void CloseSettingsPanel()
         {
-            // Enfermedades es una pestaña del mismo editor: al cerrar por Escape,
-            // por el botón superior o por la X debe conservar exactamente el mismo
-            // borrador que se guardará después dentro del paquete del mapa.
-            if (_level != null && _settingsDiseasesLoaded)
-            {
-                var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
-                StoreDiseaseSettings(settings);
-                ScenarioEditorStorage.SetScenarioSettings(_level, settings);
-            }
             _settingsClosePending = false;
             ScenarioPlotMapEditor.Close();
             ScenarioCharacterViewer.CloseEmbedded();

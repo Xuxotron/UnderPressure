@@ -572,6 +572,16 @@ namespace UnderPressure.Editor
             {
             if (File.Exists(package)) ScenarioMapPackage.Extract(package, folder);
             var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
+            var originalDescription = name;
+            if (File.Exists(package))
+            {
+                try
+                {
+                    var existing = ScenarioMapFormat.ReadHeader(package);
+                    if (!string.IsNullOrEmpty(existing.description)) originalDescription = existing.description;
+                }
+                catch (Exception) { /* Los datos de prueba no se importan. */ }
+            }
             var worldPlots = level.WorldState.HospitalPlots;
             var plotSettings = CurrentPlotSettings(level);
             var refs = new List<ScenarioMapFormat.PlotReference>();
@@ -625,9 +635,6 @@ namespace UnderPressure.Editor
                 throw new InvalidDataException("El inventario Landscape no coincide con el guardado.");
 
             // Escenario experimental desactivado: scene.json NO se utiliza.
-            var settings = CurrentScenarioSettings(level);
-            var description = settings.DescriptionPerStar == null
-                ? "" : string.Join("\n", settings.DescriptionPerStar);
             var header = new ScenarioMapFormat.Map
             {
                 sceneFile = "",
@@ -635,10 +642,11 @@ namespace UnderPressure.Editor
                 name = name,
                 baseHospitalId = baseId,
                 baseHospitalName = baseName,
-                description = description,
+                description = originalDescription,
                 terrainManifest = ScenarioEditorTerrainPainter.GetManifest(level),
                 plots = refs.ToArray()
             };
+            var settings = CurrentScenarioSettings(level);
             header.DisplayName = settings.DisplayName;
             header.DescriptionPerStar = settings.DescriptionPerStar;
             header.InitialBalance = settings.InitialBalance;
