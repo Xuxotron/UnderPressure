@@ -44,6 +44,8 @@ namespace UnderPressure.Editor
             public WeightedIllnessData[] illnesses = new WeightedIllnessData[0];
             public bool objectivesConfigured;
             public ObjectiveData[] objectives = new ObjectiveData[0];
+            public bool emergenciesConfigured;
+            public EmergencyData[] emergencies = new EmergencyData[0];
             public string terrainManifest = "";
             public string fogOfWarFile = "";
             public int fogTileWidth;
@@ -151,6 +153,43 @@ namespace UnderPressure.Editor
             public string type = "";
             public string value = "";
             public string reference = "";
+        }
+
+        [Serializable]
+        internal sealed class EmergencyData
+        {
+            public string template = "";
+            public int scheduleIndex = -1;
+            public string scheduleName = "";
+            public bool scheduleEnabled = true;
+            public bool scheduleStartsWithCooldown = true;
+            public int minimumCooldownDays = 150;
+            public int maximumCooldownDays = 250;
+            public int weight = 1;
+            public int failureAction = 1;
+            public int scoreType = (int)TH20.Objective.ObjectiveScoring.TimedStandard;
+            public string arrivalMethod = "";
+            public string arrivalMethodType = "";
+            public bool issueWarning = true;
+            public bool rejectable = true;
+            public int patients = 7;
+            public float diagnosis = 80f;
+            public int success = 70;
+            public float arrivalRate = 1.5f;
+            public int durationDays = 30;
+            public int daysUntilStart = 3;
+            public string[] illnesses = new string[0];
+            public EmergencyRuleData[] prerequisites = new EmergencyRuleData[0];
+            public EmergencyRuleData[] rewards = new EmergencyRuleData[0];
+        }
+
+        [Serializable]
+        internal sealed class EmergencyRuleData
+        {
+            public int type;
+            public string value = "";
+            public string reference = "";
+            public bool lessThan;
         }
 
         [Serializable]
@@ -298,6 +337,10 @@ namespace UnderPressure.Editor
                 illnesses = ParseObjects<WeightedIllnessData>(json, "illnesses"),
                 objectivesConfigured = false,
                 objectives = new ObjectiveData[0],
+                emergenciesConfigured = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0,
+                emergencies = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0
+                    ? ParseObjects<EmergencyData>(json, "emergencies")
+                    : new EmergencyData[0],
                 terrainManifest = document.terrainManifest ?? "",
                 fogOfWarFile = fog.file ?? "",
                 fogTileWidth = fog.width,
@@ -680,6 +723,24 @@ namespace UnderPressure.Editor
                     throw new InvalidDataException("La lista de enfermedades contiene una entrada vacia.");
                 text.Append("        ").Append(JsonUtility.ToJson(illnesses[i], false));
                 if (i < illnesses.Length - 1) text.Append(',');
+                text.AppendLine();
+            }
+            text.AppendLine("    ],");
+            text.AppendLine("    \"emergencies\": [");
+            var emergencies = map.emergencies ?? new EmergencyData[0];
+            for (var i = 0; i < emergencies.Length; i++)
+            {
+                if (emergencies[i] == null)
+                    throw new InvalidDataException("La lista de emergencias contiene una entrada vacia.");
+                var emergency = JsonUtility.ToJson(emergencies[i], false);
+                emergency = ReplaceArray(emergency, "illnesses",
+                    SerializeStrings(emergencies[i].illnesses));
+                emergency = ReplaceArray(emergency, "prerequisites",
+                    SerializeObjects(emergencies[i].prerequisites));
+                emergency = ReplaceArray(emergency, "rewards",
+                    SerializeObjects(emergencies[i].rewards));
+                text.Append("        ").Append(emergency);
+                if (i < emergencies.Length - 1) text.Append(',');
                 text.AppendLine();
             }
             text.AppendLine("    ],");

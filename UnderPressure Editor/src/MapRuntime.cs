@@ -62,6 +62,8 @@ namespace UnderPressure.Editor
         private static ScenarioCareerMapTerrainRetry _retry;
         private static UnderPressureFinanceConfigInstance _runtimeFinanceWrapper;
         private static UnderPressureCharacterConfigInstance _runtimeCharacterWrapper;
+        private static readonly List<UnityEngine.Object> RuntimeEmergencyAssets =
+            new List<UnityEngine.Object>();
         internal static bool IsCustomSession => _active || _path != null;
 
         internal static void Prepare(LevelConfig level, string path)
@@ -120,6 +122,9 @@ namespace UnderPressure.Editor
             if (_runtimeCharacterWrapper != null)
                 UnityEngine.Object.Destroy(_runtimeCharacterWrapper);
             _runtimeCharacterWrapper = null;
+            foreach (var asset in RuntimeEmergencyAssets)
+                if (asset != null) UnityEngine.Object.Destroy(asset);
+            RuntimeEmergencyAssets.Clear();
             _base = null;
             _path = null;
             _map = null;
@@ -201,6 +206,14 @@ namespace UnderPressure.Editor
                     AccessTools.Field(typeof(LevelConfig), "CharacterManagerConfig")?.SetValue(
                         clone, _runtimeCharacterWrapper);
                 }
+            }
+            if (header.emergenciesConfigured)
+            {
+                var challengeManager = ScenarioEmergencyCatalog.Apply(config,
+                    header.emergencies, RuntimeEmergencyAssets);
+                if (challengeManager != null)
+                    AccessTools.Field(typeof(LevelConfig), "ChallengeManagerConfig")
+                        ?.SetValue(clone, challengeManager);
             }
             config = clone;
         }

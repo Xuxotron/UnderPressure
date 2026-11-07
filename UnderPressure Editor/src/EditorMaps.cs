@@ -49,6 +49,8 @@ namespace UnderPressure.Editor
             new ScenarioMapFormat.WeightedIllnessData[0];
         private static ScenarioMapFormat.ObjectiveData[] _objectives =
             new ScenarioMapFormat.ObjectiveData[0];
+        private static ScenarioMapFormat.EmergencyData[] _emergencies =
+            new ScenarioMapFormat.EmergencyData[0];
         private static Level _plotSettingsLevel;
         private static readonly List<ScenarioMapFormat.Plot> _plotSettings =
             new List<ScenarioMapFormat.Plot>();
@@ -306,7 +308,9 @@ namespace UnderPressure.Editor
                 illnessesConfigured = true,
                 illnesses = CloneIllnesses(_illnesses),
                 objectivesConfigured = true,
-                objectives = CloneObjectives(_objectives)
+                objectives = CloneObjectives(_objectives),
+                emergenciesConfigured = true,
+                emergencies = CloneEmergencies(_emergencies)
             };
         }
 
@@ -332,6 +336,9 @@ namespace UnderPressure.Editor
             _objectives = source.objectivesConfigured
                 ? CloneObjectives(source.objectives)
                 : new ScenarioMapFormat.ObjectiveData[0];
+            _emergencies = source.emergenciesConfigured
+                ? CloneEmergencies(source.emergencies)
+                : ScenarioEmergencyCatalog.Capture(level?.Config);
         }
 
         private static void EnsureScenarioSettings(Level level)
@@ -356,6 +363,7 @@ namespace UnderPressure.Editor
             _illnesses = ScenarioDiseaseCatalog.Capture(
                 config?.GetCharacterManagerConfig()?._weightedIllnesses);
             _objectives = new ScenarioMapFormat.ObjectiveData[0];
+            _emergencies = ScenarioEmergencyCatalog.Capture(config);
         }
 
         private static ScenarioMapFormat.WeightedIllnessData[] CloneIllnesses(
@@ -385,6 +393,14 @@ namespace UnderPressure.Editor
                     failure = CloneObjectiveRules(value.failure),
                     abandon = CloneObjectiveRules(value.abandon)
                 }).ToArray();
+        }
+
+        internal static ScenarioMapFormat.EmergencyData[] CloneEmergencies(
+            ScenarioMapFormat.EmergencyData[] values)
+        {
+            if (values == null) return new ScenarioMapFormat.EmergencyData[0];
+            return values.Select(ScenarioEmergencyCatalog.Clone)
+                .Where(value => value != null).ToArray();
         }
 
         private static ScenarioMapFormat.ObjectiveRuleData[] CloneObjectiveRules(
@@ -649,6 +665,8 @@ namespace UnderPressure.Editor
             header.illnesses = settings.illnesses;
             header.objectivesConfigured = true;
             header.objectives = settings.objectives;
+            header.emergenciesConfigured = true;
+            header.emergencies = settings.emergencies;
             var styles = CurrentStyles(level);
             header.plotPerimeter = styles.plotPerimeter;
             header.perimeterPrefabs = styles.perimeterPrefabs;

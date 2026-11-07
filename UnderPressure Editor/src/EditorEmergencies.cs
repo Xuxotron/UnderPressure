@@ -70,11 +70,14 @@ namespace UnderPressure.Editor
         private float _emergencyBlockHeight;
         private bool _emergencyBuilt;
         private bool _emergencyIllnessOptionsScanned;
+        private bool _emergencyDataLoaded;
         private int _selectedEmergency;
         private readonly List<EmergencyDraft> _emergencies =
             new List<EmergencyDraft>();
         private readonly List<IllnessDefinition> _emergencyIllnessOptions =
             new List<IllnessDefinition>();
+        private readonly Dictionary<IllnessDefinition, string> _emergencyIllnessIds =
+            new Dictionary<IllnessDefinition, string>();
 
         private static readonly string[] EmergencyFailureOptions =
         {
@@ -134,13 +137,24 @@ namespace UnderPressure.Editor
             internal readonly List<EmergencyRuleDraft> Rewards =
                 new List<EmergencyRuleDraft>();
 
+            internal string Template = "";
+            internal int ScheduleIndex = -1;
+            internal string ScheduleName = "";
+            internal bool ScheduleEnabled = true;
+            internal bool ScheduleStartsWithCooldown = true;
+            internal int MinimumCooldownDays = 150;
+            internal int MaximumCooldownDays = 250;
+            internal int Weight = 1;
+            internal string ArrivalMethodId = "";
+            internal string ArrivalMethodType = "";
+
             internal int FailureAction = 1;
-            internal int ScoreType;
+            internal int ScoreType = (int)Objective.ObjectiveScoring.TimedStandard;
             internal int ArrivalMethod;
             internal bool Warning = true;
             internal bool Rejectable = true;
 
-            internal string Patients = "8";
+            internal string Patients = "7";
             internal string Diagnosis = "80";
             internal string Success = "70";
             internal string ArrivalRate = "1.5";
@@ -152,6 +166,8 @@ namespace UnderPressure.Editor
         {
             internal int Type;
             internal string Value = "";
+            internal string Reference = "";
+            internal bool LessThan;
         }
 
         // Se llama desde EditorLayout al crear Ajustes, antes de aplicar la paleta.
@@ -162,9 +178,11 @@ namespace UnderPressure.Editor
             _emergencyRoot = null;
             _emergencyBuilt = false;
             _emergencyIllnessOptionsScanned = false;
+            _emergencyDataLoaded = false;
             _selectedEmergency = 0;
             _emergencies.Clear();
             _emergencyIllnessOptions.Clear();
+            _emergencyIllnessIds.Clear();
 
             if (_settingsPages == null ||
                 _settingsPages.Length <= EmergencyTabIndex ||
@@ -195,10 +213,11 @@ namespace UnderPressure.Editor
         {
             if (_emergencyContent == null) return;
 
+            ScanEmergencyIllnesses();
             if (!_emergencyBuilt)
                 BuildEmergencyUi();
-
-            ScanEmergencyIllnesses();
+            if (!_emergencyDataLoaded)
+                LoadEmergencyDrafts();
             RefreshEmergencyIllnessDropdown();
             RefreshEmergencyList();
             LoadSelectedEmergency();
@@ -290,7 +309,6 @@ namespace UnderPressure.Editor
 
             RestoreEmergencyPanelColors();
 
-            _emergencies.Add(new EmergencyDraft());
             _selectedEmergency = 0;
         }
 
@@ -445,6 +463,7 @@ namespace UnderPressure.Editor
         {
             _emergencies.Add(new EmergencyDraft());
             _selectedEmergency = _emergencies.Count - 1;
+            PersistEmergencyDrafts();
             RefreshEmergencyList();
             LoadSelectedEmergency();
 
@@ -459,11 +478,9 @@ namespace UnderPressure.Editor
                 return;
 
             _emergencies.RemoveAt(_selectedEmergency);
-            if (_emergencies.Count == 0)
-                _emergencies.Add(new EmergencyDraft());
-
             _selectedEmergency = Mathf.Clamp(
-                _selectedEmergency, 0, _emergencies.Count - 1);
+                _selectedEmergency, 0, Mathf.Max(0, _emergencies.Count - 1));
+            PersistEmergencyDrafts();
             RefreshEmergencyList();
             LoadSelectedEmergency();
         }
@@ -574,19 +591,46 @@ namespace UnderPressure.Editor
 
             if (_emergencyFailureDropdown != null)
                 _emergencyFailureDropdown.onValueChanged.AddListener(
-                    value => CurrentEmergency.FailureAction = value);
+                    value =>
+                    {
+                        if (CurrentEmergency == null) return;
+                        CurrentEmergency.FailureAction = value;
+                        PersistEmergencyDrafts();
+                    });
             if (_emergencyScoreDropdown != null)
                 _emergencyScoreDropdown.onValueChanged.AddListener(
-                    value => CurrentEmergency.ScoreType = value);
+                    value =>
+                    {
+                        if (CurrentEmergency == null) return;
+                        CurrentEmergency.ScoreType = ScoreNativeFromOption(value);
+                        PersistEmergencyDrafts();
+                    });
             if (_emergencyArrivalDropdown != null)
                 _emergencyArrivalDropdown.onValueChanged.AddListener(
-                    value => CurrentEmergency.ArrivalMethod = value);
+                    value =>
+                    {
+                        if (CurrentEmergency == null) return;
+                        CurrentEmergency.ArrivalMethod = value;
+                        CurrentEmergency.ArrivalMethodId = "";
+                        CurrentEmergency.ArrivalMethodType = ArrivalTypeFromOption(value);
+                        PersistEmergencyDrafts();
+                    });
             if (_emergencyWarningToggle != null)
                 _emergencyWarningToggle.onValueChanged.AddListener(
-                    value => CurrentEmergency.Warning = value);
+                    value =>
+                    {
+                        if (CurrentEmergency == null) return;
+                        CurrentEmergency.Warning = value;
+                        PersistEmergencyDrafts();
+                    });
             if (_emergencyRejectableToggle != null)
                 _emergencyRejectableToggle.onValueChanged.AddListener(
-                    value => CurrentEmergency.Rejectable = value);
+                    value =>
+                    {
+                        if (CurrentEmergency == null) return;
+                        CurrentEmergency.Rejectable = value;
+                        PersistEmergencyDrafts();
+                    });
 
             BindEmergencyInput(
                 _emergencyPatientsInput,
@@ -893,7 +937,8 @@ namespace UnderPressure.Editor
                 title.text = "Emergencia " + (_selectedEmergency + 1);
 
             _emergencyFailureDropdown?.SetValueWithoutNotify(draft.FailureAction);
-            _emergencyScoreDropdown?.SetValueWithoutNotify(draft.ScoreType);
+            _emergencyScoreDropdown?.SetValueWithoutNotify(
+                ScoreOptionFromNative(draft.ScoreType));
             _emergencyArrivalDropdown?.SetValueWithoutNotify(draft.ArrivalMethod);
 
             _emergencyWarningToggle?.SetIsOnWithoutNotify(draft.Warning);
@@ -922,72 +967,183 @@ namespace UnderPressure.Editor
             }
         }
 
+        private void LoadEmergencyDrafts()
+        {
+            _emergencyDataLoaded = true;
+            _emergencies.Clear();
+            var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
+            foreach (var value in settings.emergencies ??
+                     new ScenarioMapFormat.EmergencyData[0])
+            {
+                if (value == null) continue;
+                var draft = new EmergencyDraft
+                {
+                    Template = value.template ?? "",
+                    ScheduleIndex = value.scheduleIndex,
+                    ScheduleName = value.scheduleName ?? "",
+                    ScheduleEnabled = value.scheduleEnabled,
+                    ScheduleStartsWithCooldown = value.scheduleStartsWithCooldown,
+                    MinimumCooldownDays = value.minimumCooldownDays,
+                    MaximumCooldownDays = value.maximumCooldownDays,
+                    Weight = value.weight,
+                    FailureAction = Mathf.Clamp(value.failureAction, 0, 2),
+                    ScoreType = Mathf.Clamp(value.scoreType, 0, 3),
+                    ArrivalMethod = ArrivalOptionFromType(value.arrivalMethodType),
+                    ArrivalMethodId = value.arrivalMethod ?? "",
+                    ArrivalMethodType = value.arrivalMethodType ?? "",
+                    Warning = value.issueWarning,
+                    Rejectable = value.rejectable,
+                    Patients = value.patients.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    Diagnosis = value.diagnosis.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    Success = value.success.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    ArrivalRate = value.arrivalRate.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    Duration = value.durationDays.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    DaysUntilStart = value.daysUntilStart.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)
+                };
+                foreach (var id in value.illnesses ?? new string[0])
+                {
+                    var illness = _emergencyIllnessIds.FirstOrDefault(pair =>
+                        string.Equals(pair.Value, id, StringComparison.Ordinal)).Key;
+                    if (illness != null && !draft.Illnesses.Contains(illness))
+                        draft.Illnesses.Add(illness);
+                }
+                foreach (var rule in value.prerequisites ??
+                         new ScenarioMapFormat.EmergencyRuleData[0])
+                    if (rule != null) draft.Prerequisites.Add(FromStoredRule(rule));
+                foreach (var rule in value.rewards ??
+                         new ScenarioMapFormat.EmergencyRuleData[0])
+                    if (rule != null) draft.Rewards.Add(FromStoredRule(rule));
+                _emergencies.Add(draft);
+            }
+            _selectedEmergency = Mathf.Clamp(_selectedEmergency, 0,
+                Mathf.Max(0, _emergencies.Count - 1));
+        }
+
+        private void PersistEmergencyDrafts()
+        {
+            if (!_emergencyDataLoaded) return;
+            var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
+            settings.emergenciesConfigured = true;
+            settings.emergencies = _emergencies.Select(ToStoredEmergency).ToArray();
+            ScenarioEditorStorage.SetScenarioSettings(_level, settings);
+        }
+
+        private ScenarioMapFormat.EmergencyData ToStoredEmergency(EmergencyDraft draft)
+        {
+            return new ScenarioMapFormat.EmergencyData
+            {
+                template = draft.Template ?? "",
+                scheduleIndex = draft.ScheduleIndex,
+                scheduleName = draft.ScheduleName ?? "",
+                scheduleEnabled = draft.ScheduleEnabled,
+                scheduleStartsWithCooldown = draft.ScheduleStartsWithCooldown,
+                minimumCooldownDays = draft.MinimumCooldownDays,
+                maximumCooldownDays = draft.MaximumCooldownDays,
+                weight = Math.Max(1, draft.Weight),
+                failureAction = draft.FailureAction,
+                scoreType = draft.ScoreType,
+                arrivalMethod = draft.ArrivalMethodId ?? "",
+                arrivalMethodType = string.IsNullOrEmpty(draft.ArrivalMethodType)
+                    ? ArrivalTypeFromOption(draft.ArrivalMethod)
+                    : draft.ArrivalMethodType,
+                issueWarning = draft.Warning,
+                rejectable = draft.Rejectable,
+                patients = ParseEmergencyInt(draft.Patients, 7),
+                diagnosis = ParseEmergencyFloat(draft.Diagnosis, 80f),
+                success = ParseEmergencyInt(draft.Success, 70),
+                arrivalRate = ParseEmergencyFloat(draft.ArrivalRate, 1.5f),
+                durationDays = ParseEmergencyInt(draft.Duration, 30),
+                daysUntilStart = ParseEmergencyInt(draft.DaysUntilStart, 3),
+                illnesses = draft.Illnesses.Where(value => value != null)
+                    .Select(value => _emergencyIllnessIds.TryGetValue(value, out var id)
+                        ? id : "").Where(value => !string.IsNullOrEmpty(value)).ToArray(),
+                prerequisites = draft.Prerequisites.Select(ToStoredRule).ToArray(),
+                rewards = draft.Rewards.Select(ToStoredRule).ToArray()
+            };
+        }
+
+        private static EmergencyRuleDraft FromStoredRule(
+            ScenarioMapFormat.EmergencyRuleData value) => new EmergencyRuleDraft
+        {
+            Type = value.type,
+            Value = value.value ?? "",
+            Reference = value.reference ?? "",
+            LessThan = value.lessThan
+        };
+
+        private static ScenarioMapFormat.EmergencyRuleData ToStoredRule(
+            EmergencyRuleDraft value) => new ScenarioMapFormat.EmergencyRuleData
+        {
+            type = value.Type,
+            value = value.Value ?? "",
+            reference = value.Reference ?? "",
+            lessThan = value.LessThan
+        };
+
+        private static int ParseEmergencyInt(string value, int fallback) =>
+            int.TryParse(value, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+                ? parsed : fallback;
+
+        private static float ParseEmergencyFloat(string value, float fallback) =>
+            float.TryParse(value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+                ? parsed : fallback;
+
+        private static int ScoreOptionFromNative(int value)
+        {
+            if (value == (int)Objective.ObjectiveScoring.Standard) return 1;
+            if (value == (int)Objective.ObjectiveScoring.HiScore) return 2;
+            return 0;
+        }
+
+        private static int ScoreNativeFromOption(int value)
+        {
+            if (value == 1) return (int)Objective.ObjectiveScoring.Standard;
+            if (value == 2) return (int)Objective.ObjectiveScoring.HiScore;
+            return (int)Objective.ObjectiveScoring.TimedStandard;
+        }
+
+        private static int ArrivalOptionFromType(string type)
+        {
+            if (string.IsNullOrEmpty(type)) return 0;
+            if (type.IndexOf("Entrance", StringComparison.Ordinal) >= 0) return 1;
+            if (type.IndexOf("Helicopter", StringComparison.Ordinal) >= 0) return 2;
+            if (type.IndexOf("TimePortal", StringComparison.Ordinal) >= 0) return 3;
+            return 0;
+        }
+
+        private static string ArrivalTypeFromOption(int value)
+        {
+            switch (value)
+            {
+                case 1: return typeof(ArrivalMethodEntranceDefinition).FullName;
+                case 2: return typeof(ArrivalMethodHelicopterDefinition).FullName;
+                case 3: return typeof(ArrivalMethodTimePortalDefinition).FullName;
+                default: return typeof(ArrivalMethodCarDefinition).FullName;
+            }
+        }
+
         private void ScanEmergencyIllnesses()
         {
             if (_emergencyIllnessOptionsScanned)
                 return;
 
             _emergencyIllnessOptions.Clear();
-            var seen = new HashSet<IllnessDefinition>();
-            var levels = new HashSet<LevelConfig>();
-
-            if (_level?.Config != null)
-                levels.Add(_level.Config);
-
-            var options = _level?.App?.SandboxSettingsConfig?.LevelOptions;
-            if (options != null)
+            _emergencyIllnessIds.Clear();
+            var snapshot = ScenarioDiseaseCatalog.Build(_level);
+            foreach (var disease in snapshot.Diseases)
             {
-                foreach (var option in options)
-                {
-                    var levelConfig = option?.Level?.Instance;
-                    if (levelConfig != null)
-                        levels.Add(levelConfig);
-                }
-            }
-
-            foreach (var levelConfig in levels)
-            {
-                try
-                {
-                    var config = levelConfig.GetCharacterManagerConfig();
-                    if (config == null) continue;
-
-                    if (config._weightedIllnesses != null)
-                    {
-                        foreach (var entry in config._weightedIllnesses)
-                            AddEmergencyIllness(entry?.Definition?.Instance, seen);
-                    }
-
-                    if (config._weightedIllnessesTimePortal != null)
-                    {
-                        foreach (var entry in config._weightedIllnessesTimePortal)
-                            AddEmergencyIllness(entry?.Definition?.Instance, seen);
-                    }
-                }
-                catch (Exception exception)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Emergencias: no se pudieron leer enfermedades de " +
-                        levelConfig.UniqueId + ": " + exception.Message);
-                }
-            }
-
-            try
-            {
-                if (typeof(UnityEngine.Object)
-                    .IsAssignableFrom(typeof(IllnessDefinition)))
-                {
-                    foreach (var asset in Resources.FindObjectsOfTypeAll(
-                                 typeof(IllnessDefinition)))
-                    {
-                        AddEmergencyIllness(
-                            (object)asset as IllnessDefinition, seen);
-                    }
-}
-            }
-            catch
-            {
-                // La tabla de niveles ya cubre el caso normal.
+                var illness = disease.Definition?.Instance;
+                if (illness == null || _emergencyIllnessIds.ContainsKey(illness)) continue;
+                _emergencyIllnessOptions.Add(illness);
+                _emergencyIllnessIds.Add(illness, disease.Id);
             }
 
             _emergencyIllnessOptions.Sort((left, right) =>
@@ -1045,6 +1201,7 @@ namespace UnderPressure.Editor
                 draft.Illnesses.Add(illness);
 
             _emergencyIllnessDropdown.SetValueWithoutNotify(0);
+            PersistEmergencyDrafts();
             RefreshEmergencyChips();
         }
 
@@ -1085,6 +1242,7 @@ namespace UnderPressure.Editor
                         var current = CurrentEmergency;
                         if (current == null) return;
                         current.Illnesses.Remove(captured);
+                        PersistEmergencyDrafts();
                         RefreshEmergencyChips();
                     });
 
@@ -1180,6 +1338,7 @@ namespace UnderPressure.Editor
                 Type = type,
                 Value = DefaultPrerequisiteValue(type)
             });
+            PersistEmergencyDrafts();
             RefreshEmergencyPrerequisites();
         }
 
@@ -1195,6 +1354,7 @@ namespace UnderPressure.Editor
                 Type = type,
                 Value = DefaultRewardValue(type)
             });
+            PersistEmergencyDrafts();
             RefreshEmergencyRewards();
         }
 
@@ -1301,6 +1461,9 @@ namespace UnderPressure.Editor
                     rule.Value = prerequisite
                         ? DefaultPrerequisiteValue(value)
                         : DefaultRewardValue(value);
+                    rule.Reference = "";
+                    rule.LessThan = false;
+                    PersistEmergencyDrafts();
 
                     if (prerequisite)
                         RefreshEmergencyPrerequisites();
@@ -1332,6 +1495,7 @@ namespace UnderPressure.Editor
                             return;
 
                         list.RemoveAt(capturedIndex);
+                        PersistEmergencyDrafts();
 
                         if (prerequisite)
                             RefreshEmergencyPrerequisites();
@@ -1356,9 +1520,12 @@ namespace UnderPressure.Editor
                 var selected = Array.IndexOf(rooms, rule.Value);
                 dropdown.SetValueWithoutNotify(Mathf.Max(0, selected));
                 dropdown.onValueChanged.AddListener(value =>
+                {
                     rule.Value = value >= 0 && value < rooms.Length
                         ? rooms[value]
-                        : "");
+                        : "";
+                    PersistEmergencyDrafts();
+                });
                 return;
             }
 
@@ -1371,8 +1538,11 @@ namespace UnderPressure.Editor
                 var selected = Array.IndexOf(stars, rule.Value);
                 dropdown.SetValueWithoutNotify(Mathf.Max(0, selected));
                 dropdown.onValueChanged.AddListener(value =>
+                {
                     rule.Value = stars[
-                        Mathf.Clamp(value, 0, stars.Length - 1)]);
+                        Mathf.Clamp(value, 0, stars.Length - 1)];
+                    PersistEmergencyDrafts();
+                });
                 return;
             }
 
@@ -1384,9 +1554,12 @@ namespace UnderPressure.Editor
                 var selected = Array.IndexOf(rooms, rule.Value);
                 dropdown.SetValueWithoutNotify(Mathf.Max(0, selected));
                 dropdown.onValueChanged.AddListener(value =>
+                {
                     rule.Value = value >= 0 && value < rooms.Length
                         ? rooms[value]
-                        : "");
+                        : "";
+                    PersistEmergencyDrafts();
+                });
                 return;
             }
 
@@ -1399,7 +1572,10 @@ namespace UnderPressure.Editor
                 parent, "Value", x, y, width, height,
                 rule.Value, integer);
             input.onEndEdit.AddListener(value =>
-                rule.Value = value ?? "");
+            {
+                rule.Value = value ?? "";
+                PersistEmergencyDrafts();
+            });
         }
 
         private static string[] EmergencyRoomOptions()
@@ -1415,7 +1591,11 @@ namespace UnderPressure.Editor
             TMP_InputField input, Action<string> setter)
         {
             if (input == null || setter == null) return;
-            input.onEndEdit.AddListener(value => setter(value ?? ""));
+            input.onEndEdit.AddListener(value =>
+            {
+                setter(value ?? "");
+                PersistEmergencyDrafts();
+            });
         }
 
         private Button CreateEmergencyButton(
