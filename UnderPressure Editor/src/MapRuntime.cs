@@ -1070,15 +1070,6 @@ namespace UnderPressure.Editor
             if (landscape != null) foreach (var item in landscape) index.Add(item);
             var regular = metagame?.RoomItemDatabase?.Instance?.RoomItems;
             if (regular != null) foreach (var item in regular) index.Add(item);
-
-            // El guardado recibe definiciones nativas directamente de las parcelas
-            // cargadas. Algunas (por ejemplo, geometria fija propia de un hospital)
-            // no figuran en las dos bases de datos ni en la plantilla seleccionada,
-            // aunque Unity mantenga su SharedInstance original cargada. Resolver
-            // desde esas mismas definiciones conserva la portabilidad de los plots.
-            foreach (var wrapper in Resources.FindObjectsOfTypeAll<
-                         SharedInstance<RoomItemDefinition>>())
-                index.Add(wrapper);
             return index;
         }
     }
