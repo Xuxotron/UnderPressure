@@ -377,7 +377,8 @@ namespace UnderPressure.Editor
             ScenarioMapFormat.ObjectiveData[] values)
         {
             if (values == null) return new ScenarioMapFormat.ObjectiveData[0];
-            return values.Where(value => value != null).Select(value =>
+            return values.Where(value => value != null &&
+                                 !ScenarioObjectiveCatalog.IsEmptyPlaceholder(value)).Select(value =>
                 new ScenarioMapFormat.ObjectiveData
                 {
                     id = value.id ?? "",
@@ -943,6 +944,7 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
                 SetScenarioSettings(level, map.Header);
+                ScenarioEditorDockLayout.NotifyScenarioDataLoaded();
                 SetPlotSettings(level, map.Plots);
                 ScenarioEditorFogOfWar.ApplyLoaded(map.Header, map.FogOfWarPng);
                 ScenarioPlotMapEditor.NotifyFogLoaded();

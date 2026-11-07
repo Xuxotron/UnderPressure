@@ -21,6 +21,17 @@ namespace UnderPressure.Editor
         private static readonly MethodInfo CloneMethod = typeof(object).GetMethod(
             "MemberwiseClone", BindingFlags.NonPublic | BindingFlags.Instance);
 
+        internal static bool IsEmptyPlaceholder(ScenarioMapFormat.ObjectiveData value)
+        {
+            if (value == null || value.isStar ||
+                !string.IsNullOrEmpty(value.name) ||
+                !string.IsNullOrEmpty(value.template)) return false;
+            return (value.requirements == null || value.requirements.Length == 0) &&
+                   (value.completion == null || value.completion.Length == 0) &&
+                   (value.failure == null || value.failure.Length == 0) &&
+                   (value.abandon == null || value.abandon.Length == 0);
+        }
+
         internal static ScenarioMapFormat.ObjectiveData[] Capture(LevelConfig level)
         {
             var result = new List<ScenarioMapFormat.ObjectiveData>();
