@@ -62,7 +62,7 @@ namespace UnderPressure.Editor
         private static ScenarioCareerMapTerrainRetry _retry;
         private static UnderPressureFinanceConfigInstance _runtimeFinanceWrapper;
         private static UnderPressureCharacterConfigInstance _runtimeCharacterWrapper;
-        private static readonly List<UnityEngine.Object> RuntimeEmergencyAssets =
+        private static readonly List<UnityEngine.Object> RuntimeScenarioAssets =
             new List<UnityEngine.Object>();
         internal static bool IsCustomSession => _active || _path != null;
 
@@ -122,9 +122,9 @@ namespace UnderPressure.Editor
             if (_runtimeCharacterWrapper != null)
                 UnityEngine.Object.Destroy(_runtimeCharacterWrapper);
             _runtimeCharacterWrapper = null;
-            foreach (var asset in RuntimeEmergencyAssets)
+            foreach (var asset in RuntimeScenarioAssets)
                 if (asset != null) UnityEngine.Object.Destroy(asset);
-            RuntimeEmergencyAssets.Clear();
+            RuntimeScenarioAssets.Clear();
             _base = null;
             _path = null;
             _map = null;
@@ -207,10 +207,30 @@ namespace UnderPressure.Editor
                         clone, _runtimeCharacterWrapper);
                 }
             }
+            if (header.objectivesConfigured)
+            {
+                var levelScript = ScenarioObjectiveCatalog.ApplyStars(config,
+                    header.objectives, RuntimeScenarioAssets);
+                if (levelScript != null)
+                    AccessTools.Field(typeof(LevelConfig), "LevelScriptConfig")
+                        ?.SetValue(clone, levelScript);
+            }
+            var challengeConfig = config.GetChallengeManagerConfig();
+            if (header.objectivesConfigured)
+                challengeConfig = ScenarioObjectiveCatalog.ApplyChallenges(config,
+                    challengeConfig, header.objectives, RuntimeScenarioAssets);
             if (header.emergenciesConfigured)
             {
                 var challengeManager = ScenarioEmergencyCatalog.Apply(config,
-                    header.emergencies, RuntimeEmergencyAssets);
+                    challengeConfig, header.emergencies, RuntimeScenarioAssets);
+                if (challengeManager != null)
+                    AccessTools.Field(typeof(LevelConfig), "ChallengeManagerConfig")
+                        ?.SetValue(clone, challengeManager);
+            }
+            else if (header.objectivesConfigured)
+            {
+                var challengeManager = ScenarioObjectiveCatalog.WrapChallenges(
+                    challengeConfig, RuntimeScenarioAssets);
                 if (challengeManager != null)
                     AccessTools.Field(typeof(LevelConfig), "ChallengeManagerConfig")
                         ?.SetValue(clone, challengeManager);

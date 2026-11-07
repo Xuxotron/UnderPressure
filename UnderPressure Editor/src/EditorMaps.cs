@@ -335,7 +335,7 @@ namespace UnderPressure.Editor
                     level?.Config?.GetCharacterManagerConfig()?._weightedIllnesses);
             _objectives = source.objectivesConfigured
                 ? CloneObjectives(source.objectives)
-                : new ScenarioMapFormat.ObjectiveData[0];
+                : ScenarioObjectiveCatalog.Capture(level?.Config);
             _emergencies = source.emergenciesConfigured
                 ? CloneEmergencies(source.emergencies)
                 : ScenarioEmergencyCatalog.Capture(level?.Config);
@@ -362,7 +362,7 @@ namespace UnderPressure.Editor
             if (finance == null) _initialBalance = 1000000;
             _illnesses = ScenarioDiseaseCatalog.Capture(
                 config?.GetCharacterManagerConfig()?._weightedIllnesses);
-            _objectives = new ScenarioMapFormat.ObjectiveData[0];
+            _objectives = ScenarioObjectiveCatalog.Capture(config);
             _emergencies = ScenarioEmergencyCatalog.Capture(config);
         }
 
@@ -382,8 +382,25 @@ namespace UnderPressure.Editor
                 {
                     id = value.id ?? "",
                     name = value.name ?? "",
+                    template = value.template ?? "",
                     isStar = value.isStar,
                     starIndex = value.starIndex,
+                    taskName = value.taskName ?? "",
+                    waitForCompletion = value.waitForCompletion,
+                    isDiscovered = value.isDiscovered,
+                    isReplayable = value.isReplayable,
+                    startImmediately = value.startImmediately,
+                    scheduleIndex = value.scheduleIndex,
+                    scheduleName = value.scheduleName ?? "",
+                    scheduleEnabled = value.scheduleEnabled,
+                    scheduleStartsWithCooldown = value.scheduleStartsWithCooldown,
+                    minimumCooldownDays = value.minimumCooldownDays,
+                    maximumCooldownDays = value.maximumCooldownDays,
+                    weight = value.weight,
+                    scoreType = value.scoreType,
+                    requiredHighScore = value.requiredHighScore,
+                    evaluateOnTimeElapse = value.evaluateOnTimeElapse,
+                    canAbandon = value.canAbandon,
                     durationDays = value.durationDays ?? "30",
                     probability = value.probability ?? "1",
                     difficulty = value.difficulty ?? "0",

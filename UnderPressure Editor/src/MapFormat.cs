@@ -135,8 +135,25 @@ namespace UnderPressure.Editor
         {
             public string id = "";
             public string name = "";
+            public string template = "";
             public bool isStar;
             public int starIndex;
+            public string taskName = "";
+            public bool waitForCompletion = true;
+            public bool isDiscovered;
+            public bool isReplayable;
+            public bool startImmediately = true;
+            public int scheduleIndex = -1;
+            public string scheduleName = "";
+            public bool scheduleEnabled = true;
+            public bool scheduleStartsWithCooldown = true;
+            public int minimumCooldownDays = 150;
+            public int maximumCooldownDays = 250;
+            public int weight = 1;
+            public int scoreType;
+            public int requiredHighScore = -1;
+            public bool evaluateOnTimeElapse;
+            public bool canAbandon;
             public string durationDays = "30";
             public string probability = "1";
             public string difficulty = "0";
@@ -335,8 +352,10 @@ namespace UnderPressure.Editor
                 scenarioSettingsConfigured = true,
                 illnessesConfigured = true,
                 illnesses = ParseObjects<WeightedIllnessData>(json, "illnesses"),
-                objectivesConfigured = false,
-                objectives = new ObjectiveData[0],
+                objectivesConfigured = json.IndexOf("\"objectives\"", StringComparison.Ordinal) >= 0,
+                objectives = json.IndexOf("\"objectives\"", StringComparison.Ordinal) >= 0
+                    ? ParseObjects<ObjectiveData>(json, "objectives")
+                    : new ObjectiveData[0],
                 emergenciesConfigured = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0,
                 emergencies = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0
                     ? ParseObjects<EmergencyData>(json, "emergencies")
@@ -723,6 +742,26 @@ namespace UnderPressure.Editor
                     throw new InvalidDataException("La lista de enfermedades contiene una entrada vacia.");
                 text.Append("        ").Append(JsonUtility.ToJson(illnesses[i], false));
                 if (i < illnesses.Length - 1) text.Append(',');
+                text.AppendLine();
+            }
+            text.AppendLine("    ],");
+            text.AppendLine("    \"objectives\": [");
+            var objectives = map.objectives ?? new ObjectiveData[0];
+            for (var i = 0; i < objectives.Length; i++)
+            {
+                if (objectives[i] == null)
+                    throw new InvalidDataException("La lista de objetivos contiene una entrada vacia.");
+                var objective = JsonUtility.ToJson(objectives[i], false);
+                objective = ReplaceArray(objective, "requirements",
+                    SerializeObjects(objectives[i].requirements));
+                objective = ReplaceArray(objective, "completion",
+                    SerializeObjects(objectives[i].completion));
+                objective = ReplaceArray(objective, "failure",
+                    SerializeObjects(objectives[i].failure));
+                objective = ReplaceArray(objective, "abandon",
+                    SerializeObjects(objectives[i].abandon));
+                text.Append("        ").Append(objective);
+                if (i < objectives.Length - 1) text.Append(',');
                 text.AppendLine();
             }
             text.AppendLine("    ],");

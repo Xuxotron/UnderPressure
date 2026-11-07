@@ -227,7 +227,16 @@ namespace UnderPressure.Editor
             ScenarioMapFormat.EmergencyData[] saved,
             IList<UnityEngine.Object> temporaryAssets)
         {
-            var original = level?.GetChallengeManagerConfig();
+            return Apply(level, level?.GetChallengeManagerConfig(), saved,
+                temporaryAssets);
+        }
+
+        internal static UnderPressureChallengeManagerConfigInstance Apply(
+            LevelConfig level,
+            ChallengeManager.Config original,
+            ScenarioMapFormat.EmergencyData[] saved,
+            IList<UnityEngine.Object> temporaryAssets)
+        {
             if (original == null) return null;
             var clone = Clone(original);
             var originalSchedules = original.Schedules ?? new List<ChallengeScheduleDefinition>();
