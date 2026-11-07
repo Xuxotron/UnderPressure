@@ -354,11 +354,11 @@ namespace UnderPressure.Editor
                 illnesses = ParseObjects<WeightedIllnessData>(json, "illnesses"),
                 objectivesConfigured = json.IndexOf("\"objectives\"", StringComparison.Ordinal) >= 0,
                 objectives = json.IndexOf("\"objectives\"", StringComparison.Ordinal) >= 0
-                    ? ParseObjects<ObjectiveData>(json, "objectives")
+                    ? ParseObjectives(json)
                     : new ObjectiveData[0],
                 emergenciesConfigured = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0,
                 emergencies = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0
-                    ? ParseObjects<EmergencyData>(json, "emergencies")
+                    ? ParseEmergencies(json)
                     : new EmergencyData[0],
                 terrainManifest = document.terrainManifest ?? "",
                 fogOfWarFile = fog.file ?? "",
@@ -563,6 +563,58 @@ namespace UnderPressure.Editor
                 result[i] = JsonUtility.FromJson<T>(entries[i]);
                 if (result[i] == null)
                     throw new InvalidDataException("Elemento JSON ilegible en " + key);
+            }
+            return result;
+        }
+
+        private static ObjectiveData[] ParseObjectives(string json)
+        {
+            var entries = ArrayElements(json, "objectives");
+            var result = new ObjectiveData[entries.Count];
+            for (var index = 0; index < entries.Count; index++)
+            {
+                var raw = entries[index];
+                var value = JsonUtility.FromJson<ObjectiveData>(raw);
+                if (value == null)
+                    throw new InvalidDataException("Objetivo ilegible en config.json.");
+                value.requirements = ParseObjects<ObjectiveRuleData>(raw, "requirements");
+                value.completion = ParseObjects<ObjectiveRuleData>(raw, "completion");
+                value.failure = ParseObjects<ObjectiveRuleData>(raw, "failure");
+                value.abandon = ParseObjects<ObjectiveRuleData>(raw, "abandon");
+                result[index] = value;
+            }
+            return result;
+        }
+
+        private static EmergencyData[] ParseEmergencies(string json)
+        {
+            var entries = ArrayElements(json, "emergencies");
+            var result = new EmergencyData[entries.Count];
+            for (var index = 0; index < entries.Count; index++)
+            {
+                var raw = entries[index];
+                var value = JsonUtility.FromJson<EmergencyData>(raw);
+                if (value == null)
+                    throw new InvalidDataException("Emergencia ilegible en config.json.");
+                value.illnesses = ParseStrings(raw, "illnesses");
+                value.prerequisites = ParseObjects<EmergencyRuleData>(raw, "prerequisites");
+                value.rewards = ParseObjects<EmergencyRuleData>(raw, "rewards");
+                result[index] = value;
+            }
+            return result;
+        }
+
+        private static string[] ParseStrings(string json, string key)
+        {
+            var entries = ArrayElements(json, key);
+            var result = new string[entries.Count];
+            for (var index = 0; index < entries.Count; index++)
+            {
+                var wrapper = JsonUtility.FromJson<StringValue>(
+                    "{\"value\":" + entries[index] + "}");
+                if (wrapper == null)
+                    throw new InvalidDataException("Texto ilegible en " + key + ".");
+                result[index] = wrapper.value ?? "";
             }
             return result;
         }
