@@ -1097,6 +1097,16 @@ namespace UnderPressure
                 Input.GetKey(KeyCode.RightAlt);
         }
 
+        internal static bool BlockGameInput
+        {
+            get
+            {
+                return
+                    _activeInstance != null &&
+                    _activeInstance._designerEnabled;
+            }
+        }
+
         internal static bool BlockEscapeForGame
         {
             get
@@ -6964,43 +6974,84 @@ namespace UnderPressure
         }
     }
 
-    // Cobertura adicional para el InputManager de TPH. Se parchea
-    // exclusivamente GetKeyDown; GetKey y GetKeyUp quedan nativos para evitar
-    // coste continuo en todas las consultas de teclado del juego.
+    // El diseñador lee UnityEngine.Input directamente. El juego, en cambio,
+    // pasa sus acciones de mapa por InputManager. Mientras el diseñador esta
+    // activo, las consultas de teclado y acciones quedan bloqueadas para que
+    // flechas, atajos y botones no modifiquen el mapa situado detras de la UI.
     [HarmonyPatch]
-    internal static class RuntimeUiDesignerTh20EscapePatch
+    internal static class RuntimeUiDesignerTh20BooleanInputPatch
     {
-        private static System.Reflection.MethodBase
-            TargetMethod()
+        private static IEnumerable<System.Reflection.MethodBase>
+            TargetMethods()
         {
-            return AccessTools.Method(
-                typeof(TH20.InputManager),
-                "GetKeyDown",
-                new Type[] { typeof(KeyCode) });
+            var inputType = typeof(TH20.InputManager);
+            var keySignature = new Type[] { typeof(KeyCode) };
+            var buttonSignature = new Type[] { typeof(int) };
+
+            yield return AccessTools.Method(inputType, "GetKey", keySignature);
+            yield return AccessTools.Method(inputType, "GetKeyDown", keySignature);
+            yield return AccessTools.Method(inputType, "GetKeyUp", keySignature);
+            yield return AccessTools.Method(inputType, "GetButton", buttonSignature);
+            yield return AccessTools.Method(inputType, "GetButtonDown", buttonSignature);
+            yield return AccessTools.Method(inputType, "GetButtonUp", buttonSignature);
         }
 
         [HarmonyPriority(Priority.First)]
-        private static bool Prefix(
-            KeyCode __0,
-            ref bool __result)
+        private static bool Prefix(ref bool __result)
         {
-            var blockEscape =
-                __0 == KeyCode.Escape &&
-                RuntimeUiDesignerPlugin
-                    .BlockEscapeForGame;
-
-            var blockEnter =
-                (__0 == KeyCode.Return ||
-                 __0 == KeyCode.KeypadEnter) &&
-                RuntimeUiDesignerPlugin
-                    .BlockEnterForGame;
-
-            if (!blockEscape &&
-                !blockEnter)
+            if (!RuntimeUiDesignerPlugin.BlockGameInput)
                 return true;
 
             __result = false;
             return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(TH20.InputManager), "GetAxis", new[] { typeof(int) })]
+    internal static class RuntimeUiDesignerTh20AxisInputPatch
+    {
+        [HarmonyPriority(Priority.First)]
+        private static bool Prefix(ref float __result)
+        {
+            if (!RuntimeUiDesignerPlugin.BlockGameInput)
+                return true;
+
+            __result = 0f;
+            return false;
+        }
+    }
+
+    // Esta es la misma senal nativa que emplean el cursor, la seleccion y la
+    // rueda para decidir si el puntero pertenece a la UI o a la escena.
+    [HarmonyPatch(typeof(TH20.InputManager), "get_IsMouseOverGui")]
+    internal static class RuntimeUiDesignerTh20MouseOverUiPatch
+    {
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ref bool __result)
+        {
+            if (RuntimeUiDesignerPlugin.BlockGameInput)
+                __result = true;
+        }
+    }
+
+    // Cubre tambien los sistemas que consultan EventSystem directamente en
+    // lugar de hacerlo mediante InputManager.
+    [HarmonyPatch]
+    internal static class RuntimeUiDesignerEventSystemPointerPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod()
+        {
+            return AccessTools.Method(
+                typeof(EventSystem),
+                nameof(EventSystem.IsPointerOverGameObject),
+                Type.EmptyTypes);
+        }
+
+        [HarmonyPriority(Priority.Last)]
+        private static void Postfix(ref bool __result)
+        {
+            if (RuntimeUiDesignerPlugin.BlockGameInput)
+                __result = true;
         }
     }
 
