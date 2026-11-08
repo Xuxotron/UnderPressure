@@ -1942,13 +1942,11 @@ namespace UnderPressure.Editor
             scroll.vertical = false;
             scroll.movementType = ScrollRect.MovementType.Clamped;
 
-            var viewportObject = NewImage(
-                "Viewport", root.transform, null,
-                new Color(0f, 0f, 0f, .001f), true);
+            var viewportObject = new GameObject(
+                "Viewport", typeof(RectTransform), typeof(RectMask2D));
+            viewportObject.transform.SetParent(root.transform, false);
             var viewport = viewportObject.transform as RectTransform;
             Stretch(viewport);
-            var mask = viewportObject.AddComponent<Mask>();
-            mask.showMaskGraphic = false;
 
             var contentObject = new GameObject(
                 "Content", typeof(RectTransform));
