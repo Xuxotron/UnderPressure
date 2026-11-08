@@ -101,8 +101,6 @@ namespace UnderPressure.Editor
                 if (found != null) continue;
                 _objectiveDrafts.Insert(star - 1, CreateObjectiveDraft(true, star));
             }
-            if (_objectiveDrafts.All(value => value.isStar))
-                _objectiveDrafts.Add(CreateObjectiveDraft(false));
             _objectiveDrafts.Sort((left, right) =>
             {
                 if (left.isStar != right.isStar) return left.isStar ? -1 : 1;
@@ -489,13 +487,6 @@ namespace UnderPressure.Editor
             ClearEmergencyChildren(_objectiveChallengeContent);
             var challenges = _objectiveDrafts.Select((value, index) => new { value, index })
                 .Where(pair => !pair.value.isStar).ToArray();
-            if (challenges.Length == 0)
-            {
-                _objectiveDrafts.Add(CreateObjectiveDraft(false));
-                SaveObjectiveDrafts();
-                challenges = _objectiveDrafts.Select((value, index) => new { value, index })
-                    .Where(pair => !pair.value.isStar).ToArray();
-            }
             Canvas.ForceUpdateCanvases();
             var height = Mathf.Max(100f, _objectiveChallengeScroll.viewport.rect.height);
             var width = Mathf.Max(160f, _objectiveChallengeScroll.viewport.rect.width - 2f);

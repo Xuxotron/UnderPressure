@@ -496,7 +496,7 @@ namespace UnderPressure.Editor
         private void BuildEmergencyConfigurationChildren()
         {
             const float margin = 14f;
-            const float selectorTop = 76f;
+            const float selectorTop = 7f;
             const float selectorHeight = 36f;
             const float columnsTop = 122f;
             const float rowHeight = 40f;
@@ -510,21 +510,21 @@ namespace UnderPressure.Editor
             var chipScroll = CreateEmergencyHorizontalScroll(
                 _emergencyConfigBlock,
                 "UP Emergency Disease Chips",
-                190f, 7f, margin,
-                _emergencyBlockHeight - 41f,
+                margin, 49f, margin,
+                _emergencyBlockHeight - 81f,
                 out _emergencyChipContent);
             chipScroll.scrollSensitivity = 10f;
 
             _emergencyIllnessDropdown = CreateEmergencyDropdown(
                 _emergencyConfigBlock,
                 "UP Emergency Illness Dropdown",
-                margin, selectorTop, 315f, selectorHeight,
+                190f, selectorTop, 315f, selectorHeight,
                 new[] { "Seleccionar enfermedad..." });
 
             CreateEmergencyButton(
                 _emergencyConfigBlock,
                 "UP Emergency Illness Add", "Añadir",
-                margin + 325f, selectorTop,
+                515f, selectorTop,
                 94f, selectorHeight,
                 EmergencyAddColor,
                 AddSelectedEmergencyIllness);
@@ -2076,21 +2076,11 @@ namespace UnderPressure.Editor
             if (_emergencyConfigBlock == null)
                 return;
 
-            var oldTitle = _emergencyConfigBlock.Find("UP Emergency Title");
-            if (oldTitle != null)
-                Destroy(oldTitle.gameObject);
-
-            var oldChips = _emergencyConfigBlock.Find(
-                "UP Emergency Disease Chips");
-            if (oldChips != null)
-                Destroy(oldChips.gameObject);
-            _emergencyChipContent = null;
-
             SetEmergencyBakedRect(
                 _emergencyConfigBlock.Find(
                     "UP Emergency Illness Dropdown") as RectTransform,
                 0f, 1f, 0f, 1f, 0f, 1f,
-                14f, -53f, 315f, 44f);
+                190f, -7f, 315f, 36f);
 
             SetEmergencyBakedRect(
                 _emergencyConfigBlock.Find(
@@ -2102,13 +2092,13 @@ namespace UnderPressure.Editor
                 _emergencyConfigBlock.Find(
                     "UP Emergency Illness Add") as RectTransform,
                 0f, 1f, 0f, 1f, 0f, 1f,
-                339f, -53f, 100f, 41f);
+                515f, -7f, 94f, 36f);
 
             SetEmergencyBakedRect(
                 _emergencyConfigBlock.Find(
                     "UP Emergency Illness Add/Text") as RectTransform,
                 0f, 1f, 0f, 1f, 0f, 1f,
-                3f, 0f, 95f, 43f);
+                3f, 0f, 89f, 36f);
 
             CreateEmergencyPatientsDesignerHeader();
             ApplyEmergencyCompactLeftDesignerLayout();
