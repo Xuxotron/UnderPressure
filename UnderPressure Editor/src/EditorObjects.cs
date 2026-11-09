@@ -347,11 +347,12 @@ namespace UnderPressure.Editor
 
     internal static class ScenarioEditorFixedGeometry
     {
-        // Los meshes "Combined Mesh (root scene) N" son resultados del static batching
-        // de Unity. El .unity original conserva MeshRenderer individuales bajo
-        // LandscapeItems_Base: no hay que modificar ni descombinar esos assets.
+        // Los meshes "Combined Mesh (root: scene) N" son resultados del static
+        // batching de Unity. El .unity original conserva tambien MeshRenderer
+        // sueltos bajo LandscapeItems_Base (por ejemplo A_LS_Tree_Pine_LOD_V1).
+        // Todos forman parte de la representacion original de la escena.
         // En el modo editor el juego crea ademas LandscapeRoomItem editables.
-        // Solo ocultamos los renderizadores ESTATICOS de la escena original.
+        // No hay que modificar ni descombinar esos assets: solo ocultarlos.
         private const string OriginalLandscapeRootName = "LandscapeItems_Base";
 
         private static readonly Dictionary<Renderer, bool> OriginalRenderers =
@@ -411,16 +412,14 @@ namespace UnderPressure.Editor
                 var hiddenRenderers = 0;
                 var hiddenColliders = 0;
                 var bakedRenderers = 0;
+                var looseRenderers = 0;
                 var candidates = _sceneRoot.GetComponentsInChildren<MeshRenderer>(true);
                 foreach (var renderer in candidates)
                 {
                     if (renderer == null || editable.Contains(renderer)) continue;
-                    // Evita scripts, personajes, previews y decoracion instanciada
-                    // durante la sesion: solo los renderizadores estaticos originales.
-                    if (!renderer.gameObject.isStatic && !renderer.isPartOfStaticBatch)
-                        continue;
-
                     if (renderer.isPartOfStaticBatch) ++bakedRenderers;
+                    if (!renderer.gameObject.isStatic && !renderer.isPartOfStaticBatch)
+                        ++looseRenderers;
                     if (!OriginalRenderers.ContainsKey(renderer))
                         OriginalRenderers.Add(renderer, renderer.enabled);
                     if (renderer.enabled)
@@ -448,13 +447,14 @@ namespace UnderPressure.Editor
                     "Editor: decoracion original ocultada en " + OriginalLandscapeRootName +
                     ": " + hiddenRenderers + " renderizadores, " + hiddenColliders +
                     " colliders; " + bakedRenderers + " renderizadores con static batching. " +
+                    looseRenderers + " renderizadores sueltos no combinados. " +
                     "Los LandscapeRoomItem editables siguen visibles. " +
                     "La malla combinada original NO se ha modificado.");
 
                 if (hiddenRenderers == 0 && OriginalRenderers.Count == 0)
                     UnderPressureEditorPlugin.Log?.LogWarning(
                         "Editor: se encontro " + OriginalLandscapeRootName +
-                        " pero ningun renderer estatico. Revisar la escena cargada.");
+                        " pero ningun MeshRenderer. Revisar la escena cargada.");
             }
             catch (Exception exception)
             {
