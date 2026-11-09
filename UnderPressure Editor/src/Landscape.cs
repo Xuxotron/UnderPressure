@@ -342,13 +342,70 @@ namespace UnderPressure.Editor
                     if (renderer == null || !renderer.enabled ||
                         !renderer.gameObject.activeInHierarchy) continue;
                     float distance;
-                    if (!renderer.bounds.IntersectRay(ray, out distance) ||
-                        distance >= best) continue;
+                    if (!RaycastVisibleMesh(renderer, ray, out distance) || distance >= best)
+                        continue;
                     best = distance;
                     closest = candidate;
                 }
             }
             return closest;
+        }
+
+        // Renderer.bounds solo es una caja alineada con el mundo: en modelos
+        // grandes puede cubrir casas y objetos que no pertenecen a su malla.
+        // La caja se conserva unicamente como descarte rapido y la seleccion
+        // final se decide contra los triangulos realmente visibles.
+        private static bool RaycastVisibleMesh(Renderer renderer, Ray worldRay,
+            out float distance)
+        {
+            distance = float.PositiveInfinity;
+            if (renderer == null || !renderer.enabled ||
+                !renderer.gameObject.activeInHierarchy ||
+                !renderer.bounds.IntersectRay(worldRay)) return false;
+            var filter = renderer.GetComponent<MeshFilter>();
+            var mesh = filter?.sharedMesh;
+            if (mesh == null || !mesh.isReadable) return false;
+            var localRay = new Ray(filter.transform.InverseTransformPoint(worldRay.origin),
+                filter.transform.InverseTransformVector(worldRay.direction));
+            if (!mesh.bounds.IntersectRay(localRay)) return false;
+            try
+            {
+                var vertices = mesh.vertices;
+                var triangles = mesh.triangles;
+                for (var i = 0; i + 2 < triangles.Length; i += 3)
+                {
+                    float hit;
+                    if (RayIntersectsTriangle(localRay, vertices[triangles[i]],
+                        vertices[triangles[i + 1]], vertices[triangles[i + 2]], out hit) &&
+                        hit < distance)
+                        distance = hit;
+                }
+            }
+            catch (UnityException)
+            {
+                return false;
+            }
+            return distance < float.PositiveInfinity;
+        }
+
+        private static bool RayIntersectsTriangle(Ray ray, Vector3 a, Vector3 b,
+            Vector3 c, out float distance)
+        {
+            distance = 0f;
+            var edge1 = b - a;
+            var edge2 = c - a;
+            var p = Vector3.Cross(ray.direction, edge2);
+            var determinant = Vector3.Dot(edge1, p);
+            if (Mathf.Abs(determinant) < 0.000001f) return false;
+            var inverse = 1f / determinant;
+            var fromA = ray.origin - a;
+            var u = Vector3.Dot(fromA, p) * inverse;
+            if (u < 0f || u > 1f) return false;
+            var q = Vector3.Cross(fromA, edge1);
+            var v = Vector3.Dot(ray.direction, q) * inverse;
+            if (v < 0f || u + v > 1f) return false;
+            distance = Vector3.Dot(edge2, q) * inverse;
+            return distance >= 0f;
         }
 
         // Conserva la altura ORIGINAL de la malla sin saltar al pivote
@@ -365,7 +422,7 @@ namespace UnderPressure.Editor
                 if (renderer == null || !renderer.enabled ||
                     !renderer.gameObject.activeInHierarchy) continue;
                 float distance;
-                if (renderer.bounds.IntersectRay(ray, out distance) && distance < best)
+                if (RaycastVisibleMesh(renderer, ray, out distance) && distance < best)
                     best = distance;
             }
             return best < float.PositiveInfinity
@@ -650,7 +707,7 @@ namespace UnderPressure.Editor
                 }
             }
 
-            var highlighted = _carrying ? _selected : hovered ?? _selected;
+            var highlighted = _carrying ? _selected : hovered;
             if (highlighted == null || _editorLevel.HighlightManager == null) return;
             if (NativeHighlight == null)
             {
