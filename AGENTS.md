@@ -27,8 +27,8 @@
 - Codex no debe pedir confirmación, permiso ni aprobación por comandos cubiertos por estas autorizaciones. Debe ejecutarlos directamente. Si la aplicación impone un diálogo técnico de seguridad que Codex no puede suprimir, no debe convertirlo en una pregunta adicional ni volver a solicitar el mismo permiso mediante mensajes.
 
 - Trabajar siempre en el repositorio, nunca sobre los fuentes desde la instalación del juego.
-- `D:\Games\Two Point Hospital` es una ruta inexistente y prohibida. No leerla, enumerarla,
-  comprobarla, escribir en ella ni usarla para compilar o desplegar bajo ninguna circunstancia.
+- `D:\Games\Two Point Hospital` es una ruta de exploracion y exportacion de ficheros.
+  Se permite leerla e inspeccionarla, pero nunca escribir, compilar ni desplegar alli.
 - La única instalación válida del juego es `D:\Steam\steamapps\common\TPH` y todos los
   despliegues del mod deben ir directamente a `D:\Steam\steamapps\common\TPH\Mods`.
 - Para el sistema eléctrico, usar `UnderPressure Power\UnderPressurePower.csproj`; su referencia también compila `UnderPressure Base\UnderPressure.csproj`.
