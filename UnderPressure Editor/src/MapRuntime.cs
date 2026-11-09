@@ -59,6 +59,7 @@ namespace UnderPressure.Editor
         private static bool _worldConfigApplied;
         private static bool _sceneApplied;
         private static bool _terrainApplied;
+        private static bool _trafficApplied;
         private static ScenarioCareerMapTerrainRetry _retry;
         private static UnderPressureFinanceConfigInstance _runtimeFinanceWrapper;
         private static UnderPressureCharacterConfigInstance _runtimeCharacterWrapper;
@@ -94,6 +95,8 @@ namespace UnderPressure.Editor
             _retry = null;
             _sceneApplied = false;
             _terrainApplied = false;
+            _trafficApplied = false;
+            ScenarioTraffic.RestoreRuntime();
             RestoreOriginalLandscape();
             RestoreTerrainMeshes();
             foreach (var pair in OriginalRendererMaterials)
@@ -380,6 +383,13 @@ namespace UnderPressure.Editor
         internal static void LoadTerrain(Level level)
         {
             if (!_active || !Match(level) || _path == null) return;
+            if (!_trafficApplied)
+            {
+                var trafficFile = _map?.Header?.trafficFile;
+                if (!string.IsNullOrEmpty(trafficFile))
+                    ScenarioTraffic.ApplyRuntime(Path.Combine(_map.ContentFolder, trafficFile));
+                _trafficApplied = true;
+            }
             // No instanciar decoracion global experimental: podria restaurar
             // objetos eliminados o duplicarlos encima de parcelas editables.
             // scene.json anterior no se elimina del disco.

@@ -62,6 +62,8 @@ namespace UnderPressure.Editor
             public string sceneFile = "";
             // Nombre del JSON de paisaje, independiente de las parcelas.
             public string landscapeFile = "";
+            // Trafico ambiental y puntos globales de llegada/salida.
+            public string trafficFile = "";
             public PlotReference[] plots = new PlotReference[0];
         }
 
@@ -74,6 +76,7 @@ namespace UnderPressure.Editor
             public string terrainManifest = "";
             public string sceneFile = "";
             public string landscapeFile = "";
+            public string trafficFile = "";
         }
 
         [Serializable]
@@ -375,6 +378,7 @@ namespace UnderPressure.Editor
                 unbuiltRoomStyle = roomStyles.unbuilt ?? "",
                 sceneFile = document.sceneFile ?? "",
                 landscapeFile = document.landscapeFile ?? "",
+                trafficFile = document.trafficFile ?? "",
                 plots = ParseObjects<PlotReference>(json, "plots")
             };
             if (header != null) header.plotPerimeter = NormalizePerimeter(header.plotPerimeter);
@@ -389,6 +393,7 @@ namespace UnderPressure.Editor
                 HasInvalidStyleId(header.buildingRoomStyle) ||
                 HasInvalidStyleId(header.unbuiltRoomStyle) ||
                 HasInvalidStyleId(header.sceneFile) ||
+                HasInvalidStyleId(header.trafficFile) ||
                 HasInvalidStyleId(header.fogOfWarFile) ||
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
                 throw new InvalidDataException("config.json incorrecto o version incompatible.");
@@ -849,6 +854,7 @@ namespace UnderPressure.Editor
                 ",\"unbuilt\":" + SerializeString(roomStyles.unbuilt) + "}", true);
             AppendMapLine(text, "sceneFile", SerializeString(map.sceneFile), true);
             AppendMapLine(text, "landscapeFile", SerializeString(map.landscapeFile), true);
+            AppendMapLine(text, "trafficFile", SerializeString(map.trafficFile), true);
             AppendMapLine(text, "plots", SerializeObjects(map.plots), false);
             text.Append('}');
             return text.ToString();
@@ -960,6 +966,15 @@ namespace UnderPressure.Editor
             return ReplaceArray(json, "added", SerializeObjects(landscape.added));
         }
 
+        private static string SerializeTraffic(ScenarioTraffic.Data traffic)
+        {
+            if (traffic.objects == null || traffic.added == null)
+                throw new InvalidDataException("Traffic contiene arrays de objetos nulos.");
+            var json = JsonUtility.ToJson(traffic, true);
+            json = ReplaceArray(json, "objects", SerializeObjects(traffic.objects));
+            return ReplaceArray(json, "added", SerializeObjects(traffic.added));
+        }
+
         private static string ReplaceArray(string json, string key, string array)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -1013,10 +1028,12 @@ namespace UnderPressure.Editor
             var map = value as Map;
             var scene = value as Scene;
             var landscape = value as ScenarioLandscape.Data;
+            var traffic = value as ScenarioTraffic.Data;
             var text = plot != null ? SerializePlot(plot) :
                        map != null ? SerializeMap(map) :
                        scene != null ? SerializeScene(scene) :
                        landscape != null ? SerializeLandscape(landscape) :
+                       traffic != null ? SerializeTraffic(traffic) :
                        JsonUtility.ToJson(value, true);
             if (string.IsNullOrWhiteSpace(text))
                 throw new InvalidDataException("No se pudo serializar el JSON: " + path);

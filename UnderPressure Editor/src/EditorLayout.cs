@@ -2407,12 +2407,12 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             skin.Initialise(row, sprite, normal, selected);
         }
 
-        // BARRA SUPERIOR: Baldosas queda junto al panel izquierdo, seguida
-        // inmediatamente por el icono compacto de Camara. Ajustes permanece
-        // junto a Historial; Personajes y Estilos viven en Ajustes.
+        // BARRA SUPERIOR: Baldosas y Llegadas quedan juntas; despues se situa
+        // el icono compacto de Camara. Ajustes permanece junto a Historial.
         private void PlaceTopButtons(float canvasWidth)
         {
-            var middleButtons = new Button[0];
+            var middleButtons = new[] { _storage?.TrafficButton }
+                .Where(button => button != null).ToArray();
             var build = _storage?.BuildButton;
             var camera = _storage?.CameraButton;
             var settings = _settingsToggle;
@@ -2427,14 +2427,14 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 gap * Mathf.Max(0, buttonCount - 1)) / Mathf.Max(1, standardCount));
             var left = PanelWidth;
             var right = canvasWidth - PanelWidth - buttonWidth;
-            var cameraX = left + (build != null ? buttonWidth + gap : 0f);
-            var middleStart = cameraX + (camera != null ? cameraWidth + gap : 0f);
+            var middleStart = left + (build != null ? buttonWidth + gap : 0f);
+            var cameraX = middleStart + middleButtons.Length * (buttonWidth + gap);
             var middleEnd = right - gap;
             var middleGap = middleButtons.Length > 1
                 ? Mathf.Max(gap, (middleEnd - middleStart -
                     buttonWidth * middleButtons.Length) / (middleButtons.Length - 1))
                 : 0f;
-            var buttons = new[] { build, camera }.Concat(middleButtons)
+            var buttons = new[] { build }.Concat(middleButtons).Concat(new[] { camera })
                 .Concat(new[] { settings }).Where(button => button != null).ToArray();
             var middleIndex = 0;
             foreach (var button in buttons)
@@ -2505,6 +2505,22 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             foreach (var button in menu.GetComponentsInChildren<Button>(true))
                 ApplyButtonStyle(button, _style.ButtonColor);
             menu.SetAsLastSibling();
+
+            var trafficPanel = _storage?.TrafficPanelRoot;
+            var trafficButton = _storage?.TrafficButton?.transform as RectTransform;
+            if (trafficPanel != null && trafficButton != null)
+            {
+                RememberRect(trafficPanel);
+                trafficPanel.SetParent(_root, false);
+                trafficPanel.anchorMin = trafficPanel.anchorMax = new Vector2(0f, 1f);
+                trafficPanel.pivot = new Vector2(0f, 1f);
+                trafficPanel.anchoredPosition = new Vector2(
+                    trafficButton.anchoredPosition.x, -40f);
+                trafficPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
+                    Mathf.Max(300f, trafficButton.rect.width));
+                EnsureSortingCanvas(trafficPanel.gameObject, 3050);
+                trafficPanel.SetAsLastSibling();
+            }
         }
 
         // PESTANAS: Objetos abajo izquierda, Historial arriba derecha,

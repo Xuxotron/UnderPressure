@@ -364,6 +364,7 @@ namespace UnderPressure.Editor
             if (ScenarioEditorStorageMenu.IsDialogOpen || ScenarioEditorScene.IsDragging ||
                 (LandscapeCarryingField != null &&
                  LandscapeCarryingField.GetValue(null) is bool carrying && carrying) ||
+                ScenarioTraffic.IsMoving ||
                 Input.GetMouseButton(0) || Input.GetMouseButton(1)) return true;
             var cursor = _level?.CursorManager;
             return cursor != null &&
@@ -497,6 +498,7 @@ namespace UnderPressure.Editor
                 new Dictionary<string, ScenarioLandscape.ObjectEntry>(StringComparer.Ordinal);
             internal readonly Dictionary<string, ScenarioMapFormat.OriginalChange> Sources =
                 new Dictionary<string, ScenarioMapFormat.OriginalChange>(StringComparer.Ordinal);
+            internal ScenarioTraffic.Data Traffic;
         }
 
 
@@ -594,6 +596,7 @@ namespace UnderPressure.Editor
             if (sources != null)
                 foreach (var pair in sources)
                     state.Sources.Add(pair.Key, CopySource(pair.Value));
+            state.Traffic = ScenarioTraffic.CaptureHistory();
             return state;
         }
 
@@ -616,6 +619,7 @@ namespace UnderPressure.Editor
             if (a.Native.Count != b.Native.Count || a.Scene.Count != b.Scene.Count ||
                 a.Landscape.Count != b.Landscape.Count || a.Sources.Count != b.Sources.Count)
                 return false;
+            if (JsonUtility.ToJson(a.Traffic) != JsonUtility.ToJson(b.Traffic)) return false;
             // FloorPlan reordena LandscapeItems al mover o refrescar objetos.
             // Comparar por ID, NUNCA por indice de la lista.
             var natives = b.Native.ToDictionary(x => x.Id);
@@ -708,6 +712,8 @@ namespace UnderPressure.Editor
                     JsonUtility.ToJson(kv.Value) != JsonUtility.ToJson(previous))
                     ++moved;
             }
+            if (JsonUtility.ToJson(before.Traffic) != JsonUtility.ToJson(after.Traffic))
+                ++moved;
             // Al trasladar de una capa a Escenario hay dos instancias tecnicas,
             // pero para el usuario es UN SOLO movimiento.
             // Solo considerar traslado cuando el objeto que desaparece y el
@@ -1115,6 +1121,7 @@ namespace UnderPressure.Editor
                     LandscapeApply?.Invoke(null, null);
                 }
             }
+            ScenarioTraffic.ApplyHistory(desired.Traffic);
             // No recalcular iluminacion global por un cambio de objeto.
         }
     }

@@ -1,0 +1,992 @@
+// Capa global de trafico y puntos nativos de llegada/salida del escenario.
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using HarmonyLib;
+using TH20;
+using UnityEngine;
+using UnityEngine.EventSystems;
+
+namespace UnderPressure.Editor
+{
+    internal static class ScenarioTraffic
+    {
+        internal const string FileName = "traffic.json";
+        private const int Version = 1;
+        private const int MaxFileBytes = 4 * 1024 * 1024;
+        private const int MaxObjects = 2048;
+
+        internal const string Ambient = "ambient";
+        internal const string StaticVehicle = "static_vehicle";
+        internal const string RoadArrival = "road_arrival";
+        internal const string HelipadArrival = "helipad_arrival";
+        internal const string SubwayArrival = "subway_arrival";
+        internal const string ItemArrival = "item_arrival";
+        internal const string TimePortalArrival = "time_portal_arrival";
+        internal const string TimePortalLanding = "time_portal_landing";
+        internal const string SubwayDeparture = "subway_departure";
+        internal const string TunnelDeparture = "tunnel_departure";
+
+        internal enum Category
+        {
+            Ambient,
+            Arrivals,
+            Departures
+        }
+
+        [Serializable]
+        internal sealed class Data
+        {
+            public int version = Version;
+            public ObjectEntry[] objects = new ObjectEntry[0];
+            public Addition[] added = new Addition[0];
+        }
+
+        [Serializable]
+        internal sealed class ObjectEntry
+        {
+            public string id = "";
+            public string name = "";
+            public string hierarchy = "";
+            public string[] components = new string[0];
+            public float originalX;
+            public float originalY;
+            public float originalZ;
+            public float originalRotation;
+            public float x;
+            public float y;
+            public float z;
+            public float rotation;
+        }
+
+        [Serializable]
+        internal sealed class Addition
+        {
+            public string id = "";
+            public string name = "";
+            public string[] components = new string[0];
+            public float x;
+            public float y;
+            public float z;
+            public float rotation;
+        }
+
+        internal sealed class ItemInfo
+        {
+            internal string Id;
+            internal string Name;
+            internal Category Category;
+            internal bool Added;
+            internal Vector3 Position;
+        }
+
+        private sealed class Item
+        {
+            internal string Id;
+            internal string Name;
+            internal Transform Transform;
+            internal string[] Components;
+            internal bool Added;
+            internal Vector3 OriginalPosition;
+            internal Quaternion OriginalRotation;
+            internal GameObject Marker;
+            internal Renderer[] Renderers;
+        }
+
+        private struct TransformState
+        {
+            internal Vector3 Position;
+            internal Quaternion Rotation;
+        }
+
+        private static readonly List<Item> Items = new List<Item>();
+        private static readonly Dictionary<string, ObjectEntry> Edited =
+            new Dictionary<string, ObjectEntry>(StringComparer.Ordinal);
+        private static readonly List<Addition> Additions = new List<Addition>();
+        private static readonly Dictionary<Transform, TransformState> OriginalStates =
+            new Dictionary<Transform, TransformState>();
+        private static readonly List<GameObject> AddedObjects = new List<GameObject>();
+        private static readonly Dictionary<Renderer, bool> VisibilityBeforeHide =
+            new Dictionary<Renderer, bool>();
+        private static readonly List<GameObject> RuntimeAddedObjects = new List<GameObject>();
+        private static readonly Dictionary<Transform, TransformState> RuntimeOriginalStates =
+            new Dictionary<Transform, TransformState>();
+        private static readonly FieldInfo SpawnPointField =
+            AccessTools.Field(typeof(ArrivalBaseComponent), "_spawnPoint");
+        private static readonly FieldInfo TimePortalLandingsField =
+            AccessTools.Field(typeof(ArrivalTimePortalComponent), "_landingPoints");
+        private static readonly MethodInfo NativeHighlight =
+            AccessTools.Method(typeof(HighlightManager), "HighlightObjects",
+                new[] { typeof(List<Renderer>) });
+
+        private static Data _loaded;
+        private static Level _level;
+        private static Item _selected;
+        private static Item _hovered;
+        private static bool _carrying;
+        private static Vector3 _moveStart;
+        private static Quaternion _rotationStart;
+        private static Vector3 _mouseWorldStart;
+        private static float _planeY;
+        private static CursorControlRotatePlace _nativeRotateControl;
+        private static Material _markerMaterial;
+        private static Category _category = Category.Arrivals;
+
+        internal static bool IsActive { get; private set; }
+        internal static bool ObjectsVisible { get; private set; } = true;
+        internal static string SelectedId => _selected?.Id ?? "";
+        internal static Category CurrentCategory => _category;
+        internal static bool IsMoving => _carrying;
+
+        internal static void Bind(Level level)
+        {
+            if (level == null || ReferenceEquals(_level, level)) return;
+            _level = level;
+            Rebuild();
+            ApplySaved();
+        }
+
+        internal static void Activate(Level level)
+        {
+            if (level == null || !ScenarioEditorSession.Active ||
+                !ReferenceEquals(level, ScenarioEditorSession.Level)) return;
+            ScenarioLandscape.Deselect();
+            IsActive = true;
+            _level = level;
+            Rebuild();
+            ApplySaved();
+            RefreshMarkers();
+            ApplyVisibility();
+        }
+
+        internal static void Deselect()
+        {
+            CancelMove();
+            IsActive = false;
+            _selected = null;
+            _hovered = null;
+            DestroyMarkers();
+        }
+
+        internal static void Release()
+        {
+            RestoreVisibility();
+            CancelMove();
+            RestoreEditorScene();
+            DestroyMarkers();
+            Items.Clear();
+            Edited.Clear();
+            Additions.Clear();
+            _loaded = null;
+            _level = null;
+            _selected = null;
+            _hovered = null;
+            IsActive = false;
+            ObjectsVisible = true;
+            if (_markerMaterial != null) UnityEngine.Object.Destroy(_markerMaterial);
+            _markerMaterial = null;
+        }
+
+        internal static void SetMapFile(string path)
+        {
+            RestoreVisibility();
+            CancelMove();
+            RestoreEditorScene();
+            DestroyMarkers();
+            Items.Clear();
+            Edited.Clear();
+            Additions.Clear();
+            _loaded = null;
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            {
+                _loaded = Read(path);
+                foreach (var entry in _loaded.objects)
+                    Edited[entry.id] = entry;
+                Additions.AddRange(_loaded.added);
+            }
+            if (_level != null)
+            {
+                Rebuild();
+                ApplySaved();
+                if (IsActive) RefreshMarkers();
+                ApplyVisibility();
+            }
+        }
+
+        internal static void RefreshAfterMapLoad()
+        {
+            if (_level == null) return;
+            Rebuild();
+            ApplySaved();
+            if (IsActive) RefreshMarkers();
+            ApplyVisibility();
+        }
+
+        internal static void SetCategory(Category category)
+        {
+            _category = category;
+            if (_selected != null && CategoryFor(_selected.Components) != category)
+                _selected = null;
+            RefreshMarkers();
+        }
+
+        internal static List<ItemInfo> GetItems()
+        {
+            return Items.Where(item => CategoryFor(item.Components) == _category)
+                .OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
+                .Select(item => new ItemInfo
+                {
+                    Id = item.Id,
+                    Name = item.Name,
+                    Category = CategoryFor(item.Components),
+                    Added = item.Added,
+                    Position = item.Transform == null ? Vector3.zero : item.Transform.position
+                }).ToList();
+        }
+
+        internal static bool Select(string id)
+        {
+            var item = Items.FirstOrDefault(value => value.Id == id);
+            if (item == null) return false;
+            _selected = item;
+            _category = CategoryFor(item.Components);
+            return true;
+        }
+
+        internal static bool BeginMoveSelected()
+        {
+            if (!IsActive || _selected?.Transform == null || _level?.CursorManager == null)
+                return false;
+            CancelMove();
+            _moveStart = _selected.Transform.position;
+            _rotationStart = _selected.Transform.rotation;
+            _planeY = _moveStart.y;
+            if (!PlanePoint(Input.mousePosition, _planeY, out _mouseWorldStart))
+                _mouseWorldStart = _moveStart;
+            _nativeRotateControl = new CursorControlRotatePlace(
+                _selected.Transform.eulerAngles.y, _level.CursorManager);
+            _nativeRotateControl.Initialise();
+            _carrying = true;
+            return true;
+        }
+
+        internal static bool AddPoint(string kind)
+        {
+            if (!IsActive || _level == null || !CanAdd(kind)) return false;
+            Vector3 position;
+            if (!GroundPoint(Input.mousePosition, out position))
+                position = Camera.main == null ? Vector3.zero :
+                    Camera.main.transform.position + Camera.main.transform.forward * 20f;
+            position.y = Mathf.Max(0f, position.y);
+            var id = "added_" + Guid.NewGuid().ToString("N");
+            var components = ComponentsForAddition(kind);
+            var addition = new Addition
+            {
+                id = id,
+                name = LabelFor(components, true),
+                components = components,
+                x = position.x,
+                y = position.y,
+                z = position.z,
+                rotation = 0f
+            };
+            var created = CreatePointObject(addition, false);
+            if (created == null) return false;
+            Additions.Add(addition);
+            AddedObjects.Add(created);
+            var item = MakeAddedItem(addition, created.transform);
+            Items.Add(item);
+            _selected = item;
+            _category = CategoryFor(components);
+            RefreshMarkers();
+            ApplyVisibility();
+            return BeginMoveSelected();
+        }
+
+        internal static bool CanAdd(string kind) =>
+            kind == RoadArrival || kind == HelipadArrival ||
+            kind == SubwayArrival || kind == SubwayDeparture ||
+            kind == TunnelDeparture;
+
+        private static string[] ComponentsForAddition(string kind)
+        {
+            return new[] { kind };
+        }
+
+        internal static void SetObjectsVisible(bool visible)
+        {
+            if (ObjectsVisible == visible) return;
+            RestoreVisibility();
+            ObjectsVisible = visible;
+            ApplyVisibility();
+        }
+
+        private static void ApplyVisibility()
+        {
+            RestoreVisibility();
+            if (ObjectsVisible) return;
+            foreach (var item in Items)
+            {
+                if (item.Marker != null) item.Marker.SetActive(false);
+                if (!item.Components.Contains(Ambient) &&
+                    !item.Components.Contains(StaticVehicle)) continue;
+                foreach (var renderer in item.Renderers ?? new Renderer[0])
+                {
+                    if (renderer == null || VisibilityBeforeHide.ContainsKey(renderer)) continue;
+                    VisibilityBeforeHide.Add(renderer, renderer.enabled);
+                    renderer.enabled = false;
+                }
+            }
+        }
+
+        private static void RestoreVisibility()
+        {
+            foreach (var pair in VisibilityBeforeHide)
+                if (pair.Key != null) pair.Key.enabled = pair.Value;
+            VisibilityBeforeHide.Clear();
+            foreach (var item in Items)
+                if (item.Marker != null) item.Marker.SetActive(ObjectsVisible && IsActive &&
+                    CategoryFor(item.Components) == _category);
+        }
+
+        private static void Rebuild()
+        {
+            var selectedId = _selected?.Id;
+            DestroyMarkers();
+            foreach (var added in AddedObjects)
+                if (added != null) UnityEngine.Object.Destroy(added);
+            AddedObjects.Clear();
+            Items.Clear();
+            foreach (var captured in CaptureNativeItems())
+            {
+                if (!OriginalStates.ContainsKey(captured.Transform))
+                    OriginalStates.Add(captured.Transform, new TransformState
+                    {
+                        Position = captured.Transform.position,
+                        Rotation = captured.Transform.rotation
+                    });
+                var state = OriginalStates[captured.Transform];
+                captured.OriginalPosition = state.Position;
+                captured.OriginalRotation = state.Rotation;
+                Items.Add(captured);
+            }
+            foreach (var addition in Additions)
+            {
+                var created = CreatePointObject(addition, false);
+                if (created == null) continue;
+                AddedObjects.Add(created);
+                Items.Add(MakeAddedItem(addition, created.transform));
+            }
+            _selected = Items.FirstOrDefault(item => item.Id == selectedId);
+        }
+
+        private static void ApplySaved()
+        {
+            foreach (var item in Items.Where(value => !value.Added))
+            {
+                ObjectEntry entry;
+                if (!Edited.TryGetValue(item.Id, out entry) || item.Transform == null) continue;
+                item.Transform.position = new Vector3(entry.x, entry.y, entry.z);
+                item.Transform.rotation = Quaternion.Euler(0f, entry.rotation, 0f);
+            }
+        }
+
+        private static void RestoreEditorScene()
+        {
+            foreach (var pair in OriginalStates)
+                if (pair.Key != null)
+                {
+                    pair.Key.position = pair.Value.Position;
+                    pair.Key.rotation = pair.Value.Rotation;
+                }
+            OriginalStates.Clear();
+            foreach (var added in AddedObjects)
+                if (added != null) UnityEngine.Object.Destroy(added);
+            AddedObjects.Clear();
+        }
+
+        private static List<Item> CaptureNativeItems()
+        {
+            var result = new Dictionary<Transform, HashSet<string>>();
+            var names = new Dictionary<Transform, string>();
+            var traffic = UnityEngine.Object.FindObjectsOfType<Transform>()
+                .FirstOrDefault(value => value != null && value.parent == null &&
+                    value.name == "Traffic");
+            if (traffic != null)
+                for (var index = 0; index < traffic.childCount; ++index)
+                {
+                    var child = traffic.GetChild(index);
+                    var looping = child.GetComponentsInChildren<Animator>(true)
+                        .Any(animator => animator != null && animator.runtimeAnimatorController != null &&
+                            animator.runtimeAnimatorController.name.IndexOf("DriveLoop",
+                                StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (looping) AddCaptured(result, names, child, Ambient, child.name);
+                }
+
+            foreach (var animator in UnityEngine.Object.FindObjectsOfType<Animator>())
+            {
+                if (animator == null || animator.GetComponent<VehicleAnimationEventListener>() != null)
+                    continue;
+                var vehicle = VehicleRoot(animator.transform);
+                if (vehicle == null || IsInsideArrivalPoint(vehicle) ||
+                    result.ContainsKey(vehicle)) continue;
+                AddCaptured(result, names, vehicle, StaticVehicle, vehicle.name);
+            }
+
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<ArrivalCarComponent>())
+                AddCaptured(result, names, component.GetTransform(), RoadArrival, component.name);
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<ArrivalHelipadComponent>())
+                AddCaptured(result, names, component.GetTransform(), HelipadArrival, component.name);
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<ArrivalSubwayComponent>())
+                AddCaptured(result, names, component.GetTransform(), SubwayArrival, component.name);
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<ArrivalItemComponent>())
+                AddCaptured(result, names, component.GetTransform(), ItemArrival, component.name);
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<ArrivalTimePortalComponent>())
+            {
+                AddCaptured(result, names, component.transform, TimePortalArrival, component.name);
+                var landings = TimePortalLandingsField?.GetValue(component) as List<Transform>;
+                if (landings != null)
+                    for (var index = 0; index < landings.Count; ++index)
+                        AddCaptured(result, names, landings[index], TimePortalLanding,
+                            component.name + " / " + (index + 1));
+            }
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<DepartureSubwayComponent>())
+                AddCaptured(result, names, component.GetTransform(), SubwayDeparture, component.name);
+            foreach (var component in UnityEngine.Object.FindObjectsOfType<DepartureTunnelComponent>())
+                AddCaptured(result, names, component.GetTransform(), TunnelDeparture, component.name);
+
+            var items = new List<Item>();
+            foreach (var pair in result)
+            {
+                var hierarchy = Hierarchy(pair.Key);
+                var id = StableId(hierarchy, pair.Key.position);
+                items.Add(new Item
+                {
+                    Id = id,
+                    Name = LabelFor(pair.Value.ToArray(), false) + " — " + names[pair.Key],
+                    Transform = pair.Key,
+                    Components = pair.Value.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    Added = false,
+                    OriginalPosition = pair.Key.position,
+                    OriginalRotation = pair.Key.rotation,
+                    Renderers = pair.Key.GetComponentsInChildren<Renderer>(true)
+                });
+            }
+            return items;
+        }
+
+        private static void AddCaptured(Dictionary<Transform, HashSet<string>> result,
+            Dictionary<Transform, string> names, Transform point, string kind, string name)
+        {
+            if (point == null || point.name.StartsWith("UP Traffic Added - ",
+                    StringComparison.Ordinal)) return;
+            HashSet<string> kinds;
+            if (!result.TryGetValue(point, out kinds))
+            {
+                kinds = new HashSet<string>(StringComparer.Ordinal);
+                result.Add(point, kinds);
+                names.Add(point, string.IsNullOrEmpty(name) ? point.name : name);
+            }
+            kinds.Add(kind);
+        }
+
+        private static Transform VehicleRoot(Transform node)
+        {
+            Transform found = null;
+            for (var current = node; current != null; current = current.parent)
+            {
+                if (current.name.StartsWith("A_CAR_", StringComparison.OrdinalIgnoreCase) ||
+                    current.name.StartsWith("A_Ambulance", StringComparison.OrdinalIgnoreCase))
+                    found = current;
+                if (current.parent == null || current.name == "Traffic") break;
+            }
+            return found;
+        }
+
+        private static bool IsInsideArrivalPoint(Transform node)
+        {
+            for (var current = node; current != null; current = current.parent)
+                if (current.GetComponent<ArrivalBaseComponent>() != null) return true;
+            return false;
+        }
+
+        private static Item MakeAddedItem(Addition addition, Transform transform) => new Item
+        {
+            Id = addition.id,
+            Name = addition.name,
+            Transform = transform,
+            Components = addition.components,
+            Added = true,
+            OriginalPosition = transform.position,
+            OriginalRotation = transform.rotation,
+            Renderers = new Renderer[0]
+        };
+
+        private static Category CategoryFor(IEnumerable<string> components)
+        {
+            if (components.Contains(Ambient) || components.Contains(StaticVehicle))
+                return Category.Ambient;
+            if (components.Any(value => value.EndsWith("_arrival", StringComparison.Ordinal)))
+                return Category.Arrivals;
+            return Category.Departures;
+        }
+
+        internal static string LabelFor(string[] components, bool added)
+        {
+            var label = components.Contains(Ambient) ? "editor.traffic.ambient_item" :
+                components.Contains(StaticVehicle) ? "editor.traffic.static_vehicle" :
+                components.Contains(RoadArrival) ? "editor.traffic.road_arrival" :
+                components.Contains(HelipadArrival) ? "editor.traffic.helipad_arrival" :
+                components.Contains(SubwayArrival) ? "editor.traffic.subway" :
+                components.Contains(ItemArrival) ? "editor.traffic.item_arrival" :
+                components.Contains(TimePortalArrival) ? "editor.traffic.time_portal" :
+                components.Contains(TimePortalLanding) ? "editor.traffic.time_portal_landing" :
+                components.Contains(SubwayDeparture) ? "editor.traffic.subway_departure" :
+                "editor.traffic.tunnel_departure";
+            return EditorLocalization.Get(label) + (added ? " *" : "");
+        }
+
+        private static void RefreshMarkers()
+        {
+            DestroyMarkers();
+            if (!IsActive || !ObjectsVisible) return;
+            foreach (var item in Items)
+            {
+                if (CategoryFor(item.Components) != _category ||
+                    (item.Components.Contains(Ambient) ||
+                     item.Components.Contains(StaticVehicle)) || item.Transform == null) continue;
+                item.Marker = CreateMarker(item);
+                item.Renderers = item.Marker.GetComponentsInChildren<Renderer>(true);
+            }
+        }
+
+        private static GameObject CreateMarker(Item item)
+        {
+            var marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            marker.name = "UP Traffic Marker - " + item.Id;
+            marker.transform.SetParent(item.Transform, false);
+            marker.transform.localPosition = new Vector3(0f, 1.5f, 0f);
+            marker.transform.localRotation = Quaternion.identity;
+            marker.transform.localScale = new Vector3(.7f, 1.5f, .7f);
+            var collider = marker.GetComponent<Collider>();
+            if (collider != null) UnityEngine.Object.Destroy(collider);
+            var renderer = marker.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                if (_markerMaterial == null)
+                {
+                    var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
+                    if (shader != null)
+                    {
+                        _markerMaterial = new Material(shader)
+                        {
+                            name = "UP Traffic Point Marker",
+                            hideFlags = HideFlags.DontSave
+                        };
+                        _markerMaterial.color = new Color(.08f, .85f, 1f, .82f);
+                    }
+                }
+                if (_markerMaterial != null) renderer.sharedMaterial = _markerMaterial;
+            }
+            return marker;
+        }
+
+        private static void DestroyMarkers()
+        {
+            foreach (var item in Items)
+            {
+                if (item.Marker != null) UnityEngine.Object.Destroy(item.Marker);
+                item.Marker = null;
+                if (item.Transform != null)
+                    item.Renderers = item.Transform.GetComponentsInChildren<Renderer>(true)
+                        .Where(renderer => renderer != null &&
+                            !renderer.name.StartsWith("UP Traffic Marker - ", StringComparison.Ordinal))
+                        .ToArray();
+            }
+        }
+
+        private static Item Pick(Vector2 pointer)
+        {
+            var camera = Camera.main;
+            if (camera == null) return null;
+            var ray = camera.ScreenPointToRay(pointer);
+            float best = float.PositiveInfinity;
+            Item found = null;
+            foreach (var item in Items)
+            {
+                if (CategoryFor(item.Components) != _category || item.Transform == null) continue;
+                foreach (var renderer in item.Renderers ?? new Renderer[0])
+                {
+                    if (renderer == null || !renderer.enabled ||
+                        !renderer.bounds.IntersectRay(ray, out var distance) || distance >= best)
+                        continue;
+                    best = distance;
+                    found = item;
+                }
+            }
+            return found;
+        }
+
+        internal static void UpdateSelection()
+        {
+            if (!IsActive || _level == null || !ScenarioEditorSession.Active ||
+                !ReferenceEquals(_level, ScenarioEditorSession.Level)) return;
+            if (ScenarioEditorStorageMenu.IsDialogOpen ||
+                (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
+                return;
+
+            if (_carrying && _selected?.Transform != null)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) CancelMove();
+                else if (_nativeRotateControl != null && _level.InputManager != null)
+                {
+                    _nativeRotateControl.Update(_level.InputManager, _level, .1f,
+                        RoomItemDefinition.Size.Large, null);
+                    if (_nativeRotateControl.Cancel) CancelMove();
+                    else
+                    {
+                        _selected.Transform.rotation = Quaternion.Euler(
+                            0f, _nativeRotateControl.SnapRotation, 0f);
+                        if (!_nativeRotateControl.Rotating &&
+                            PlanePoint(Input.mousePosition, _planeY, out var current))
+                            _selected.Transform.position = _moveStart + current - _mouseWorldStart;
+                        UpdateEdited(_selected);
+                        if (_nativeRotateControl.Place) FinishMove();
+                    }
+                }
+            }
+            else
+            {
+                _hovered = Pick(Input.mousePosition);
+                if (Input.GetMouseButtonDown(0) && _hovered != null)
+                {
+                    _selected = _hovered;
+                    BeginMoveSelected();
+                }
+            }
+
+            var highlighted = _carrying ? _selected : _hovered ?? _selected;
+            if (highlighted == null || _level.HighlightManager == null || NativeHighlight == null)
+                return;
+            var visible = (highlighted.Renderers ?? new Renderer[0])
+                .Where(renderer => renderer != null && renderer.enabled &&
+                    renderer.gameObject.activeInHierarchy).ToList();
+            if (visible.Count > 0)
+                NativeHighlight.Invoke(_level.HighlightManager, new object[] { visible });
+        }
+
+        private static void UpdateEdited(Item item)
+        {
+            if (item?.Transform == null) return;
+            if (item.Added)
+            {
+                var addition = Additions.FirstOrDefault(value => value.id == item.Id);
+                if (addition == null) return;
+                addition.x = item.Transform.position.x;
+                addition.y = item.Transform.position.y;
+                addition.z = item.Transform.position.z;
+                addition.rotation = item.Transform.eulerAngles.y;
+                return;
+            }
+            ObjectEntry entry;
+            if (!Edited.TryGetValue(item.Id, out entry))
+                entry = EntryFor(item);
+            entry.x = item.Transform.position.x;
+            entry.y = item.Transform.position.y;
+            entry.z = item.Transform.position.z;
+            entry.rotation = item.Transform.eulerAngles.y;
+            Edited[item.Id] = entry;
+        }
+
+        private static void CancelMove()
+        {
+            var added = _carrying && _selected != null && _selected.Added;
+            if (_carrying && _selected?.Transform != null)
+            {
+                _selected.Transform.position = _moveStart;
+                _selected.Transform.rotation = _rotationStart;
+                UpdateEdited(_selected);
+            }
+            _carrying = false;
+            ReleaseRotateControl();
+            if (added) ScenarioEditorHistory.ObjectDropped();
+        }
+
+        private static void FinishMove()
+        {
+            if (_selected != null) UpdateEdited(_selected);
+            _carrying = false;
+            ReleaseRotateControl();
+            ScenarioEditorHistory.ObjectDropped();
+        }
+
+        private static void ReleaseRotateControl()
+        {
+            if (_nativeRotateControl == null) return;
+            try { _nativeRotateControl.Destroy(); }
+            catch (Exception) { }
+            _nativeRotateControl = null;
+        }
+
+        private static bool PlanePoint(Vector2 pointer, float y, out Vector3 point)
+        {
+            point = Vector3.zero;
+            if (Camera.main == null) return false;
+            var ray = Camera.main.ScreenPointToRay(pointer);
+            if (!new Plane(Vector3.up, new Vector3(0f, y, 0f)).Raycast(ray, out var distance))
+                return false;
+            point = ray.GetPoint(distance);
+            return true;
+        }
+
+        private static bool GroundPoint(Vector2 pointer, out Vector3 point)
+        {
+            point = Vector3.zero;
+            var camera = Camera.main;
+            if (camera == null) return false;
+            var ray = camera.ScreenPointToRay(pointer);
+            if (Physics.Raycast(ray, out var hit, camera.farClipPlane))
+            {
+                point = hit.point;
+                return true;
+            }
+            return PlanePoint(pointer, 0f, out point);
+        }
+
+        internal static Data Capture(Data previous = null)
+        {
+            if (_level == null) _level = ScenarioEditorSession.Level;
+            if (_level != null && Items.Count == 0)
+            {
+                Rebuild();
+                ApplySaved();
+            }
+            var data = new Data();
+            data.objects = Items.Where(item => !item.Added)
+                .Select(item =>
+                {
+                    ObjectEntry edited;
+                    return Edited.TryGetValue(item.Id, out edited) ? edited : EntryFor(item);
+                })
+                .OrderBy(entry => entry.id, StringComparer.Ordinal).ToArray();
+            data.added = Additions.Select(CopyAddition).ToArray();
+            return data;
+        }
+
+        internal static Data CaptureHistory() => CopyData(Capture());
+
+        internal static void ApplyHistory(Data data)
+        {
+            if (data == null) return;
+            CancelMove();
+            Edited.Clear();
+            Additions.Clear();
+            foreach (var entry in data.objects ?? new ObjectEntry[0])
+                if (entry != null) Edited[entry.id] = CopyObject(entry);
+            foreach (var addition in data.added ?? new Addition[0])
+                if (addition != null) Additions.Add(CopyAddition(addition));
+            Rebuild();
+            ApplySaved();
+            if (IsActive) RefreshMarkers();
+            ApplyVisibility();
+        }
+
+        private static Data CopyData(Data value) => new Data
+        {
+            version = value?.version ?? Version,
+            objects = (value?.objects ?? new ObjectEntry[0]).Select(CopyObject).ToArray(),
+            added = (value?.added ?? new Addition[0]).Select(CopyAddition).ToArray()
+        };
+
+        private static ObjectEntry CopyObject(ObjectEntry value) => new ObjectEntry
+        {
+            id = value.id,
+            name = value.name,
+            hierarchy = value.hierarchy,
+            components = value.components?.ToArray() ?? new string[0],
+            originalX = value.originalX,
+            originalY = value.originalY,
+            originalZ = value.originalZ,
+            originalRotation = value.originalRotation,
+            x = value.x,
+            y = value.y,
+            z = value.z,
+            rotation = value.rotation
+        };
+
+        private static ObjectEntry EntryFor(Item item)
+        {
+            var transform = item.Transform;
+            return new ObjectEntry
+            {
+                id = item.Id,
+                name = item.Name,
+                hierarchy = Hierarchy(transform),
+                components = item.Components,
+                originalX = item.OriginalPosition.x,
+                originalY = item.OriginalPosition.y,
+                originalZ = item.OriginalPosition.z,
+                originalRotation = item.OriginalRotation.eulerAngles.y,
+                x = transform.position.x,
+                y = transform.position.y,
+                z = transform.position.z,
+                rotation = transform.eulerAngles.y
+            };
+        }
+
+        private static Addition CopyAddition(Addition value) => new Addition
+        {
+            id = value.id,
+            name = value.name,
+            components = value.components?.ToArray() ?? new string[0],
+            x = value.x,
+            y = value.y,
+            z = value.z,
+            rotation = value.rotation
+        };
+
+        internal static Data Read(string path)
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length == 0 || info.Length > MaxFileBytes)
+                throw new InvalidDataException("traffic.json ausente, vacio o demasiado grande.");
+            var json = File.ReadAllText(path, Encoding.UTF8);
+            var data = JsonUtility.FromJson<Data>(json);
+            if (data == null || data.version != Version)
+                throw new InvalidDataException("Version de traffic.json no compatible.");
+            data.objects = json.Contains("\"objects\"")
+                ? ScenarioMapFormat.ParseObjects<ObjectEntry>(json, "objects")
+                : new ObjectEntry[0];
+            data.added = json.Contains("\"added\"")
+                ? ScenarioMapFormat.ParseObjects<Addition>(json, "added")
+                : new Addition[0];
+            if (data.objects.Length > MaxObjects || data.added.Length > MaxObjects)
+                throw new InvalidDataException("Demasiados objetos de trafico.");
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in data.objects)
+                ValidateEntry(entry?.id, entry?.components, ids);
+            foreach (var entry in data.added)
+                ValidateEntry(entry?.id, entry?.components, ids);
+            return data;
+        }
+
+        private static void ValidateEntry(string id, string[] components, HashSet<string> ids)
+        {
+            if (string.IsNullOrEmpty(id) || components == null || components.Length == 0 ||
+                !ids.Add(id) || components.Any(component => !KnownComponent(component)))
+                throw new InvalidDataException("traffic.json contiene una identidad invalida.");
+        }
+
+        private static bool KnownComponent(string component) =>
+            component == Ambient || component == StaticVehicle || component == RoadArrival ||
+            component == HelipadArrival || component == SubwayArrival ||
+            component == ItemArrival || component == TimePortalArrival ||
+            component == TimePortalLanding ||
+            component == SubwayDeparture || component == TunnelDeparture;
+
+        private static GameObject CreatePointObject(Addition addition, bool runtime)
+        {
+            if (addition?.components == null || addition.components.Length == 0 ||
+                addition.components.Contains(Ambient) ||
+                addition.components.Contains(StaticVehicle) ||
+                addition.components.Contains(ItemArrival) ||
+                addition.components.Contains(TimePortalArrival)) return null;
+            var go = new GameObject("UP Traffic Added - " + addition.id);
+            go.SetActive(false);
+            go.transform.position = new Vector3(addition.x, addition.y, addition.z);
+            go.transform.rotation = Quaternion.Euler(0f, addition.rotation, 0f);
+            try
+            {
+                foreach (var kind in addition.components)
+                {
+                    Component component;
+                    if (kind == RoadArrival) component = go.AddComponent<ArrivalCarComponent>();
+                    else if (kind == HelipadArrival) component = go.AddComponent<ArrivalHelipadComponent>();
+                    else if (kind == SubwayArrival) component = go.AddComponent<ArrivalSubwayComponent>();
+                    else if (kind == SubwayDeparture) component = go.AddComponent<DepartureSubwayComponent>();
+                    else if (kind == TunnelDeparture) component = go.AddComponent<DepartureTunnelComponent>();
+                    else continue;
+                    var field = AccessTools.Field(component.GetType(), "_spawnPoint") ?? SpawnPointField;
+                    field?.SetValue(component, go.transform);
+                }
+                go.SetActive(true);
+                return go;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(go);
+                if (runtime) throw;
+                return null;
+            }
+        }
+
+        internal static void ApplyRuntime(string path)
+        {
+            RestoreRuntime();
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            var data = Read(path);
+            var natives = CaptureNativeItems().ToDictionary(item => item.Id,
+                item => item, StringComparer.Ordinal);
+            foreach (var entry in data.objects)
+            {
+                Item item;
+                if (!natives.TryGetValue(entry.id, out item) || item.Transform == null) continue;
+                if (!RuntimeOriginalStates.ContainsKey(item.Transform))
+                    RuntimeOriginalStates.Add(item.Transform, new TransformState
+                    {
+                        Position = item.Transform.position,
+                        Rotation = item.Transform.rotation
+                    });
+                item.Transform.position = new Vector3(entry.x, entry.y, entry.z);
+                item.Transform.rotation = Quaternion.Euler(0f, entry.rotation, 0f);
+            }
+            foreach (var addition in data.added)
+            {
+                var go = CreatePointObject(addition, true);
+                if (go != null) RuntimeAddedObjects.Add(go);
+            }
+            UnderPressureEditorPlugin.Log?.LogInfo("Trafico: traffic.json aplicado: " +
+                data.objects.Length + " originales, " + data.added.Length + " anadidos.");
+        }
+
+        internal static void RestoreRuntime()
+        {
+            foreach (var pair in RuntimeOriginalStates)
+                if (pair.Key != null)
+                {
+                    pair.Key.position = pair.Value.Position;
+                    pair.Key.rotation = pair.Value.Rotation;
+                }
+            RuntimeOriginalStates.Clear();
+            foreach (var go in RuntimeAddedObjects)
+                if (go != null) UnityEngine.Object.Destroy(go);
+            RuntimeAddedObjects.Clear();
+        }
+
+        private static string Hierarchy(Transform node)
+        {
+            var parts = new List<string>();
+            for (var current = node; current != null; current = current.parent)
+                parts.Add(current.name + "[" + current.GetSiblingIndex() + "]");
+            parts.Reverse();
+            return string.Join("/", parts.ToArray());
+        }
+
+        private static string StableId(string hierarchy, Vector3 point)
+        {
+            var invariant = CultureInfo.InvariantCulture;
+            var source = hierarchy + "|" + point.x.ToString("R", invariant) + "|" +
+                point.y.ToString("R", invariant) + "|" + point.z.ToString("R", invariant);
+            using (var sha = SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(source));
+                return BitConverter.ToString(bytes, 0, 12).Replace("-", "").ToLowerInvariant();
+            }
+        }
+    }
+}
