@@ -364,105 +364,6 @@ namespace UnderPressure.Editor
         private static bool _scanning;
         private static bool _reportedMissing;
 
-        private static bool IsDescendantOf(Transform node, Transform root)
-        {
-            for (var current = node; current != null; current = current.parent)
-                if (current == root) return true;
-            return false;
-        }
-
-        private static bool IsProtectedHierarchy(Transform node,
-            HashSet<Transform> editableRoots)
-        {
-            for (var current = node; current != null; current = current.parent)
-            {
-                if (editableRoots.Contains(current)) return true;
-                if (current.name.StartsWith("UP Landscape Editable - ",
-                        StringComparison.Ordinal) ||
-                    current.name.StartsWith("Terrain_",
-                        StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            return false;
-        }
-
-        private static string MaterialName(Material material)
-        {
-            if (material == null) return "";
-            var name = material.name ?? "";
-            const string instance = " (Instance)";
-            return name.EndsWith(instance, StringComparison.Ordinal)
-                ? name.Substring(0, name.Length - instance.Length)
-                : name;
-        }
-
-        private static bool SameMaterials(Renderer first, Renderer second)
-        {
-            var a = first.sharedMaterials;
-            var b = second.sharedMaterials;
-            if (a == null || b == null || a.Length == 0 || a.Length != b.Length)
-                return false;
-            for (var i = 0; i < a.Length; ++i)
-                if (!string.Equals(MaterialName(a[i]), MaterialName(b[i]),
-                        StringComparison.Ordinal))
-                    return false;
-            return true;
-        }
-
-        private static bool SameWorldBounds(Bounds first, Bounds second)
-        {
-            // El static batching puede introducir diferencias minimas de coma
-            // flotante, pero no cambia los limites mundiales del renderer.
-            const float centerTolerance = .025f;
-            if ((first.center - second.center).sqrMagnitude >
-                centerTolerance * centerTolerance) return false;
-            var firstSize = first.size;
-            var secondSize = second.size;
-            return Mathf.Abs(firstSize.x - secondSize.x) <=
-                       .025f + Mathf.Max(firstSize.x, secondSize.x) * .002f &&
-                   Mathf.Abs(firstSize.y - secondSize.y) <=
-                       .025f + Mathf.Max(firstSize.y, secondSize.y) * .002f &&
-                   Mathf.Abs(firstSize.z - secondSize.z) <=
-                       .025f + Mathf.Max(firstSize.z, secondSize.z) * .002f;
-        }
-
-        private static bool DuplicatesEditable(Renderer original,
-            List<Renderer> editable)
-        {
-            foreach (var candidate in editable)
-                if (candidate != null && candidate.enabled &&
-                    candidate.gameObject.activeInHierarchy &&
-                    SameMaterials(original, candidate) &&
-                    SameWorldBounds(original.bounds, candidate.bounds))
-                    return true;
-            return false;
-        }
-
-        private static void RememberAndHide(Renderer renderer,
-            ref int hiddenRenderers, ref int hiddenColliders)
-        {
-            if (!OriginalRenderers.ContainsKey(renderer))
-                OriginalRenderers.Add(renderer, renderer.enabled);
-            if (renderer.enabled)
-            {
-                renderer.enabled = false;
-                ++hiddenRenderers;
-            }
-
-            // Una malla invisible con un collider activo puede seguir
-            // interceptando el cursor. Solo se tocan los colliders del mismo
-            // GameObject, nunca los del terreno ni los de sus antecesores.
-            foreach (var collider in renderer.GetComponents<Collider>())
-            {
-                if (collider == null) continue;
-                if (!OriginalColliders.ContainsKey(collider))
-                    OriginalColliders.Add(collider, collider.enabled);
-                if (!collider.enabled) continue;
-                collider.enabled = false;
-                ++hiddenColliders;
-            }
-        }
-
         internal static void Scan(Level level, bool force = false)
         {
             if (_scanning || !ScenarioEditorSession.Active ||
@@ -494,8 +395,6 @@ namespace UnderPressure.Editor
                 // Evita ocultar los clones editables del HospitalMap incluso en el
                 // caso de que el juego los coloque dentro de la misma jerarquia.
                 var editable = new HashSet<Renderer>();
-                var editableList = new List<Renderer>();
-                var editableRoots = new HashSet<Transform>();
                 foreach (var plot in level.WorldState.HospitalPlots)
                 {
                     var items = plot?.HospitalMap?.FloorPlan?.LandscapeItems;
@@ -504,10 +403,8 @@ namespace UnderPressure.Editor
                     {
                         var visual = item?.Visual?.GameObject;
                         if (visual == null) continue;
-                        editableRoots.Add(visual.transform);
                         foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
-                            if (renderer != null && editable.Add(renderer))
-                                editableList.Add(renderer);
+                            if (renderer != null) editable.Add(renderer);
                     }
                 }
 
@@ -524,32 +421,26 @@ namespace UnderPressure.Editor
                         continue;
 
                     if (renderer.isPartOfStaticBatch) ++bakedRenderers;
-                    RememberAndHide(renderer, ref hiddenRenderers,
-                        ref hiddenColliders);
-                }
+                    if (!OriginalRenderers.ContainsKey(renderer))
+                        OriginalRenderers.Add(renderer, renderer.enabled);
+                    if (renderer.enabled)
+                    {
+                        renderer.enabled = false;
+                        ++hiddenRenderers;
+                    }
 
-                // Algunas escenas dejaron piezas de la decoracion Base fuera de
-                // LandscapeItems_Base. En el juego normal no se crea la copia
-                // editable de Base; el editor si la crea y ambas se superponen.
-                // Se oculta exclusivamente la pieza estatica cuya geometria y
-                // materiales coinciden con un LandscapeRoomItem vivo. El resto
-                // del paisaje exterior independiente permanece intacto.
-                var residualRenderers = 0;
-                var residualBatched = 0;
-                foreach (var renderer in UnityEngine.Object.FindObjectsOfType<MeshRenderer>())
-                {
-                    if (renderer == null || !renderer.enabled ||
-                        editable.Contains(renderer) ||
-                        IsDescendantOf(renderer.transform, _sceneRoot) ||
-                        IsProtectedHierarchy(renderer.transform, editableRoots) ||
-                        (!renderer.gameObject.isStatic && !renderer.isPartOfStaticBatch) ||
-                        !DuplicatesEditable(renderer, editableList))
-                        continue;
-
-                    if (renderer.isPartOfStaticBatch) ++residualBatched;
-                    RememberAndHide(renderer, ref hiddenRenderers,
-                        ref hiddenColliders);
-                    ++residualRenderers;
+                    // Una malla invisible con un collider activo puede seguir
+                    // interceptando el cursor. Solo tocamos los colliders del
+                    // mismo GameObject que el renderer original, no el terreno.
+                    foreach (var collider in renderer.GetComponents<Collider>())
+                    {
+                        if (collider == null) continue;
+                        if (!OriginalColliders.ContainsKey(collider))
+                            OriginalColliders.Add(collider, collider.enabled);
+                        if (!collider.enabled) continue;
+                        collider.enabled = false;
+                        ++hiddenColliders;
+                    }
                 }
 
                 _scanned = true;
@@ -557,8 +448,6 @@ namespace UnderPressure.Editor
                     "Editor: decoracion original ocultada en " + OriginalLandscapeRootName +
                     ": " + hiddenRenderers + " renderizadores, " + hiddenColliders +
                     " colliders; " + bakedRenderers + " renderizadores con static batching. " +
-                    residualRenderers + " residuos exteriores coincidentes (" +
-                    residualBatched + " con static batching). " +
                     "Los LandscapeRoomItem editables siguen visibles. " +
                     "La malla combinada original NO se ha modificado.");
 
