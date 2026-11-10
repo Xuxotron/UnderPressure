@@ -3339,6 +3339,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
         {
             if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
                 _detachedMenu == null) return true;
+            if (ScenarioTraffic.IsActive) return false;
             if (buildEvents == null) return false;
             var level = BuildEventsLevelField?.GetValue(buildEvents) as Level;
             var cursor = level?.CursorManager;
@@ -3370,7 +3371,8 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             if (!ScenarioEditorFlow.IsRunning || !ScenarioEditorSession.Active ||
                 level == null || !ReferenceEquals(level, ScenarioEditorSession.Level) ||
                 ScenarioEditorTerrainPainter.BrushEnabled || ScenarioCharacterViewer.IsOpen ||
-                ScenarioPlotMapEditor.IsOpen || ScenarioLandscape.IsActive) return;
+                ScenarioPlotMapEditor.IsOpen || ScenarioLandscape.IsActive ||
+                ScenarioTraffic.IsActive) return;
             var cursor = level.CursorManager;
             if (cursor == null || ContainsMode(cursor, typeof(CursorEditHospitalItem))) return;
             var current = CursorModeField?.GetValue(cursor);

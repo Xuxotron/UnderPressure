@@ -2689,10 +2689,15 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static void ActivateNativeTool(Button native)
+        private void ActivateNativeTool(Button native)
         {
             ScenarioCharacterViewer.Close();
             ScenarioPlotMapEditor.Close();
+            ScenarioLandscape.Deselect();
+            ScenarioTraffic.Deselect();
+            SetLayerControlsVisible(true);
+            RefreshLandscapeButton();
+            RefreshTrafficButton();
             native?.onClick.Invoke();
         }
 
@@ -3400,6 +3405,12 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void ActivateTrafficLayer()
         {
+            // Tráfico es una herramienta exclusiva: retirar primero los modos
+            // nativos evita que el mismo clic alcance carreteras o baldosas.
+            ScenarioEditorTerrainPainter.DisableTools();
+            ScenarioCharacterViewer.Close();
+            ScenarioPlotMapEditor.Close();
+            StopNativeTools();
             ScenarioEditorScene.Deselect();
             ScenarioEditorObjectInteraction.ClearCurrentSelection();
             if (_plotIsolation) SetPlotIsolation(false);
@@ -4402,23 +4413,27 @@ PriorVisibility.Clear();
         private static void Postfix() => ScenarioEditorPerimeterVisibility.Restore();
     }
 
-    // Los cursores nativos no deben recibir clics mientras se abre el cuadro de mapas.
+    // Los cursores nativos no deben recibir clics durante un diálogo ni mientras
+    // Tráfico posee en exclusiva la selección de la escena.
     [HarmonyPatch(typeof(CursorEditHospitalBuild), "CursorUpdate")]
     internal static class ScenarioEditorBlockBuildDuringDialogPatch
     {
-        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen;
+        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen &&
+            !ScenarioTraffic.IsActive;
     }
 
     [HarmonyPatch(typeof(CursorEditHospitalMovePlot), "CursorUpdate")]
     internal static class ScenarioEditorBlockMoveDuringDialogPatch
     {
-        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen;
+        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen &&
+            !ScenarioTraffic.IsActive;
     }
 
     [HarmonyPatch(typeof(CursorEditHospitalItem), "CursorUpdate")]
     internal static class ScenarioEditorBlockItemsDuringDialogPatch
     {
-        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen;
+        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen &&
+            !ScenarioTraffic.IsActive;
     }
 
     [HarmonyPatch(typeof(EditHospitalMenu), "Setup")]

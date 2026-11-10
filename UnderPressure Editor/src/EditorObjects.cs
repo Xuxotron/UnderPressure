@@ -1410,7 +1410,7 @@ namespace UnderPressure.Editor
         {
             previousPlot = null;
             var self = _active;
-            if (ScenarioLandscape.IsActive) return false;
+            if (ScenarioLandscape.IsActive || ScenarioTraffic.IsActive) return false;
             if (self == null || !self.Ready || cursor == null) return true;
             if (self._nativeMulti.Count > 0) return false;
             if (self._rightClickPending &&
@@ -2024,22 +2024,18 @@ namespace UnderPressure.Editor
                         _ctrlSceneSelected.Add(scene);
                 return;
             }
-            var plots = _level?.WorldState?.HospitalPlots;
-            if (plots == null) return;
-            foreach (var plot in plots)
+            var plot = _selection;
+            if (plot == null || !plot.IsVisible() || !plot.IsLayerVisible(_ctrlLayer)) return;
+            var items = plot.HospitalMap?.FloorPlan?.LandscapeItems;
+            if (items == null) return;
+            foreach (var item in items)
             {
-                if (plot == null || !plot.IsVisible() || !plot.IsLayerVisible(_ctrlLayer)) continue;
-                var items = plot.HospitalMap?.FloorPlan?.LandscapeItems;
-                if (items == null) continue;
-                foreach (var item in items)
-                {
-                    if (item == null || ReadLayer(item) != _ctrlLayer) continue;
-                    var visual = item.Visual?.GameObject;
-                    if (visual == null || !visual.activeInHierarchy)
-                        continue;
-                    if (IntersectsXZ(visual, minX, maxX, minZ, maxZ))
-                        _ctrlSelected.Add(item, plot);
-                }
+                if (item == null || ReadLayer(item) != _ctrlLayer) continue;
+                var visual = item.Visual?.GameObject;
+                if (visual == null || !visual.activeInHierarchy)
+                    continue;
+                if (IntersectsXZ(visual, minX, maxX, minZ, maxZ))
+                    _ctrlSelected.Add(item, plot);
             }
         }
 
@@ -2112,24 +2108,21 @@ namespace UnderPressure.Editor
             owner = null;
             selected = null;
             var camera = Camera.main;
-            var plots = _level?.WorldState?.HospitalPlots;
-            if (camera == null || plots == null) return false;
+            var plot = _selection;
+            if (camera == null || plot == null || !plot.IsVisible()) return false;
             var ray = camera.ScreenPointToRay(mouse);
             var nearest = float.PositiveInfinity;
-            foreach (var plot in plots)
+            var items = plot.HospitalMap?.FloorPlan?.LandscapeItems;
+            if (items == null) return false;
+            foreach (var item in items)
             {
-                var items = plot?.HospitalMap?.FloorPlan?.LandscapeItems;
-                if (items == null) continue;
-                foreach (var item in items)
-                {
-                    if (!plot.IsVisible() || item?.Visual == null || item.Visual.GameObject == null ||
-                        !item.Visual.GameObject.activeInHierarchy) continue;
-                    float distance;
-                    if (!item.Visual.RayCast(ray, out distance) || distance >= nearest) continue;
-                    owner = plot;
-                    selected = item;
-                    nearest = distance;
-                }
+                if (item?.Visual == null || item.Visual.GameObject == null ||
+                    !item.Visual.GameObject.activeInHierarchy) continue;
+                float distance;
+                if (!item.Visual.RayCast(ray, out distance) || distance >= nearest) continue;
+                owner = plot;
+                selected = item;
+                nearest = distance;
             }
             return selected != null;
         }
@@ -2140,13 +2133,13 @@ namespace UnderPressure.Editor
                 Configure(ScenarioEditorSession.Level);
             if (!Ready) return;
             RefreshSearch();
-            if (ScenarioLandscape.IsActive) return;
+            if (ScenarioLandscape.IsActive || ScenarioTraffic.IsActive) return;
 
             if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
             UpdateCtrlObjectHover();
             if (_ctrlDragging || (CtrlDown && !OverUi())) UpdateCtrlRectangle();
-            // Mayus clona y Alt roba, pero ambos deben mostrar siempre el
-            // contorno del objeto alcanzado aunque pertenezca a otra parcela o capa.
+            // Mayus clona y Alt mueve, pero nunca deben alcanzar objetos de una
+            // parcela distinta de la seleccionada.
             if ((Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ||
                  Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) &&
                 !CtrlDown && !OverUi() &&
