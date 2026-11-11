@@ -1,4 +1,4 @@
-// Updated: 2026-11-06 - Panel superior de pacientes adaptado al BGSolid redondeado y al ultimo layout guardado.
+// Updated: 2026-11-11 - Override de pestana Enfermedades integrado y textos de sala centrados verticalmente a mano.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -101,12 +101,14 @@ namespace UnderPressure.Editor
             _settingsDiseaseScroll.content = _settingsDiseaseContent;
             _settingsDiseaseScroll.horizontal = false;
             _settingsDiseaseScroll.vertical = true;
-            _settingsDiseaseScroll.inertia = true;
+            _settingsDiseaseScroll.inertia = false;
             _settingsDiseaseScroll.movementType = ScrollRect.MovementType.Clamped;
+            _settingsDiseaseScroll.elasticity = 0f;
             _settingsDiseaseScroll.scrollSensitivity = 120f;
             InstallDiseaseNativeScrollbar(_settingsDiseaseSurface, _settingsDiseaseScroll,
                 "UP Disease Native Scrollbar", 0f, 0f);
             _settingsDiseaseSurface.SetAsLastSibling();
+            ApplyDiseaseTabTextOverride();
         }
 
         private void RefreshDiseaseSettingsContents()
@@ -191,6 +193,8 @@ namespace UnderPressure.Editor
             ApplyDiseaseFrequencyVisualState();
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
             ReapplySettingsDesignerStructure();
+            CenterDiseaseRoomTitlesVertically();
+            ApplyDiseaseTabTextOverride();
         }
 
         private void LoadPatientSettingsFromLevel()
@@ -291,7 +295,7 @@ namespace UnderPressure.Editor
                 new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(.5f, 1f),
                 new Vector2(1.5f, -(top - .8450293f)),
-                new Vector2(-11f, 60f));
+                new Vector2(-11f, 64f));
 
             var panelImage = panel.GetComponent<Image>();
             if (panelImage != null)
@@ -299,8 +303,7 @@ namespace UnderPressure.Editor
 
             CreatePatientIntegerField(
                 panel.transform,
-                EditorLocalization.Get(
-                    "editor.scenario_settings.diseases.max_patients"),
+                "Máx. pacientes",
                 _settingsMaxPatients,
                 20.8800049f, 164f,
                 180.88f, 49f,
@@ -309,8 +312,7 @@ namespace UnderPressure.Editor
 
             CreatePatientFloatField(
                 panel.transform,
-                EditorLocalization.Get(
-                    "editor.scenario_settings.diseases.arrival_rate"),
+                "Ritmo de llegada",
                 _settingsPatientSpawnRate,
                 301.88f, 140f,
                 443.88f, 47f,
@@ -319,8 +321,7 @@ namespace UnderPressure.Editor
 
             CreatePatientFloatField(
                 panel.transform,
-                EditorLocalization.Get(
-                    "editor.scenario_settings.diseases.randomness"),
+                "Aleatoriedad",
                 _settingsPatientSelectionRandomJitter,
                 568.88f, 121f,
                 680.88f, 49f,
@@ -330,8 +331,7 @@ namespace UnderPressure.Editor
 
             var neverLabel = CreateDiseaseText(
                 panel.transform,
-                EditorLocalization.Get(
-                    "editor.scenario_settings.diseases.never_spawn_patients"),
+                "No generar pacientes",
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -354,8 +354,7 @@ namespace UnderPressure.Editor
 
             var ignoreFrequencyLabel = CreateDiseaseText(
                 panel.transform,
-                EditorLocalization.Get(
-                    "editor.scenario_settings.diseases.ignore_frequency"),
+                "Ignorar frecuencia",
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -604,6 +603,65 @@ namespace UnderPressure.Editor
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsDiseaseContent);
             ApplyDiseaseFrequencyVisualState();
             ReapplySettingsDesignerStructure();
+            CenterDiseaseRoomTitlesVertically();
+            ApplyDiseaseTabTextOverride();
+        }
+
+        private void CenterDiseaseRoomTitlesVertically()
+        {
+            if (_settingsDiseaseSections == null ||
+                _settingsDiseaseSections.Count == 0)
+                return;
+
+            for (var index = 0; index < _settingsDiseaseSections.Count; ++index)
+            {
+                var section = _settingsDiseaseSections[index];
+                if (section == null)
+                    continue;
+
+                var titleTransform = section.transform.Find("Cabecera/Texto");
+                var titleRect = titleTransform as RectTransform;
+                if (titleRect == null)
+                    continue;
+
+                var title = titleRect.GetComponent<TextMeshProUGUI>();
+                if (title != null)
+                {
+                    title.enableAutoSizing = false;
+                    title.enableWordWrapping = false;
+                    title.alignment = TextAlignmentOptions.MidlineLeft;
+                }
+
+                // Cabecera: 60 px. Texto: 50 px. Top 5 = centro vertical exacto.
+                SetTopLeft(titleRect, 70f, 5f, 280f, 50f);
+            }
+        }
+
+        private void ApplyDiseaseTabTextOverride()
+        {
+            if (_settingsTabButtons == null ||
+                _settingsTabButtons.Length <= 1 ||
+                _settingsTabButtons[1] == null)
+                return;
+
+            var text = _settingsTabButtons[1]
+                .GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault();
+            if (text == null)
+                return;
+
+            var rect = text.rectTransform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(.5f, .5f);
+            rect.anchoredPosition = new Vector2(.3199997f, -.629997253f);
+            rect.sizeDelta = new Vector2(-15.13f, -14.24f);
+
+            text.fontStyle &= ~FontStyles.Bold;
+            text.fontSize = 26.35f;
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 8f;
+            text.fontSizeMax = 72f;
         }
 
         private void BuildDiseaseRoomHeader(Transform parent, ScenarioDiseaseCatalog.Room room,
@@ -634,7 +692,10 @@ namespace UnderPressure.Editor
             }
             var roomName = CreateDiseaseText(header.transform, room.Name, 22f,
                 TextAlignmentOptions.MidlineLeft, Color.white);
-            SetTopLeft(roomName.rectTransform, 70f, -5f, 280f, 50f);
+            roomName.enableAutoSizing = false;
+            roomName.enableWordWrapping = false;
+            roomName.alignment = TextAlignmentOptions.MidlineLeft;
+            SetTopLeft(roomName.rectTransform, 70f, 5f, 280f, 50f);
 
             var available = AvailableForRoom(room, null);
             var choices = new List<DiseaseChoice>
@@ -647,7 +708,7 @@ namespace UnderPressure.Editor
             var selector = CreateDiseaseDropdown(header.transform,
                 choices.Select(choice => choice.Name).ToList(), 0,
                 choices.Select(choice => choice.DlcIcon).ToList());
-            SetTopLeft((RectTransform)selector.transform, 350f, 8f, 274f, 44f);
+            SetTopLeft((RectTransform)selector.transform, 365f, 8f, 296f, 44f);
 
             var add = CreateDiseaseButton(header.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.add"),
@@ -656,7 +717,7 @@ namespace UnderPressure.Editor
                     if (selector.value <= 0 || selector.value >= choices.Count) return;
                     AddDisease(room, choices[selector.value].Id);
                 });
-            SetTopLeft((RectTransform)add.transform, 639f, 8f, 116f, 44f);
+            SetTopLeft((RectTransform)add.transform, 675f, 8f, 116f, 44f);
 
             if (room.Dlc?.Icon != null)
             {
@@ -701,7 +762,7 @@ namespace UnderPressure.Editor
             var definition = CreateDiseaseDropdown(panel.transform,
                 choices.Select(choice => choice.Name).ToList(), currentIndex,
                 choices.Select(choice => choice.DlcIcon).ToList());
-            SetTopLeft((RectTransform)definition.transform, 60f, 8f, 270f, 38f);
+            SetTopLeft((RectTransform)definition.transform, 60f, 8f, 295f, 38f);
             ApplyDiseaseDropdownDesignerLayout(definition);
             definition.onValueChanged.AddListener(index =>
             {
@@ -716,7 +777,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(unlockedLabel.rectTransform, 350f, 11f, 125f, 38f);
+            SetTopLeft(unlockedLabel.rectTransform, 378f, 11f, 125f, 38f);
 
             var unlocked = CreateDiseaseToggle(panel.transform, value.unlocked,
                 state => value.unlocked = state);
@@ -732,13 +793,13 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(frequencyLabel.rectTransform, 552f, 10f, 111f, 38f);
+            SetTopLeft(frequencyLabel.rectTransform, 576f, 10f, 111f, 38f);
             _settingsFrequencyTexts.Add(frequencyLabel);
 
             var minimumFrequency = CreateDiseaseIntegerInput(
                 panel.transform,
                 value.minWeight,
-                648f, 9f, 46f,
+                673f, 9f, 46f,
                 changed => value.minWeight = changed);
             if (minimumFrequency != null)
                 _settingsFrequencyInputs.Add(minimumFrequency);
@@ -749,13 +810,13 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(frequencySeparator.rectTransform, 694f, 8f, 36f, 38f);
+            SetTopLeft(frequencySeparator.rectTransform, 714.000061f, 8f, 36f, 38f);
             _settingsFrequencyTexts.Add(frequencySeparator);
 
             var maximumFrequency = CreateDiseaseIntegerInput(
                 panel.transform,
                 value.maxWeight,
-                722f, 9f, 48f,
+                737f, 9f, 48f,
                 changed => value.maxWeight = changed);
             if (maximumFrequency != null)
                 _settingsFrequencyInputs.Add(maximumFrequency);
@@ -766,12 +827,12 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(patientsLabel.rectTransform, 817f, 10f, 156f, 38f);
+            SetTopLeft(patientsLabel.rectTransform, 822f, 10f, 156f, 38f);
 
             CreateDiseaseIntegerInput(
                 panel.transform,
                 value.minPatientsSpawned,
-                965f, 8f, 40f,
+                970f, 8f, 40f,
                 changed => value.minPatientsSpawned = changed);
 
             CreateDiseaseStarRatingDesigner(panel.transform, value);
@@ -798,7 +859,7 @@ namespace UnderPressure.Editor
 
             background.anchorMin = new Vector2(.5f, .5f);background.anchorMax = new Vector2(.5f, .5f);
             background.pivot = new Vector2(.5f, .5f);
-            background.anchoredPosition = new Vector2(-658f, -1f);
+            background.anchoredPosition = new Vector2(-633f, -1f);
             background.sizeDelta = new Vector2(40f, 40f);
 
             var checkmark = background.Find("Checkmark") as RectTransform;
@@ -887,7 +948,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(starsLabel.rectTransform, 1034f, 10f, 87f, 38f);
+            SetTopLeft(starsLabel.rectTransform, 1044f, 10f, 87f, 38f);
 
             value.minStarRating = Mathf.Clamp(value.minStarRating, 0, 3);
             if (!ResolveNativeDiseaseStarSprites()) return;
@@ -1141,8 +1202,9 @@ namespace UnderPressure.Editor
             button.targetGraphic = root.GetComponent<Image>();
             button.colors = _style.ButtonColors;
             button.onClick.AddListener(() => clicked());
-            CreateDiseaseText(root.transform, value, 18f,
-                TextAlignmentOptions.Center, Color.white).fontStyle = FontStyles.Bold;
+            var label = CreateDiseaseText(root.transform, value, 18f,
+                TextAlignmentOptions.Center, Color.white);
+            label.fontStyle = FontStyles.Normal;
             StandardiseClickSound(button);
             return button;
         }
@@ -1153,7 +1215,7 @@ namespace UnderPressure.Editor
             var root = NewImage("Selector", parent, _style.ButtonSprite,
                 new Color32(218, 222, 226, 255), true);
             var dropdown = root.AddComponent<TMP_Dropdown>();
-            var caption = CreateDiseaseText(root.transform, "", 16f,
+            var caption = CreateDiseaseText(root.transform, "", 18f,
                 TextAlignmentOptions.MidlineLeft, Color.black);
             caption.rectTransform.offsetMin = new Vector2(10f, 0f);
             caption.rectTransform.offsetMax = new Vector2(-68f, 0f);
@@ -1187,7 +1249,10 @@ namespace UnderPressure.Editor
             var scroll = template.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
-            scroll.scrollSensitivity = 800f;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = false;
+            scroll.elasticity = 0f;
+            scroll.scrollSensitivity = 120f;
 
             var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image),
                 typeof(Mask));
@@ -1226,7 +1291,7 @@ namespace UnderPressure.Editor
             itemLayout.minHeight = itemLayout.preferredHeight = 34f;
             var toggle = item.AddComponent<Toggle>();
             toggle.targetGraphic = item.GetComponent<Image>();
-            var itemLabel = CreateDiseaseText(item.transform, "", 15f,
+            var itemLabel = CreateDiseaseText(item.transform, "", 18f,
                 TextAlignmentOptions.MidlineLeft, Color.black);
             itemLabel.rectTransform.offsetMin = new Vector2(10f, 0f);
             itemLabel.rectTransform.offsetMax = new Vector2(-42f, 0f);

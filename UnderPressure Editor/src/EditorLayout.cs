@@ -1,4 +1,4 @@
-// Updated: 2026-11-04 - Ajustes aislados por pestana; sin reparentados persistentes entre paneles.
+// Updated: 2026-11-09 - Enfermedades vuelve a activar su pagina padre; scroll global sigue limitado sin rebote ni inercia.
 using System;
 using System.Globalization;
 using System.Linq;
@@ -958,7 +958,7 @@ namespace UnderPressure.Editor
                 if (index == 1)
                 {
                     if (_settingsPages[index] != null)
-                        _settingsPages[index].SetActive(false);
+                        _settingsPages[index].SetActive(selected);
 
                     if (_settingsDiseaseSurface != null)
                         _settingsDiseaseSurface.gameObject.SetActive(selected);
@@ -1505,7 +1505,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 false, .52f, .98f);
             SetScenarioSettingsInputLabel(_settingsAuthor, "Autor");
             _settingsDescriptionPerStar = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.description_per_star", 70f, 118f, true,
+                "editor.scenario_settings.field.description_per_star", 70f, 127f, true,
                 false, .02f, .98f);
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
@@ -1513,6 +1513,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _settingsFailWarning = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_warning", 202f, 48f, false, true,
                 .35f, .65f, 130f);
+            ApplyScenarioSettingsLabelV7(_settingsFailWarning, 23.35f, 12f, 32f);
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
                 .68f, .98f, 130f);
@@ -1797,6 +1798,29 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                        StringComparison.Ordinal))
                 row = row.parent;
             if (row != null) SetWorkshopFieldLabel(row, fieldRoot, value);
+        }
+
+        private static void ApplyScenarioSettingsLabelV7(
+            TMP_InputField input, float size, float minimum, float maximum)
+        {
+            if (input == null) return;
+            var fieldRoot = input.transform.parent;
+            var row = fieldRoot;
+            while (row != null &&
+                   !row.name.StartsWith("UP Workshop Settings Field ",
+                       StringComparison.Ordinal))
+                row = row.parent;
+            if (row == null) return;
+
+            var label = row.GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault(text => text != null &&
+                    !text.transform.IsChildOf(fieldRoot));
+            if (label == null) return;
+
+            label.fontSize = size;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = minimum;
+            label.fontSizeMax = maximum;
         }
 
         private void RefreshScenarioSettingsFields()
@@ -2186,6 +2210,16 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             float width = 12f)
         {
             if (host == null || scroll == null) return null;
+
+            // Todos los scrolls verticales del editor se detienen exactamente
+            // en el primer/ultimo elemento: sin elasticidad, rebote ni inercia
+            // que pueda mostrar una zona vacia fuera del contenido.
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = false;
+            scroll.elasticity = 0f;
+            scroll.StopMovement();
+            scroll.velocity = Vector2.zero;
+
             var existing = host.Find(name)?.GetComponent<Scrollbar>();
             if (existing == null)
             {

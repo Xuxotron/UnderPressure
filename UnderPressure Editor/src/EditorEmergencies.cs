@@ -1,4 +1,4 @@
-// Updated: 2026-11-06 - Filas visibles y controles compactos uniformes.
+// Updated: 2026-11-08 - Layout V7 aplicado en Emergencias sin cambiar su logica.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -875,6 +875,17 @@ namespace UnderPressure.Editor
                 row.transform, fieldObject.transform, 56f);
             RemoveEmergencyRowChrome(
                 row.transform, fieldObject.transform);
+
+            var toggleLabel = row.GetComponentsInChildren<TMP_Text>(true)
+                .FirstOrDefault(value => value != null &&
+                    !value.transform.IsChildOf(fieldObject.transform));
+            if (toggleLabel != null)
+            {
+                toggleLabel.fontSize = 20.15f;
+                toggleLabel.enableAutoSizing = true;
+                toggleLabel.fontSizeMin = 12f;
+                toggleLabel.fontSizeMax = 32f;
+            }
 
             foreach (var image in
                      fieldObject.GetComponentsInChildren<Image>(true))
@@ -2005,7 +2016,7 @@ namespace UnderPressure.Editor
             SetEmergencyBakedRect(
                 _emergencyConfigBlock,
                 0f, 1f, 1f, 1f, .5f, 1f,
-                126.5f, -11f, -279f, 399f);
+                127.5f, 0f, -255f, 384f);
 
             SetEmergencyBakedRect(
                 _emergencyListBlock,
@@ -2060,7 +2071,7 @@ namespace UnderPressure.Editor
             SetEmergencyBakedRect(
                 _emergencyListBlock.Find("UP Emergency List Scroll") as RectTransform,
                 0f, 0f, 1f, 1f, .5f, .5f,
-                0f, 2f, -24f, -100f);
+                0f, 7f, -24f, -110f);
 
             SetEmergencyBakedRect(
                 _emergencyListBlock.Find(
@@ -2096,7 +2107,7 @@ namespace UnderPressure.Editor
                 _emergencyConfigBlock.Find(
                     "UP Emergency Illness Add/Text") as RectTransform,
                 0f, 1f, 0f, 1f, 0f, 1f,
-                3f, 0f, 89f, 36f);
+                3f, 0f, 88f, 36f);
 
             CreateEmergencyPatientsDesignerHeader();
             ApplyEmergencyCompactLeftDesignerLayout();
@@ -2353,6 +2364,12 @@ namespace UnderPressure.Editor
         {
             if (_emergencyPrerequisiteBlock != null)
             {
+                SetEmergencyBakedRect(
+                    _emergencyPrerequisiteBlock.Find(
+                        "UP Emergency Prerequisite Scroll") as RectTransform,
+                    0f, 0f, 1f, 1f, .5f, .5f,
+                    0f, -19f, -24f, -62f);
+
                 SetEmergencyBakedRect(
                     _emergencyPrerequisiteBlock.Find("Text") as RectTransform,
                     0f, 1f, 0f, 1f, 0f, 1f,
