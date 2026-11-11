@@ -2525,7 +2525,7 @@ namespace UnderPressure.Editor
                 _nativeBuildButton.gameObject.SetActive(false);
             }
             _trafficToolbarButton = AddTopButton(parent, T("editor.traffic.arrivals"),
-                -440f, ToggleTrafficPanel);
+                -550f, ToggleTrafficPanel);
             _trafficToolbarButton.gameObject.name = "UP Traffic Options Toggle";
             BuildTrafficPanel(parent);
             if (_nativeObjectsButton != null)
@@ -2552,6 +2552,7 @@ namespace UnderPressure.Editor
                 _nativeCameraButton.gameObject.SetActive(false);
                 RefreshCameraButton();
             }
+            RefreshContextToolbarButtons();
         }
 
         private void ToggleTrafficPanel()
@@ -3539,6 +3540,22 @@ rect.pivot = new Vector2(1f, 1f);
             }
             if (_trafficBorder != null) _trafficBorder.enabled = ScenarioTraffic.IsActive;
             SetToolButtonSelected(_trafficToolbarButton, _trafficPanelOpen);
+            RefreshContextToolbarButtons();
+        }
+
+        private void RefreshContextToolbarButtons()
+        {
+            var trafficActive = ScenarioTraffic.IsActive;
+            var plotActive = _selectedPlot != null && !ScenarioLandscape.IsActive &&
+                !trafficActive;
+            if (_buildButton != null) _buildButton.gameObject.SetActive(plotActive);
+            if (_trafficToolbarButton != null)
+                _trafficToolbarButton.gameObject.SetActive(trafficActive);
+            if (trafficActive || !_trafficPanelOpen) return;
+            _trafficPanelOpen = false;
+            if (_trafficPanelRoot != null)
+                _trafficPanelRoot.gameObject.SetActive(false);
+            SetToolButtonSelected(_trafficToolbarButton, false);
         }
 
         // Atajos limitados a la sesion del Editor. InputManager.GetKeyDown
