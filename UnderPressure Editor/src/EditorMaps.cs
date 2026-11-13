@@ -2351,6 +2351,7 @@ namespace UnderPressure.Editor
         private Button _addPlotButton;
         private Button _movePlotButton;
         private Button _deletePlotButton;
+        private GameObject _plotActionsRoot;
         private Button _cameraButton;
         private TMP_Text _cameraButtonText;
         private Image _cameraButtonIcon;
@@ -2591,24 +2592,22 @@ namespace UnderPressure.Editor
             titleRect.offsetMin = new Vector2(8f, -33f);
             titleRect.offsetMax = new Vector2(-8f, -5f);
             AddTrafficPanelButton(panel.transform, T("editor.traffic.road_arrival"),
-                0f, .5f, 38f, () => AddTrafficPoint(ScenarioTraffic.RoadArrival));
+                0f, 1f, 38f, () => AddTrafficPoint(ScenarioTraffic.RoadArrival));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.helipad_arrival"),
-                .5f, 1f, 38f, () => AddTrafficPoint(ScenarioTraffic.HelipadArrival));
+                0f, 1f, 76f, () => AddTrafficPoint(ScenarioTraffic.HelipadArrival));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.subway"),
-                0f, .5f, 76f, () => AddTrafficPoint(ScenarioTraffic.SubwayArrival));
+                0f, 1f, 114f, () => AddTrafficPoint(ScenarioTraffic.SubwayArrival));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.subway_departure"),
-                .5f, 1f, 76f, () => AddTrafficPoint(ScenarioTraffic.SubwayDeparture));
+                0f, 1f, 152f, () => AddTrafficPoint(ScenarioTraffic.SubwayDeparture));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.tunnel_departure"),
-                0f, 1f, 114f, () => AddTrafficPoint(ScenarioTraffic.TunnelDeparture));
-            AddTrafficPanelButton(panel.transform, T("editor.traffic.move_selected"),
-                0f, 1f, 152f, () => ScenarioTraffic.BeginMoveSelected());
+                0f, 1f, 190f, () => AddTrafficPoint(ScenarioTraffic.TunnelDeparture));
 
             var viewport = AddUi("UP Traffic List Viewport", panel.transform);
             var viewportRect = viewport.GetComponent<RectTransform>();
             viewportRect.anchorMin = new Vector2(0f, 0f);
             viewportRect.anchorMax = new Vector2(1f, 1f);
             viewportRect.offsetMin = new Vector2(8f, 8f);
-            viewportRect.offsetMax = new Vector2(-8f, -192f);
+            viewportRect.offsetMax = new Vector2(-8f, -230f);
             var viewportImage = viewport.AddComponent<Image>();
             viewportImage.color = new Color(0f, 0f, 0f, .16f);
             var mask = viewport.AddComponent<Mask>();
@@ -2635,6 +2634,7 @@ namespace UnderPressure.Editor
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 44f;
             panel.SetActive(false);
             _buttons.Add(panel);
         }
@@ -2682,19 +2682,21 @@ namespace UnderPressure.Editor
                 var id = item.Id;
                 var button = CloneButton(_template, _trafficListContent, label, () =>
                 {
-                    ScenarioTraffic.Select(id);
+                    ScenarioTraffic.BeginNativeMove(id);
                     RefreshTrafficPanel();
                 });
                 var layout = button.GetComponent<LayoutElement>() ??
                     button.gameObject.AddComponent<LayoutElement>();
-                layout.minHeight = layout.preferredHeight = 31f;
+                layout.minHeight = layout.preferredHeight = 36f;
                 var text = button.GetComponentInChildren<TMP_Text>(true);
                 if (text != null)
                 {
                     text.enableAutoSizing = true;
-                    text.fontSizeMin = 8f;
-                    text.fontSizeMax = 12f;
+                    text.fontSizeMin = 11f;
+                    text.fontSizeMax = 14f;
                     text.alignment = TextAlignmentOptions.Left;
+                    text.enableWordWrapping = false;
+                    text.overflowMode = TextOverflowModes.Ellipsis;
                 }
                 SetToolButtonSelected(button, id == ScenarioTraffic.SelectedId);
             }
@@ -3286,7 +3288,12 @@ rect.pivot = new Vector2(1f, 1f);
             _plotListViewport = scroll != null
                 ? scroll.GetComponent<RectTransform>()
                 : root.parent as RectTransform;
-            _addPlotButton = CloneButton(_template, transform, T("editor.plot.add"), () =>
+            _plotActionsRoot = AddUi("UP Plot Actions Panel", transform);
+            var actionsRect = _plotActionsRoot.GetComponent<RectTransform>();
+            actionsRect.anchorMin = actionsRect.anchorMax = Vector2.zero;
+            actionsRect.pivot = new Vector2(0f, 1f);
+            _addPlotButton = CloneButton(_template, _plotActionsRoot.transform,
+                T("editor.plot.add"), () =>
             {
                 try { ScenarioEditorStorage.AddNewPlot(_level); }
                 catch (Exception exception)
@@ -3295,20 +3302,19 @@ rect.pivot = new Vector2(1f, 1f);
                     ShowError(T("editor.plot.add.title"), T("editor.plot.add.error"));
                 }
             });
-            _deletePlotButton = CloneButton(_template, transform,
+            _deletePlotButton = CloneButton(_template, _plotActionsRoot.transform,
                 T("editor.plot.delete"), ShowDeleteConfirmation);
             _nativeMoveButton = AccessTools.Field(typeof(EditHospitalMenu), "_moveButton")?
                 .GetValue(_menu) as Button;
             if (_nativeMoveButton != null)
             {
-                _movePlotButton = CloneButton(_template, transform,
+                _movePlotButton = CloneButton(_template, _plotActionsRoot.transform,
                     T("editor.toolbar.move_plot"), () => _nativeMoveButton.onClick.Invoke());
                 _nativeMoveButton.gameObject.SetActive(false);
-                _buttons.Add(_movePlotButton.gameObject);
             }
-            _buttons.Add(_addPlotButton.gameObject);
-            _buttons.Add(_deletePlotButton.gameObject);
+            _buttons.Add(_plotActionsRoot);
             PositionPlotActions();
+            RefreshContextToolbarButtons();
         }
 
         private void AddLandscapeSelector(Transform listRoot)
@@ -3514,16 +3520,15 @@ rect.pivot = new Vector2(1f, 1f);
         private static void ApplyModeSelectorColors(Button button, bool active)
         {
             if (button == null) return;
+            if (button.image != null)
+                button.image.color = active
+                    ? ScenarioEditorDockLayout.EditorSelectedButtonColor
+                    : ScenarioEditorDockLayout.EditorButtonColor;
             var colors = button.colors;
-            colors.normalColor = active
-                ? new Color(0.02f, 0.55f, 0.90f, 1f)
-                : new Color(0.38f, 0.68f, 0.82f, 1f);
-            colors.highlightedColor = active
-                ? new Color(0.04f, 0.70f, 1f, 1f)
-                : new Color(0.50f, 0.78f, 0.90f, 1f);
-            colors.pressedColor = new Color(0.02f, 0.42f, 0.72f, 1f);
-            colors.selectedColor = colors.highlightedColor;
-            colors.disabledColor = new Color(0.30f, 0.50f, 0.60f, 1f);
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.pressedColor = new Color(.95f, .95f, .95f, 1f);
+            colors.selectedColor = Color.white;
             colors.colorMultiplier = 1f;
             button.colors = colors;
         }
@@ -3534,6 +3539,7 @@ rect.pivot = new Vector2(1f, 1f);
             var plotActive = _selectedPlot != null && !ScenarioLandscape.IsActive &&
                 !trafficActive;
             if (_buildButton != null) _buildButton.gameObject.SetActive(plotActive);
+            if (_plotActionsRoot != null) _plotActionsRoot.SetActive(plotActive);
             if (_trafficToolbarButton != null)
                 _trafficToolbarButton.gameObject.SetActive(trafficActive);
             if (trafficActive || !_trafficPanelOpen) return;
@@ -3680,7 +3686,7 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void PositionPlotActions()
         {
-            if (_plotListViewport == null || _addPlotButton == null ||
+            if (_plotListViewport == null || _plotActionsRoot == null || _addPlotButton == null ||
                 _movePlotButton == null || _deletePlotButton == null)
                 return;
             var parentRect = transform as RectTransform;
@@ -3697,24 +3703,27 @@ rect.pivot = new Vector2(1f, 1f);
             var gap = ScenarioEditorDockLayout.CompactTripleButtonGap;
             var totalWidth = buttonWidth * 3f + gap * 2f;
             var left = Mathf.Max(0f, (width - totalWidth) * .5f);
+            var actions = _plotActionsRoot.transform as RectTransform;
             var add = _addPlotButton.transform as RectTransform;
             var move = _movePlotButton.transform as RectTransform;
             var remove = _deletePlotButton.transform as RectTransform;
-            if (add == null || move == null || remove == null) return;
+            if (actions == null || add == null || move == null || remove == null) return;
+            actions.anchorMin = actions.anchorMax = new Vector2(0f, 0f);
+            actions.pivot = new Vector2(0f, 1f);
+            actions.sizeDelta = new Vector2(totalWidth, buttonHeight);
             foreach (var rect in new[] { add, move, remove })
             {
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
                 rect.pivot = new Vector2(0f, 1f);
                 rect.sizeDelta = new Vector2(buttonWidth, buttonHeight);
             }
             // Los tres botones terminan antes de la linea separadora. La linea
             // conserva exactamente su posicion y su punto de agarre originales.
             var offset = parentRect.TransformVector(new Vector3(left, 2f, 0f));
-            add.position = _plotViewportCorners[0] + offset;
-            move.position = _plotViewportCorners[0] + offset +
-                            parentRect.TransformVector(new Vector3(buttonWidth + gap, 0f, 0f));
-            remove.position = _plotViewportCorners[0] + offset +
-                              parentRect.TransformVector(new Vector3((buttonWidth + gap) * 2f, 0f, 0f));
+            actions.position = _plotViewportCorners[0] + offset;
+            add.anchoredPosition = Vector2.zero;
+            move.anchoredPosition = new Vector2(buttonWidth + gap, 0f);
+            remove.anchoredPosition = new Vector2((buttonWidth + gap) * 2f, 0f);
         }
 
         private void RefreshPlotSizeText()
