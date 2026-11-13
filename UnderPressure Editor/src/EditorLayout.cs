@@ -69,6 +69,8 @@ namespace UnderPressure.Editor
         private Canvas _canvas;
         private RectTransform _canvasRect;
         private RectTransform _root;
+        private RectTransform _contextToolbarHost;
+        private RectTransform _contextPanelHost;
         private RectTransform _plotPanel;
         private RectTransform _plotViewport;
         private LandscapeObjectsMenu _objectsMenu;
@@ -2141,7 +2143,9 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             var landscape = _plotPanel.GetComponentsInChildren<Transform>(true)
                 .FirstOrDefault(child => child.name == "UP Landscape - Row");
             var landscapeImage = landscape?.GetComponent<Image>();
-            if (landscapeImage != null) landscapeImage.color = _style.ButtonColor;
+            // Los dos selectores de modo parten de blanco para que su
+            // ColorBlock produzca exactamente el mismo contraste.
+            if (landscapeImage != null) landscapeImage.color = Color.white;
             foreach (var row in _plotPanel.GetComponentsInChildren<PlotSelectionItem>(true))
                 ApplyPlotRow(row);
             if (_resetPlotScroll)
@@ -2441,61 +2445,70 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             skin.Initialise(row, sprite, normal, selected);
         }
 
-        // BARRA SUPERIOR: Baldosas y Llegadas quedan juntas; despues se situa
-        // el icono compacto de Camara. Ajustes permanece junto a Historial.
+        // BARRA SUPERIOR: Baldosas y Llegadas comparten exactamente el mismo
+        // hueco. Solo uno esta activo cada vez y Camara queda a continuacion.
         private void PlaceTopButtons(float canvasWidth)
         {
-            var middleButtons = new[] { _storage?.TrafficButton }
-                .Where(button => button != null).ToArray();
             var build = _storage?.BuildButton;
+            var traffic = _storage?.TrafficButton;
             var camera = _storage?.CameraButton;
             var settings = _settingsToggle;
-            var buttonCount = middleButtons.Length + (build != null ? 1 : 0) +
-                (camera != null ? 1 : 0) + (settings != null ? 1 : 0);
-            if (buttonCount == 0) return;
+            if (build == null && traffic == null && camera == null && settings == null)
+                return;
             var centralWidth = Mathf.Max(1f, canvasWidth - PanelWidth * 2f);
             var gap = 8f;
             var cameraWidth = camera != null ? 40f : 0f;
-            var standardCount = buttonCount - (camera != null ? 1 : 0);
+            var standardCount = (build != null || traffic != null ? 1 : 0) +
+                (settings != null ? 1 : 0);
+            var gapCount = Mathf.Max(0, standardCount + (camera != null ? 1 : 0) - 1);
             var buttonWidth = Mathf.Min(208f, (centralWidth - cameraWidth -
-                gap * Mathf.Max(0, buttonCount - 1)) / Mathf.Max(1, standardCount));
+                gap * gapCount) / Mathf.Max(1, standardCount));
             var left = PanelWidth;
             var right = canvasWidth - PanelWidth - buttonWidth;
-            var middleStart = left + (build != null ? buttonWidth + gap : 0f);
-            var cameraX = middleStart + middleButtons.Length * (buttonWidth + gap);
-            var middleEnd = right - gap;
-            var middleGap = middleButtons.Length > 1
-                ? Mathf.Max(gap, (middleEnd - middleStart -
-                    buttonWidth * middleButtons.Length) / (middleButtons.Length - 1))
-                : 0f;
-            var buttons = new[] { build }.Concat(middleButtons).Concat(new[] { camera })
-                .Concat(new[] { settings }).Where(button => button != null).ToArray();
-            var middleIndex = 0;
-            foreach (var button in buttons)
+            var cameraX = left + buttonWidth + gap;
+
+            var toolbarHost = EnsureContextHost(ref _contextToolbarHost,
+                "UP Context Toolbar Host");
+            SetTopLeft(toolbarHost, left, 0f, buttonWidth, 40f);
+            foreach (var button in new[] { build, traffic })
             {
+                if (button == null) continue;
                 var rect = button.transform as RectTransform;
                 if (rect == null) continue;
                 RememberRect(rect);
-                rect.SetParent(_root, false);
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-                rect.pivot = new Vector2(0f, 1f);
-                float buttonX;
-                if (ReferenceEquals(button, build)) buttonX = left;
-                else if (ReferenceEquals(button, camera)) buttonX = cameraX;
-                else if (ReferenceEquals(button, settings)) buttonX = right;
-                else
-                {
-                    buttonX = middleStart + middleIndex * (buttonWidth + middleGap);
-                    ++middleIndex;
-                }
-                rect.anchoredPosition = new Vector2(buttonX, 0f);
-                rect.sizeDelta = new Vector2(ReferenceEquals(button, camera)
-                    ? cameraWidth : buttonWidth, 40f);
+                rect.SetParent(toolbarHost, false);
+                Stretch(rect);
                 ApplyButtonStyle(button);
-                if (ReferenceEquals(button, camera))
-                    MakeCameraButtonTransparent(button);
                 button.transform.SetAsLastSibling();
             }
+
+            PlaceToolbarButton(camera, cameraX, cameraWidth, true);
+            PlaceToolbarButton(settings, right, buttonWidth, false);
+            toolbarHost.SetAsLastSibling();
+        }
+
+        private RectTransform EnsureContextHost(ref RectTransform host, string name)
+        {
+            if (host != null) return host;
+            var root = new GameObject(name, typeof(RectTransform));
+            host = root.GetComponent<RectTransform>();
+            host.SetParent(_root, false);
+            host.localScale = Vector3.one;
+            return host;
+        }
+
+        private void PlaceToolbarButton(Button button, float x, float width,
+            bool transparent)
+        {
+            if (button == null) return;
+            var rect = button.transform as RectTransform;
+            if (rect == null) return;
+            RememberRect(rect);
+            rect.SetParent(_root, false);
+            SetTopLeft(rect, x, 0f, width, 40f);
+            ApplyButtonStyle(button);
+            if (transparent) MakeCameraButtonTransparent(button);
+            rect.SetAsLastSibling();
         }
 
         // El boton de camara conserva su zona clicable, sonido y estado, pero
@@ -2523,15 +2536,16 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             var menu = _storage?.TileSelectionRoot;
             var buttonRect = _storage?.BuildButton?.transform as RectTransform;
             if (menu == null || buttonRect == null) return;
+            var panelHost = EnsureContextHost(ref _contextPanelHost,
+                "UP Context Panel Host");
+            SetTopLeft(panelHost, PanelWidth, 40f, buttonRect.rect.width, 430f);
             RememberRect(menu);
-            menu.SetParent(_root, false);
+            menu.SetParent(panelHost, false);
             menu.anchorMin = menu.anchorMax = new Vector2(0f, 1f);
             menu.pivot = new Vector2(0f, 1f);
-            // El boton superior mide 40 px: el submenu comienza exactamente
-            // bajo el, sin el hueco anterior de 10 px.
-            menu.anchoredPosition = new Vector2(PanelWidth, -40f);
+            menu.anchoredPosition = Vector2.zero;
             menu.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
-                buttonRect.rect.width);
+                panelHost.rect.width);
             var blocker = menu.GetComponent<Image>() ?? menu.gameObject.AddComponent<Image>();
             if (blocker.sprite == null) blocker.color = new Color(0f, 0f, 0f, .001f);
             blocker.raycastTarget = true;
@@ -2541,20 +2555,21 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             menu.SetAsLastSibling();
 
             var trafficPanel = _storage?.TrafficPanelRoot;
-            var trafficButton = _storage?.TrafficButton?.transform as RectTransform;
-            if (trafficPanel != null && trafficButton != null)
+            if (trafficPanel != null)
             {
                 RememberRect(trafficPanel);
-                trafficPanel.SetParent(_root, false);
+                trafficPanel.SetParent(panelHost, false);
                 trafficPanel.anchorMin = trafficPanel.anchorMax = new Vector2(0f, 1f);
                 trafficPanel.pivot = new Vector2(0f, 1f);
-                trafficPanel.anchoredPosition = new Vector2(
-                    trafficButton.anchoredPosition.x, -40f);
+                trafficPanel.anchoredPosition = Vector2.zero;
                 trafficPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal,
-                    Mathf.Max(300f, trafficButton.rect.width));
+                    panelHost.rect.width);
+                foreach (var button in trafficPanel.GetComponentsInChildren<Button>(true))
+                    ApplyButtonStyle(button, _style.ButtonColor);
                 EnsureSortingCanvas(trafficPanel.gameObject, 3050);
                 trafficPanel.SetAsLastSibling();
             }
+            panelHost.SetAsLastSibling();
         }
 
         // PESTANAS: Objetos abajo izquierda, Historial arriba derecha,
@@ -2941,6 +2956,8 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _createdCanvases.Clear();
             _createdLayouts.Clear();
             _root = null;
+            _contextToolbarHost = null;
+            _contextPanelHost = null;
             _plotPanel = null;
             _plotViewport = null;
             _objectsMenu = null;

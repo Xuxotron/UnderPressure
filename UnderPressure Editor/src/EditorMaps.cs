@@ -2328,6 +2328,7 @@ namespace UnderPressure.Editor
         private bool _layerDropdownOriginalInteractable;
         private bool _layerDropdownOriginalBlocksRaycasts;
         private readonly Button[] _layerButtons = new Button[3];
+        private GameObject _modeLayerRoot;
         private GameObject _layerButtonsRoot;
         private RectTransform _tileSelectionRoot;
         private RectTransform _plotListViewport;
@@ -2380,7 +2381,8 @@ namespace UnderPressure.Editor
         internal Button CameraButton => _cameraButton;
         internal Button TrafficButton => _trafficToolbarButton;
         internal Button StylesButton => _stylesButton;
-        internal Transform PlotLayerRoot => _layerButtonsRoot?.transform;
+        internal Transform PlotLayerRoot => _modeLayerRoot != null
+            ? _modeLayerRoot.transform : _layerButtonsRoot?.transform;
         internal RectTransform TileSelectionRoot => _tileSelectionRoot;
         internal RectTransform TrafficPanelRoot => _trafficPanelRoot;
         internal GameObject MapIdentityRoot => _mapIdentityRoot;
@@ -2573,7 +2575,7 @@ namespace UnderPressure.Editor
             _trafficPanelRoot.anchorMin = _trafficPanelRoot.anchorMax = new Vector2(0f, 1f);
             _trafficPanelRoot.pivot = new Vector2(0f, 1f);
             _trafficPanelRoot.anchoredPosition = new Vector2(440f, -40f);
-            _trafficPanelRoot.sizeDelta = new Vector2(300f, 430f);
+            _trafficPanelRoot.sizeDelta = new Vector2(208f, 430f);
             var background = panel.AddComponent<Image>();
             background.color = new Color32(10, 110, 170, 250);
             background.raycastTarget = true;
@@ -2581,20 +2583,25 @@ namespace UnderPressure.Editor
             outline.effectColor = Color.white;
             outline.effectDistance = new Vector2(1f, -1f);
 
-            AddText(panel.transform, T("editor.traffic.options"), 8f, 5f, 284f, 28f,
-                16, TextAnchor.MiddleCenter);
+            var title = AddText(panel.transform, T("editor.traffic.options"), 8f, 5f,
+                192f, 28f, 16, TextAnchor.MiddleCenter);
+            var titleRect = title.transform as RectTransform;
+            titleRect.anchorMin = new Vector2(0f, 1f);
+            titleRect.anchorMax = new Vector2(1f, 1f);
+            titleRect.offsetMin = new Vector2(8f, -33f);
+            titleRect.offsetMax = new Vector2(-8f, -5f);
             AddTrafficPanelButton(panel.transform, T("editor.traffic.road_arrival"),
-                8f, 38f, () => AddTrafficPoint(ScenarioTraffic.RoadArrival));
+                0f, .5f, 38f, () => AddTrafficPoint(ScenarioTraffic.RoadArrival));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.helipad_arrival"),
-                154f, 38f, () => AddTrafficPoint(ScenarioTraffic.HelipadArrival));
+                .5f, 1f, 38f, () => AddTrafficPoint(ScenarioTraffic.HelipadArrival));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.subway"),
-                8f, 76f, () => AddTrafficPoint(ScenarioTraffic.SubwayArrival));
+                0f, .5f, 76f, () => AddTrafficPoint(ScenarioTraffic.SubwayArrival));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.subway_departure"),
-                154f, 76f, () => AddTrafficPoint(ScenarioTraffic.SubwayDeparture));
+                .5f, 1f, 76f, () => AddTrafficPoint(ScenarioTraffic.SubwayDeparture));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.tunnel_departure"),
-                8f, 114f, () => AddTrafficPoint(ScenarioTraffic.TunnelDeparture), 284f);
+                0f, 1f, 114f, () => AddTrafficPoint(ScenarioTraffic.TunnelDeparture));
             AddTrafficPanelButton(panel.transform, T("editor.traffic.move_selected"),
-                8f, 152f, () => ScenarioTraffic.BeginMoveSelected(), 284f);
+                0f, 1f, 152f, () => ScenarioTraffic.BeginMoveSelected());
 
             var viewport = AddUi("UP Traffic List Viewport", panel.transform);
             var viewportRect = viewport.GetComponent<RectTransform>();
@@ -2632,15 +2639,18 @@ namespace UnderPressure.Editor
             _buttons.Add(panel);
         }
 
-        private Button AddTrafficPanelButton(Transform parent, string label, float x,
-            float y, Action action, float width = 138f)
+        private Button AddTrafficPanelButton(Transform parent, string label,
+            float anchorMin, float anchorMax, float y, Action action)
         {
             var button = CloneButton(_template, parent, label, action);
             var rect = button.transform as RectTransform;
-            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(x, -y);
-            rect.sizeDelta = new Vector2(width, 32f);
+            rect.anchorMin = new Vector2(anchorMin, 1f);
+            rect.anchorMax = new Vector2(anchorMax, 1f);
+            rect.pivot = new Vector2(.5f, 1f);
+            var left = anchorMin <= 0f ? 8f : 4f;
+            var right = anchorMax >= 1f ? -8f : -4f;
+            rect.offsetMin = new Vector2(left, -y - 32f);
+            rect.offsetMax = new Vector2(right, -y);
             var text = button.GetComponentInChildren<TMP_Text>(true);
             if (text != null)
             {
@@ -2818,17 +2828,21 @@ namespace UnderPressure.Editor
             _layerDropdownCanvasGroup.interactable = false;
             _layerDropdownCanvasGroup.blocksRaycasts = false;
 
-            _layerButtonsRoot = AddUi("UP Plot Layer Buttons", dropdownRect.parent);
-            var root = _layerButtonsRoot.GetComponent<RectTransform>();
-            root.anchorMin = dropdownRect.anchorMin;
-            root.anchorMax = dropdownRect.anchorMax;
-            root.pivot = dropdownRect.pivot;
-            root.anchoredPosition = dropdownRect.anchoredPosition;
-            root.sizeDelta = new Vector2(210f, dropdownRect.sizeDelta.y);
-            root.localRotation = dropdownRect.localRotation;
-            root.localScale = dropdownRect.localScale;
-            var layout = _layerButtonsRoot.AddComponent<LayoutElement>();
+            _modeLayerRoot = AddUi("UP Mode Layer Panel", dropdownRect.parent);
+            var modeRoot = _modeLayerRoot.GetComponent<RectTransform>();
+            modeRoot.anchorMin = dropdownRect.anchorMin;
+            modeRoot.anchorMax = dropdownRect.anchorMax;
+            modeRoot.pivot = dropdownRect.pivot;
+            modeRoot.anchoredPosition = dropdownRect.anchoredPosition;
+            modeRoot.sizeDelta = new Vector2(210f, dropdownRect.sizeDelta.y);
+            modeRoot.localRotation = dropdownRect.localRotation;
+            modeRoot.localScale = dropdownRect.localScale;
+            var layout = _modeLayerRoot.AddComponent<LayoutElement>();
             layout.ignoreLayout = true;
+
+            _layerButtonsRoot = AddUi("UP Plot Layer Buttons", modeRoot);
+            var root = _layerButtonsRoot.GetComponent<RectTransform>();
+            Stretch(root, Vector2.zero, Vector2.one);
 
             var keys = new[] { "editor.layer.base", "editor.layer.built", "editor.layer.unbuilt" };
             for (var i = 0; i < _layerButtons.Length; ++i)
@@ -2853,24 +2867,17 @@ namespace UnderPressure.Editor
             _layerDropdown.onValueChanged.AddListener(OnLayerDropdownValueChanged);
             _level.HospitalEditEvents.OnSelectHospitalPlotLayer += OnLayerSelected;
             RefreshLayerButtons((HospitalPlotLayer)Mathf.Clamp(_layerDropdown.value, 0, 2));
-            _buttons.Add(_layerButtonsRoot);
+            _buttons.Add(_modeLayerRoot);
         }
 
         private void AddTrafficLayerButtons()
         {
             var source = _layerButtonsRoot?.transform as RectTransform;
             if (source == null) return;
-            _trafficLayerButtonsRoot = AddUi("UP Traffic Layer Buttons", source.parent);
+            _trafficLayerButtonsRoot = AddUi("UP Traffic Layer Buttons",
+                _modeLayerRoot.transform);
             var root = _trafficLayerButtonsRoot.GetComponent<RectTransform>();
-            root.anchorMin = source.anchorMin;
-            root.anchorMax = source.anchorMax;
-            root.pivot = source.pivot;
-            root.anchoredPosition = source.anchoredPosition;
-            root.sizeDelta = source.sizeDelta;
-            root.localRotation = source.localRotation;
-            root.localScale = source.localScale;
-            var layout = _trafficLayerButtonsRoot.AddComponent<LayoutElement>();
-            layout.ignoreLayout = true;
+            Stretch(root, Vector2.zero, Vector2.one);
             var keys = new[]
             {
                 "editor.traffic.ambient", "editor.traffic.arrivals", "editor.traffic.departures"
@@ -2892,7 +2899,6 @@ namespace UnderPressure.Editor
                 _trafficLayerButtons[i] = button;
             }
             _trafficLayerButtonsRoot.SetActive(false);
-            _buttons.Add(_trafficLayerButtonsRoot);
         }
 
         private void SelectTrafficCategory(ScenarioTraffic.Category category)
@@ -3260,10 +3266,10 @@ rect.pivot = new Vector2(1f, 1f);
             _plotSelectionRoot = root;
             _plotInfoText = AccessTools.Field(typeof(EditHospitalMenu), "_infoText")?
                 .GetValue(_menu) as TMP_Text;
-            if (_plotInfoText != null && _layerButtonsRoot != null)
+            if (_plotInfoText != null && _modeLayerRoot != null)
             {
                 var infoRect = _plotInfoText.transform as RectTransform;
-                infoRect.SetParent(_layerButtonsRoot.transform, false);
+                infoRect.SetParent(_modeLayerRoot.transform, false);
                 infoRect.anchorMin = new Vector2(0f, 1f);
                 infoRect.anchorMax = new Vector2(2f / 3f, 1f);
                 infoRect.pivot = new Vector2(.5f, 0f);
@@ -3321,9 +3327,10 @@ rect.pivot = new Vector2(1f, 1f);
             landscapeRect.offsetMin = Vector2.zero;
             landscapeRect.offsetMax = new Vector2(-2f, 0f);
             var background = landscapeHalf.AddComponent<Image>();
-            background.color = new Color(0.23f, 0.37f, 0.49f, 0.94f);
+            background.color = Color.white;
             var button = landscapeHalf.AddComponent<Button>();
             button.targetGraphic = background;
+            button.transition = Selectable.Transition.ColorTint;
             button.onClick.AddListener(() =>
             {
                 ScenarioEditorScene.Deselect();
@@ -3372,9 +3379,10 @@ rect.pivot = new Vector2(1f, 1f);
             trafficRect.offsetMin = new Vector2(2f, 0f);
             trafficRect.offsetMax = Vector2.zero;
             _trafficSelectBackground = trafficHalf.AddComponent<Image>();
-            _trafficSelectBackground.color = new Color(0.23f, 0.37f, 0.49f, 0.94f);
+            _trafficSelectBackground.color = Color.white;
             _trafficButton = trafficHalf.AddComponent<Button>();
             _trafficButton.targetGraphic = _trafficSelectBackground;
+            _trafficButton.transition = Selectable.Transition.ColorTint;
             _trafficButton.onClick.AddListener(ActivateTrafficLayer);
             var trafficLabel = AddUi("UP Traffic - Text", trafficHalf.transform);
             Stretch(trafficLabel.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
@@ -3439,44 +3447,22 @@ rect.pivot = new Vector2(1f, 1f);
         // los objetos originales de Landscape; ninguna parcela cambia.
         private void AddLandscapeVisibilityCheck(Transform row)
         {
-            var check = AddUi("UP Landscape - Visibility Check", row);
-            var rect = check.GetComponent<RectTransform>();
-            rect.anchorMin = rect.anchorMax = new Vector2(1f, .5f);
-            rect.pivot = new Vector2(1f, .5f);
-            rect.anchoredPosition = new Vector2(-7f, 0f);
-            rect.sizeDelta = new Vector2(19f, 19f);
-            var background = check.AddComponent<Image>();
-            background.color = Color.white;
-            var interior = AddUi("UP Landscape - Check Interior", check.transform);
-            var interiorRect = interior.GetComponent<RectTransform>();
-            interiorRect.anchorMin = Vector2.zero;
-            interiorRect.anchorMax = Vector2.one;
-            interiorRect.offsetMin = new Vector2(2f, 2f);
-            interiorRect.offsetMax = new Vector2(-2f, -2f);
-            var dark = interior.AddComponent<Image>();
-            dark.color = new Color(.18f, .22f, .26f, 1f);
-            dark.raycastTarget = false;
-            var mark = AddUi("UP Landscape - Check Mark", check.transform);
-            Stretch(mark.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
-            var tick = mark.AddComponent<Text>();
-            tick.font = _font;
-            tick.fontSize = 18;
-            tick.fontStyle = FontStyle.Bold;
-            tick.alignment = TextAnchor.MiddleCenter;
-            tick.color = Color.white;
-            tick.text = "✓";
-            tick.raycastTarget = false;
-            _landscapeVisibilityToggle = check.AddComponent<Toggle>();
-            _landscapeVisibilityToggle.targetGraphic = background;
-            _landscapeVisibilityToggle.graphic = tick;
-            _landscapeVisibilityToggle.isOn = ScenarioLandscape.ObjectsVisible;
-            _landscapeVisibilityToggle.onValueChanged.AddListener(visible =>
-                ScenarioLandscape.SetObjectsVisible(visible));
+            _landscapeVisibilityToggle = AddModeVisibilityCheck(row,
+                "UP Landscape - Visibility Check", ScenarioLandscape.ObjectsVisible,
+                ScenarioLandscape.SetObjectsVisible);
         }
 
         private void AddTrafficVisibilityCheck(Transform row)
         {
-            var check = AddUi("UP Traffic - Visibility Check", row);
+            _trafficVisibilityToggle = AddModeVisibilityCheck(row,
+                "UP Traffic - Visibility Check", ScenarioTraffic.ObjectsVisible,
+                ScenarioTraffic.SetObjectsVisible);
+        }
+
+        private Toggle AddModeVisibilityCheck(Transform row, string name,
+            bool initialValue, Action<bool> changed)
+        {
+            var check = AddUi(name, row);
             var rect = check.GetComponent<RectTransform>();
             rect.anchorMin = rect.anchorMax = new Vector2(1f, .5f);
             rect.pivot = new Vector2(1f, .5f);
@@ -3494,29 +3480,20 @@ rect.pivot = new Vector2(1f, 1f);
             tick.color = new Color(.18f, .22f, .26f, 1f);
             tick.text = "✓";
             tick.raycastTarget = false;
-            _trafficVisibilityToggle = check.AddComponent<Toggle>();
-            _trafficVisibilityToggle.targetGraphic = background;
-            _trafficVisibilityToggle.graphic = tick;
-            _trafficVisibilityToggle.isOn = ScenarioTraffic.ObjectsVisible;
-            _trafficVisibilityToggle.onValueChanged.AddListener(
-                ScenarioTraffic.SetObjectsVisible);
+            var toggle = check.AddComponent<Toggle>();
+            toggle.targetGraphic = background;
+            toggle.graphic = tick;
+            toggle.isOn = initialValue;
+            toggle.onValueChanged.AddListener(value => changed(value));
+            return toggle;
         }
 
         private void RefreshLandscapeButton()
         {
             if (_landscapeButton != null)
             {
-                var colors = _landscapeButton.colors;
                 var active = ScenarioLandscape.IsActive;
-                colors.normalColor = active
-                    ? new Color(0.02f, 0.55f, 0.90f, 1f)
-                    : new Color(0.23f, 0.37f, 0.49f, 0.94f);
-                colors.highlightedColor = active
-                    ? new Color(0.04f, 0.70f, 1f, 1f)
-                    : new Color(0.31f, 0.48f, 0.61f, 1f);
-                colors.pressedColor = new Color(0.02f, 0.42f, 0.72f, 1f);
-                colors.selectedColor = colors.highlightedColor;
-                _landscapeButton.colors = colors;
+                ApplyModeSelectorColors(_landscapeButton, active);
             }
             if (_landscapeBorder != null)
                 _landscapeBorder.enabled = ScenarioLandscape.IsActive;
@@ -3526,21 +3503,29 @@ rect.pivot = new Vector2(1f, 1f);
         {
             if (_trafficButton != null)
             {
-                var colors = _trafficButton.colors;
                 var active = ScenarioTraffic.IsActive;
-                colors.normalColor = active
-                    ? new Color(0.02f, 0.55f, 0.90f, 1f)
-                    : new Color(0.23f, 0.37f, 0.49f, 0.94f);
-                colors.highlightedColor = active
-                    ? new Color(0.04f, 0.70f, 1f, 1f)
-                    : new Color(0.31f, 0.48f, 0.61f, 1f);
-                colors.pressedColor = new Color(0.02f, 0.42f, 0.72f, 1f);
-                colors.selectedColor = colors.highlightedColor;
-                _trafficButton.colors = colors;
+                ApplyModeSelectorColors(_trafficButton, active);
             }
             if (_trafficBorder != null) _trafficBorder.enabled = ScenarioTraffic.IsActive;
             SetToolButtonSelected(_trafficToolbarButton, _trafficPanelOpen);
             RefreshContextToolbarButtons();
+        }
+
+        private static void ApplyModeSelectorColors(Button button, bool active)
+        {
+            if (button == null) return;
+            var colors = button.colors;
+            colors.normalColor = active
+                ? new Color(0.02f, 0.55f, 0.90f, 1f)
+                : new Color(0.38f, 0.68f, 0.82f, 1f);
+            colors.highlightedColor = active
+                ? new Color(0.04f, 0.70f, 1f, 1f)
+                : new Color(0.50f, 0.78f, 0.90f, 1f);
+            colors.pressedColor = new Color(0.02f, 0.42f, 0.72f, 1f);
+            colors.selectedColor = colors.highlightedColor;
+            colors.disabledColor = new Color(0.30f, 0.50f, 0.60f, 1f);
+            colors.colorMultiplier = 1f;
+            button.colors = colors;
         }
 
         private void RefreshContextToolbarButtons()
