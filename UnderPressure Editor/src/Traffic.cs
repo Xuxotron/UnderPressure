@@ -105,6 +105,8 @@ namespace UnderPressure.Editor
             internal Item Source;
             internal LandscapeRoomItem RoomItem;
             internal GameObject Prefab;
+            internal Vector3 SourceOffsetLocal;
+            internal List<Mesh> BakedMeshes;
             internal Renderer[] SourceRenderers;
             internal bool[] RendererStates;
         }
@@ -285,6 +287,18 @@ namespace UnderPressure.Editor
             if (item == null) return false;
             _selected = item;
             _category = CategoryFor(item.Components);
+            return true;
+        }
+
+        internal static bool SelectAndFocus(string id)
+        {
+            if (!Select(id)) return false;
+            RefreshMarkerVisibility();
+            RefreshNativeProxyVisibility();
+            NativeProxy proxy;
+            var point = NativeBySource.TryGetValue(_selected, out proxy) &&
+                proxy?.RoomItem != null ? proxy.RoomItem.WorldPosition : _selected.Transform.position;
+            _level?.CameraLogic?.SetFocalPoint(point, false);
             return true;
         }
 
@@ -754,7 +768,12 @@ namespace UnderPressure.Editor
                 item.Components.Contains(StaticVehicle) ? item.Transform.gameObject : item.Marker;
             if (floor == null || sourceVisual == null) return;
 
-            var prefab = CreateProxyPrefab(sourceVisual, item.Id);
+            Vector3 sourceOffsetLocal;
+            List<Mesh> bakedMeshes;
+            var model = item.Components.Contains(Ambient) ||
+                item.Components.Contains(StaticVehicle);
+            var prefab = CreateProxyPrefab(sourceVisual, item.Id, model,
+                out sourceOffsetLocal, out bakedMeshes);
             var definition = CreateProxyDefinition(prefab, item.Id);
             if (prefab == null || definition == null)
             {
@@ -765,7 +784,8 @@ namespace UnderPressure.Editor
             var roomItem = new LandscapeRoomItem(definition, floor, _level,
                 HospitalPlotLayer.Base)
             {
-                WorldPosition = item.Transform.position,
+                WorldPosition = item.Transform.position +
+                    item.Transform.rotation * sourceOffsetLocal,
                 Rotation = item.Transform.eulerAngles.y,
                 HasBeenPurchased = true,
                 IsInBoughtPlot = true
@@ -781,6 +801,8 @@ namespace UnderPressure.Editor
                 Source = item,
                 RoomItem = roomItem,
                 Prefab = prefab,
+                SourceOffsetLocal = sourceOffsetLocal,
+                BakedMeshes = bakedMeshes,
                 SourceRenderers = renderers,
                 RendererStates = renderers.Select(renderer => renderer.enabled).ToArray()
             };
@@ -792,8 +814,11 @@ namespace UnderPressure.Editor
             HideSourceRenderers(proxy);
         }
 
-        private static GameObject CreateProxyPrefab(GameObject source, string id)
+        private static GameObject CreateProxyPrefab(GameObject source, string id,
+            bool freezeModel, out Vector3 sourceOffsetLocal, out List<Mesh> bakedMeshes)
         {
+            sourceOffsetLocal = Vector3.zero;
+            bakedMeshes = new List<Mesh>();
             if (source == null) return null;
             var root = new GameObject("UP Traffic Native Prefab - " + id)
             {
@@ -811,9 +836,76 @@ namespace UnderPressure.Editor
                 visual.transform.localPosition = Vector3.zero;
                 visual.transform.localRotation = Quaternion.identity;
             }
+            if (freezeModel)
+            {
+                FreezeSkinnedMeshes(visual, bakedMeshes);
+                Bounds bounds;
+                if (TryCalculateMeshBounds(root.transform, out bounds))
+                {
+                    sourceOffsetLocal = bounds.center;
+                    visual.transform.localPosition -= sourceOffsetLocal;
+                }
+            }
             foreach (var behaviour in visual.GetComponentsInChildren<Behaviour>(true))
                 if (behaviour != null) behaviour.enabled = false;
             return root;
+        }
+
+        private static void FreezeSkinnedMeshes(GameObject visual, List<Mesh> bakedMeshes)
+        {
+            foreach (var skinned in visual.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (skinned == null) continue;
+                var mesh = new Mesh
+                {
+                    name = "UP Traffic Frozen " + skinned.name,
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+                skinned.BakeMesh(mesh);
+                bakedMeshes.Add(mesh);
+                var filter = skinned.gameObject.GetComponent<MeshFilter>() ??
+                    skinned.gameObject.AddComponent<MeshFilter>();
+                filter.sharedMesh = mesh;
+                var renderer = skinned.gameObject.AddComponent<MeshRenderer>();
+                renderer.sharedMaterials = skinned.sharedMaterials;
+                renderer.shadowCastingMode = skinned.shadowCastingMode;
+                renderer.receiveShadows = skinned.receiveShadows;
+                renderer.lightProbeUsage = skinned.lightProbeUsage;
+                renderer.reflectionProbeUsage = skinned.reflectionProbeUsage;
+                renderer.probeAnchor = skinned.probeAnchor;
+                UnityEngine.Object.DestroyImmediate(skinned);
+            }
+        }
+
+        private static bool TryCalculateMeshBounds(Transform root, out Bounds bounds)
+        {
+            bounds = new Bounds();
+            var found = false;
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = filter?.sharedMesh;
+                if (mesh == null) continue;
+                var local = mesh.bounds;
+                var matrix = root.worldToLocalMatrix * filter.transform.localToWorldMatrix;
+                var min = local.min;
+                var max = local.max;
+                for (var x = 0; x < 2; ++x)
+                    for (var y = 0; y < 2; ++y)
+                        for (var z = 0; z < 2; ++z)
+                        {
+                            var point = matrix.MultiplyPoint3x4(new Vector3(
+                                x == 0 ? min.x : max.x,
+                                y == 0 ? min.y : max.y,
+                                z == 0 ? min.z : max.z));
+                            if (!found)
+                            {
+                                bounds = new Bounds(point, Vector3.zero);
+                                found = true;
+                            }
+                            else bounds.Encapsulate(point);
+                        }
+            }
+            return found;
         }
 
         private static RoomItemDefinition CreateProxyDefinition(GameObject prefab, string id)
@@ -910,6 +1002,9 @@ namespace UnderPressure.Editor
                         catch (Exception) { }
                     }
                     if (proxy.Prefab != null) UnityEngine.Object.Destroy(proxy.Prefab);
+                    if (proxy.BakedMeshes != null)
+                        foreach (var mesh in proxy.BakedMeshes)
+                            if (mesh != null) UnityEngine.Object.Destroy(mesh);
                 }
                 if (floor != null && _nativeHostPlot.HospitalMap.RoomVisual != null)
                     _nativeHostPlot.HospitalMap.RoomVisual.CreateRoomItems(Vector3.zero, 0f, null);
@@ -928,8 +1023,10 @@ namespace UnderPressure.Editor
             NativeProxy proxy;
             if (!NativeByRoomItem.TryGetValue(roomItem, out proxy) || proxy?.Source?.Transform == null)
                 return;
-            proxy.Source.Transform.position = roomItem.WorldPosition;
-            proxy.Source.Transform.rotation = Quaternion.Euler(0f, roomItem.Rotation, 0f);
+            var rotation = Quaternion.Euler(0f, roomItem.Rotation, 0f);
+            proxy.Source.Transform.rotation = rotation;
+            proxy.Source.Transform.position = roomItem.WorldPosition -
+                rotation * proxy.SourceOffsetLocal;
             _selected = proxy.Source;
             UpdateEdited(proxy.Source);
             ScenarioEditorHistory.ObjectDropped();

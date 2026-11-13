@@ -2441,6 +2441,7 @@ namespace UnderPressure.Editor
             InitialisePlotActions();
             _selectedPlot = level.WorldState.HospitalPlots.Count > 0
                 ? level.WorldState.HospitalPlots[0] : null;
+            RefreshContextToolbarButtons();
             level.HospitalEditEvents.OnSelectHospitalPlot += OnPlotSelected;
             AddMapIdentity();
             PrepareNativeToolbar();
@@ -2682,7 +2683,7 @@ namespace UnderPressure.Editor
                 var id = item.Id;
                 var button = CloneButton(_template, _trafficListContent, label, () =>
                 {
-                    ScenarioTraffic.BeginNativeMove(id);
+                    ScenarioTraffic.SelectAndFocus(id);
                     RefreshTrafficPanel();
                 });
                 var layout = button.GetComponent<LayoutElement>() ??
