@@ -2125,6 +2125,12 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 layerRoot.sizeDelta = new Vector2(PanelWidth - 10f, 30f);
             }
             var plotButtons = _storage?.PlotChromeButtons ?? new Button[0];
+            var plotActions = _storage?.PlotActionsRoot;
+            if (plotActions != null)
+            {
+                RememberRect(plotActions);
+                if (plotActions.parent != _root) plotActions.SetParent(_root, false);
+            }
             for (var buttonIndex = 0; buttonIndex < plotButtons.Length; ++buttonIndex)
             {
                 var button = plotButtons[buttonIndex];
@@ -2139,6 +2145,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 }
                 button.transform.SetAsLastSibling();
             }
+            if (plotActions != null) plotActions.SetAsLastSibling();
             _storage?.RefreshLayerColors();
             var landscape = _plotPanel.GetComponentsInChildren<Transform>(true)
                 .FirstOrDefault(child => child.name == "UP Landscape - Row");

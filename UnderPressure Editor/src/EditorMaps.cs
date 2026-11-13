@@ -2386,6 +2386,8 @@ namespace UnderPressure.Editor
             ? _modeLayerRoot.transform : _layerButtonsRoot?.transform;
         internal RectTransform TileSelectionRoot => _tileSelectionRoot;
         internal RectTransform TrafficPanelRoot => _trafficPanelRoot;
+        internal RectTransform PlotActionsRoot =>
+            _plotActionsRoot == null ? null : _plotActionsRoot.transform as RectTransform;
         internal GameObject MapIdentityRoot => _mapIdentityRoot;
         internal Button[] PlotChromeButtons => new[]
         {
