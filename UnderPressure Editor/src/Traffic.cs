@@ -645,7 +645,10 @@ namespace UnderPressure.Editor
                 if (Input.GetKeyDown(KeyCode.Escape)) CancelMove();
                 else if (_nativeRotateControl != null && _level.InputManager != null)
                 {
-                    _nativeRotateControl.Update(_level.InputManager, _level, .1f,
+                    var freePlacement = _level.InputManager.GetButton(31);
+                    var gridSnap = freePlacement ? .1f : 1f;
+                    var rotationSnap = freePlacement ? 1f : 90f;
+                    _nativeRotateControl.Update(_level.InputManager, _level, rotationSnap,
                         RoomItemDefinition.Size.Large, null);
                     if (_nativeRotateControl.Cancel) CancelMove();
                     else
@@ -654,7 +657,8 @@ namespace UnderPressure.Editor
                             0f, _nativeRotateControl.SnapRotation, 0f);
                         if (!_nativeRotateControl.Rotating &&
                             PlanePoint(Input.mousePosition, _planeY, out var current))
-                            _selected.Transform.position = _moveStart + current - _mouseWorldStart;
+                            _selected.Transform.position = (_moveStart + current -
+                                _mouseWorldStart).SnapTo(gridSnap);
                         UpdateEdited(_selected);
                         if (_nativeRotateControl.Place) FinishMove();
                     }
