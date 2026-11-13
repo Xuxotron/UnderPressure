@@ -7,10 +7,10 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using FullInspector;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 namespace UnderPressure.Editor
 {
@@ -98,6 +98,17 @@ namespace UnderPressure.Editor
             internal Renderer[] Renderers;
         }
 
+        // Adaptador de edicion: el objeto funcional de la escena permanece
+        // intacto y el cursor del juego opera sobre un LandscapeRoomItem real.
+        private sealed class NativeProxy
+        {
+            internal Item Source;
+            internal LandscapeRoomItem RoomItem;
+            internal GameObject Prefab;
+            internal Renderer[] SourceRenderers;
+            internal bool[] RendererStates;
+        }
+
         private struct TransformState
         {
             internal Vector3 Position;
@@ -120,20 +131,20 @@ namespace UnderPressure.Editor
             AccessTools.Field(typeof(ArrivalBaseComponent), "_spawnPoint");
         private static readonly FieldInfo TimePortalLandingsField =
             AccessTools.Field(typeof(ArrivalTimePortalComponent), "_landingPoints");
-        private static readonly MethodInfo NativeHighlight =
-            AccessTools.Method(typeof(HighlightManager), "HighlightObjects",
-                new[] { typeof(List<Renderer>) });
+        private static readonly MethodInfo MemberwiseCloneMethod =
+            AccessTools.Method(typeof(object), "MemberwiseClone");
+        private static readonly Dictionary<RoomItem, NativeProxy> NativeByRoomItem =
+            new Dictionary<RoomItem, NativeProxy>();
+        private static readonly Dictionary<Item, NativeProxy> NativeBySource =
+            new Dictionary<Item, NativeProxy>();
 
         private static Data _loaded;
         private static Level _level;
         private static Item _selected;
-        private static Item _hovered;
-        private static bool _carrying;
-        private static Vector3 _moveStart;
-        private static Quaternion _rotationStart;
-        private static Vector3 _mouseWorldStart;
-        private static float _planeY;
-        private static CursorControlRotatePlace _nativeRotateControl;
+        private static HospitalPlot _nativeHostPlot;
+        private static CursorEditHospitalItem _nativeEditorCursor;
+        private static bool _destroyingNativeProxies;
+        private static bool _rebuildNativeProxies;
         private static Material _markerMaterial;
         private static Category _category = Category.Arrivals;
 
@@ -141,12 +152,15 @@ namespace UnderPressure.Editor
         internal static bool ObjectsVisible { get; private set; } = true;
         internal static string SelectedId => _selected?.Id ?? "";
         internal static Category CurrentCategory => _category;
-        internal static bool IsMoving => _carrying;
+        internal static bool IsMoving => _level?.CursorManager != null &&
+            _level.CursorManager.IsModeActive<CursorRoomItem>();
 
         internal static void Bind(Level level)
         {
             if (level == null || ReferenceEquals(_level, level)) return;
+            UnbindNativeEvents();
             _level = level;
+            BindNativeEvents();
             Rebuild();
             ApplySaved();
         }
@@ -161,31 +175,34 @@ namespace UnderPressure.Editor
             Rebuild();
             ApplySaved();
             RefreshMarkers();
+            BuildNativeProxies();
+            BeginNativeEditor();
             ApplyVisibility();
         }
 
         internal static void Deselect()
         {
-            CancelMove();
+            EndNativeEditor();
+            DestroyNativeProxies();
             IsActive = false;
             _selected = null;
-            _hovered = null;
             DestroyMarkers();
         }
 
         internal static void Release()
         {
             RestoreVisibility();
-            CancelMove();
+            EndNativeEditor();
+            DestroyNativeProxies();
             RestoreEditorScene();
             DestroyMarkers();
             Items.Clear();
             Edited.Clear();
             Additions.Clear();
             _loaded = null;
+            UnbindNativeEvents();
             _level = null;
             _selected = null;
-            _hovered = null;
             IsActive = false;
             ObjectsVisible = true;
             if (_markerMaterial != null) UnityEngine.Object.Destroy(_markerMaterial);
@@ -195,7 +212,8 @@ namespace UnderPressure.Editor
         internal static void SetMapFile(string path)
         {
             RestoreVisibility();
-            CancelMove();
+            EndNativeEditor();
+            DestroyNativeProxies();
             RestoreEditorScene();
             DestroyMarkers();
             Items.Clear();
@@ -214,6 +232,11 @@ namespace UnderPressure.Editor
                 Rebuild();
                 ApplySaved();
                 if (IsActive) RefreshMarkers();
+                if (IsActive)
+                {
+                    BuildNativeProxies();
+                    BeginNativeEditor();
+                }
                 ApplyVisibility();
             }
         }
@@ -224,6 +247,11 @@ namespace UnderPressure.Editor
             Rebuild();
             ApplySaved();
             if (IsActive) RefreshMarkers();
+            if (IsActive)
+            {
+                BuildNativeProxies();
+                BeginNativeEditor();
+            }
             ApplyVisibility();
         }
 
@@ -232,17 +260,19 @@ namespace UnderPressure.Editor
             _category = category;
             if (_selected != null && CategoryFor(_selected.Components) != category)
                 _selected = null;
-            RefreshMarkers();
+            RefreshMarkerVisibility();
+            RefreshNativeProxyVisibility();
         }
 
         internal static List<ItemInfo> GetItems()
         {
-            return Items.Where(item => CategoryFor(item.Components) == _category)
+            var visible = Items.Where(item => CategoryFor(item.Components) == _category)
                 .OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
-                .Select(item => new ItemInfo
+                .ToList();
+            return visible.Select((item, index) => new ItemInfo
                 {
                     Id = item.Id,
-                    Name = item.Name,
+                    Name = LabelFor(item.Components, item.Added) + " " + (index + 1),
                     Category = CategoryFor(item.Components),
                     Added = item.Added,
                     Position = item.Transform == null ? Vector3.zero : item.Transform.position
@@ -260,19 +290,7 @@ namespace UnderPressure.Editor
 
         internal static bool BeginMoveSelected()
         {
-            if (!IsActive || _selected?.Transform == null || _level?.CursorManager == null)
-                return false;
-            CancelMove();
-            _moveStart = _selected.Transform.position;
-            _rotationStart = _selected.Transform.rotation;
-            _planeY = _moveStart.y;
-            if (!PlanePoint(Input.mousePosition, _planeY, out _mouseWorldStart))
-                _mouseWorldStart = _moveStart;
-            _nativeRotateControl = new CursorControlRotatePlace(
-                _selected.Transform.eulerAngles.y, _level.CursorManager);
-            _nativeRotateControl.Initialise();
-            _carrying = true;
-            return true;
+            return BeginNativeMove(_selected);
         }
 
         internal static bool AddPoint(string kind)
@@ -303,7 +321,11 @@ namespace UnderPressure.Editor
             Items.Add(item);
             _selected = item;
             _category = CategoryFor(components);
-            RefreshMarkers();
+            item.Marker = CreateMarker(item);
+            item.Renderers = item.Marker.GetComponentsInChildren<Renderer>(true);
+            RefreshMarkerVisibility();
+            BuildNativeProxy(item);
+            RefreshNativeProxyVisibility();
             ApplyVisibility();
             return BeginMoveSelected();
         }
@@ -324,6 +346,7 @@ namespace UnderPressure.Editor
             RestoreVisibility();
             ObjectsVisible = visible;
             ApplyVisibility();
+            RefreshNativeProxyVisibility();
         }
 
         private static void ApplyVisibility()
@@ -356,6 +379,7 @@ namespace UnderPressure.Editor
 
         private static void Rebuild()
         {
+            DestroyNativeProxies();
             var selectedId = _selected?.Id;
             DestroyMarkers();
             foreach (var added in AddedObjects)
@@ -557,12 +581,20 @@ namespace UnderPressure.Editor
             if (!IsActive || !ObjectsVisible) return;
             foreach (var item in Items)
             {
-                if (CategoryFor(item.Components) != _category ||
-                    (item.Components.Contains(Ambient) ||
+                if ((item.Components.Contains(Ambient) ||
                      item.Components.Contains(StaticVehicle)) || item.Transform == null) continue;
                 item.Marker = CreateMarker(item);
+                item.Marker.SetActive(CategoryFor(item.Components) == _category);
                 item.Renderers = item.Marker.GetComponentsInChildren<Renderer>(true);
             }
+        }
+
+        private static void RefreshMarkerVisibility()
+        {
+            foreach (var item in Items)
+                if (item.Marker != null)
+                    item.Marker.SetActive(IsActive && ObjectsVisible &&
+                        CategoryFor(item.Components) == _category);
         }
 
         private static GameObject CreateMarker(Item item)
@@ -610,78 +642,328 @@ namespace UnderPressure.Editor
             }
         }
 
-        private static Item Pick(Vector2 pointer)
-        {
-            var camera = Camera.main;
-            if (camera == null) return null;
-            var ray = camera.ScreenPointToRay(pointer);
-            float best = float.PositiveInfinity;
-            Item found = null;
-            foreach (var item in Items)
-            {
-                if (CategoryFor(item.Components) != _category || item.Transform == null) continue;
-                foreach (var renderer in item.Renderers ?? new Renderer[0])
-                {
-                    if (renderer == null || !renderer.enabled ||
-                        !renderer.bounds.IntersectRay(ray, out var distance) || distance >= best)
-                        continue;
-                    best = distance;
-                    found = item;
-                }
-            }
-            return found;
-        }
-
         internal static void UpdateSelection()
         {
             if (!IsActive || _level == null || !ScenarioEditorSession.Active ||
                 !ReferenceEquals(_level, ScenarioEditorSession.Level)) return;
-            if (ScenarioEditorStorageMenu.IsDialogOpen ||
-                (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()))
-                return;
-
-            if (_carrying && _selected?.Transform != null)
+            if (_rebuildNativeProxies && _level.CursorManager != null &&
+                !_level.CursorManager.IsModeActive<CursorRoomItem>())
             {
-                if (Input.GetKeyDown(KeyCode.Escape)) CancelMove();
-                else if (_nativeRotateControl != null && _level.InputManager != null)
+                _rebuildNativeProxies = false;
+                DestroyNativeProxies();
+                BuildNativeProxies();
+                RefreshNativeProxyVisibility();
+            }
+        }
+
+        // Este es el mismo filtro que CursorEditHospitalItem.GetSelectedItem:
+        // RoomItemVisual.RayCast y la menor distancia. No se usan bounds,
+        // colliders añadidos ni un selector paralelo.
+        internal static RoomItem GetNativeSelectedItem(InputManager inputManager)
+        {
+            if (!IsActive || inputManager == null || Camera.main == null) return null;
+            var ray = Camera.main.ScreenPointToRay(inputManager.GetMousePos());
+            var nearest = float.MaxValue;
+            RoomItem selected = null;
+            foreach (var pair in NativeByRoomItem)
+            {
+                var proxy = pair.Value;
+                var visual = pair.Key?.Visual;
+                if (proxy?.Source == null ||
+                    CategoryFor(proxy.Source.Components) != _category ||
+                    visual?.GameObject == null || !visual.GameObject.activeInHierarchy)
+                    continue;
+                float distance;
+                if (!visual.RayCast(ray, out distance) || distance >= nearest) continue;
+                nearest = distance;
+                selected = pair.Key;
+            }
+            return selected;
+        }
+
+        private static void BindNativeEvents()
+        {
+            if (_level?.BuildEvents == null) return;
+            _level.BuildEvents.OnRoomItemPlaced += OnNativeProxyPlaced;
+            _level.BuildEvents.OnRoomItemCancel += OnNativeProxyCancelled;
+        }
+
+        private static void UnbindNativeEvents()
+        {
+            if (_level?.BuildEvents == null) return;
+            _level.BuildEvents.OnRoomItemPlaced -= OnNativeProxyPlaced;
+            _level.BuildEvents.OnRoomItemCancel -= OnNativeProxyCancelled;
+        }
+
+        private static void BeginNativeEditor()
+        {
+            if (!IsActive || _level?.CursorManager == null || _nativeHostPlot == null ||
+                _nativeEditorCursor != null) return;
+            _level.CursorManager.PopMode<CursorEditHospitalItem>();
+            _nativeEditorCursor = new CursorEditHospitalItem(_level.CursorManager, _level,
+                _nativeHostPlot, HospitalPlotLayer.Base);
+            _level.CursorManager.PushMode(_nativeEditorCursor);
+        }
+
+        private static void EndNativeEditor()
+        {
+            if (_level?.CursorManager == null)
+            {
+                _nativeEditorCursor = null;
+                return;
+            }
+            _destroyingNativeProxies = true;
+            try
+            {
+                _level.CursorManager.PopMode<CursorRoomItem>();
+                if (_nativeEditorCursor != null)
+                    _level.CursorManager.PopMode<CursorEditHospitalItem>();
+            }
+            finally
+            {
+                _nativeEditorCursor = null;
+                _destroyingNativeProxies = false;
+            }
+        }
+
+        private static void BuildNativeProxies()
+        {
+            if (!IsActive || _level?.WorldState?.HospitalPlots == null ||
+                NativeByRoomItem.Count != 0) return;
+            _nativeHostPlot = _level.WorldState.HospitalPlots.FirstOrDefault(plot =>
+                plot?.HospitalMap?.FloorPlan != null && plot.HospitalMap.RoomVisual != null);
+            if (_nativeHostPlot == null) return;
+            foreach (var item in Items)
+                BuildNativeProxy(item, false);
+            _nativeHostPlot.HospitalMap.RoomVisual.CreateRoomItems(Vector3.zero, 0f, null);
+            foreach (var proxy in NativeByRoomItem.Values)
+                HideSourceRenderers(proxy);
+            RefreshNativeProxyVisibility();
+        }
+
+        private static void BuildNativeProxy(Item item) => BuildNativeProxy(item, true);
+
+        private static void BuildNativeProxy(Item item, bool refreshVisuals)
+        {
+            if (!IsActive || item?.Transform == null || NativeBySource.ContainsKey(item)) return;
+            if (_nativeHostPlot == null)
+                _nativeHostPlot = _level?.WorldState?.HospitalPlots?.FirstOrDefault(plot =>
+                    plot?.HospitalMap?.FloorPlan != null && plot.HospitalMap.RoomVisual != null);
+            var floor = _nativeHostPlot?.HospitalMap?.FloorPlan;
+            var sourceVisual = item.Components.Contains(Ambient) ||
+                item.Components.Contains(StaticVehicle) ? item.Transform.gameObject : item.Marker;
+            if (floor == null || sourceVisual == null) return;
+
+            var prefab = CreateProxyPrefab(sourceVisual, item.Id);
+            var definition = CreateProxyDefinition(prefab, item.Id);
+            if (prefab == null || definition == null)
+            {
+                if (prefab != null) UnityEngine.Object.Destroy(prefab);
+                return;
+            }
+
+            var roomItem = new LandscapeRoomItem(definition, floor, _level,
+                HospitalPlotLayer.Base)
+            {
+                WorldPosition = item.Transform.position,
+                Rotation = item.Transform.eulerAngles.y,
+                HasBeenPurchased = true,
+                IsInBoughtPlot = true
+            };
+            var renderers = item.Transform.GetComponentsInChildren<Renderer>(true)
+                .Where(renderer => renderer != null &&
+                    !renderer.name.StartsWith("UP Traffic Marker - ", StringComparison.Ordinal))
+                .ToArray();
+            if (!(item.Components.Contains(Ambient) || item.Components.Contains(StaticVehicle)))
+                renderers = item.Marker.GetComponentsInChildren<Renderer>(true);
+            var proxy = new NativeProxy
+            {
+                Source = item,
+                RoomItem = roomItem,
+                Prefab = prefab,
+                SourceRenderers = renderers,
+                RendererStates = renderers.Select(renderer => renderer.enabled).ToArray()
+            };
+            NativeByRoomItem.Add(roomItem, proxy);
+            NativeBySource.Add(item, proxy);
+            floor.AddItem(roomItem);
+            if (!refreshVisuals) return;
+            _nativeHostPlot.HospitalMap.RoomVisual.CreateRoomItems(Vector3.zero, 0f, null);
+            HideSourceRenderers(proxy);
+        }
+
+        private static GameObject CreateProxyPrefab(GameObject source, string id)
+        {
+            if (source == null) return null;
+            var root = new GameObject("UP Traffic Native Prefab - " + id)
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            root.SetActive(false);
+            var visual = UnityEngine.Object.Instantiate(source, root.transform);
+            visual.name = source.name;
+            visual.transform.localPosition = source.transform.localPosition;
+            visual.transform.localRotation = source.transform.localRotation;
+            visual.transform.localScale = source.transform.localScale;
+            if (source.transform.parent == null ||
+                !source.name.StartsWith("UP Traffic Marker - ", StringComparison.Ordinal))
+            {
+                visual.transform.localPosition = Vector3.zero;
+                visual.transform.localRotation = Quaternion.identity;
+            }
+            foreach (var behaviour in visual.GetComponentsInChildren<Behaviour>(true))
+                if (behaviour != null) behaviour.enabled = false;
+            return root;
+        }
+
+        private static RoomItemDefinition CreateProxyDefinition(GameObject prefab, string id)
+        {
+            var source = _level?.App?.Metagame?.LandscapeItemDatabase?.Instance?.RoomItems?
+                .Select(reference => reference?.Instance as RoomItemDefinition)
+                .FirstOrDefault(definition => definition != null &&
+                    definition.ItemType == RoomItemDefinition.Type.Landscape);
+            if (source == null || MemberwiseCloneMethod == null) return null;
+            var definition = MemberwiseCloneMethod.Invoke(source, null) as RoomItemDefinition;
+            if (definition == null) return null;
+            SetDefinitionField(definition, "_guid", Guid.NewGuid());
+            SetDefinitionField(definition, "_debugTag", "UP_Traffic_" + id);
+            SetDefinitionField(definition, "_type", RoomItemDefinition.Type.Landscape);
+            SetDefinitionField(definition, "_prefab", prefab);
+            SetDefinitionField(definition, "_blueprintPrefab", null);
+            SetDefinitionField(definition, "_gridSnap", 1f);
+            SetDefinitionField(definition, "_rotationSnap", 90f);
+            SetDefinitionField(definition, "_hasCollision", false);
+            SetDefinitionField(definition, "_ignoreValidation", true);
+            SetDefinitionField(definition, "_isSelectable", true);
+            SetDefinitionField(definition, "_affectsNavigation", false);
+            SetDefinitionField(definition, "_singlePlace", true);
+            SetDefinitionField(definition, "_placementEffect", null);
+            SetDefinitionField(definition, "_wallMagnetism", false);
+            SetDefinitionField(definition, "_placeOnWall", false);
+            SetDefinitionField(definition, "_cost", 0);
+            SetDefinitionField(definition, "_canBeSold", false);
+            SetDefinitionField(definition, "_components", new EntityComponent[0]);
+            SetDefinitionField(definition, "_interactions", new InteractionDefinition[0]);
+            SetDefinitionField(definition, "_attributes", new ObjectAttributes.Definition[0]);
+            SetDefinitionField(definition, "_upgrades",
+                new SharedInstance<RoomItemUpgradeDefinition>[0]);
+            SetDefinitionField(definition, "_canBePlacedIn", new RoomDefinition.Type[0]);
+            SetDefinitionField(definition, "_cantBePlacedIn", new RoomDefinition.Type[0]);
+            return definition;
+        }
+
+        private static void SetDefinitionField(RoomItemDefinition definition, string name,
+            object value)
+        {
+            var field = AccessTools.Field(typeof(RoomItemDefinition), name);
+            if (field == null)
+                throw new MissingFieldException(typeof(RoomItemDefinition).FullName, name);
+            field.SetValue(definition, value);
+        }
+
+        private static void HideSourceRenderers(NativeProxy proxy)
+        {
+            if (proxy?.SourceRenderers == null) return;
+            foreach (var renderer in proxy.SourceRenderers)
+                if (renderer != null) renderer.enabled = false;
+        }
+
+        private static void RefreshNativeProxyVisibility()
+        {
+            foreach (var pair in NativeByRoomItem)
+            {
+                var proxy = pair.Value;
+                var visible = IsActive && ObjectsVisible && proxy?.Source != null &&
+                    CategoryFor(proxy.Source.Components) == _category;
+                if (pair.Key?.Visual?.GameObject != null)
+                    pair.Key.Visual.GameObject.SetActive(visible);
+            }
+        }
+
+        private static void DestroyNativeProxies()
+        {
+            if (NativeByRoomItem.Count == 0)
+            {
+                _nativeHostPlot = null;
+                return;
+            }
+            _destroyingNativeProxies = true;
+            var floor = _nativeHostPlot?.HospitalMap?.FloorPlan;
+            try
+            {
+                foreach (var proxy in NativeByRoomItem.Values.ToArray())
                 {
-                    var freePlacement = _level.InputManager.GetButton(31);
-                    var gridSnap = freePlacement ? .1f : 1f;
-                    var rotationSnap = freePlacement ? 1f : 90f;
-                    _nativeRotateControl.Update(_level.InputManager, _level, rotationSnap,
-                        RoomItemDefinition.Size.Large, null);
-                    if (_nativeRotateControl.Cancel) CancelMove();
-                    else
+                    if (proxy == null) continue;
+                    if (proxy.SourceRenderers != null)
+                        for (var index = 0; index < proxy.SourceRenderers.Length; ++index)
+                            if (proxy.SourceRenderers[index] != null &&
+                                index < proxy.RendererStates.Length)
+                                proxy.SourceRenderers[index].enabled =
+                                    proxy.RendererStates[index];
+                    if (proxy.RoomItem != null)
                     {
-                        _selected.Transform.rotation = Quaternion.Euler(
-                            0f, _nativeRotateControl.SnapRotation, 0f);
-                        if (!_nativeRotateControl.Rotating &&
-                            PlanePoint(Input.mousePosition, _planeY, out var current))
-                            _selected.Transform.position = (_moveStart + current -
-                                _mouseWorldStart).SnapTo(gridSnap);
-                        UpdateEdited(_selected);
-                        if (_nativeRotateControl.Place) FinishMove();
+                        if (floor != null && (floor.Items.Contains(proxy.RoomItem) ||
+                            floor.LandscapeItems.Contains(proxy.RoomItem)))
+                            floor.RemoveItem(proxy.RoomItem);
+                        proxy.RoomItem.Visual = null;
+                        try { proxy.RoomItem.Destroy(); }
+                        catch (Exception) { }
                     }
+                    if (proxy.Prefab != null) UnityEngine.Object.Destroy(proxy.Prefab);
                 }
+                if (floor != null && _nativeHostPlot.HospitalMap.RoomVisual != null)
+                    _nativeHostPlot.HospitalMap.RoomVisual.CreateRoomItems(Vector3.zero, 0f, null);
             }
-            else
+            finally
             {
-                _hovered = Pick(Input.mousePosition);
-                if (Input.GetMouseButtonDown(0) && _hovered != null)
-                {
-                    _selected = _hovered;
-                    BeginMoveSelected();
-                }
+                NativeByRoomItem.Clear();
+                NativeBySource.Clear();
+                _nativeHostPlot = null;
+                _destroyingNativeProxies = false;
             }
+        }
 
-            var highlighted = _carrying ? _selected : _hovered ?? _selected;
-            if (highlighted == null || _level.HighlightManager == null || NativeHighlight == null)
+        private static void OnNativeProxyPlaced(RoomItem roomItem, FloorPlan floorPlan)
+        {
+            NativeProxy proxy;
+            if (!NativeByRoomItem.TryGetValue(roomItem, out proxy) || proxy?.Source?.Transform == null)
                 return;
-            var visible = (highlighted.Renderers ?? new Renderer[0])
-                .Where(renderer => renderer != null && renderer.enabled &&
-                    renderer.gameObject.activeInHierarchy).ToList();
-            if (visible.Count > 0)
-                NativeHighlight.Invoke(_level.HighlightManager, new object[] { visible });
+            proxy.Source.Transform.position = roomItem.WorldPosition;
+            proxy.Source.Transform.rotation = Quaternion.Euler(0f, roomItem.Rotation, 0f);
+            _selected = proxy.Source;
+            UpdateEdited(proxy.Source);
+            ScenarioEditorHistory.ObjectDropped();
+            RefreshNativeProxyVisibility();
+        }
+
+        private static void OnNativeProxyCancelled(RoomItem roomItem, bool requestedByUser)
+        {
+            if (_destroyingNativeProxies || !NativeByRoomItem.ContainsKey(roomItem)) return;
+            _rebuildNativeProxies = true;
+        }
+
+        internal static bool IsNativeProxy(RoomItem item) =>
+            item != null && NativeByRoomItem.ContainsKey(item);
+
+        internal static bool BeginNativeMove(string id)
+        {
+            var item = Items.FirstOrDefault(value => value.Id == id);
+            if (item == null) return false;
+            _selected = item;
+            _category = CategoryFor(item.Components);
+            RefreshMarkerVisibility();
+            RefreshNativeProxyVisibility();
+            return BeginNativeMove(item);
+        }
+
+        private static bool BeginNativeMove(Item item)
+        {
+            if (!IsActive || item == null || _level?.BuildEvents == null) return false;
+            NativeProxy proxy;
+            if (!NativeBySource.TryGetValue(item, out proxy) || proxy?.RoomItem == null ||
+                proxy.RoomItem.OwningRoom == null) return false;
+            _level.BuildEvents.StartItemEdit(proxy.RoomItem, proxy.RoomItem.OwningRoom);
+            return true;
         }
 
         private static void UpdateEdited(Item item)
@@ -705,36 +987,6 @@ namespace UnderPressure.Editor
             entry.z = item.Transform.position.z;
             entry.rotation = item.Transform.eulerAngles.y;
             Edited[item.Id] = entry;
-        }
-
-        private static void CancelMove()
-        {
-            var added = _carrying && _selected != null && _selected.Added;
-            if (_carrying && _selected?.Transform != null)
-            {
-                _selected.Transform.position = _moveStart;
-                _selected.Transform.rotation = _rotationStart;
-                UpdateEdited(_selected);
-            }
-            _carrying = false;
-            ReleaseRotateControl();
-            if (added) ScenarioEditorHistory.ObjectDropped();
-        }
-
-        private static void FinishMove()
-        {
-            if (_selected != null) UpdateEdited(_selected);
-            _carrying = false;
-            ReleaseRotateControl();
-            ScenarioEditorHistory.ObjectDropped();
-        }
-
-        private static void ReleaseRotateControl()
-        {
-            if (_nativeRotateControl == null) return;
-            try { _nativeRotateControl.Destroy(); }
-            catch (Exception) { }
-            _nativeRotateControl = null;
         }
 
         private static bool PlanePoint(Vector2 pointer, float y, out Vector3 point)
@@ -787,7 +1039,8 @@ namespace UnderPressure.Editor
         internal static void ApplyHistory(Data data)
         {
             if (data == null) return;
-            CancelMove();
+            EndNativeEditor();
+            DestroyNativeProxies();
             Edited.Clear();
             Additions.Clear();
             foreach (var entry in data.objects ?? new ObjectEntry[0])
@@ -797,6 +1050,11 @@ namespace UnderPressure.Editor
             Rebuild();
             ApplySaved();
             if (IsActive) RefreshMarkers();
+            if (IsActive)
+            {
+                BuildNativeProxies();
+                BeginNativeEditor();
+            }
             ApplyVisibility();
         }
 
@@ -992,5 +1250,26 @@ namespace UnderPressure.Editor
                 return BitConverter.ToString(bytes, 0, 12).Replace("-", "").ToLowerInvariant();
             }
         }
+    }
+
+    // CursorEditHospitalItem conserva su flujo nativo completo. Solo se limita
+    // su búsqueda a los LandscapeRoomItem temporales de la capa de Tráfico.
+    [HarmonyPatch(typeof(CursorEditHospitalItem), "GetSelectedItem")]
+    internal static class ScenarioTrafficNativeSelectionPatch
+    {
+        private static bool Prefix(InputManager __0, ref RoomItem __result)
+        {
+            if (!ScenarioTraffic.IsActive) return true;
+            __result = ScenarioTraffic.GetNativeSelectedItem(__0);
+            return false;
+        }
+    }
+
+    // Los adaptadores no forman parte de HospitalPlotDefinition: su posición se
+    // guarda exclusivamente en traffic.json al terminar el movimiento nativo.
+    [HarmonyPatch(typeof(CursorEditHospitalItem), "OnRoomItemAdded")]
+    internal static class ScenarioTrafficDoNotPersistProxyPatch
+    {
+        private static bool Prefix(RoomItem __0) => !ScenarioTraffic.IsNativeProxy(__0);
     }
 }

@@ -1410,7 +1410,8 @@ namespace UnderPressure.Editor
         {
             previousPlot = null;
             var self = _active;
-            if (ScenarioLandscape.IsActive || ScenarioTraffic.IsActive) return false;
+            if (ScenarioLandscape.IsActive) return false;
+            if (ScenarioTraffic.IsActive) return true;
             if (self == null || !self.Ready || cursor == null) return true;
             if (self._nativeMulti.Count > 0) return false;
             if (self._rightClickPending &&

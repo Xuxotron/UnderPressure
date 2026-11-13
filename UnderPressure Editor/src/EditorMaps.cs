@@ -4415,8 +4415,8 @@ PriorVisibility.Clear();
         private static void Postfix() => ScenarioEditorPerimeterVisibility.Restore();
     }
 
-    // Los cursores nativos no deben recibir clics durante un diálogo ni mientras
-    // Tráfico posee en exclusiva la selección de la escena.
+    // Los cursores nativos no deben recibir clics durante un diálogo. Tráfico usa
+    // deliberadamente CursorEditHospitalItem y CursorRoomItem sin reemplazarlos.
     [HarmonyPatch(typeof(CursorEditHospitalBuild), "CursorUpdate")]
     internal static class ScenarioEditorBlockBuildDuringDialogPatch
     {
@@ -4434,8 +4434,7 @@ PriorVisibility.Clear();
     [HarmonyPatch(typeof(CursorEditHospitalItem), "CursorUpdate")]
     internal static class ScenarioEditorBlockItemsDuringDialogPatch
     {
-        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen &&
-            !ScenarioTraffic.IsActive;
+        private static bool Prefix() => !ScenarioEditorStorageMenu.IsDialogOpen;
     }
 
     [HarmonyPatch(typeof(EditHospitalMenu), "Setup")]
