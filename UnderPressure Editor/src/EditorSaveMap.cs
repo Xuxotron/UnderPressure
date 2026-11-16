@@ -1,6 +1,7 @@
-// Updated: 2026-11-16 - Capturar la disponibilidad calculada por el WorldState nativo.
+// Updated: 2026-11-16 - Leer salas iniciales desde los assets nativos del nivel y del tutorial base.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
+using BehaviorDesigner.Runtime;
 using FullInspector;
 using HarmonyLib;
 using System.Collections.Generic;
@@ -394,18 +395,77 @@ namespace UnderPressure.Editor
 
         private static string[] CaptureAvailableRoomIds(Level level)
         {
-            var availableRooms = level?.WorldState?.AvailableRooms;
-            if (availableRooms == null)
-                return new string[0];
-
             var result = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var entry in availableRooms)
+            AddAvailableRoomIds(result,
+                level?.Config?.GetWorldStateConfig()?._availableRooms);
+
+            // Consulta, Aseos, Sala de personal y el resto de desbloqueos base
+            // no pertenecen al WorldState.Config de cada hospital: el juego los
+            // concede desde el guion nativo de Hogsport y los conserva después
+            // en el metajuego. Se lee el asset del guion, nunca el WorldState
+            // vivo, porque otros mods pueden haberlo modificado.
+            var baseLevel = FindNativeLevelConfig(level, "901");
+            var script = baseLevel?.GetLevelScriptConfig()?.LevelObjectiveScript;
+            if (script != null)
             {
-                var id = AvailableRoomId(entry);
-                if (!string.IsNullOrEmpty(id))
-                    result.Add(id);
+                foreach (var action in script.FindTasks<TH20.BTA.AddRoomDefinition>() ??
+                                       new List<TH20.BTA.AddRoomDefinition>())
+                {
+                    var entries = AccessTools.Field(action.GetType(), "_rooms")
+                        ?.GetValue(action) as Array;
+                    AddAvailableRoomIds(result, entries);
+                }
+
+                foreach (var action in script.FindTasks<TH20.BTA.Level.CreateObjective>() ??
+                                       new List<TH20.BTA.Level.CreateObjective>())
+                    AddRewardRoomIds(result, action?.Objective?.Instance);
+                foreach (var action in script.FindTasks<TH20.BTA.Level.CreateHiddenObjective>() ??
+                                       new List<TH20.BTA.Level.CreateHiddenObjective>())
+                    AddRewardRoomIds(result, action?.Objective?.Instance);
             }
             return result.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        }
+
+        private static LevelConfig FindNativeLevelConfig(Level level, string uniqueId)
+        {
+            if (level?.Config != null && string.Equals(level.Config.UniqueId,
+                    uniqueId, StringComparison.Ordinal))
+                return level.Config;
+
+            var options = level?.App?.SandboxSettingsConfig?.LevelOptions;
+            if (options == null) return null;
+            foreach (var option in options)
+            {
+                LevelConfig config;
+                try { config = option?.Level?.Instance; }
+                catch { continue; }
+                if (config != null && string.Equals(config.UniqueId, uniqueId,
+                        StringComparison.Ordinal))
+                    return config;
+            }
+            return null;
+        }
+
+        private static void AddAvailableRoomIds(HashSet<string> result,
+            System.Collections.IEnumerable entries)
+        {
+            if (result == null || entries == null) return;
+            foreach (var entry in entries)
+            {
+                var id = AvailableRoomId(entry);
+                if (!string.IsNullOrEmpty(id)) result.Add(id);
+            }
+        }
+
+        private static void AddRewardRoomIds(HashSet<string> result,
+            ObjectiveDefinition objective)
+        {
+            if (result == null || objective?.CompletionRewards == null) return;
+            foreach (var reward in objective.CompletionRewards.OfType<RewardRoom>())
+            {
+                var id = AvailableRoomId(reward.Definition);
+                if (!string.IsNullOrEmpty(id)) result.Add(id);
+            }
         }
 
         private static string AvailableRoomId(object entry)
