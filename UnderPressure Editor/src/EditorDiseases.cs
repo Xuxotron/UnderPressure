@@ -30,9 +30,8 @@ namespace UnderPressure.Editor
         private Sprite _settingsDiseaseStarEmptySprite;
         private bool _settingsDiseaseStarSpritesSearched;
 
-        // Panel superior de pacientes. De momento mantiene un borrador local
-        // cargado desde CharacterManager.Config para poder terminar su diseño
-        // antes de fijar el formato definitivo del mapa.
+        // Panel superior de pacientes. Sus valores forman parte del mapa y se
+        // aplican sobre un CharacterManager.Config aislado al cargarlo.
         private GameObject _settingsPatientPanel;
         private bool _settingsPatientValuesLoaded;
         private int _settingsMaxPatients = 250;
@@ -202,49 +201,13 @@ namespace UnderPressure.Editor
             if (_settingsPatientValuesLoaded) return;
             _settingsPatientValuesLoaded = true;
 
-            var config = _level?.Config?.GetCharacterManagerConfig();
-            if (config == null) return;
-
-            _settingsMaxPatients = ReadPatientConfigInt(
-                config, "_maxPatients", _settingsMaxPatients);
-            _settingsPatientSpawnRate = ReadPatientConfigFloat(
-                config, "_patientSpawnRate", _settingsPatientSpawnRate);
-            _settingsNeverSpawnPatients = ReadPatientConfigBool(
-                config, "NeverSpawnPatients", _settingsNeverSpawnPatients);
-            _settingsUsePatientSelector = ReadPatientConfigBool(
-                config, "_usePatientSelector", _settingsUsePatientSelector);
-            _settingsPatientSelectionRandomJitter = ReadPatientConfigFloat(
-                config, "_patientSelectionRandomJitter",
-                _settingsPatientSelectionRandomJitter);
-        }
-
-        private static int ReadPatientConfigInt(
-            CharacterManager.Config config, string fieldName, int fallback)
-        {
-            var field = AccessTools.Field(typeof(CharacterManager.Config), fieldName);
-            if (field == null || config == null) return fallback;
-            var value = field.GetValue(config);
-            return value is int result ? result : fallback;
-        }
-
-        private static float ReadPatientConfigFloat(
-            CharacterManager.Config config, string fieldName, float fallback)
-        {
-            var field = AccessTools.Field(typeof(CharacterManager.Config), fieldName);
-            if (field == null || config == null) return fallback;
-            var value = field.GetValue(config);
-            if (value is float result) return result;
-            if (value is double doubleValue) return (float)doubleValue;
-            return fallback;
-        }
-
-        private static bool ReadPatientConfigBool(
-            CharacterManager.Config config, string fieldName, bool fallback)
-        {
-            var field = AccessTools.Field(typeof(CharacterManager.Config), fieldName);
-            if (field == null || config == null) return fallback;
-            var value = field.GetValue(config);
-            return value is bool result ? result : fallback;
+            var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
+            _settingsMaxPatients = settings.maxPatients;
+            _settingsPatientSpawnRate = settings.patientSpawnRate;
+            _settingsNeverSpawnPatients = settings.neverSpawnPatients;
+            _settingsUsePatientSelector = settings.usePatientSelector;
+            _settingsPatientSelectionRandomJitter =
+                settings.patientSelectionRandomJitter;
         }
 
         private GameObject BuildPatientSettingsPanel(float top)
@@ -1405,6 +1368,13 @@ namespace UnderPressure.Editor
         private void StoreDiseaseSettings(ScenarioMapFormat.Map settings)
         {
             if (settings == null) return;
+            settings.patientSettingsConfigured = true;
+            settings.maxPatients = _settingsMaxPatients;
+            settings.patientSpawnRate = _settingsPatientSpawnRate;
+            settings.neverSpawnPatients = _settingsNeverSpawnPatients;
+            settings.usePatientSelector = _settingsUsePatientSelector;
+            settings.patientSelectionRandomJitter =
+                _settingsPatientSelectionRandomJitter;
             settings.illnessesConfigured = true;
             settings.illnesses = _settingsIllnesses.Select(ScenarioDiseaseCatalog.Clone)
                 .Where(value => value != null).ToArray();

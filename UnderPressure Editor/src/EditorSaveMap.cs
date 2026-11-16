@@ -46,6 +46,14 @@ namespace UnderPressure.Editor
         private static int _initialBalance = 1000000;
         private static int _failStateBalanceWarning = -150000;
         private static int _failStateBalanceGameOver = -300000;
+        private static int _maxPatients = 250;
+        private static float _patientSpawnRate = 48f;
+        private static bool _neverSpawnPatients;
+        private static bool _usePatientSelector = true;
+        private static float _patientSelectionRandomJitter = .35f;
+        private static float _initialTemperature;
+        private static float _initialAttractiveness;
+        private static float _initialHygiene = 1f;
         private static ScenarioMapFormat.WeightedIllnessData[] _illnesses =
             new ScenarioMapFormat.WeightedIllnessData[0];
         private static ScenarioMapFormat.ObjectiveData[] _objectives =
@@ -310,6 +318,16 @@ namespace UnderPressure.Editor
                 InitialBalance = _initialBalance,
                 FailStateBalanceWarning = _failStateBalanceWarning,
                 FailStateBalanceGameOver = _failStateBalanceGameOver,
+                patientSettingsConfigured = true,
+                maxPatients = _maxPatients,
+                patientSpawnRate = _patientSpawnRate,
+                neverSpawnPatients = _neverSpawnPatients,
+                usePatientSelector = _usePatientSelector,
+                patientSelectionRandomJitter = _patientSelectionRandomJitter,
+                environmentSettingsConfigured = true,
+                initialTemperature = _initialTemperature,
+                initialAttractiveness = _initialAttractiveness,
+                initialHygiene = _initialHygiene,
                 scenarioSettingsConfigured = true,
                 illnessesConfigured = true,
                 illnesses = CloneIllnesses(_illnesses),
@@ -337,6 +355,24 @@ namespace UnderPressure.Editor
             _initialBalance = source.InitialBalance;
             _failStateBalanceWarning = source.FailStateBalanceWarning;
             _failStateBalanceGameOver = source.FailStateBalanceGameOver;
+            if (source.patientSettingsConfigured)
+            {
+                _maxPatients = source.maxPatients;
+                _patientSpawnRate = source.patientSpawnRate;
+                _neverSpawnPatients = source.neverSpawnPatients;
+                _usePatientSelector = source.usePatientSelector;
+                _patientSelectionRandomJitter = source.patientSelectionRandomJitter;
+            }
+            else
+                ResetPatientSettings(level);
+            if (source.environmentSettingsConfigured)
+            {
+                _initialTemperature = source.initialTemperature;
+                _initialAttractiveness = source.initialAttractiveness;
+                _initialHygiene = source.initialHygiene;
+            }
+            else
+                ResetEnvironmentSettings(level);
             _illnesses = source.illnessesConfigured
                 ? CloneIllnesses(source.illnesses)
                 : ScenarioDiseaseCatalog.Capture(
@@ -371,11 +407,48 @@ namespace UnderPressure.Editor
             var finance = config?.GetFinanceManagerConfig();
             _initialBalance = ReadField<int>(finance, "InitialBalance");
             if (finance == null) _initialBalance = 1000000;
+            ResetPatientSettings(level);
+            ResetEnvironmentSettings(level);
             _illnesses = ScenarioDiseaseCatalog.Capture(
                 config?.GetCharacterManagerConfig()?._weightedIllnesses);
             _objectives = ScenarioObjectiveCatalog.Capture(config);
             _emergencies = ScenarioEmergencyCatalog.Capture(config);
             _availableRooms = CaptureAvailableRoomIds(level);
+        }
+
+        private static void ResetPatientSettings(Level level)
+        {
+            var config = level?.Config?.GetCharacterManagerConfig();
+            if (config == null)
+            {
+                _maxPatients = 250;
+                _patientSpawnRate = 48f;
+                _neverSpawnPatients = false;
+                _usePatientSelector = true;
+                _patientSelectionRandomJitter = .35f;
+                return;
+            }
+            _maxPatients = ReadField<int>(config, "_maxPatients");
+            _patientSpawnRate = ReadField<float>(config, "_patientSpawnRate");
+            _neverSpawnPatients = ReadField<bool>(config, "NeverSpawnPatients");
+            _usePatientSelector = ReadField<bool>(config, "_usePatientSelector");
+            _patientSelectionRandomJitter =
+                ReadField<float>(config, "_patientSelectionRandomJitter");
+        }
+
+        private static void ResetEnvironmentSettings(Level level)
+        {
+            var config = level?.Config?.GetWorldStateConfig();
+            if (config == null)
+            {
+                _initialTemperature = 0f;
+                _initialAttractiveness = 0f;
+                _initialHygiene = 1f;
+                return;
+            }
+            _initialTemperature = config.initialTemperature;
+            _initialAttractiveness = config.initialAttractiveness;
+            _initialHygiene = config.initialHygiene;
         }
 
         private static string[] CloneAvailableRooms(string[] values)
@@ -857,6 +930,16 @@ namespace UnderPressure.Editor
             header.InitialBalance = settings.InitialBalance;
             header.FailStateBalanceWarning = settings.FailStateBalanceWarning;
             header.FailStateBalanceGameOver = settings.FailStateBalanceGameOver;
+            header.patientSettingsConfigured = true;
+            header.maxPatients = settings.maxPatients;
+            header.patientSpawnRate = settings.patientSpawnRate;
+            header.neverSpawnPatients = settings.neverSpawnPatients;
+            header.usePatientSelector = settings.usePatientSelector;
+            header.patientSelectionRandomJitter = settings.patientSelectionRandomJitter;
+            header.environmentSettingsConfigured = true;
+            header.initialTemperature = settings.initialTemperature;
+            header.initialAttractiveness = settings.initialAttractiveness;
+            header.initialHygiene = settings.initialHygiene;
             header.scenarioSettingsConfigured = true;
             header.illnessesConfigured = true;
             header.illnesses = settings.illnesses;

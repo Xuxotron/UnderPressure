@@ -31,6 +31,9 @@ namespace UnderPressure.Editor
         private TMP_InputField _settingsInitialBalance;
         private TMP_InputField _settingsFailWarning;
         private TMP_InputField _settingsFailGameOver;
+        private TMP_InputField _settingsInitialTemperature;
+        private TMP_InputField _settingsInitialAttractiveness;
+        private TMP_InputField _settingsInitialHygiene;
         private int _activeSettingsTab;
         internal static bool CloseSettingsPanelIfOpen()
         {
@@ -918,6 +921,18 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _settingsFailGameOver = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.fail_game_over", 202f, 48f, false, true,
                 .68f, .98f, 130f);
+            _settingsInitialTemperature = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.initial_temperature", 258f, 48f, false,
+                false, .02f, .32f, 130f);
+            _settingsInitialAttractiveness = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.initial_attractiveness", 258f, 48f, false,
+                false, .35f, .65f, 130f);
+            _settingsInitialHygiene = CreateScenarioSettingsInput(content,
+                "editor.scenario_settings.field.initial_hygiene", 258f, 48f, false,
+                false, .68f, .98f, 130f);
+            SetScenarioDecimalContentType(_settingsInitialTemperature);
+            SetScenarioDecimalContentType(_settingsInitialAttractiveness);
+            SetScenarioDecimalContentType(_settingsInitialHygiene);
             BuildGeneralStyleSettings(content);
             BuildGeneralRoomAvailabilitySettings(content);
             RefreshScenarioSettingsFields();
@@ -928,11 +943,11 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             var contentRect = content as RectTransform;
             if (contentRect != null)
                 contentRect.sizeDelta = new Vector2(contentRect.sizeDelta.x,
-                    Mathf.Max(contentRect.sizeDelta.y, 520f));
+                    Mathf.Max(contentRect.sizeDelta.y, 802f));
             var catalog = ScenarioHospitalStyles.Build(_level,
                 EditorLocalization.Get("editor.map.style.original"),
                 EditorLocalization.Get("editor.map.style.none"));
-            CreateGeneralStyleRow(content, "editor.map.style.perimeter", 278f,
+            CreateGeneralStyleRow(content, "editor.map.style.perimeter", 334f,
                 catalog.Perimeters.Select(choice => choice.Label).ToList(),
                 () =>
                 {
@@ -949,13 +964,13 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                     current.perimeterPrefabs = choice.PrefabNames ?? new string[0];
                     ScenarioEditorStorage.SetStyles(_level, current);
                 });
-            CreateGeneralRoomStyleRow(content, "editor.map.style.built", 334f,
+            CreateGeneralRoomStyleRow(content, "editor.map.style.built", 390f,
                 catalog.Built, map => map.builtRoomStyle,
                 (map, value) => map.builtRoomStyle = value);
-            CreateGeneralRoomStyleRow(content, "editor.map.style.building", 390f,
+            CreateGeneralRoomStyleRow(content, "editor.map.style.building", 446f,
                 catalog.Building, map => map.buildingRoomStyle,
                 (map, value) => map.buildingRoomStyle = value);
-            CreateGeneralRoomStyleRow(content, "editor.map.style.unbuilt", 446f,
+            CreateGeneralRoomStyleRow(content, "editor.map.style.unbuilt", 502f,
                 catalog.Unbuilt, map => map.unbuiltRoomStyle,
                 (map, value) => map.unbuiltRoomStyle = value);
         }
@@ -1202,6 +1217,11 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             if (row != null) SetWorkshopFieldLabel(row, fieldRoot, value);
         }
 
+        private static void SetScenarioDecimalContentType(TMP_InputField input)
+        {
+            if (input != null) input.contentType = TMP_InputField.ContentType.DecimalNumber;
+        }
+
         private static void ApplyScenarioSettingsLabelV7(
             TMP_InputField input, float size, float minimum, float maximum)
         {
@@ -1240,6 +1260,12 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 settings.FailStateBalanceWarning.ToString(CultureInfo.InvariantCulture));
             _settingsFailGameOver.SetTextWithoutNotify(
                 settings.FailStateBalanceGameOver.ToString(CultureInfo.InvariantCulture));
+            _settingsInitialTemperature?.SetTextWithoutNotify(
+                settings.initialTemperature.ToString(CultureInfo.InvariantCulture));
+            _settingsInitialAttractiveness?.SetTextWithoutNotify(
+                settings.initialAttractiveness.ToString(CultureInfo.InvariantCulture));
+            _settingsInitialHygiene?.SetTextWithoutNotify(
+                settings.initialHygiene.ToString(CultureInfo.InvariantCulture));
         }
 
         private void AcceptScenarioSettings()
@@ -1256,7 +1282,15 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 !TryReadScenarioInteger(_settingsFailWarning,
                     out settings.FailStateBalanceWarning) ||
                 !TryReadScenarioInteger(_settingsFailGameOver,
-                    out settings.FailStateBalanceGameOver)) return;
+                    out settings.FailStateBalanceGameOver) ||
+                !TryReadScenarioFloat(_settingsInitialTemperature,
+                    out settings.initialTemperature) ||
+                !TryReadScenarioFloat(_settingsInitialAttractiveness,
+                    out settings.initialAttractiveness) ||
+                !TryReadScenarioFloat(_settingsInitialHygiene,
+                    out settings.initialHygiene)) return;
+            settings.initialHygiene = Mathf.Clamp01(settings.initialHygiene);
+            settings.environmentSettingsConfigured = true;
             StoreDiseaseSettings(settings);
             ScenarioEditorStorage.SetScenarioSettings(_level, settings);
             CloseSettingsPanel();
@@ -1267,6 +1301,16 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             value = 0;
             if (input != null && int.TryParse(input.text, NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out value)) return true;
+            input?.Select();
+            return false;
+        }
+
+        private static bool TryReadScenarioFloat(TMP_InputField input, out float value)
+        {
+            value = 0f;
+            if (input != null && float.TryParse(input.text, NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out value) &&
+                !float.IsNaN(value) && !float.IsInfinity(value)) return true;
             input?.Select();
             return false;
         }
@@ -1367,7 +1411,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
 
             // Los paneles quedan en la zona inferior, sin modificar el
             // ScrollRect ni la geometria de los campos superiores de General.
-            const float panelTop = 356f;
+            const float panelTop = 412f;
             const float panelHeight = 390f;
 
             BuildGeneralRoomPanel(content, "UP General Common Rooms",

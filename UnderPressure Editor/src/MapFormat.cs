@@ -44,6 +44,16 @@ namespace UnderPressure.Editor
             public int InitialBalance = 1000000;
             public int FailStateBalanceWarning = -150000;
             public int FailStateBalanceGameOver = -300000;
+            public bool patientSettingsConfigured;
+            public int maxPatients = 250;
+            public float patientSpawnRate = 48f;
+            public bool neverSpawnPatients;
+            public bool usePatientSelector = true;
+            public float patientSelectionRandomJitter = .35f;
+            public bool environmentSettingsConfigured;
+            public float initialTemperature;
+            public float initialAttractiveness;
+            public float initialHygiene = 1f;
             public bool scenarioSettingsConfigured;
             public bool illnessesConfigured;
             public WeightedIllnessData[] illnesses = new WeightedIllnessData[0];
@@ -99,6 +109,24 @@ namespace UnderPressure.Editor
             public int initial = 1000000;
             public int warning = -150000;
             public int gameOver = -300000;
+        }
+
+        [Serializable]
+        internal sealed class PatientData
+        {
+            public int maxPatients = 250;
+            public float patientSpawnRate = 48f;
+            public bool neverSpawnPatients;
+            public bool usePatientSelector = true;
+            public float patientSelectionRandomJitter = .35f;
+        }
+
+        [Serializable]
+        internal sealed class EnvironmentData
+        {
+            public float initialTemperature;
+            public float initialAttractiveness;
+            public float initialHygiene = 1f;
         }
 
         [Serializable]
@@ -347,6 +375,12 @@ namespace UnderPressure.Editor
             var document = JsonUtility.FromJson<MapDocument>(json);
             var hospital = ParseObject<BaseHospitalData>(json, "baseHospital");
             var balance = ParseObject<BalanceData>(json, "balance");
+            var hasPatients = json.IndexOf("\"patients\"", StringComparison.Ordinal) >= 0;
+            var patients = hasPatients
+                ? ParseObject<PatientData>(json, "patients") : new PatientData();
+            var hasEnvironment = json.IndexOf("\"environment\"", StringComparison.Ordinal) >= 0;
+            var environment = hasEnvironment
+                ? ParseObject<EnvironmentData>(json, "environment") : new EnvironmentData();
             var fog = ParseObject<FogData>(json, "fog");
             var perimeter = ParseObject<PerimeterData>(json, "perimeter");
             var roomStyles = ParseObject<RoomStylesData>(json, "roomStyles");
@@ -363,6 +397,16 @@ namespace UnderPressure.Editor
                 InitialBalance = balance.initial,
                 FailStateBalanceWarning = balance.warning,
                 FailStateBalanceGameOver = balance.gameOver,
+                patientSettingsConfigured = hasPatients,
+                maxPatients = patients.maxPatients,
+                patientSpawnRate = patients.patientSpawnRate,
+                neverSpawnPatients = patients.neverSpawnPatients,
+                usePatientSelector = patients.usePatientSelector,
+                patientSelectionRandomJitter = patients.patientSelectionRandomJitter,
+                environmentSettingsConfigured = hasEnvironment,
+                initialTemperature = environment.initialTemperature,
+                initialAttractiveness = environment.initialAttractiveness,
+                initialHygiene = environment.initialHygiene,
                 scenarioSettingsConfigured = true,
                 illnessesConfigured = true,
                 illnesses = ParseObjects<WeightedIllnessData>(json, "illnesses"),
@@ -412,6 +456,17 @@ namespace UnderPressure.Editor
                 HasInvalidStyleId(header.sceneFile) ||
                 HasInvalidStyleId(header.trafficFile) ||
                 HasInvalidStyleId(header.fogOfWarFile) ||
+                (header.patientSettingsConfigured &&
+                 (header.maxPatients < 1 || InvalidNumber(header.patientSpawnRate) ||
+                  header.patientSpawnRate < 0f ||
+                  InvalidNumber(header.patientSelectionRandomJitter) ||
+                  header.patientSelectionRandomJitter < 0f ||
+                  header.patientSelectionRandomJitter > 1f)) ||
+                (header.environmentSettingsConfigured &&
+                 (InvalidNumber(header.initialTemperature) ||
+                  InvalidNumber(header.initialAttractiveness) ||
+                  InvalidNumber(header.initialHygiene) ||
+                  header.initialHygiene < 0f || header.initialHygiene > 1f)) ||
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
                 throw new InvalidDataException("config.json incorrecto o version incompatible.");
             return header;
@@ -420,6 +475,11 @@ namespace UnderPressure.Editor
         private static bool HasInvalidStyleId(string value)
         {
             return value != null && (value.Length > 160 || value.IndexOfAny(new[] {'\r', '\n'}) >= 0);
+        }
+
+        private static bool InvalidNumber(float value)
+        {
+            return float.IsNaN(value) || float.IsInfinity(value);
         }
 
         internal static string NormalizePerimeter(string value)
@@ -783,6 +843,20 @@ namespace UnderPressure.Editor
                 warning = map.FailStateBalanceWarning,
                 gameOver = map.FailStateBalanceGameOver
             };
+            var patients = new PatientData
+            {
+                maxPatients = map.maxPatients,
+                patientSpawnRate = map.patientSpawnRate,
+                neverSpawnPatients = map.neverSpawnPatients,
+                usePatientSelector = map.usePatientSelector,
+                patientSelectionRandomJitter = map.patientSelectionRandomJitter
+            };
+            var environment = new EnvironmentData
+            {
+                initialTemperature = map.initialTemperature,
+                initialAttractiveness = map.initialAttractiveness,
+                initialHygiene = map.initialHygiene
+            };
             var fog = new FogData
             {
                 file = map.fogOfWarFile ?? "",
@@ -815,6 +889,8 @@ namespace UnderPressure.Editor
             AppendMapLine(text, "balance", "{\"initial\":" + Integer(balance.initial) +
                 ",\"warning\":" + Integer(balance.warning) +
                 ",\"gameOver\":" + Integer(balance.gameOver) + "}", true);
+            AppendMapLine(text, "patients", JsonUtility.ToJson(patients, false), true);
+            AppendMapLine(text, "environment", JsonUtility.ToJson(environment, false), true);
             text.AppendLine("    \"illnesses\": [");
             var illnesses = map.illnesses ?? new WeightedIllnessData[0];
             for (var i = 0; i < illnesses.Length; i++)
@@ -1265,35 +1341,52 @@ namespace UnderPressure.Editor
                     clone, _runtimeFinanceWrapper);
             }
 
-            if (header.illnessesConfigured)
+            if (header.illnessesConfigured || header.patientSettingsConfigured)
             {
                 var characters = config.GetCharacterManagerConfig();
                 if (characters != null)
                 {
                     var characterClone = (CharacterManager.Config)CloneMethod.Invoke(characters, null);
-                    var weighted = new List<WeightedIllness>();
-                    foreach (var saved in header.illnesses ??
-                             new ScenarioMapFormat.WeightedIllnessData[0])
+                    if (header.illnessesConfigured)
                     {
-                        var definition = ScenarioDiseaseCatalog.Resolve(config, saved.definition);
-                        if (definition == null)
+                        var weighted = new List<WeightedIllness>();
+                        foreach (var saved in header.illnesses ??
+                                 new ScenarioMapFormat.WeightedIllnessData[0])
                         {
-                            UnderPressureEditorPlugin.Log?.LogError(
-                                "Carrera: enfermedad desconocida en config.json: " + saved.definition);
-                            continue;
+                            var definition = ScenarioDiseaseCatalog.Resolve(config, saved.definition);
+                            if (definition == null)
+                            {
+                                UnderPressureEditorPlugin.Log?.LogError(
+                                    "Carrera: enfermedad desconocida en config.json: " + saved.definition);
+                                continue;
+                            }
+                            weighted.Add(new WeightedIllness
+                            {
+                                Definition = definition,
+                                Deprecated = saved.deprecated,
+                                Unlocked = saved.unlocked,
+                                MinWeight = saved.minWeight,
+                                MaxWeight = saved.maxWeight,
+                                MinStarRating = saved.minStarRating,
+                                MinPatientsSpawned = saved.minPatientsSpawned
+                            });
                         }
-                        weighted.Add(new WeightedIllness
-                        {
-                            Definition = definition,
-                            Deprecated = saved.deprecated,
-                            Unlocked = saved.unlocked,
-                            MinWeight = saved.minWeight,
-                            MaxWeight = saved.maxWeight,
-                            MinStarRating = saved.minStarRating,
-                            MinPatientsSpawned = saved.minPatientsSpawned
-                        });
+                        characterClone._weightedIllnesses = weighted.ToArray();
                     }
-                    characterClone._weightedIllnesses = weighted.ToArray();
+                    if (header.patientSettingsConfigured)
+                    {
+                        AccessTools.Field(typeof(CharacterManager.Config), "_maxPatients")
+                            ?.SetValue(characterClone, header.maxPatients);
+                        AccessTools.Field(typeof(CharacterManager.Config), "_patientSpawnRate")
+                            ?.SetValue(characterClone, header.patientSpawnRate);
+                        AccessTools.Field(typeof(CharacterManager.Config), "NeverSpawnPatients")
+                            ?.SetValue(characterClone, header.neverSpawnPatients);
+                        AccessTools.Field(typeof(CharacterManager.Config), "_usePatientSelector")
+                            ?.SetValue(characterClone, header.usePatientSelector);
+                        AccessTools.Field(typeof(CharacterManager.Config),
+                                "_patientSelectionRandomJitter")
+                            ?.SetValue(characterClone, header.patientSelectionRandomJitter);
+                    }
                     _runtimeCharacterWrapper = ScriptableObject.CreateInstance<
                         UnderPressureCharacterConfigInstance>();
                     _runtimeCharacterWrapper.name = "UP Scenario Character Config";
@@ -1461,6 +1554,12 @@ namespace UnderPressure.Editor
                     _runtimeFog = ScenarioEditorFogOfWar.CreateDefinition(
                         _map.Header, _map.FogOfWarPng);
                     cloned.FogOfWarDefinition = _runtimeFog;
+                }
+                if (_map.Header.environmentSettingsConfigured)
+                {
+                    cloned.initialTemperature = _map.Header.initialTemperature;
+                    cloned.initialAttractiveness = _map.Header.initialAttractiveness;
+                    cloned.initialHygiene = _map.Header.initialHygiene;
                 }
                 ScenarioHospitalStyles.Apply(level, _map.Header, cloned, _plotAssets.Definitions);
                 config = cloned;
