@@ -1,4 +1,4 @@
-// Updated: 2026-11-03 - Menu ESC: integrado layout UI Designer sobre fichero actual.
+// Updated: 2026-11-16 - Restaurar disponibilidad nativa desde WorldState.Config._availableRooms.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -51,6 +51,7 @@ namespace UnderPressure.Editor
             new ScenarioMapFormat.ObjectiveData[0];
         private static ScenarioMapFormat.EmergencyData[] _emergencies =
             new ScenarioMapFormat.EmergencyData[0];
+        private static string[] _availableRooms = new string[0];
         private static Level _plotSettingsLevel;
         private static readonly List<ScenarioMapFormat.Plot> _plotSettings =
             new List<ScenarioMapFormat.Plot>();
@@ -314,7 +315,9 @@ namespace UnderPressure.Editor
                 objectivesConfigured = true,
                 objectives = CloneObjectives(_objectives),
                 emergenciesConfigured = true,
-                emergencies = CloneEmergencies(_emergencies)
+                emergencies = CloneEmergencies(_emergencies),
+                availableRoomsConfigured = true,
+                availableRooms = CloneAvailableRooms(_availableRooms)
             };
         }
 
@@ -343,6 +346,9 @@ namespace UnderPressure.Editor
             _emergencies = source.emergenciesConfigured
                 ? CloneEmergencies(source.emergencies)
                 : ScenarioEmergencyCatalog.Capture(level?.Config);
+            _availableRooms = source.availableRoomsConfigured
+                ? NormalizeAvailableRoomIds(source.availableRooms)
+                : CaptureAvailableRoomIds(level?.Config);
         }
 
         private static void EnsureScenarioSettings(Level level)
@@ -368,6 +374,104 @@ namespace UnderPressure.Editor
                 config?.GetCharacterManagerConfig()?._weightedIllnesses);
             _objectives = ScenarioObjectiveCatalog.Capture(config);
             _emergencies = ScenarioEmergencyCatalog.Capture(config);
+            _availableRooms = CaptureAvailableRoomIds(config);
+        }
+
+        private static string[] CloneAvailableRooms(string[] values)
+        {
+            return NormalizeAvailableRoomIds(values);
+        }
+
+        private static string[] NormalizeAvailableRoomIds(string[] values)
+        {
+            return (values ?? new string[0])
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static string[] CaptureAvailableRoomIds(LevelConfig config)
+        {
+            var availableRooms = config?.GetWorldStateConfig()?._availableRooms;
+            if (availableRooms == null)
+                return new string[0];
+
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in availableRooms)
+            {
+                var id = AvailableRoomId(entry);
+                if (!string.IsNullOrEmpty(id))
+                    result.Add(id);
+            }
+            return result.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        }
+
+        private static string AvailableRoomId(object entry)
+        {
+            if (entry == null) return "";
+            var shared = entry as SharedInstance<RoomDefinition>;
+            if (shared?.Instance != null)
+                return shared.Instance._type.ToString();
+            var definition = entry as RoomDefinition;
+            if (definition != null)
+                return definition._type.ToString();
+            if (entry is RoomDefinition.Type)
+                return ((RoomDefinition.Type)entry).ToString();
+            return "";
+        }
+
+        internal static bool ApplyAvailableRoomsToConfig(
+            LevelConfig config,
+            string[] roomIds,
+            IList<UnityEngine.Object> temporaryAssets)
+        {
+            var source = config?.GetWorldStateConfig();
+            if (source == null)
+                return false;
+
+            try
+            {
+                var wanted = new HashSet<string>(
+                    NormalizeAvailableRoomIds(roomIds),
+                    StringComparer.Ordinal);
+                var rooms = Resources
+                    .FindObjectsOfTypeAll<SharedInstance<RoomDefinition>>()
+                    .Where(value => value?.Instance != null &&
+                                    wanted.Contains(value.Instance._type.ToString()))
+                    .GroupBy(value => value.Instance._type)
+                    .Select(group => group.First())
+                    .ToList();
+
+                var worldClone = (WorldState.Config)CloneMethod.Invoke(source, null);
+                worldClone._availableRooms = rooms.ToArray();
+
+                var wrapper = ScriptableObject.CreateInstance<
+                    UnderPressureWorldStateConfigInstance>();
+                wrapper.name = "UP Scenario World State Config";
+                wrapper.hideFlags = HideFlags.DontSave;
+                wrapper.Instance = worldClone;
+                var worldStateField =
+                    AccessTools.Field(typeof(LevelConfig), "WorldStateConfig");
+                if (worldStateField == null)
+                {
+                    UnityEngine.Object.Destroy(wrapper);
+                    UnderPressureEditorPlugin.Log?.LogWarning(
+                        "Ajustes del escenario: no existe LevelConfig.WorldStateConfig.");
+                    return false;
+                }
+                worldStateField.SetValue(config, wrapper);
+                temporaryAssets?.Add(wrapper);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "Ajustes del escenario: no se pudo aplicar WorldState.Config._availableRooms: " +
+                    exception.Message);
+                return false;
+            }
         }
 
         private static ScenarioMapFormat.WeightedIllnessData[] CloneIllnesses(
@@ -700,6 +804,8 @@ namespace UnderPressure.Editor
             header.objectives = settings.objectives;
             header.emergenciesConfigured = true;
             header.emergencies = settings.emergencies;
+            header.availableRoomsConfigured = true;
+            header.availableRooms = CloneAvailableRooms(settings.availableRooms);
             var styles = CurrentStyles(level);
             header.plotPerimeter = styles.plotPerimeter;
             header.perimeterPrefabs = styles.perimeterPrefabs;
@@ -737,6 +843,7 @@ namespace UnderPressure.Editor
             if (verified.Plots.Count != saved.Count)
                 throw new InvalidDataException("El mapa guardado no coincide con las parcelas del Editor.");
             VerifySavedObjectives(header.objectives, verified.Header.objectives);
+            VerifySavedAvailableRooms(header.availableRooms, verified.Header.availableRooms);
             ScenarioMapPackage.Publish(folder, package, candidate => ScenarioMapFormat.Read(candidate));
             UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + package + " (" + refs.Count + " parcelas)");
             MarkCurrentMap(level, name, package);
@@ -819,6 +926,15 @@ namespace UnderPressure.Editor
                 if (!left.SequenceEqual(right)) return false;
             }
             return true;
+        }
+
+        private static void VerifySavedAvailableRooms(string[] before, string[] after)
+        {
+            before = CloneAvailableRooms(before);
+            after = CloneAvailableRooms(after);
+            if (!before.SequenceEqual(after))
+                throw new InvalidDataException(
+                    "Las salas disponibles no coinciden con el guardado.");
         }
 
         private static void VerifySavedObjectives(

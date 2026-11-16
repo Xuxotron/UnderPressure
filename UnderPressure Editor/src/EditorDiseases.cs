@@ -1,4 +1,4 @@
-// Updated: 2026-11-16 - Corregidos errores de sintaxis e identificadores dañados sin cambiar el diseño.
+// Updated: 2026-11-16 - Añadido control de disponibilidad inicial en las cabeceras de salas de tratamiento.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -728,6 +728,33 @@ namespace UnderPressure.Editor
                 });
             SetTopLeft((RectTransform)add.transform, 675f, 8f, 116f, 44f);
 
+            var roomAvailabilityId = room.Definition == null
+                ? "" : room.Definition._type.ToString();
+            if (!string.IsNullOrEmpty(roomAvailabilityId))
+            {
+                var unlockedLabel = CreateDiseaseText(
+                    header.transform,
+                    EditorLocalization.Get(RoomUnlockedLabelKey),
+                    16f,
+                    TextAlignmentOptions.MidlineRight,
+                    Color.white);
+                SetTopLeft(unlockedLabel.rectTransform, 802f, 11f, 119f, 38f);
+
+                var unlockedToggle = CreateDiseaseToggle(
+                    header.transform,
+                    IsGeneralRoomAvailable(roomAvailabilityId),
+                    value => SaveGeneralRoomAvailability(roomAvailabilityId, value));
+                if (unlockedToggle != null)
+                {
+                    unlockedToggle.gameObject.name =
+                        "UP Treatment Room Unlocked " + roomAvailabilityId;
+                    SetTopLeft((RectTransform)unlockedToggle.transform,
+                        928f, 15f, 30f, 30f);
+                    ApplyDiseaseRoomUnlockedToggleLayout(unlockedToggle);
+                    RegisterRoomAvailabilityToggle(roomAvailabilityId, unlockedToggle);
+                }
+            }
+
             if (room.Dlc?.Icon != null)
             {
                 var dlcIcon = NewImage("Icono DLC", header.transform, room.Dlc.Icon,
@@ -857,6 +884,26 @@ namespace UnderPressure.Editor
             caption.pivot = new Vector2(.5f, .5f);
             caption.anchoredPosition = new Vector2(-29f, 0f);
             caption.sizeDelta = new Vector2(-78f, 0f);
+        }
+
+        private static void ApplyDiseaseRoomUnlockedToggleLayout(Toggle toggle)
+        {
+            if (toggle == null) return;
+            var background = toggle.transform.Find("Background") as RectTransform;
+            if (background == null) return;
+            background.anchorMin = background.anchorMax = new Vector2(.5f, .5f);
+            background.pivot = new Vector2(.5f, .5f);
+            background.anchoredPosition = Vector2.zero;
+            background.sizeDelta = new Vector2(38f, 38f);
+            var checkmark = background.Find("Checkmark") as RectTransform;
+            if (checkmark == null && toggle.graphic != null)
+                checkmark = toggle.graphic.rectTransform;
+            if (checkmark == null) return;
+            checkmark.anchorMin = Vector2.zero;
+            checkmark.anchorMax = Vector2.one;
+            checkmark.pivot = new Vector2(.5f, .5f);
+            checkmark.anchoredPosition = Vector2.zero;
+            checkmark.sizeDelta = new Vector2(-10f, -10f);
         }
 
         private static void ApplyDiseaseUnlockedToggleDesignerLayout(Toggle toggle)
