@@ -655,7 +655,6 @@ namespace UnderPressure.Editor
             try
             {
                 var full = Path.GetFullPath(map);
-                ScenarioMapFormat.ReadHeader(full);
                 WorkshopMaps.Add(full);
             }
             catch (Exception exception)

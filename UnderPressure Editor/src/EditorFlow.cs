@@ -121,7 +121,7 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioEditorMapPicker
     {
-        private sealed class MapChoice{internal string Path;internal string Name;internal LevelConfig Level;}
+        private sealed class MapChoice{internal string Path;internal string Name;internal LevelConfig Level;internal bool Obsolete;}
         private sealed class HospitalChoice{internal LevelConfig Level;internal string Label;}
         private sealed class RowEntry{internal string Label;internal Action OnClick;internal bool Green;internal bool Selected;}
         private sealed class ScrollColumn{internal RectTransform Viewport;internal RectTransform Content;internal ScrollRect Scroll;internal Scrollbar Bar;internal float Width;internal float RowInset;internal readonly List<RowEntry> Entries=new List<RowEntry>();internal readonly List<GameObject> VisibleRows=new List<GameObject>();}
@@ -266,7 +266,7 @@ namespace UnderPressure.Editor
                 var captured = map;
                 _mapsColumn.Entries.Add(new RowEntry
                 {
-                    Label = map.Name,
+                    Label = MapLabel(map),
                     OnClick = () => OpenMap(captured)
                 });
             }
@@ -290,7 +290,7 @@ namespace UnderPressure.Editor
                 var captured = map;
                 _mapsColumn.Entries.Add(new RowEntry
                 {
-                    Label = captured.Name,
+                    Label = MapLabel(captured),
                     OnClick = () => OpenMap(captured)
                 });
             }
@@ -299,34 +299,38 @@ namespace UnderPressure.Editor
 
         private static void OpenMap(MapChoice map)
         {
-            if (map == null || map.Level == null)
+            if (map == null)
             {
                 if (_selectedHospitalTitle != null)
                     _selectedHospitalTitle.text = EditorLocalization.Get("scenario_editor.invalid_map");
                 return;
             }
-            _selectedLevel = map.Level;
+            try
+            {
+                var header = ScenarioMapFormat.ReadHeader(map.Path);
+                var hospital = _hospitalChoices.FirstOrDefault(choice =>
+                    string.Equals(choice.Level.UniqueId, header.baseHospitalId,
+                        StringComparison.Ordinal));
+                if (hospital != null) map.Level = hospital.Level;
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "No se pudo leer la cabecera al abrir el mapa: " + exception.Message);
+            }
+            _selectedLevel = map.Level ?? _selectedLevel;
+            if (_selectedLevel == null)
+            {
+                if (_selectedHospitalTitle != null)
+                    _selectedHospitalTitle.text = EditorLocalization.Get("scenario_editor.invalid_map");
+                return;
+            }
             OpenSelected(map.Path);
         }
 
         private static void OpenSelected(string mapPath)
         {
             if (_selectedLevel == null || _onOpen == null) return;
-            // Comprobar el mapa antes de abandonar la pantalla inicial. No
-            // comenzar a cargar un escenario cuyo JSON/PNG no puede abrirse.
-            if (!string.IsNullOrEmpty(mapPath))
-            {
-                try { ScenarioMapFormat.Read(mapPath); }
-                catch (Exception ex)
-                {
-                    UnderPressureEditorPlugin.Log?.LogError(
-                        "No se puede abrir el mapa seleccionado: " + ex);
-                    if (_selectedHospitalTitle != null)
-                        _selectedHospitalTitle.text =
-                            EditorLocalization.Get("scenario_editor.invalid_map");
-                    return;
-                }
-            }
             _pendingNewMap = string.IsNullOrEmpty(mapPath);
             _pendingArchitect = _pendingNewMap
                 ? UnderPressureEditorPlugin.ArchitectName : null;
@@ -423,20 +427,18 @@ namespace UnderPressure.Editor
         {
             try
             {
-                var header = ScenarioMapFormat.ReadHeader(file);
-                if (!string.IsNullOrEmpty(hospitalId) &&
-                    !string.Equals(header.baseHospitalId, hospitalId, StringComparison.Ordinal))
-                    return;
-                var hospital = _hospitalChoices.FirstOrDefault(choice =>
-                    string.Equals(choice.Level.UniqueId, header.baseHospitalId,
-                        StringComparison.Ordinal));
-                if (hospital == null) return;
+                int version;
+                var hasVersion = ScenarioMapFormat.TryReadVersion(file, out version);
+                var hospital = string.IsNullOrEmpty(hospitalId) ? null :
+                    _hospitalChoices.FirstOrDefault(choice =>
+                        string.Equals(choice.Level.UniqueId, hospitalId,
+                            StringComparison.Ordinal));
                 result.Add(new MapChoice
                 {
                     Path = file,
-                    Name = string.IsNullOrWhiteSpace(header.name)
-                        ? Path.GetFileNameWithoutExtension(file) : header.name,
-                    Level = hospital.Level
+                    Name = Path.GetFileNameWithoutExtension(file),
+                    Level = hospital?.Level,
+                    Obsolete = hasVersion && version < ScenarioMapFormat.Version
                 });
             }
             catch (Exception exception)
@@ -444,6 +446,13 @@ namespace UnderPressure.Editor
                 UnderPressureEditorPlugin.Log?.LogWarning(
                     "Mapa omitido: " + file + " - " + exception.Message);
             }
+        }
+
+        private static string MapLabel(MapChoice map)
+        {
+            if (map == null || !map.Obsolete) return map?.Name ?? "";
+            return map.Name + " <color=#FF9819>(" +
+                   EditorLocalization.Get("scenario_editor.obsolete") + ")</color>";
         }
 
         private static ScrollColumn CreateColumn(Transform parent, string name, Vector2 pos,
@@ -585,6 +594,7 @@ namespace UnderPressure.Editor
                 text.fontSizeMax = 23f;
                 text.fontSize = Mathf.Min(text.fontSize, 23f);
                 text.fontStyle = FontStyles.Normal;
+                text.richText = true;
                 text.raycastTarget = false;
             }
 

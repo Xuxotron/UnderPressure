@@ -139,6 +139,25 @@ namespace UnderPressure.Editor
             }
         }
 
+        internal static string ReadTextPrefix(string package, string entryName, int maximumBytes)
+        {
+            ValidateEntryName(entryName);
+            if (maximumBytes < 1)
+                throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+            using (var stream = File.OpenRead(package))
+            using (var reader = new BinaryReader(stream, Encoding.UTF8, true))
+            {
+                var entries = ReadDirectory(stream, reader);
+                var matches = entries.Where(entry => string.Equals(
+                    entry.Name, entryName, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (matches.Length != 1)
+                    throw new InvalidDataException("Entrada inexistente o duplicada: " + entryName);
+                var bytes = ReadEntry(stream, reader, matches[0]);
+                var length = Math.Min(bytes.Length, maximumBytes);
+                return Encoding.UTF8.GetString(bytes, 0, length);
+            }
+        }
+
         internal static void Extract(string package, string destination)
         {
             Directory.CreateDirectory(destination);

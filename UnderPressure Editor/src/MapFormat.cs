@@ -30,6 +30,9 @@ namespace UnderPressure.Editor
             RegexOptions.CultureInvariant | RegexOptions.Compiled);
         private static readonly Regex RotationField = new Regex(
             @"""rotation""\s*:", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        private static readonly Regex VersionField = new Regex(
+            @"""version""\s*:\s*(-?\d+)",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
         [Serializable]
         internal sealed class Map
@@ -365,6 +368,28 @@ namespace UnderPressure.Editor
             return ParseHeader(ScenarioMapPackage.ReadText(file, ConfigFileName, MaxHeaderBytes));
         }
 
+        internal static bool TryReadVersion(string file, out int version)
+        {
+            version = Version;
+            try
+            {
+                if (!string.Equals(Path.GetExtension(file), ScenarioMapPackage.Extension,
+                        StringComparison.OrdinalIgnoreCase))
+                    return false;
+                var prefix = ScenarioMapPackage.ReadTextPrefix(file, ConfigFileName, 4096);
+                var match = VersionField.Match(prefix);
+                return match.Success && int.TryParse(match.Groups[1].Value,
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out version);
+            }
+            catch (Exception exception)
+            {
+                UnderPressureEditorPlugin.Log?.LogWarning(
+                    "No se pudo leer la version del mapa " + file + ": " + exception.Message);
+                return false;
+            }
+        }
+
         internal static Map ReadLooseHeader(string file)
         {
             return ParseHeader(ReadText(file, MaxHeaderBytes));
@@ -373,17 +398,45 @@ namespace UnderPressure.Editor
         private static Map ParseHeader(string json)
         {
             var document = JsonUtility.FromJson<MapDocument>(json);
-            var hospital = ParseObject<BaseHospitalData>(json, "baseHospital");
-            var balance = ParseObject<BalanceData>(json, "balance");
-            var hasPatients = json.IndexOf("\"patients\"", StringComparison.Ordinal) >= 0;
-            var patients = hasPatients
-                ? ParseObject<PatientData>(json, "patients") : new PatientData();
-            var hasEnvironment = json.IndexOf("\"environment\"", StringComparison.Ordinal) >= 0;
-            var environment = hasEnvironment
-                ? ParseObject<EnvironmentData>(json, "environment") : new EnvironmentData();
-            var fog = ParseObject<FogData>(json, "fog");
-            var perimeter = ParseObject<PerimeterData>(json, "perimeter");
-            var roomStyles = ParseObject<RoomStylesData>(json, "roomStyles");
+            if (document == null)
+                throw new InvalidDataException("config.json ilegible.");
+
+            // Las versiones anteriores guardaban todos los campos directamente
+            // en la raiz. Se conservan tal cual y se completan al volver a guardar.
+            if (document.version < Version)
+            {
+                var legacy = JsonUtility.FromJson<Map>(json) ?? new Map();
+                legacy.plots = ParseOptionalObjects<PlotReference>(json, "plots");
+                legacy.illnesses = ParseOptionalObjects<WeightedIllnessData>(json, "illnesses");
+                legacy.availableRooms = ParseOptionalStrings(json, "availableRooms");
+                legacy.objectives = HasTopLevelField(json, "objectives")
+                    ? ParseObjectives(json) : new ObjectiveData[0];
+                legacy.emergencies = HasTopLevelField(json, "emergencies")
+                    ? ParseEmergencies(json) : new EmergencyData[0];
+                return ValidateHeader(legacy);
+            }
+
+            BaseHospitalData hospital;
+            BalanceData balance;
+            FogData fog;
+            PerimeterData perimeter;
+            RoomStylesData roomStyles;
+            PatientData patients;
+            EnvironmentData environment;
+            var hasHospital = TryParseObject(json, "baseHospital", out hospital);
+            var hasBalance = TryParseObject(json, "balance", out balance);
+            var hasFog = TryParseObject(json, "fog", out fog);
+            var hasPerimeter = TryParseObject(json, "perimeter", out perimeter);
+            var hasRoomStyles = TryParseObject(json, "roomStyles", out roomStyles);
+            var hasPatients = TryParseObject(json, "patients", out patients);
+            var hasEnvironment = TryParseObject(json, "environment", out environment);
+            hospital = hospital ?? new BaseHospitalData();
+            balance = balance ?? new BalanceData();
+            fog = fog ?? new FogData();
+            perimeter = perimeter ?? new PerimeterData();
+            roomStyles = roomStyles ?? new RoomStylesData();
+            patients = patients ?? new PatientData();
+            environment = environment ?? new EnvironmentData();
             var header = document == null ? null : new Map
             {
                 version = document.version,
@@ -407,21 +460,17 @@ namespace UnderPressure.Editor
                 initialTemperature = environment.initialTemperature,
                 initialAttractiveness = environment.initialAttractiveness,
                 initialHygiene = environment.initialHygiene,
-                scenarioSettingsConfigured = true,
-                illnessesConfigured = true,
-                illnesses = ParseObjects<WeightedIllnessData>(json, "illnesses"),
-                availableRoomsConfigured =
-                    json.IndexOf("\"availableRooms\"", StringComparison.Ordinal) >= 0,
-                availableRooms = json.IndexOf("\"availableRooms\"",
-                        StringComparison.Ordinal) >= 0
-                    ? ParseStrings(json, "availableRooms")
-                    : new string[0],
-                objectivesConfigured = json.IndexOf("\"objectives\"", StringComparison.Ordinal) >= 0,
-                objectives = json.IndexOf("\"objectives\"", StringComparison.Ordinal) >= 0
+                scenarioSettingsConfigured = hasHospital || hasBalance,
+                illnessesConfigured = HasTopLevelField(json, "illnesses"),
+                illnesses = ParseOptionalObjects<WeightedIllnessData>(json, "illnesses"),
+                availableRoomsConfigured = HasTopLevelField(json, "availableRooms"),
+                availableRooms = ParseOptionalStrings(json, "availableRooms"),
+                objectivesConfigured = HasTopLevelField(json, "objectives"),
+                objectives = HasTopLevelField(json, "objectives")
                     ? ParseObjectives(json)
                     : new ObjectiveData[0],
-                emergenciesConfigured = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0,
-                emergencies = json.IndexOf("\"emergencies\"", StringComparison.Ordinal) >= 0
+                emergenciesConfigured = HasTopLevelField(json, "emergencies"),
+                emergencies = HasTopLevelField(json, "emergencies")
                     ? ParseEmergencies(json)
                     : new EmergencyData[0],
                 terrainManifest = document.terrainManifest ?? "",
@@ -440,15 +489,18 @@ namespace UnderPressure.Editor
                 sceneFile = document.sceneFile ?? "",
                 landscapeFile = document.landscapeFile ?? "",
                 trafficFile = document.trafficFile ?? "",
-                plots = ParseObjects<PlotReference>(json, "plots")
+                plots = ParseOptionalObjects<PlotReference>(json, "plots")
             };
+            return ValidateHeader(header);
+        }
+
+        private static Map ValidateHeader(Map header)
+        {
             if (header != null) header.plotPerimeter = NormalizePerimeter(header.plotPerimeter);
             if (header != null && header.perimeterPrefabs == null)
                 header.perimeterPrefabs = new string[0];
-            if (header == null || header.version != Version ||
-                string.IsNullOrWhiteSpace(header.name) ||
-                string.IsNullOrWhiteSpace(header.baseHospitalId) ||
-                header.plots == null || header.plots.Length == 0 || header.plots.Length > 128 ||
+            if (header == null ||
+                header.plots == null || header.plots.Length > 128 ||
                 header.perimeterPrefabs.Length > 32 ||
                 HasInvalidStyleId(header.builtRoomStyle) ||
                 HasInvalidStyleId(header.buildingRoomStyle) ||
@@ -468,7 +520,7 @@ namespace UnderPressure.Editor
                   InvalidNumber(header.initialHygiene) ||
                   header.initialHygiene < 0f || header.initialHygiene > 1f)) ||
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
-                throw new InvalidDataException("config.json incorrecto o version incompatible.");
+                throw new InvalidDataException("config.json contiene datos no permitidos.");
             return header;
         }
 
@@ -498,10 +550,8 @@ namespace UnderPressure.Editor
         {
             var json = ReadText(path, MaxPlotBytes);
             var scene = JsonUtility.FromJson<Scene>(json) ?? new Scene();
-            scene.items = ParseObjects<Item>(json, "items");
-            scene.sourceChanges = json.Contains("\"sourceChanges\"")
-                ? ParseObjects<OriginalChange>(json, "sourceChanges")
-                : new OriginalChange[0];
+            scene.items = ParseOptionalObjects<Item>(json, "items");
+            scene.sourceChanges = ParseOptionalObjects<OriginalChange>(json, "sourceChanges");
             return scene;
         }
 
@@ -587,9 +637,12 @@ namespace UnderPressure.Editor
             var plot = JsonUtility.FromJson<Plot>(json);
             if (plot == null)
                 throw new InvalidDataException("Parcela JSON ilegible: " + Path.GetFileName(path));
-            plot.baseItems = ParseCompactPlotItems(json, "baseItems");
-            plot.builtItems = ParseCompactPlotItems(json, "builtItems");
-            plot.unbuiltItems = ParseCompactPlotItems(json, "unbuiltItems");
+            plot.baseItems = HasTopLevelField(json, "baseItems")
+                ? ParseCompactPlotItems(json, "baseItems") : new Item[0];
+            plot.builtItems = HasTopLevelField(json, "builtItems")
+                ? ParseCompactPlotItems(json, "builtItems") : new Item[0];
+            plot.unbuiltItems = HasTopLevelField(json, "unbuiltItems")
+                ? ParseCompactPlotItems(json, "unbuiltItems") : new Item[0];
             plot.builtRoomStyle = plot.builtRoomStyle ?? "";
             plot.buildingRoomStyle = plot.buildingRoomStyle ?? "";
             plot.unbuiltRoomStyle = plot.unbuiltRoomStyle ?? "";
@@ -597,14 +650,16 @@ namespace UnderPressure.Editor
                 HasInvalidStyleId(plot.buildingRoomStyle) ||
                 HasInvalidStyleId(plot.unbuiltRoomStyle))
                 throw new InvalidDataException("Estilo de parcela incorrecto.");
-            var rawPrerequisites = ArrayElements(json, "prerequisites");
+            var rawPrerequisites = HasTopLevelField(json, "prerequisites")
+                ? ArrayElements(json, "prerequisites") : new List<string>();
             var requirements = new List<PlotPrerequisite>();
             foreach (var raw in rawPrerequisites)
             {
                 var requirement = JsonUtility.FromJson<PlotPrerequisite>(raw);
                 if (requirement == null)
                     throw new InvalidDataException("Requisito de parcela ilegible.");
-                var indices = ArrayElements(raw, "anyBought");
+                var indices = HasTopLevelField(raw, "anyBought")
+                    ? ArrayElements(raw, "anyBought") : new List<string>();
                 requirement.anyBought = new int[indices.Count];
                 for (var i = 0; i < indices.Count; i++)
                 {
@@ -656,6 +711,18 @@ namespace UnderPressure.Editor
             return result;
         }
 
+        private static T[] ParseOptionalObjects<T>(string json, string key) where T : class
+        {
+            return HasTopLevelField(json, key)
+                ? ParseObjects<T>(json, key) : new T[0];
+        }
+
+        private static string[] ParseOptionalStrings(string json, string key)
+        {
+            return HasTopLevelField(json, key)
+                ? ParseStrings(json, key) : new string[0];
+        }
+
         private static ObjectiveData[] ParseObjectives(string json)
         {
             var entries = ArrayElements(json, "objectives");
@@ -666,10 +733,10 @@ namespace UnderPressure.Editor
                 var value = JsonUtility.FromJson<ObjectiveData>(raw);
                 if (value == null)
                     throw new InvalidDataException("Objetivo ilegible en config.json.");
-                value.requirements = ParseObjects<ObjectiveRuleData>(raw, "requirements");
-                value.completion = ParseObjects<ObjectiveRuleData>(raw, "completion");
-                value.failure = ParseObjects<ObjectiveRuleData>(raw, "failure");
-                value.abandon = ParseObjects<ObjectiveRuleData>(raw, "abandon");
+                value.requirements = ParseOptionalObjects<ObjectiveRuleData>(raw, "requirements");
+                value.completion = ParseOptionalObjects<ObjectiveRuleData>(raw, "completion");
+                value.failure = ParseOptionalObjects<ObjectiveRuleData>(raw, "failure");
+                value.abandon = ParseOptionalObjects<ObjectiveRuleData>(raw, "abandon");
                 result[index] = value;
             }
             return result;
@@ -685,9 +752,9 @@ namespace UnderPressure.Editor
                 var value = JsonUtility.FromJson<EmergencyData>(raw);
                 if (value == null)
                     throw new InvalidDataException("Emergencia ilegible en config.json.");
-                value.illnesses = ParseStrings(raw, "illnesses");
-                value.prerequisites = ParseObjects<EmergencyRuleData>(raw, "prerequisites");
-                value.rewards = ParseObjects<EmergencyRuleData>(raw, "rewards");
+                value.illnesses = ParseOptionalStrings(raw, "illnesses");
+                value.prerequisites = ParseOptionalObjects<EmergencyRuleData>(raw, "prerequisites");
+                value.rewards = ParseOptionalObjects<EmergencyRuleData>(raw, "rewards");
                 result[index] = value;
             }
             return result;
@@ -1003,6 +1070,59 @@ namespace UnderPressure.Editor
             if (value == null)
                 throw new InvalidDataException("Objeto JSON incorrecto: " + key);
             return value;
+        }
+
+        private static bool TryParseObject<T>(string json, string key, out T value) where T : class
+        {
+            value = null;
+            if (!HasTopLevelField(json, key)) return false;
+            value = ParseObject<T>(json, key);
+            return true;
+        }
+
+        private static bool HasTopLevelField(string json, string key)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return false;
+            var objectDepth = 0;
+            var arrayDepth = 0;
+            var quoted = false;
+            var escaped = false;
+            for (var index = 0; index < json.Length; index++)
+            {
+                var current = json[index];
+                if (quoted)
+                {
+                    if (escaped) escaped = false;
+                    else if (current == '\\') escaped = true;
+                    else if (current == '"') quoted = false;
+                    continue;
+                }
+                if (current == '"')
+                {
+                    if (objectDepth == 1 && arrayDepth == 0)
+                    {
+                        var end = index + 1;
+                        while (end < json.Length && json[end] != '"')
+                        {
+                            if (json[end] == '\\') end++;
+                            end++;
+                        }
+                        if (end < json.Length && end - index - 1 == key.Length &&
+                            string.CompareOrdinal(json, index + 1, key, 0, key.Length) == 0)
+                        {
+                            var colon = end + 1;
+                            while (colon < json.Length && char.IsWhiteSpace(json[colon])) colon++;
+                            if (colon < json.Length && json[colon] == ':') return true;
+                        }
+                    }
+                    quoted = true;
+                }
+                else if (current == '{') objectDepth++;
+                else if (current == '}') objectDepth--;
+                else if (current == '[') arrayDepth++;
+                else if (current == ']') arrayDepth--;
+            }
+            return false;
         }
 
         private static string ExtractObject(string json, string key)

@@ -203,6 +203,7 @@ scenario_editor.hospitals,,,,,
 scenario_editor.maps,,,,,
 scenario_editor.new_map,,,,,
 scenario_editor.invalid_map,,,,,
+scenario_editor.obsolete,Obsolete,Obsoleto,Obsolete,Obsolete,Obsolete
 editor.objects.title,,,,,
 editor.objects.search,,,,,
 editor.objects.show_all,,,,,
