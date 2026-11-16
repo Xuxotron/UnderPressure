@@ -1,4 +1,4 @@
-// Updated: 2026-10-15 - Reparado guardado Landscape: arrays objects y added escritos y verificados individualmente.
+// Updated: 2026-11-13 - Estilos de hospital persistentes por parcela con herencia desde Parcela 1.
 // Mantiene el contrato config.json del mapa, sus PNG y las capas Base/Built/Unbuilt.
 using System;
 using System.Collections.Generic;
@@ -241,6 +241,10 @@ namespace UnderPressure.Editor
             public bool buildObjectiveStartOnPrereqsMet;
             public int mergeInto = -1;
             public int ambulanceBayEntranceSide = (int)TH20.GridDirection.Max;
+            public bool customRoomStyles;
+            public string builtRoomStyle = "";
+            public string buildingRoomStyle = "";
+            public string unbuiltRoomStyle = "";
             public PlotPrerequisite[] prerequisites = new PlotPrerequisite[0];
             public Item[] baseItems = new Item[0];
             public Item[] builtItems = new Item[0];
@@ -513,6 +517,13 @@ namespace UnderPressure.Editor
             plot.baseItems = ParseCompactPlotItems(json, "baseItems");
             plot.builtItems = ParseCompactPlotItems(json, "builtItems");
             plot.unbuiltItems = ParseCompactPlotItems(json, "unbuiltItems");
+            plot.builtRoomStyle = plot.builtRoomStyle ?? "";
+            plot.buildingRoomStyle = plot.buildingRoomStyle ?? "";
+            plot.unbuiltRoomStyle = plot.unbuiltRoomStyle ?? "";
+            if (HasInvalidStyleId(plot.builtRoomStyle) ||
+                HasInvalidStyleId(plot.buildingRoomStyle) ||
+                HasInvalidStyleId(plot.unbuiltRoomStyle))
+                throw new InvalidDataException("Estilo de parcela incorrecto.");
             var rawPrerequisites = ArrayElements(json, "prerequisites");
             var requirements = new List<PlotPrerequisite>();
             foreach (var raw in rawPrerequisites)

@@ -1,4 +1,4 @@
-// Updated: 2026-10-14 - Agrupacion estructural del Editor desde GitHub beb96a79.
+// Updated: 2026-11-13 - Estilos de hospital por parcela persistentes; Parcela 1 base y herencia para el resto.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -730,6 +730,93 @@ namespace UnderPressure.Editor
             }
         }
 
+        internal static void ApplyPlotRoomStyles(
+            Level level,
+            IList<ScenarioMapFormat.Plot> plots,
+            IList<HospitalPlotDefinition> definitions,
+            ScenarioMapFormat.Map fallbackStyles,
+            WorldState.Config config = null)
+        {
+            if (level == null || plots == null || plots.Count == 0 ||
+                definitions == null || definitions.Count == 0)
+                return;
+
+            var catalog = Build(
+                level,
+                EditorLocalization.Get("editor.map.style.original"),
+                EditorLocalization.Get("editor.map.style.none"));
+            var templates = level.Config?.GetWorldStateConfig()?.HospitalPlots;
+            var basis = plots[0];
+            var explicitBase = basis != null && basis.customRoomStyles;
+            var baseBuilt = explicitBase
+                ? basis.builtRoomStyle ?? ""
+                : fallbackStyles?.builtRoomStyle ?? "";
+            var baseBuilding = explicitBase
+                ? basis.buildingRoomStyle ?? ""
+                : fallbackStyles?.buildingRoomStyle ?? "";
+            var baseUnbuilt = explicitBase
+                ? basis.unbuiltRoomStyle ?? ""
+                : fallbackStyles?.unbuiltRoomStyle ?? "";
+
+            for (var index = 0; index < definitions.Count; ++index)
+            {
+                var definition = definitions[index];
+                if (definition == null) continue;
+                var model = index < plots.Count ? plots[index] : null;
+                var custom = index == 0
+                    ? explicitBase
+                    : model != null && model.customRoomStyles;
+                var built = custom ? model?.builtRoomStyle ?? "" : baseBuilt;
+                var building = custom ? model?.buildingRoomStyle ?? "" : baseBuilding;
+                var unbuilt = custom ? model?.unbuiltRoomStyle ?? "" : baseUnbuilt;
+
+                HospitalPlotDefinition original = null;
+                if (templates != null && templates.Count != 0)
+                {
+                    var template = templates[Math.Min(index, templates.Count - 1)];
+                    original = template?.Instance;
+                }
+
+                definition.BuiltRoomDefinition = ResolvePlotRoomStyle(
+                    built, catalog.Built,
+                    original?.BuiltRoomDefinition ?? definition.BuiltRoomDefinition);
+                definition.BuildingRoomDefinition = ResolvePlotRoomStyle(
+                    building, catalog.Building,
+                    original?.BuildingRoomDefinition ?? definition.BuildingRoomDefinition);
+                definition.UnbuiltRoomDefinition = ResolvePlotRoomStyle(
+                    unbuilt, catalog.Unbuilt,
+                    original?.UnbuiltRoomDefinition ?? definition.UnbuiltRoomDefinition);
+            }
+
+            if (config != null)
+            {
+                var originalConfig = level.Config?.GetWorldStateConfig();
+                config._roomBuiltDefinition = ResolvePlotRoomStyle(
+                    baseBuilt, catalog.Built,
+                    originalConfig?._roomBuiltDefinition ?? config._roomBuiltDefinition);
+                config._roomBuildingDefinition = ResolvePlotRoomStyle(
+                    baseBuilding, catalog.Building,
+                    originalConfig?._roomBuildingDefinition ?? config._roomBuildingDefinition);
+                config._roomUnbuiltDefinition = ResolvePlotRoomStyle(
+                    baseUnbuilt, catalog.Unbuilt,
+                    originalConfig?._roomUnbuiltDefinition ?? config._roomUnbuiltDefinition);
+            }
+        }
+
+        private static SharedInstance<RoomDefinition> ResolvePlotRoomStyle(
+            string id,
+            IList<RoomChoice> choices,
+            SharedInstance<RoomDefinition> original)
+        {
+            if (string.IsNullOrEmpty(id)) return original;
+            var choice = choices?.FirstOrDefault(value =>
+                string.Equals(value.Id, id, StringComparison.Ordinal));
+            if (choice?.Definition == null)
+                throw new InvalidDataException(
+                    "El estilo de hospital no esta disponible: " + id);
+            return choice.Definition;
+        }
+
         private static void ApplyRoom(string id, IList<RoomChoice> choices,
             Action<SharedInstance<RoomDefinition>> setConfig,
             IList<HospitalPlotDefinition> definitions,
@@ -743,6 +830,105 @@ namespace UnderPressure.Editor
             if (definitions == null) return;
             foreach (var definition in definitions)
                 if (definition != null) setDefinition(definition, choice.Definition);
+        }
+    }
+}
+
+
+namespace UnderPressure.Editor
+{
+    internal static class ScenarioPerPlotRoomStyleRuntime
+    {
+        private sealed class CapturedStyle
+        {
+            internal ScenarioMapFormat.Plot Plot;
+            internal SharedInstance<RoomDefinition> OriginalBuilt;
+            internal SharedInstance<RoomDefinition> OriginalBuilding;
+            internal SharedInstance<RoomDefinition> OriginalUnbuilt;
+        }
+
+        private static readonly Dictionary<HospitalPlotDefinition, CapturedStyle> Captured =
+            new Dictionary<HospitalPlotDefinition, CapturedStyle>();
+
+        internal static void Capture(
+            ScenarioMapFormat.LoadedMap map,
+            ScenarioPlotRuntime.Collection collection)
+        {
+            Captured.Clear();
+            if (map == null || collection == null) return;
+            for (var index = 0; index < collection.Definitions.Count; ++index)
+            {
+                var definition = collection.Definitions[index];
+                if (definition == null) continue;
+                Captured[definition] = new CapturedStyle
+                {
+                    Plot = index < map.Plots.Count ? map.Plots[index]?.Data : null,
+                    OriginalBuilt = definition.BuiltRoomDefinition,
+                    OriginalBuilding = definition.BuildingRoomDefinition,
+                    OriginalUnbuilt = definition.UnbuiltRoomDefinition
+                };
+            }
+        }
+
+        internal static void Apply(
+            Level level,
+            ScenarioMapFormat.Map map,
+            WorldState.Config config,
+            IList<HospitalPlotDefinition> definitions)
+        {
+            if (level == null || map == null || definitions == null || Captured.Count == 0)
+                return;
+
+            var plots = new List<ScenarioMapFormat.Plot>(definitions.Count);
+            var anyCaptured = false;
+            foreach (var definition in definitions)
+            {
+                CapturedStyle saved;
+                if (definition != null && Captured.TryGetValue(definition, out saved))
+                {
+                    plots.Add(saved.Plot ?? new ScenarioMapFormat.Plot());
+                    anyCaptured = true;
+                }
+                else
+                    plots.Add(null);
+            }
+            if (!anyCaptured) return;
+
+            try
+            {
+                ScenarioHospitalStyles.ApplyPlotRoomStyles(
+                    level, plots, definitions, map, config);
+            }
+            finally
+            {
+                foreach (var definition in definitions)
+                    if (definition != null) Captured.Remove(definition);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioPlotRuntime), "Build")]
+    internal static class ScenarioPlotRoomStyleBuildPatch
+    {
+        private static void Postfix(
+            ScenarioMapFormat.LoadedMap map,
+            ScenarioPlotRuntime.Collection __result)
+        {
+            ScenarioPerPlotRoomStyleRuntime.Capture(map, __result);
+        }
+    }
+
+    [HarmonyPatch(typeof(ScenarioHospitalStyles), "Apply")]
+    internal static class ScenarioPlotRoomStyleApplyPatch
+    {
+        private static void Postfix(
+            Level level,
+            ScenarioMapFormat.Map map,
+            WorldState.Config config,
+            IList<HospitalPlotDefinition> definitions)
+        {
+            ScenarioPerPlotRoomStyleRuntime.Apply(
+                level, map, config, definitions);
         }
     }
 }

@@ -1,4 +1,4 @@
-// Updated: 2026-11-11 - Recompensas completas; filtros Tutorial/DLCs; checkbox nativo para Hospital publico y filtros.
+// Updated: 2026-11-16 - Objetivos: restaurar EnsureTrailingColon para los cuatro campos superiores.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace UnderPressure.Editor
         private static readonly Color ObjectivePanelColor =
             new Color(.105882354f, .407843143f, .6f, 1f);
         private static readonly Color ObjectiveRaisedPanelColor =
-            new Color(.16f, .49f, .69f, 1f);
+            new Color(.1882353f, .533333361f, .7529412f, 1f);
 
         private static readonly string[] ObjectiveRequirementTypes =
             ScenarioObjectiveRequirements.Types;
@@ -60,6 +60,7 @@ namespace UnderPressure.Editor
         private TMP_InputField _objectiveDifficultyInput;
         private TMP_InputField _objectiveCooldownInput;
         private Toggle _objectivePublicHospitalToggle;
+        private TMP_Text _objectivePublicHospitalLabel;
         private Toggle _objectiveTutorialRequirementsToggle;
         private Toggle _objectiveDlcRequirementsToggle;
         private bool _objectiveShowTutorialRequirements;
@@ -76,6 +77,9 @@ namespace UnderPressure.Editor
             _objectiveBuilt = false;
             _objectiveDrafts.Clear();
             _selectedObjective = 0;
+            _objectiveHeaderBlock = null;
+            _objectivePublicHospitalToggle = null;
+            _objectivePublicHospitalLabel = null;
             _objectiveTutorialRequirementsToggle = null;
             _objectiveDlcRequirementsToggle = null;
             _objectiveShowTutorialRequirements = false;
@@ -175,6 +179,9 @@ namespace UnderPressure.Editor
                 "UP Objectives List", _objectiveRoot, SettingsOuterPanelColor);
             SetTopLeft(_objectiveListBlock, 0f, 0f, ObjectiveLeftWidth,
                 pageHeight - 20f);
+            var objectiveListImage = _objectiveListBlock.GetComponent<Image>();
+            if (objectiveListImage != null)
+                objectiveListImage.color = new Color(.1370083f, .2631579f, .0452631563f, 0f);
 
             _objectiveConfigurationBlock = CreateObjectivePanel(
                 "UP Objective Configuration", _objectiveRoot, SettingsOuterPanelColor);
@@ -182,7 +189,7 @@ namespace UnderPressure.Editor
             _objectiveConfigurationBlock.anchorMax = new Vector2(1f, 1f);
             _objectiveConfigurationBlock.offsetMin =
                 new Vector2(ObjectiveLeftWidth + ObjectiveGap, 0f);
-            _objectiveConfigurationBlock.offsetMax = Vector2.zero;
+            _objectiveConfigurationBlock.offsetMax = new Vector2(0f, -73f);
 
             BuildObjectiveListChildren(pageHeight - 20f);
             BuildObjectiveConfigurationChildren();
@@ -213,7 +220,7 @@ namespace UnderPressure.Editor
             CreateObjectiveLabel(
                 _objectiveChallengePanel,
                 EditorLocalization.Get("editor.objectives.challenges"),
-                11f, 11f, ObjectiveLeftWidth - 40f, 34f, 25f,
+                11f, 4f, 198f, 34f, 25f,
                 TextAlignmentOptions.MidlineLeft);
 
             _objectiveChallengeScroll = CreateObjectiveVerticalScroll(
@@ -226,7 +233,7 @@ namespace UnderPressure.Editor
                 "UP Objective Challenge Scrollbar",
                 37f, 8f, false, 22f);
             _objectiveChallengeScroll.verticalScrollbarVisibility =
-                ScrollRect.ScrollbarVisibility.Permanent;
+                ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
 
             CreateObjectiveButton(
                 _objectiveListBlock,
@@ -245,158 +252,243 @@ namespace UnderPressure.Editor
 
         private void BuildObjectiveConfigurationChildren()
         {
-            _objectiveHeaderBlock = CreateObjectivePanel(
-                "UP Objective Header", _objectiveConfigurationBlock,
-                ObjectivePanelColor, true);
-            SetObjectiveStretchRect(
-                _objectiveHeaderBlock,
-                0f, 8f, 719f, 434f);
+            _objectiveHeaderBlock = CreateObjectiveNativeHeaderPanel();
 
-            _objectiveSelectionTitle = CreateObjectiveLabel(
-                _objectiveHeaderBlock,
-                "",
-                14f, 4f, -14f, 38f, 24f,
-                TextAlignmentOptions.MidlineLeft,
-                "UP Objective Selection Title");
-            var objectiveSelectionTitleRect =
-                _objectiveSelectionTitle.rectTransform;
-            objectiveSelectionTitleRect.anchorMin =
-                new Vector2(0f, 1f);
-            objectiveSelectionTitleRect.anchorMax =
-                new Vector2(1f, 1f);
-            objectiveSelectionTitleRect.pivot =
-                new Vector2(.5f, 1f);
-            objectiveSelectionTitleRect.anchoredPosition =
-                new Vector2(0f, -4f);
-            objectiveSelectionTitleRect.sizeDelta =
-                new Vector2(-28f, 38f);
-            _objectiveSelectionTitle.color = Color.white;
-            ConfigureObjectiveTmpText(
-                _objectiveSelectionTitle,
-                24f, 24f, 24f);
+            if (_objectiveHeaderBlock != null)
+            {
+                _objectiveSelectionTitle = CreateObjectiveLabel(
+                    _objectiveHeaderBlock, "", 0f, 0f, 100f, 38f, 24f,
+                    TextAlignmentOptions.MidlineLeft,
+                    "UP Objective Selection Title");
+                SetObjectiveExactRect(
+                    _objectiveSelectionTitle.rectTransform,
+                    new Vector2(0f, 1f), new Vector2(1f, 1f),
+                    new Vector2(.5f, 1f),
+                    new Vector2(-466.5f, -10f), new Vector2(-964f, 38f));
+                _objectiveSelectionTitle.color = Color.white;
+                ConfigureObjectiveTmpText(_objectiveSelectionTitle, 24f, 24f, 24f);
 
-            _objectiveDurationInput = CreateObjectiveCompactField(
-                _objectiveHeaderBlock,
-                "editor.objectives.duration",
-                46f,
-                true);
-
-            _objectiveProbabilityInput = CreateObjectiveCompactField(
-                _objectiveHeaderBlock,
-                "editor.objectives.probability",
-                117f,
-                false);
-
-            _objectiveDifficultyInput = CreateObjectiveCompactField(
-                _objectiveHeaderBlock,
-                "editor.objectives.difficulty",
-                186f,
-                true);
-
-            _objectiveCooldownInput = CreateObjectiveCompactField(
-                _objectiveHeaderBlock,
-                "editor.objectives.cooldown",
-                255f,
-                false);
-
-            _objectivePublicHospitalToggle =
-                CreateObjectivePublicHospitalToggle(
-                    _objectiveHeaderBlock,
-                    14f,
-                    326f);
+                _objectiveDurationInput = CreateObjectiveHeaderField(
+                    _objectiveHeaderBlock, "editor.objectives.duration",
+                    EnsureTrailingColon(EditorLocalization.Get("editor.objectives.duration")),
+                    138.5f, 0f, 223.5f, 12f, 41f, true, 0f);
+                _objectiveProbabilityInput = CreateObjectiveHeaderField(
+                    _objectiveHeaderBlock, "editor.objectives.probability",
+                    EnsureTrailingColon(EditorLocalization.Get("editor.objectives.probability")),
+                    301.5f, 1f, 413.5f, 11f, 42f, false, 1f);
+                _objectiveDifficultyInput = CreateObjectiveHeaderField(
+                    _objectiveHeaderBlock, "editor.objectives.difficulty",
+                    EnsureTrailingColon(EditorLocalization.Get("editor.objectives.difficulty")),
+                    494.5f, 0f, 586.5f, 11f, 39f, true, 0f);
+                _objectiveCooldownInput = CreateObjectiveHeaderField(
+                    _objectiveHeaderBlock, "editor.objectives.cooldown",
+                    EnsureTrailingColon(EditorLocalization.Get("editor.objectives.cooldown")),
+                    664.5f, 0f, 771.5f, 11f, 47f, false, 0f);
+                _objectivePublicHospitalToggle =
+                    CreateObjectiveHeaderPublicHospitalToggle(_objectiveHeaderBlock);
+            }
 
             var requirements = CreateObjectivePanel(
-                "UP Objective Requirements",
-                _objectiveConfigurationBlock,
-                ObjectiveRaisedPanelColor,
-                true);
-            SetObjectiveStretchRect(
-                requirements,
-                364f, 7f, 4f, 436f);
+                "UP Objective Requirements", _objectiveConfigurationBlock,
+                new Color(.1882353f, .533333361f, .7529412f, 1f), true);
+            SetObjectiveExactRect(
+                requirements, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(.5f, 1f), new Vector2(-1f, -7f), new Vector2(-6f, 369f));
+            ConfigureObjectiveExactOutline(
+                requirements, true,
+                new Color(.6392157f, .8509804f, .9843137f, 1f),
+                new Vector2(3f, -3f));
 
             CreateObjectiveLabel(
-                requirements,
-                EditorLocalization.Get("editor.objectives.requirements"),
-                10f, 5f, 280f, 38f, 24f,
-                TextAlignmentOptions.MidlineLeft);
+                requirements, EditorLocalization.Get("editor.objectives.requirements"),
+                10f, 5f, 280f, 38f, 24f, TextAlignmentOptions.MidlineLeft);
 
-            _objectiveRequirementTypeDropdown =
-                CreateObjectiveNativeDropdown(
-                    requirements,
-                    "UP Objective Requirement Type",
-                    13f, 47f, 320f, 36f,
-                    AvailableObjectiveRequirementTypes().Select(
-                        ObjectiveRequirementLabel));
+            _objectiveRequirementTypeDropdown = CreateObjectiveNativeDropdown(
+                requirements, "UP Objective Requirement Type",
+                13f, 47f, 320f, 36f,
+                AvailableObjectiveRequirementTypes().Select(ObjectiveRequirementLabel));
 
             CreateObjectiveButton(
-                requirements,
-                "UP Objective Requirement Add",
-                "+",
-                343f, 47f, 40f, 36f,
-                EmergencyAddColor,
-                AddObjectiveRequirement);
+                requirements, "UP Objective Requirement Add", "+",
+                343f, 47f, 40f, 36f, EmergencyAddColor, AddObjectiveRequirement);
 
-            _objectiveTutorialRequirementsToggle =
-                CreateObjectiveRequirementFilterToggle(
-                    requirements,
-                    "UP Objective Tutorial Requirements Toggle",
-                    "Tutorial:",
-                    394f,
-                    47f,
-                    116f,
-                    _objectiveShowTutorialRequirements,
-                    value =>
-                    {
-                        _objectiveShowTutorialRequirements = value;
-                        RefreshObjectiveRequirementTypeDropdown();
-                        RefreshObjectiveRequirements();
-                    });
+            _objectiveTutorialRequirementsToggle = CreateObjectiveRequirementFilterToggle(
+                requirements, "UP Objective Tutorial Requirements Toggle", "Tutorial:",
+                394f, 47f, 116f, _objectiveShowTutorialRequirements,
+                value =>
+                {
+                    _objectiveShowTutorialRequirements = value;
+                    RefreshObjectiveRequirementTypeDropdown();
+                    RefreshObjectiveRequirements();
+                });
+            ApplyObjectiveFilterLabelRect(_objectiveTutorialRequirementsToggle, 0f, 72f);
 
-            _objectiveDlcRequirementsToggle =
-                CreateObjectiveRequirementFilterToggle(
-                    requirements,
-                    "UP Objective DLC Requirements Toggle",
-                    "DLCs:",
-                    520f,
-                    47f,
-                    96f,
-                    _objectiveShowDlcRequirements,
-                    value =>
-                    {
-                        _objectiveShowDlcRequirements = value;
-                        RefreshObjectiveRequirementTypeDropdown();
-                        RefreshObjectiveRequirements();
-                    });
+            _objectiveDlcRequirementsToggle = CreateObjectiveRequirementFilterToggle(
+                requirements, "UP Objective DLC Requirements Toggle", "DLCs:",
+                520f, 47f, 96f, _objectiveShowDlcRequirements,
+                value =>
+                {
+                    _objectiveShowDlcRequirements = value;
+                    RefreshObjectiveRequirementTypeDropdown();
+                    RefreshObjectiveRequirements();
+                });
+            ApplyObjectiveFilterLabelRect(_objectiveDlcRequirementsToggle, 0f, 34f);
 
-            _objectiveRequirementScroll =
-                CreateObjectiveVerticalScroll(
-                    requirements,
-                    "UP Objective Requirements Scroll",
-                    12f, 92f, 12f, 12f,
-                    out _objectiveRequirementContent);
+            _objectiveRequirementScroll = CreateObjectiveVerticalScroll(
+                requirements, "UP Objective Requirements Scroll",
+                12f, 92f, 12f, 12f, out _objectiveRequirementContent);
             _objectiveRequirementScroll.scrollSensitivity = 44f;
-
             InstallNativeVerticalScrollbar(
-                requirements,
-                _objectiveRequirementScroll,
-                "UP Objective Requirements Scrollbar",
-                92f, 12f, false, 12f);
+                requirements, _objectiveRequirementScroll,
+                "UP Objective Requirements Scrollbar", 92f, 12f, false, 22f);
 
-            BuildObjectiveResultPanels(
-                _objectiveConfigurationBlock);
+            BuildObjectiveResultPanels(_objectiveConfigurationBlock);
 
-            BindObjectiveInput(
-                _objectiveDurationInput,
-                value => CurrentObjective.durationDays = value);
-            BindObjectiveInput(
-                _objectiveProbabilityInput,
-                value => CurrentObjective.probability = value);
-            BindObjectiveInput(
-                _objectiveDifficultyInput,
-                value => CurrentObjective.difficulty = value);
-            BindObjectiveInput(
-                _objectiveCooldownInput,
-                value => CurrentObjective.cooldownSeconds = value);
+            BindObjectiveInput(_objectiveDurationInput, value => CurrentObjective.durationDays = value);
+            BindObjectiveInput(_objectiveProbabilityInput, value => CurrentObjective.probability = value);
+            BindObjectiveInput(_objectiveDifficultyInput, value => CurrentObjective.difficulty = value);
+            BindObjectiveInput(_objectiveCooldownInput, value => CurrentObjective.cooldownSeconds = value);
+        }
+
+        private RectTransform CreateObjectiveNativeHeaderPanel()
+        {
+            GameObject workshopFieldTemplate;
+            Component nativeInputTemplate;
+            if (!TryGetWorkshopFieldTemplate(false, out workshopFieldTemplate, out nativeInputTemplate) ||
+                workshopFieldTemplate == null)
+                return null;
+
+            var backgroundSource = workshopFieldTemplate.transform.Find("BGSolid");
+            if (backgroundSource == null)
+                return null;
+
+            var panel = Instantiate(backgroundSource.gameObject, _objectiveContent, false);
+            panel.name = "UP Patient Settings Copy";
+            panel.SetActive(true);
+            panel.transform.localScale = Vector3.one;
+            DisableLocalisers(panel.transform);
+
+            var rect = panel.transform as RectTransform;
+            SetObjectiveExactRect(
+                rect, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(.5f, 1f), new Vector2(120.5f, -16f), new Vector2(-260f, 64f));
+            if (rect.parent != null)
+                rect.SetSiblingIndex(Mathf.Clamp(2, 0, rect.parent.childCount - 1));
+
+            var image = panel.GetComponent<Image>();
+            if (image != null) image.color = Color.white;
+            foreach (var outline in panel.GetComponents<Outline>())
+                if (outline != null) outline.enabled = false;
+            return rect;
+        }
+
+        private static string EnsureTrailingColon(string value)
+        {
+            value = (value ?? string.Empty).TrimEnd();
+            return value.EndsWith(":", StringComparison.Ordinal) ? value : value + ":";
+        }
+
+        private TMP_InputField CreateObjectiveHeaderField(
+            Transform parent, string inputName, string labelValue,
+            float labelX, float labelY, float inputX, float inputY,
+            float inputWidth, bool integer, float textOffsetX)
+        {
+            CreateObjectiveLabel(parent, labelValue,
+                labelX, labelY, 108f, 58f, 18f, TextAlignmentOptions.MidlineLeft);
+
+            var input = CreateObjectiveInput(
+                parent, inputName, inputX, inputY, inputWidth, 36f, "", integer);
+            if (input == null) return null;
+            SetTopLeft(input.transform as RectTransform, inputX, inputY, inputWidth, 36f);
+            if (!integer) input.contentType = TMP_InputField.ContentType.DecimalNumber;
+            input.characterLimit = 16;
+
+            var textArea = input.transform.Find("Text Area") as RectTransform;
+            if (textArea != null)
+                SetObjectiveExactRect(textArea, Vector2.zero, Vector2.one,
+                    new Vector2(.5f, .5f), Vector2.zero, new Vector2(-14f, 0f));
+
+            if (input.textComponent != null)
+            {
+                SetObjectiveExactRect(input.textComponent.rectTransform,
+                    Vector2.zero, Vector2.one, new Vector2(.5f, .5f),
+                    new Vector2(textOffsetX, 0f), Vector2.zero);
+                ConfigureObjectiveTmpText(input.textComponent, 16f, 20f, 20f);
+                DisableObjectiveTextOutline(input.textComponent);
+            }
+            return input;
+        }
+
+        private Toggle CreateObjectiveHeaderPublicHospitalToggle(Transform parent)
+        {
+            _objectivePublicHospitalLabel = CreateObjectiveLabel(
+                parent, ObjectivePublicToggleLabel(),
+                861.5f, 11f, 136f, 36f, 18f, TextAlignmentOptions.MidlineLeft);
+
+            var toggle = CreateDiseaseToggle(parent, false, value =>
+            {
+                var draft = CurrentObjective;
+                if (draft == null || draft.isStar) return;
+                ScenarioObjectiveRequirements.SetPublicHospital(draft, value);
+                SaveObjectiveDrafts();
+                RefreshObjectiveList();
+                RefreshObjectiveConfiguration();
+            });
+            if (toggle == null) return null;
+
+            toggle.gameObject.name = "UP Objective Public Hospital Toggle Control";
+            SetObjectiveExactRect(toggle.transform as RectTransform,
+                new Vector2(.5f, .5f), new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                new Vector2(488.5f, 3f), new Vector2(40f, 40f));
+
+            var background = toggle.transform.Find("Background") as RectTransform;
+            if (background != null)
+            {
+                SetObjectiveExactRect(background, Vector2.zero, Vector2.one,
+                    new Vector2(.5f, .5f), Vector2.zero, Vector2.zero);
+                var bg = background.GetComponent<Image>();
+                if (bg != null) bg.color = new Color(.80392164f, .80392164f, .80392164f, 1f);
+                var border = background.Find("Border") as RectTransform;
+                if (border != null)
+                    SetObjectiveExactRect(border, Vector2.zero, Vector2.one,
+                        new Vector2(.5f, .5f), Vector2.zero, Vector2.zero);
+                var checkmark = background.Find("Checkmark") as RectTransform;
+                if (checkmark != null)
+                    SetObjectiveExactRect(checkmark, Vector2.zero, Vector2.one,
+                        new Vector2(.5f, .5f), Vector2.zero, new Vector2(-10f, -10f));
+            }
+            return toggle;
+        }
+
+        private static void ApplyObjectiveFilterLabelRect(Toggle toggle, float x, float width)
+        {
+            if (toggle == null || toggle.transform.parent == null) return;
+            var label = toggle.transform.parent.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault();
+            if (label != null) SetTopLeft(label.rectTransform, x, 0f, width, 36f);
+        }
+
+        private static void ConfigureObjectiveExactOutline(
+            RectTransform rect, bool enabled, Color color, Vector2 distance)
+        {
+            if (rect == null) return;
+            var outline = rect.GetComponent<Outline>();
+            if (outline == null) outline = rect.gameObject.AddComponent<Outline>();
+            outline.enabled = enabled;
+            outline.effectColor = color;
+            outline.effectDistance = distance;
+            outline.useGraphicAlpha = true;
+        }
+
+        private static void SetObjectiveExactRect(
+            RectTransform rect, Vector2 anchorMin, Vector2 anchorMax,
+            Vector2 pivot, Vector2 anchoredPosition, Vector2 sizeDelta)
+        {
+            if (rect == null) return;
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.pivot = pivot;
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = sizeDelta;
         }
 
         private RectTransform CreateObjectivePanel(string name, Transform parent, Color color,
@@ -433,7 +525,7 @@ namespace UnderPressure.Editor
             rootRect.offsetMin = new Vector2(left, bottom);
             rootRect.offsetMax = new Vector2(-right, -top);
 
-            var scroll = root.AddComponent<ScrollRect>();
+            var scroll =  root.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
@@ -758,14 +850,17 @@ namespace UnderPressure.Editor
                 var captured = index;
                 var panel = CreateObjectivePanel(
                     "UP Objective Result Panel " + index,
-                    parent, ObjectivePanelColor, true);
+                    parent, ObjectiveRaisedPanelColor, true);
 
-                // Los tres bloques son paneles independientes, hermanos de
-                // Cabecera/Requisitos. No existe un contenedor "Resultados".
-                panel.anchorMin = new Vector2(index / 3f, 0f);
-                panel.anchorMax = new Vector2((index + 1f) / 3f, 1f);
-                panel.offsetMin = new Vector2(index == 0 ? 0f : 4f, 0f);
-                panel.offsetMax = new Vector2(index == 2 ? 0f : -4f, -452f);
+                if (index == 0)
+                    SetObjectiveExactRect(panel, new Vector2(0f, 0f), new Vector2(.333333343f, 1f), new Vector2(.5f, .5f), new Vector2(-2f, -194.5f), new Vector2(-4f, -389f));
+                else if (index == 1)
+                    SetObjectiveExactRect(panel, new Vector2(.333333343f, 0f), new Vector2(.6666667f, 1f), new Vector2(.5f, .5f), new Vector2(0f, -194f), new Vector2(-8f, -388f));
+                else
+                    SetObjectiveExactRect(panel, new Vector2(.6666667f, 0f), new Vector2(1f, 1f), new Vector2(.5f, .5f), new Vector2(2f, -194.5f), new Vector2(-4f, -389f));
+
+                ConfigureObjectiveExactOutline(panel, true,
+                    new Color(.6392157f, .8509804f, .9843137f, 1f), new Vector2(3f, -3f));
 
                 var resultTitle = CreateObjectiveLabel(
                     panel,
@@ -812,7 +907,7 @@ namespace UnderPressure.Editor
                     panel,
                     _objectiveResultScrolls[index],
                     "UP Objective Results Scrollbar " + index,
-                    80f, 8f, false, 12f);
+                    80f, 8f, false, 22f);
             }
         }
 
@@ -848,7 +943,7 @@ namespace UnderPressure.Editor
                     EditorLocalization.Format(
                         "editor.objectives.star",
                         stars[row].value.starIndex),
-                    8f,
+                    10f,
                     40f + row * 44f,
                     ObjectiveLeftWidth - 32f,
                     38f,
@@ -893,7 +988,7 @@ namespace UnderPressure.Editor
                         challenges[row].value);
 
                 var label = publicHospital
-                    ? ScenarioObjectiveRequirements.PublicChallengeLabel(
+                    ? ObjectivePublicLabel(
                         ++publicNumber)
                     : EditorLocalization.Format(
                         "editor.objectives.challenge",
@@ -928,6 +1023,8 @@ namespace UnderPressure.Editor
                         -18f,
                         rowHeight - 4f);
             }
+
+            ClampObjectiveScroll(_objectiveChallengeScroll);
         }
 
         private void RefreshObjectiveConfiguration()
@@ -947,7 +1044,7 @@ namespace UnderPressure.Editor
                 if (_objectiveSelectionTitle != null)
                 {
                     if (draft.isStar)
-                    {
+                     {
                         _objectiveSelectionTitle.text =
                             EditorLocalization.Format(
                                 "editor.objectives.star",
@@ -962,8 +1059,7 @@ namespace UnderPressure.Editor
                                 ScenarioObjectiveRequirements
                                     .IsPublicHospital(value));
                         _objectiveSelectionTitle.text =
-                            ScenarioObjectiveRequirements
-                                .PublicChallengeLabel(publicIndex);
+                            ObjectivePublicLabel(publicIndex);
                     }
                     else
                     {
@@ -999,12 +1095,21 @@ namespace UnderPressure.Editor
 
                 if (_objectivePublicHospitalToggle != null)
                 {
-                    _objectivePublicHospitalToggle.gameObject
-                        .SetActive(!draft.isStar);
-                    _objectivePublicHospitalToggle
-                        .SetIsOnWithoutNotify(
-                            ScenarioObjectiveRequirements
-                                .IsPublicHospital(draft));
+                    var publicHospitalEditable = !draft.isStar;
+                    _objectivePublicHospitalToggle.gameObject.SetActive(true);
+                    _objectivePublicHospitalToggle.interactable = publicHospitalEditable;
+                    _objectivePublicHospitalToggle.SetIsOnWithoutNotify(
+                        ScenarioObjectiveRequirements.IsPublicHospital(draft));
+                    if (_objectivePublicHospitalLabel != null)
+                        _objectivePublicHospitalLabel.color = publicHospitalEditable
+                            ? Color.white
+                            : new Color(.65f, .65f, .65f, 1f);
+                    var publicBackground = _objectivePublicHospitalToggle.transform
+                        .Find("Background")?.GetComponent<Image>();
+                    if (publicBackground != null)
+                        publicBackground.color = publicHospitalEditable
+                            ? new Color(.80392164f, .80392164f, .80392164f, 1f)
+                            : new Color(.65f, .65f, .65f, 1f);
                 }
 
                 for (var index = 0; index < 3; ++index)
@@ -1229,26 +1334,29 @@ namespace UnderPressure.Editor
                     "UP Objective Rule " + index,
                     content,
                     _style.ButtonSprite,
-                    SettingsOuterPanelColor,
+                    ObjectivePanelColor,
                     false);
                 rowObject.SetActive(false);
 
                 var rowOutline =
                     rowObject.AddComponent<Outline>();
-                rowOutline.effectColor =
-                    new Color(1f, 1f, 1f, .7f);
-                rowOutline.effectDistance =
-                    new Vector2(1f, -1f);
+                rowOutline.enabled = false;
+                rowOutline.effectColor = new Color(1f, 1f, 1f, .7f);
+                rowOutline.effectDistance = requirement
+                    ? new Vector2(1f, -1f)
+                    : new Vector2(2f, -2f);
                 rowOutline.useGraphicAlpha = true;
 
                 var row = rowObject.transform as RectTransform;
                 row.anchorMin = new Vector2(0f, 1f);
                 row.anchorMax = new Vector2(1f, 1f);
                 row.pivot = new Vector2(.5f, 1f);
-                row.anchoredPosition =
-                    new Vector2(0f, -top);
-                row.sizeDelta =
-                    new Vector2(0f, rowHeight - 4f);
+                row.anchoredPosition = requirement
+                    ? new Vector2(0f, 2f - top)
+                    : new Vector2(-8f, 1f - top);
+                row.sizeDelta = requirement
+                    ? new Vector2(0f, rowHeight + 1f)
+                    : new Vector2(-16f, 85f);
 
                 if (requirement)
                 {
@@ -1291,8 +1399,14 @@ namespace UnderPressure.Editor
 
             Canvas.ForceUpdateCanvases();
 
-            if (scroll.content.rect.height <=
-                scroll.viewport.rect.height + .5f)
+            var needsScrollbar =
+                scroll.content.rect.height >
+                scroll.viewport.rect.height + .5f;
+
+            if (scroll.verticalScrollbar != null)
+                scroll.verticalScrollbar.gameObject.SetActive(needsScrollbar);
+
+            if (!needsScrollbar)
             {
                 var position = scroll.content.anchoredPosition;
                 position.y = 0f;
@@ -1307,6 +1421,35 @@ namespace UnderPressure.Editor
             scroll.verticalNormalizedPosition = Mathf.Clamp01(normalized);
         }
 
+        private string ObjectivePublicBaseLabel()
+        {
+            var sample = EditorLocalization.Format(
+                "editor.objectives.challenge",
+                1);
+            return sample != null &&
+                   sample.IndexOf("challenge",
+                       StringComparison.OrdinalIgnoreCase) >= 0
+                ? "Public"
+                : "Público";
+        }
+
+        private string ObjectivePublicLabel(int index)
+        {
+            return ObjectivePublicBaseLabel() + " " + index;
+        }
+
+        private string ObjectivePublicToggleLabel()
+        {
+            var sample = EditorLocalization.Format(
+                "editor.objectives.challenge",
+                1);
+            return sample != null &&
+                   sample.IndexOf("challenge",
+                       StringComparison.OrdinalIgnoreCase) >= 0
+                ? "Public objective:"
+                : "Objetivo público:";
+        }
+
         private void BuildObjectiveRequirementRow(
             RectTransform row,
             ScrollRect scroll,
@@ -1316,7 +1459,7 @@ namespace UnderPressure.Editor
             var available = Mathf.Max(
                 520f,
                 scroll.viewport.rect.width);
-            var typeWidth = available * .42f;
+            const float typeWidth = 433.439972f;
             var references =
                 ScenarioObjectiveRequirements.ReferenceKinds(
                     rule.type);
@@ -1335,7 +1478,7 @@ namespace UnderPressure.Editor
                     row,
                     "Type",
                     6f,
-                    4f,
+                    7f,
                     typeWidth,
                     34f,
                     labels);
@@ -1369,8 +1512,8 @@ namespace UnderPressure.Editor
                 row,
                 "Remove",
                 "×",
-                available - 42f,
-                4f,
+                989f,
+                7f,
                 36f,
                 34f,
                 EmergencyRemoveColor,
@@ -1391,9 +1534,8 @@ namespace UnderPressure.Editor
 
             if (references.Length <= 1)
             {
-                var x = 12f + typeWidth;
-                var remaining =
-                    available - x - 48f;
+                var x = 445.439972f;
+                var remaining = 532.560059f;
 
                 if (references.Length == 1)
                 {
@@ -1419,8 +1561,8 @@ namespace UnderPressure.Editor
                         row,
                         rule,
                         x,
-                        4f,
-                        Mathf.Max(54f, remaining - 6f),
+                        references.Length == 0 ? 7f : 4f,
+                        references.Length == 0 ? 532.560059f : Mathf.Max(54f, remaining - 6f),
                         34f);
                 }
                 return;
@@ -1465,7 +1607,7 @@ namespace UnderPressure.Editor
                     x,
                     y,
                     referenceWidth,
-                    34f);
+                     34f);
             }
         }
 
@@ -1597,7 +1739,7 @@ namespace UnderPressure.Editor
             return CreateObjectiveNativeCheckbox(
                 parent,
                 "UP Objective Public Hospital Toggle",
-                ScenarioObjectiveRequirements.PublicHospitalLabel(),
+                ObjectivePublicToggleLabel(),
                 x,
                 y,
                 174f,
@@ -1694,8 +1836,7 @@ namespace UnderPressure.Editor
             var available = Mathf.Max(
                 160f,
                 scroll.viewport.rect.width);
-            var firstLineWidth =
-                Mathf.Max(80f, available - 54f);
+            const float firstLineWidth = 255f;
 
             var labels = ObjectiveResultTypes
                 .Select(ObjectiveResultLabel)
@@ -1703,8 +1844,8 @@ namespace UnderPressure.Editor
             var dropdown = CreateObjectiveNativeDropdown(
                 row,
                 "Type",
-                6f,
-                4f,
+                8f,
+                7f,
                 firstLineWidth,
                 34f,
                 labels);
@@ -1749,8 +1890,8 @@ namespace UnderPressure.Editor
                 row,
                 "Remove",
                 "×",
-                available - 42f,
-                4f,
+                267f,
+                7f,
                 36f,
                 34f,
                 EmergencyRemoveColor,
@@ -1780,9 +1921,9 @@ namespace UnderPressure.Editor
                     : CreateObjectiveNativeDropdown(
                         row,
                         "Reference",
-                        6f,
-                        42f,
-                        Mathf.Max(80f, available - 12f),
+                        8f,
+                        45f,
+                        295f,
                         34f,
                         referenceChoices.Select(value => value.Label));
                 if (reference != null)
@@ -1821,9 +1962,9 @@ namespace UnderPressure.Editor
                 var input = CreateObjectiveInput(
                     row,
                     "Value",
-                    6f,
-                    42f,
-                    Mathf.Max(80f, available - 12f),
+                    8f,
+                    45f,
+                    295f,
                     34f,
                     rule.value,
                     false);

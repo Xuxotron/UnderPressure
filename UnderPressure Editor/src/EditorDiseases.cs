@@ -1,4 +1,4 @@
-// Updated: 2026-11-11 - Override de pestana Enfermedades integrado y textos de sala centrados verticalmente a mano.
+// Updated: 2026-11-16 - Corregidos errores de sintaxis e identificadores dañados sin cambiar el diseño.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -303,7 +303,7 @@ namespace UnderPressure.Editor
 
             CreatePatientIntegerField(
                 panel.transform,
-                "Máx. pacientes",
+                EnsureDiseaseTrailingColon(EditorLocalization.Get("editor.scenario_settings.diseases.max_patients")),
                 _settingsMaxPatients,
                 20.8800049f, 164f,
                 180.88f, 49f,
@@ -312,7 +312,7 @@ namespace UnderPressure.Editor
 
             CreatePatientFloatField(
                 panel.transform,
-                "Ritmo de llegada",
+                EnsureDiseaseTrailingColon(EditorLocalization.Get("editor.scenario_settings.diseases.arrival_rate")),
                 _settingsPatientSpawnRate,
                 301.88f, 140f,
                 443.88f, 47f,
@@ -321,7 +321,7 @@ namespace UnderPressure.Editor
 
             CreatePatientFloatField(
                 panel.transform,
-                "Aleatoriedad",
+                EnsureDiseaseTrailingColon(EditorLocalization.Get("editor.scenario_settings.diseases.randomness")),
                 _settingsPatientSelectionRandomJitter,
                 568.88f, 121f,
                 680.88f, 49f,
@@ -331,7 +331,7 @@ namespace UnderPressure.Editor
 
             var neverLabel = CreateDiseaseText(
                 panel.transform,
-                "No generar pacientes",
+                EditorLocalization.Get("editor.scenario_settings.diseases.never_spawn_patients"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -354,7 +354,7 @@ namespace UnderPressure.Editor
 
             var ignoreFrequencyLabel = CreateDiseaseText(
                 panel.transform,
-                "Ignorar frecuencia",
+                EditorLocalization.Get("editor.scenario_settings.diseases.ignore_frequency"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -528,6 +528,15 @@ namespace UnderPressure.Editor
             input.selectionColor = selection;
             input.SetTextWithoutNotify(value);
             return input;
+        }
+
+        private static string EnsureDiseaseTrailingColon(string value)
+        {
+            value = value ?? string.Empty;
+            value = value.TrimEnd();
+            return value.EndsWith(":", StringComparison.Ordinal)
+                ? value
+                : value + ":";
         }
 
         private GameObject BuildDiseaseRoomSection(ScenarioDiseaseCatalog.Room room, float top)
@@ -1337,6 +1346,7 @@ namespace UnderPressure.Editor
             var text = root.GetComponent<TextMeshProUGUI>();
             text.text = value ?? "";
             text.fontSize = size;
+            text.fontStyle = FontStyles.Normal;
             text.alignment = alignment;
             text.color = color;
             text.raycastTarget = false;

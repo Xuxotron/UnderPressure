@@ -222,6 +222,10 @@ namespace UnderPressure.Editor
                 buildObjectiveAutoStart = source.buildObjectiveAutoStart,
                 buildObjectiveStartOnPrereqsMet = source.buildObjectiveStartOnPrereqsMet,
                 mergeInto = source.mergeInto,
+                customRoomStyles = source.customRoomStyles,
+                builtRoomStyle = source.builtRoomStyle ?? "",
+                buildingRoomStyle = source.buildingRoomStyle ?? "",
+                unbuiltRoomStyle = source.unbuiltRoomStyle ?? "",
                 prerequisites = (source.prerequisites ??
                     new ScenarioMapFormat.PlotPrerequisite[0]).Select(value =>
                         new ScenarioMapFormat.PlotPrerequisite
@@ -715,6 +719,7 @@ namespace UnderPressure.Editor
                 // Unity omite ocasionalmente los arrays vacios al serializar JSON.
                 // El formato fuerza su presencia y normaliza solo los declarados [].
                 var check = ScenarioMapFormat.ReadPlot(filename);
+                VerifySavedPlotSettings(entry.Item2, check, entry.Item1);
                 if (check.index != entry.Item2.index ||
                     check.baseItems.Length != entry.Item2.baseItems.Length ||
                     check.builtItems.Length != entry.Item2.builtItems.Length ||
@@ -731,6 +736,7 @@ namespace UnderPressure.Editor
             var verified = ScenarioMapFormat.ReadLoose(main);
             if (verified.Plots.Count != saved.Count)
                 throw new InvalidDataException("El mapa guardado no coincide con las parcelas del Editor.");
+            VerifySavedObjectives(header.objectives, verified.Header.objectives);
             ScenarioMapPackage.Publish(folder, package, candidate => ScenarioMapFormat.Read(candidate));
             UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + package + " (" + refs.Count + " parcelas)");
             MarkCurrentMap(level, name, package);
@@ -756,6 +762,132 @@ namespace UnderPressure.Editor
                     throw new InvalidDataException("Error al verificar objeto " + i +
                         " de " + layer + " en " + file);
             }
+        }
+
+        private static void VerifySavedPlotSettings(
+            ScenarioMapFormat.Plot before,
+            ScenarioMapFormat.Plot after,
+            string file)
+        {
+            if (before == null || after == null ||
+                before.index != after.index ||
+                !string.Equals(before.nameTerm ?? "", after.nameTerm ?? "", StringComparison.Ordinal) ||
+                before.cost != after.cost ||
+                !SameColor(before.color, after.color) ||
+                before.initiallyOpen != after.initiallyOpen ||
+                before.built != after.built ||
+                before.instaBuild != after.instaBuild ||
+                before.hideUntilAvailable != after.hideUntilAvailable ||
+                before.notHiddenInSandbox != after.notHiddenInSandbox ||
+                before.includePerimiterInNavMesh != after.includePerimiterInNavMesh ||
+                before.useEnergyUI != after.useEnergyUI ||
+                before.energyUnitsGenerated != after.energyUnitsGenerated ||
+                Math.Abs(before.timeToBuild - after.timeToBuild) > 0.001f ||
+                Math.Abs(before.footprintYOffset - after.footprintYOffset) > 0.001f ||
+                before.buildObjectiveAutoStart != after.buildObjectiveAutoStart ||
+                before.buildObjectiveStartOnPrereqsMet != after.buildObjectiveStartOnPrereqsMet ||
+                before.mergeInto != after.mergeInto ||
+                before.ambulanceBayEntranceSide != after.ambulanceBayEntranceSide ||
+                before.customRoomStyles != after.customRoomStyles ||
+                !string.Equals(before.builtRoomStyle ?? "", after.builtRoomStyle ?? "", StringComparison.Ordinal) ||
+                !string.Equals(before.buildingRoomStyle ?? "", after.buildingRoomStyle ?? "", StringComparison.Ordinal) ||
+                !string.Equals(before.unbuiltRoomStyle ?? "", after.unbuiltRoomStyle ?? "", StringComparison.Ordinal) ||
+                !SamePlotPrerequisites(before.prerequisites, after.prerequisites))
+                throw new InvalidDataException(
+                    "Los parametros de " + file + " no coinciden con lo exportado.");
+        }
+
+        private static bool SameColor(Color left, Color right)
+        {
+            return Math.Abs(left.r - right.r) <= 0.001f &&
+                   Math.Abs(left.g - right.g) <= 0.001f &&
+                   Math.Abs(left.b - right.b) <= 0.001f &&
+                   Math.Abs(left.a - right.a) <= 0.001f;
+        }
+
+        private static bool SamePlotPrerequisites(
+            ScenarioMapFormat.PlotPrerequisite[] before,
+            ScenarioMapFormat.PlotPrerequisite[] after)
+        {
+            before = before ?? new ScenarioMapFormat.PlotPrerequisite[0];
+            after = after ?? new ScenarioMapFormat.PlotPrerequisite[0];
+            if (before.Length != after.Length) return false;
+            for (var index = 0; index < before.Length; ++index)
+            {
+                var left = before[index]?.anyBought ?? new int[0];
+                var right = after[index]?.anyBought ?? new int[0];
+                if (!left.SequenceEqual(right)) return false;
+            }
+            return true;
+        }
+
+        private static void VerifySavedObjectives(
+            ScenarioMapFormat.ObjectiveData[] before,
+            ScenarioMapFormat.ObjectiveData[] after)
+        {
+            before = before ?? new ScenarioMapFormat.ObjectiveData[0];
+            after = after ?? new ScenarioMapFormat.ObjectiveData[0];
+            if (before.Length != after.Length)
+                throw new InvalidDataException(
+                    "La cantidad de objetivos no coincide con el guardado.");
+
+            for (var index = 0; index < before.Length; ++index)
+            {
+                var left = before[index];
+                var right = after[index];
+                if (left == null || right == null ||
+                    !string.Equals(left.id ?? "", right.id ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.name ?? "", right.name ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.template ?? "", right.template ?? "", StringComparison.Ordinal) ||
+                    left.isStar != right.isStar ||
+                    left.starIndex != right.starIndex ||
+                    !string.Equals(left.taskName ?? "", right.taskName ?? "", StringComparison.Ordinal) ||
+                    left.waitForCompletion != right.waitForCompletion ||
+                    left.isDiscovered != right.isDiscovered ||
+                    left.isReplayable != right.isReplayable ||
+                    left.startImmediately != right.startImmediately ||
+                    left.scheduleIndex != right.scheduleIndex ||
+                    !string.Equals(left.scheduleName ?? "", right.scheduleName ?? "", StringComparison.Ordinal) ||
+                    left.scheduleEnabled != right.scheduleEnabled ||
+                    left.scheduleStartsWithCooldown != right.scheduleStartsWithCooldown ||
+                    left.minimumCooldownDays != right.minimumCooldownDays ||
+                    left.maximumCooldownDays != right.maximumCooldownDays ||
+                    left.weight != right.weight ||
+                    left.scoreType != right.scoreType ||
+                    left.requiredHighScore != right.requiredHighScore ||
+                    left.evaluateOnTimeElapse != right.evaluateOnTimeElapse ||
+                    left.canAbandon != right.canAbandon ||
+                    !string.Equals(left.durationDays ?? "", right.durationDays ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.probability ?? "", right.probability ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.difficulty ?? "", right.difficulty ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.cooldownSeconds ?? "", right.cooldownSeconds ?? "", StringComparison.Ordinal) ||
+                    !SameObjectiveRules(left.requirements, right.requirements) ||
+                    !SameObjectiveRules(left.completion, right.completion) ||
+                    !SameObjectiveRules(left.failure, right.failure) ||
+                    !SameObjectiveRules(left.abandon, right.abandon))
+                    throw new InvalidDataException(
+                        "El objetivo " + index + " no coincide con el guardado.");
+            }
+        }
+
+        private static bool SameObjectiveRules(
+            ScenarioMapFormat.ObjectiveRuleData[] before,
+            ScenarioMapFormat.ObjectiveRuleData[] after)
+        {
+            before = before ?? new ScenarioMapFormat.ObjectiveRuleData[0];
+            after = after ?? new ScenarioMapFormat.ObjectiveRuleData[0];
+            if (before.Length != after.Length) return false;
+            for (var index = 0; index < before.Length; ++index)
+            {
+                var left = before[index];
+                var right = after[index];
+                if (left == null || right == null ||
+                    !string.Equals(left.type ?? "", right.type ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.value ?? "", right.value ?? "", StringComparison.Ordinal) ||
+                    !string.Equals(left.reference ?? "", right.reference ?? "", StringComparison.Ordinal))
+                    return false;
+            }
+            return true;
         }
 
         private static int GetMergeIndex(IList<HospitalPlot> all, HospitalPlotDefinition definition)

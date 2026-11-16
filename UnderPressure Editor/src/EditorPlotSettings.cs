@@ -1,3 +1,4 @@
+// Updated: 2026-11-13 - Parcelas: estilos por parcela, herencia desde Parcela 1, desplegables, numeros cuadrados y layout V8 limpio.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -14,9 +15,9 @@ namespace UnderPressure.Editor
     internal sealed partial class ScenarioEditorDockLayout
     {
         private const float PlotListHeaderHeight = 48f;
-        private const float PlotListButtonHeight = 48f;
+        private const float PlotListButtonHeight = 40f;
         private const float PlotListSpacing = 4f;
-        private const float PlotListWidth = 245f;
+        private const float PlotListWidth = 198f;
         private const float PlotColumnGap = 10f;
         private const float PlotMapButtonHeight = 48f;
 
@@ -37,24 +38,35 @@ namespace UnderPressure.Editor
             var nativeScroll = page.GetComponentInChildren<ScrollRect>(true);
             if (nativeScroll != null) nativeScroll.gameObject.SetActive(false);
 
+            RemoveGeneralPlotStyleControls();
+
             _settingsPlotRoot = NewImage("UP Plot Settings", page, null,
                 Color.clear, false).transform as RectTransform;
             Stretch(_settingsPlotRoot);
             _settingsPlotRoot.offsetMin = new Vector2(10f, 10f);
             _settingsPlotRoot.offsetMax = new Vector2(-10f, -10f);
 
-            var listPanel = NewImage("Lista de parcelas", _settingsPlotRoot,
+            var listPanel = NewImage("Parcelas", _settingsPlotRoot,
                 _style.ButtonSprite, _style.PanelColor, false);
-            ApplyPlotSettingsPanelStyle(listPanel);
+            ApplyPlotSettingsPanelStyle(
+                listPanel,
+                new Color(.803157866f, .8786105f, .921052635f, 1f),
+                3f);
             var listRect = listPanel.transform as RectTransform;
             listRect.anchorMin = new Vector2(0f, 0f);
             listRect.anchorMax = new Vector2(0f, 1f);
             listRect.pivot = new Vector2(0f, .5f);
             listRect.anchoredPosition = Vector2.zero;
-            listRect.sizeDelta = new Vector2(PlotListWidth, 0f);
-            CreatePlotHeader(listPanel.transform,
-                EditorLocalization.Get("editor.scenario_settings.plots.list"),
-                TextAlignmentOptions.Center, _style.ButtonColor);
+            listRect.sizeDelta = new Vector2(198f, 0f);
+            CreatePlotTitle(
+                listPanel.transform,
+                PlotListTitle(),
+                TextAlignmentOptions.Center,
+                new Vector2(0f, 0f),
+                new Vector2(1f, 1f),
+                new Vector2(.5f, .5f),
+                new Vector2(-2.5f, 365f),
+                new Vector2(-27f, -738f));
 
             var scrollObject = new GameObject("Desplazamiento de parcelas",
                 typeof(RectTransform), typeof(ScrollRect));
@@ -71,8 +83,9 @@ namespace UnderPressure.Editor
             var viewport = viewportObject.transform as RectTransform;
             viewport.anchorMin = Vector2.zero;
             viewport.anchorMax = Vector2.one;
-            viewport.offsetMin = Vector2.zero;
-            viewport.offsetMax = Vector2.zero;
+            viewport.pivot = new Vector2(.5f, .5f);
+            viewport.anchoredPosition = new Vector2(0f, 5f);
+            viewport.sizeDelta = new Vector2(0f, 6f);
 
             var listObject = new GameObject("Content", typeof(RectTransform));
             listObject.transform.SetParent(viewport, false);
@@ -93,26 +106,39 @@ namespace UnderPressure.Editor
             _settingsPlotScroll.scrollSensitivity = 120f;
             InstallDiseaseNativeScrollbar(scrollRect, _settingsPlotScroll,
                 "UP Plot Native Scrollbar", 0f, 0f);
+            _settingsPlotScroll.verticalScrollbarVisibility =
+                ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
             scrollRect.SetAsLastSibling();
 
-            _settingsPlotMapButton = CreateDiseaseButton(listPanel.transform,
+            _settingsPlotMapButton = CreateObjectiveButton(
+                listPanel.transform,
+                "Boton Mapa",
                 EditorLocalization.Get("editor.scenario_settings.plots.map"),
-                _style.SelectedColor, SelectPlotMap);
+                0f, 0f, 160f, PlotMapButtonHeight,
+                _style.ButtonColor, SelectPlotMap);
             var mapRect = _settingsPlotMapButton.transform as RectTransform;
             SetRect(mapRect, new Vector2(0f, 0f), new Vector2(1f, 0f),
                 new Vector2(.5f, 0f), new Vector2(0f, 10f),
                 new Vector2(-20f, PlotMapButtonHeight));
-            AddPlotButtonOutline(_settingsPlotMapButton);
+            foreach (var mapText in
+                     _settingsPlotMapButton.GetComponentsInChildren<TMP_Text>(true))
+                ConfigureObjectiveTmpText(mapText, 25f, 18f, 72f);
+            ApplyObjectiveSelectionOutline(_settingsPlotMapButton, false);
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
-                _style.ButtonSprite, _style.PanelColor, false);
-            ApplyPlotSettingsPanelStyle(detailsPanel);
+                _style.ButtonSprite,
+                new Color(.1882353f, .533333361f, .7529412f, 1f),
+                false);
+            ApplyPlotSettingsPanelStyle(
+                detailsPanel,
+                new Color(.6392157f, .8509804f, .9843137f, 1f),
+                3f);
             _settingsPlotDetails = detailsPanel.transform as RectTransform;
-            _settingsPlotDetails.anchorMin = Vector2.zero;
-            _settingsPlotDetails.anchorMax = Vector2.one;
-            _settingsPlotDetails.offsetMin = new Vector2(
-                PlotListWidth + PlotColumnGap, 0f);
-            _settingsPlotDetails.offsetMax = Vector2.zero;
+            _settingsPlotDetails.anchorMin = new Vector2(0f, 0f);
+            _settingsPlotDetails.anchorMax = new Vector2(1f, 1f);
+            _settingsPlotDetails.pivot = new Vector2(.5f, .5f);
+            _settingsPlotDetails.anchoredPosition = new Vector2(104f, 0f);
+            _settingsPlotDetails.sizeDelta = new Vector2(-208f, 0f);
             RefreshPlotSettingsContents();
         }
 
@@ -127,36 +153,56 @@ namespace UnderPressure.Editor
                     Mathf.Max(0, plots.Count - 1));
 
             ClearPlotChildren(_settingsPlotList);
-            var contentHeight = plots.Count * PlotListButtonHeight +
-                Mathf.Max(0, plots.Count - 1) * PlotListSpacing;
+            var contentHeight = 6f +
+                plots.Count * (PlotListButtonHeight + PlotListSpacing);
             _settingsPlotList.sizeDelta = new Vector2(0f, contentHeight);
             for (var index = 0; index < plots.Count; ++index)
             {
                 var captured = index;
                 var selected = !_settingsPlotMapSelected &&
                     index == _settingsPlotSelectedIndex;
-                var button = CreateDiseaseButton(_settingsPlotList,
-                    EditorLocalization.Format("editor.scenario_settings.plots.plot", index + 1),
-                    selected ? _style.ButtonColor : _style.SelectedColor,
+                var button = CreateObjectiveButton(
+                    _settingsPlotList,
+                    "UP Plot Choice " + index,
+                    EditorLocalization.Format(
+                        "editor.scenario_settings.plots.plot", index + 1),
+                    0f, 0f,
+                    160f,
+                    PlotListButtonHeight,
+                    selected ? LayerBuildOrange : _style.ButtonColor,
                     () => SelectPlotSettings(captured));
-                AddPlotButtonOutline(button);
+                ApplyObjectiveSelectionOutline(button, selected);
+
                 var rect = button.transform as RectTransform;
-                SetRect(rect, new Vector2(0f, 1f), new Vector2(1f, 1f),
-                    new Vector2(.5f, 1f),
-                    new Vector2(0f, -index * (PlotListButtonHeight + PlotListSpacing)),
-                    new Vector2(0f, PlotListButtonHeight));
+                rect.anchorMin = new Vector2(0f, 1f);
+                rect.anchorMax = new Vector2(1f, 1f);
+                rect.pivot = new Vector2(.5f, 1f);
+                rect.anchoredPosition = new Vector2(
+                    0f,
+                    -(6f + index *
+                        (PlotListButtonHeight + PlotListSpacing)));
+                rect.sizeDelta = new Vector2(-18f, PlotListButtonHeight);
             }
             _settingsPlotList.anchoredPosition = Vector2.zero;
             _settingsPlotScroll.StopMovement();
             _settingsPlotScroll.verticalNormalizedPosition = 1f;
             LayoutRebuilder.ForceRebuildLayoutImmediate(_settingsPlotList);
+            RefreshPlotScrollbarVisibility();
 
             ScenarioPlotMapEditor.Close();
             ClearPlotChildren(_settingsPlotDetails);
             if (_settingsPlotMapButton != null)
-                ScenarioEditorDockLayout.ApplyEditorButtonVisuals(_settingsPlotMapButton,
-                    _style.ButtonSprite, _settingsPlotMapSelected
-                        ? _style.ButtonColor : _style.SelectedColor);
+            {
+                ScenarioEditorDockLayout.ApplyEditorButtonVisuals(
+                    _settingsPlotMapButton,
+                    _style.ButtonSprite,
+                    _settingsPlotMapSelected
+                        ? LayerBuildOrange
+                        : _style.ButtonColor);
+                ApplyObjectiveSelectionOutline(
+                    _settingsPlotMapButton,
+                    _settingsPlotMapSelected);
+            }
             if (_settingsPlotMapSelected)
             {
                 ScenarioPlotMapEditor.OpenEmbedded(_settingsPlotDetails,
@@ -169,10 +215,17 @@ namespace UnderPressure.Editor
             if (plot == null) return;
             LoadPlotRequirements(plot);
 
-            CreatePlotHeader(_settingsPlotDetails,
-                EditorLocalization.Format("editor.scenario_settings.plots.plot",
-                    _settingsPlotSelectedIndex + 1), TextAlignmentOptions.MidlineLeft,
-                _style.SelectedColor);
+            CreatePlotTitle(
+                _settingsPlotDetails,
+                EditorLocalization.Format(
+                    "editor.scenario_settings.plots.plot",
+                    _settingsPlotSelectedIndex + 1),
+                TextAlignmentOptions.MidlineLeft,
+                new Vector2(0f, 0f),
+                new Vector2(1f, 1f),
+                new Vector2(.5f, .5f),
+                new Vector2(-476f, 365f),
+                new Vector2(-980f, -738f));
 
             CreatePlotIntegerField("editor.scenario_settings.plots.cost",
                 .025f, .325f, 72f, plot.cost,
@@ -227,35 +280,70 @@ namespace UnderPressure.Editor
                 });
             SetPlotControlRect(add.transform as RectTransform, .675f, .72f, 182f, 40f);
             BuildPlotRequirementChips(plot, plots.Count);
+            BuildPlotStyleControls(plots, plot);
 
             Canvas.ForceUpdateCanvases();
         }
 
-        private void CreatePlotHeader(Transform parent, string value,
-            TextAlignmentOptions alignment, Color color)
+        private void RefreshPlotScrollbarVisibility()
         {
-            var header = NewImage("Cabecera", parent, _style.ButtonSprite,
-                color, false);
-            var rect = header.transform as RectTransform;
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(.5f, 1f);
-            rect.anchoredPosition = new Vector2(0f, -4f);
-            rect.sizeDelta = new Vector2(0f, PlotListHeaderHeight - 8f);
-            var title = CreateDiseaseText(header.transform, value, 22f,
-                alignment, Color.white);
-            Stretch(title.rectTransform);
-            title.rectTransform.offsetMin = new Vector2(14f, 0f);
-            title.rectTransform.offsetMax = new Vector2(-14f, 0f);
+            if (_settingsPlotScroll == null ||
+                _settingsPlotScroll.content == null ||
+                _settingsPlotScroll.viewport == null)
+                return;
+
+            Canvas.ForceUpdateCanvases();
+            var needsScrollbar =
+                _settingsPlotScroll.content.rect.height >
+                _settingsPlotScroll.viewport.rect.height + .5f;
+
+            if (_settingsPlotScroll.verticalScrollbar != null)
+                _settingsPlotScroll.verticalScrollbar.gameObject
+                    .SetActive(needsScrollbar);
+
+            if (needsScrollbar)
+                return;
+
+            var position = _settingsPlotScroll.content.anchoredPosition;
+            position.y = 0f;
+            _settingsPlotScroll.content.anchoredPosition = position;
+            _settingsPlotScroll.verticalNormalizedPosition = 1f;
         }
 
-        private static void ApplyPlotSettingsPanelStyle(GameObject panel)
+        private void CreatePlotTitle(
+            Transform parent,
+            string value,
+            TextAlignmentOptions alignment,
+            Vector2 anchorMin,
+            Vector2 anchorMax,
+            Vector2 pivot,
+            Vector2 anchoredPosition,
+            Vector2 sizeDelta)
+        {
+            var title = CreateDiseaseText(
+                parent, value, 25f, alignment, Color.white);
+            title.gameObject.name = "Texto";
+            title.enableAutoSizing = false;
+            title.fontSize = 25f;
+            title.fontSizeMin = 18f;
+            title.fontSizeMax = 72f;
+            title.fontStyle = FontStyles.Normal;
+            title.rectTransform.anchorMin = anchorMin;
+            title.rectTransform.anchorMax = anchorMax;
+            title.rectTransform.pivot = pivot;
+            title.rectTransform.anchoredPosition = anchoredPosition;
+            title.rectTransform.sizeDelta = sizeDelta;
+        }
+
+        private static void ApplyPlotSettingsPanelStyle(
+            GameObject panel, Color outlineColor, float distance)
         {
             if (panel == null) return;
             var outline = panel.GetComponent<Outline>() ??
                           panel.AddComponent<Outline>();
-            outline.effectColor = Color.white;
-            outline.effectDistance = new Vector2(2f, -2f);
+            outline.enabled = true;
+            outline.effectColor = outlineColor;
+            outline.effectDistance = new Vector2(distance, -distance);
             outline.useGraphicAlpha = false;
         }
 
@@ -305,7 +393,7 @@ namespace UnderPressure.Editor
         private void AddPlotLabel(string key, float minX, float maxX, float top)
         {
             var label = CreateDiseaseText(_settingsPlotDetails,
-                EditorLocalization.Get(key) + ":", 18f,
+                EnsurePlotTrailingColon(EditorLocalization.Get(key)), 18f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
             SetPlotControlRect(label.rectTransform, minX, maxX, top, 44f);
@@ -358,10 +446,42 @@ namespace UnderPressure.Editor
             float top, string value, bool integer, float inputWidth,
             int characterLimit, Func<string, bool> accept)
         {
-            var input = CreateScenarioSettingsInput(_settingsPlotDetails, labelKey,
-                top, 44f, false, integer, minX, maxX, inputWidth);
+            var label = CreateDiseaseText(
+                _settingsPlotDetails,
+                EnsurePlotTrailingColon(EditorLocalization.Get(labelKey)),
+                18f, TextAlignmentOptions.MidlineLeft, Color.white);
+            label.fontStyle = FontStyles.Normal;
+            SetPlotControlRect(label.rectTransform, minX, maxX, top, 44f);
+            label.rectTransform.offsetMax = new Vector2(
+                -(inputWidth + 10f), label.rectTransform.offsetMax.y);
+
+            var input = integer
+                ? CreateDiseaseInput(_settingsPlotDetails, value)
+                : CreatePatientDecimalInput(_settingsPlotDetails, value);
             if (input == null) return;
-            ConfigurePlotNativeField(input, labelKey, characterLimit);
+
+            input.gameObject.name = "UP Plot Number " + labelKey;
+            input.characterLimit = characterLimit;
+            input.contentType = integer
+                ? TMP_InputField.ContentType.IntegerNumber
+                : TMP_InputField.ContentType.DecimalNumber;
+
+            var inputRect = input.transform as RectTransform;
+            SetRect(inputRect,
+                new Vector2(maxX, 1f), new Vector2(maxX, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(0f, -(top + 4f)),
+                new Vector2(inputWidth, 36f));
+
+            if (input.textComponent != null)
+            {
+                input.textComponent.fontStyle = FontStyles.Normal;
+                input.textComponent.enableAutoSizing = false;
+                input.textComponent.fontSize = 16f;
+                input.textComponent.fontSizeMin = 16f;
+                input.textComponent.fontSizeMax = 16f;
+            }
+
             input.SetTextWithoutNotify(value);
             input.onEndEdit.AddListener(text =>
             {
@@ -370,25 +490,251 @@ namespace UnderPressure.Editor
             });
         }
 
-        private static void ConfigurePlotNativeField(TMP_InputField input,
-            string labelKey, int characterLimit)
+        private void RemoveGeneralPlotStyleControls()
         {
-            input.characterLimit = characterLimit;
-            var fieldRoot = input.transform.parent;
-            var row = fieldRoot;
-            while (row != null &&
-                   !row.name.StartsWith("UP Workshop Settings Field ",
-                       StringComparison.Ordinal))
-                row = row.parent;
-            if (row == null) return;
+            if (_settingsPages == null || _settingsPages.Length == 0 ||
+                _settingsPages[0] == null) return;
 
-            SetWorkshopFieldLabel(row, fieldRoot,
-                EditorLocalization.Get(labelKey) + ":");
-            foreach (var label in row.GetComponentsInChildren<TMP_Text>(true))
+            var content = _settingsPages[0].transform.Find(
+                "Scroll View/Viewport/Content") as RectTransform;
+            if (content == null) return;
+
+            var styleTops = new[] { 278f, 334f, 390f, 446f };
+            for (var index = content.childCount - 1; index >= 0; --index)
             {
-                if (label.transform.IsChildOf(fieldRoot)) continue;
-                label.enableWordWrapping = false;
-                label.overflowMode = TextOverflowModes.Overflow;
+                var child = content.GetChild(index) as RectTransform;
+                if (child == null) continue;
+                var top = -child.anchoredPosition.y;
+                if (styleTops.Any(value => Mathf.Abs(top - value) < .75f))
+                    Destroy(child.gameObject);
+            }
+        }
+
+        private string PlotListTitle()
+        {
+            var sample = EditorLocalization.Format(
+                "editor.scenario_settings.plots.plot", 1);
+            if (!string.IsNullOrEmpty(sample) &&
+                sample.StartsWith("Parcela", StringComparison.OrdinalIgnoreCase))
+                return "Parcelas";
+            if (!string.IsNullOrEmpty(sample) &&
+                sample.StartsWith("Plot", StringComparison.OrdinalIgnoreCase))
+                return "Plots";
+            return EditorLocalization.Get("editor.scenario_settings.plots.list");
+        }
+
+        private static string EnsurePlotTrailingColon(string value)
+        {
+            value = (value ?? string.Empty).TrimEnd();
+            return value.EndsWith(":", StringComparison.Ordinal)
+                ? value
+                : value + ":";
+        }
+
+        private bool PlotUiIsSpanish()
+        {
+            var sample = EditorLocalization.Format(
+                "editor.scenario_settings.plots.plot", 1);
+            return !string.IsNullOrEmpty(sample) &&
+                   sample.StartsWith("Parcela", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string PlotCustomStylesLabel() =>
+            PlotUiIsSpanish() ? "Personalizar:" : "Custom styles:";
+
+        private void BuildPlotStyleControls(
+            IList<ScenarioMapFormat.Plot> plots,
+            ScenarioMapFormat.Plot plot)
+        {
+            if (plots == null || plots.Count == 0 || plot == null ||
+                _settingsPlotDetails == null)
+                return;
+
+            var baseStyles = plots[0];
+            if (baseStyles == null) return;
+            if (!baseStyles.customRoomStyles)
+            {
+                var global = ScenarioEditorStorage.CurrentStyles(_level);
+                baseStyles.builtRoomStyle = global.builtRoomStyle ?? string.Empty;
+                baseStyles.buildingRoomStyle = global.buildingRoomStyle ?? string.Empty;
+                baseStyles.unbuiltRoomStyle = global.unbuiltRoomStyle ?? string.Empty;
+                baseStyles.customRoomStyles = true;
+            }
+
+            var catalog = ScenarioHospitalStyles.Build(
+                _level,
+                EditorLocalization.Get("editor.map.style.original"),
+                EditorLocalization.Get("editor.map.style.none"));
+
+            var isBase = _settingsPlotSelectedIndex == 0;
+            var top = 242f;
+
+            if (!isBase)
+            {
+                var customLabel = CreateDiseaseText(
+                    _settingsPlotDetails, PlotCustomStylesLabel(), 18f,
+                    TextAlignmentOptions.MidlineLeft, Color.white);
+                customLabel.fontStyle = FontStyles.Normal;
+                SetPlotControlRect(customLabel.rectTransform, .025f, .255f, top, 44f);
+
+                var customToggle = CreateDiseaseToggle(
+                    _settingsPlotDetails, plot.customRoomStyles, value =>
+                    {
+                        if (value && !plot.customRoomStyles)
+                        {
+                            plot.builtRoomStyle = baseStyles.builtRoomStyle ?? string.Empty;
+                            plot.buildingRoomStyle = baseStyles.buildingRoomStyle ?? string.Empty;
+                            plot.unbuiltRoomStyle = baseStyles.unbuiltRoomStyle ?? string.Empty;
+                        }
+                        plot.customRoomStyles = value;
+                        ApplyLivePlotRoomStyles(plots);
+                        RefreshPlotSettingsContents();
+                    });
+                if (customToggle != null)
+                    SetPlotControlRect(customToggle.transform as RectTransform,
+                        .265f, .31f, top, 44f);
+                top += 56f;
+            }
+
+            CreatePlotPerimeterStyleRow(catalog, top, isBase);
+            top += 54f;
+
+            var effective = !isBase && !plot.customRoomStyles
+                ? baseStyles : plot;
+            var editable = isBase || plot.customRoomStyles;
+
+            CreatePlotRoomStyleRow(
+                "editor.map.style.built", catalog.Built,
+                effective.builtRoomStyle, top, editable, value =>
+                {
+                    plot.builtRoomStyle = value ?? string.Empty;
+                    if (isBase) SyncBasePlotStylesToGlobal(baseStyles);
+                    ApplyLivePlotRoomStyles(plots);
+                });
+            top += 54f;
+
+            CreatePlotRoomStyleRow(
+                "editor.map.style.building", catalog.Building,
+                effective.buildingRoomStyle, top, editable, value =>
+                {
+                    plot.buildingRoomStyle = value ?? string.Empty;
+                    if (isBase) SyncBasePlotStylesToGlobal(baseStyles);
+                    ApplyLivePlotRoomStyles(plots);
+                });
+            top += 54f;
+
+            CreatePlotRoomStyleRow(
+                "editor.map.style.unbuilt", catalog.Unbuilt,
+                effective.unbuiltRoomStyle, top, editable, value =>
+                {
+                    plot.unbuiltRoomStyle = value ?? string.Empty;
+                    if (isBase) SyncBasePlotStylesToGlobal(baseStyles);
+                    ApplyLivePlotRoomStyles(plots);
+                });
+        }
+
+        private void SyncBasePlotStylesToGlobal(ScenarioMapFormat.Plot baseStyles)
+        {
+            if (baseStyles == null) return;
+            baseStyles.customRoomStyles = true;
+            var current = ScenarioEditorStorage.CurrentStyles(_level);
+            current.builtRoomStyle = baseStyles.builtRoomStyle ?? string.Empty;
+            current.buildingRoomStyle = baseStyles.buildingRoomStyle ?? string.Empty;
+            current.unbuiltRoomStyle = baseStyles.unbuiltRoomStyle ?? string.Empty;
+            ScenarioEditorStorage.SetStyles(_level, current);
+        }
+
+        private void ApplyLivePlotRoomStyles(IList<ScenarioMapFormat.Plot> plots)
+        {
+            if (_level?.WorldState?.HospitalPlots == null) return;
+            ScenarioHospitalStyles.ApplyPlotRoomStyles(
+                _level,
+                plots,
+                _level.WorldState.HospitalPlots
+                    .Select(value => value?.Definition)
+                    .ToList(),
+                ScenarioEditorStorage.CurrentStyles(_level));
+        }
+
+        private void CreatePlotPerimeterStyleRow(
+            ScenarioHospitalStyles.Catalog catalog,
+            float top, bool editable)
+        {
+            var label = CreateDiseaseText(
+                _settingsPlotDetails,
+                EnsurePlotTrailingColon(EditorLocalization.Get("editor.map.style.perimeter")),
+                18f, TextAlignmentOptions.MidlineLeft, Color.white);
+            label.fontStyle = FontStyles.Normal;
+            SetPlotControlRect(label.rectTransform, .025f, .30f, top, 44f);
+
+            var global = ScenarioEditorStorage.CurrentStyles(_level);
+            var index = catalog.Perimeters.FindIndex(choice =>
+                choice.Mode == global.plotPerimeter &&
+                (choice.Mode != ScenarioMapFormat.PerimeterCustom ||
+                 choice.PrefabNames.SequenceEqual(global.perimeterPrefabs)));
+            if (index < 0) index = 0;
+
+            var dropdown = CreateDiseaseDropdown(
+                _settingsPlotDetails,
+                catalog.Perimeters.Select(choice => choice.Label).ToList(),
+                index);
+            ConfigurePlotStyleDropdown(dropdown, editable);
+            SetPlotControlRect(dropdown.transform as RectTransform, .32f, .985f, top + 2f, 40f);
+            dropdown.onValueChanged.AddListener(value =>
+            {
+                if (!editable || value < 0 || value >= catalog.Perimeters.Count) return;
+                var choice = catalog.Perimeters[value];
+                var current = ScenarioEditorStorage.CurrentStyles(_level);
+                current.plotPerimeter = choice.Mode;
+                current.perimeterPrefabs = choice.PrefabNames ?? new string[0];
+                ScenarioEditorStorage.SetStyles(_level, current);
+            });
+        }
+
+        private void CreatePlotRoomStyleRow(
+            string labelKey,
+            IList<ScenarioHospitalStyles.RoomChoice> choices,
+            string currentId,
+            float top, bool editable, Action<string> changed)
+        {
+            if (choices == null || choices.Count == 0) return;
+
+            var label = CreateDiseaseText(
+                _settingsPlotDetails,
+                EnsurePlotTrailingColon(EditorLocalization.Get(labelKey)),
+                18f, TextAlignmentOptions.MidlineLeft, Color.white);
+            label.fontStyle = FontStyles.Normal;
+            SetPlotControlRect(label.rectTransform, .025f, .30f, top, 44f);
+
+            var index = choices.ToList().FindIndex(choice =>
+                string.Equals(choice.Id, currentId ?? string.Empty,
+                    StringComparison.Ordinal));
+            if (index < 0) index = 0;
+
+            var dropdown = CreateDiseaseDropdown(
+                _settingsPlotDetails,
+                choices.Select(choice => choice.Label).ToList(),
+                index);
+            ConfigurePlotStyleDropdown(dropdown, editable);
+            SetPlotControlRect(dropdown.transform as RectTransform, .32f, .985f, top + 2f, 40f);
+            dropdown.onValueChanged.AddListener(value =>
+            {
+                if (!editable || value < 0 || value >= choices.Count) return;
+                changed?.Invoke(choices[value].Id ?? string.Empty);
+            });
+        }
+
+        private static void ConfigurePlotStyleDropdown(TMP_Dropdown dropdown, bool editable)
+        {
+            if (dropdown == null) return;
+            dropdown.interactable = editable;
+            foreach (var text in dropdown.GetComponentsInChildren<TMP_Text>(true))
+            {
+                text.fontStyle = FontStyles.Normal;
+                text.enableAutoSizing = false;
+                text.fontSize = 18f;
+                text.fontSizeMin = 18f;
+                text.fontSizeMax = 18f;
             }
         }
 
@@ -493,6 +839,7 @@ namespace UnderPressure.Editor
             _settingsPlotSelectedIndex = 0;
             _settingsPlotMapSelected = false;
         }
+
     }
 
     internal static class ScenarioPlotMapEditor
@@ -797,7 +1144,6 @@ namespace UnderPressure.Editor
                     new Vector2(220f, 46f), _buttonColor, ToggleSceneFog);
                 SetBottom(fog.transform, 0f, 128f);
                 _fogText = fog.GetComponentInChildren<Text>();
-
                 var alpha = CreateButton(controls.transform, "Alpha", "",
                     new Vector2(220f, 46f), _buttonColor, ToggleAlpha);
                 SetBottom(alpha.transform, 0f, 72f);
