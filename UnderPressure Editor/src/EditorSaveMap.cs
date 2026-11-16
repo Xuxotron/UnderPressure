@@ -1,4 +1,4 @@
-// Updated: 2026-11-16 - Restaurar disponibilidad nativa desde WorldState.Config._availableRooms.
+// Updated: 2026-11-16 - Capturar la disponibilidad calculada por el WorldState nativo.
 // Archivos originales fusionados SIN alterar sus clases o parches de Harmony.
 using System;
 using FullInspector;
@@ -348,7 +348,7 @@ namespace UnderPressure.Editor
                 : ScenarioEmergencyCatalog.Capture(level?.Config);
             _availableRooms = source.availableRoomsConfigured
                 ? NormalizeAvailableRoomIds(source.availableRooms)
-                : CaptureAvailableRoomIds(level?.Config);
+                : CaptureAvailableRoomIds(level);
         }
 
         private static void EnsureScenarioSettings(Level level)
@@ -374,7 +374,7 @@ namespace UnderPressure.Editor
                 config?.GetCharacterManagerConfig()?._weightedIllnesses);
             _objectives = ScenarioObjectiveCatalog.Capture(config);
             _emergencies = ScenarioEmergencyCatalog.Capture(config);
-            _availableRooms = CaptureAvailableRoomIds(config);
+            _availableRooms = CaptureAvailableRoomIds(level);
         }
 
         private static string[] CloneAvailableRooms(string[] values)
@@ -392,9 +392,9 @@ namespace UnderPressure.Editor
                 .ToArray();
         }
 
-        private static string[] CaptureAvailableRoomIds(LevelConfig config)
+        private static string[] CaptureAvailableRoomIds(Level level)
         {
-            var availableRooms = config?.GetWorldStateConfig()?._availableRooms;
+            var availableRooms = level?.WorldState?.AvailableRooms;
             if (availableRooms == null)
                 return new string[0];
 
