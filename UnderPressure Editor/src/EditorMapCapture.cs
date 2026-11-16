@@ -2,6 +2,7 @@
 // Archivo INDEPENDIENTE. Anadirlo a "UnderPressure Editor/src" (no sustituye otros .cs).
 using System;
 using System.IO;
+using System.Text;
 using HarmonyLib;
 using TH20;
 using UnityEngine;
@@ -58,8 +59,13 @@ namespace UnderPressure.Editor
         {
             if (level == null) return null;
             var carpeta = ScenarioEditorStorage.CurrentMapFolder(level);
-            return string.IsNullOrEmpty(carpeta)
-                ? null : Path.Combine(carpeta, "map.jpg");
+            if (!string.IsNullOrEmpty(carpeta)) return Path.Combine(carpeta, "map.jpg");
+
+            // Antes del primer guardado se conserva la captura provisional
+            // tradicional para que Alpha muestre el mapa bajo la mascara.
+            carpeta = Path.Combine(ScenarioEditorStorage.Folder, "Capturas");
+            var nombre = SafeFileName(ScenarioEditorStorage.CurrentMapName(level));
+            return Path.Combine(carpeta, nombre + ".jpg");
         }
 
         internal static void Capture(Action<string> completed)
@@ -201,8 +207,18 @@ namespace UnderPressure.Editor
                     var jpg = ImageConversion.EncodeToJPG(imagen, CalidadJpeg);
                     if (jpg == null || jpg.Length == 0)
                         throw new IOException("No se ha podido codificar la captura JPG.");
-                    archivoGuardado = ScenarioEditorStorage.CommitCurrentMapFile(
-                        _level, "map.jpg", jpg);
+                    var paquete = ScenarioEditorStorage.CurrentMapPath(_level);
+                    if (!string.IsNullOrEmpty(paquete) && File.Exists(paquete))
+                    {
+                        archivoGuardado = ScenarioEditorStorage.CommitCurrentMapFile(
+                            _level, "map.jpg", jpg);
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(archivo));
+                        File.WriteAllBytes(archivo, jpg);
+                        archivoGuardado = archivo;
+                    }
                     if (string.IsNullOrEmpty(archivoGuardado))
                         throw new IOException("No se ha podido actualizar map.jpg dentro del paquete.");
 
@@ -306,6 +322,16 @@ namespace UnderPressure.Editor
                 }
             }
             return encontrado && bounds.size.x > 0.1f && bounds.size.z > 0.1f;
+        }
+
+        private static string SafeFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "Mapa";
+            var invalidos = Path.GetInvalidFileNameChars();
+            var resultado = new StringBuilder(value.Length);
+            foreach (var caracter in value)
+                resultado.Append(Array.IndexOf(invalidos, caracter) >= 0 ? '_' : caracter);
+            return resultado.ToString().Trim();
         }
 
     }
