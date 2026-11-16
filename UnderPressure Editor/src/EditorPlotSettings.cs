@@ -871,6 +871,7 @@ namespace UnderPressure.Editor
         private static RectTransform _brushCursor;
         private static Texture2D _brushCursorTexture;
         private static Texture2D _checkerTexture;
+        private static Texture2D _alphaPreviewTexture;
         private static int _paintDirection = 1; // +1 Anadir, -1 Eliminar
         private static int _brushSize = 10;
         private static int _brushMaxOpacity = 100;
@@ -1416,7 +1417,35 @@ namespace UnderPressure.Editor
         private static void RebuildPreview()
         {
             if (_workingTexture == null || _preview == null) return;
-            _preview.texture = _workingTexture;
+            if (_alphaEnabled)
+            {
+                if (_alphaPreviewTexture == null ||
+                    _alphaPreviewTexture.width != _workingTexture.width ||
+                    _alphaPreviewTexture.height != _workingTexture.height)
+                {
+                    if (_alphaPreviewTexture != null)
+                        UnityEngine.Object.Destroy(_alphaPreviewTexture);
+                    _alphaPreviewTexture = new Texture2D(
+                        _workingTexture.width, _workingTexture.height,
+                        TextureFormat.RGBA32, false, true)
+                    {
+                        name = "UP_FogTransparentPreview",
+                        hideFlags = HideFlags.DontSave,
+                        filterMode = FilterMode.Bilinear,
+                        wrapMode = TextureWrapMode.Clamp
+                    };
+                }
+
+                var source = _workingTexture.GetPixels32();
+                var previewPixels = new Color32[source.Length];
+                for (var index = 0; index < source.Length; ++index)
+                    previewPixels[index] = new Color32(0, 0, 0, source[index].a);
+                _alphaPreviewTexture.SetPixels32(previewPixels);
+                _alphaPreviewTexture.Apply(false, false);
+                _preview.texture = _alphaPreviewTexture;
+            }
+            else
+                _preview.texture = _workingTexture;
             _preview.color = Color.white;
         }
 
@@ -1608,6 +1637,9 @@ namespace UnderPressure.Editor
             _brushCursorTexture = null;
             if (_checkerTexture != null) UnityEngine.Object.Destroy(_checkerTexture);
             _checkerTexture = null;
+            if (_alphaPreviewTexture != null)
+                UnityEngine.Object.Destroy(_alphaPreviewTexture);
+            _alphaPreviewTexture = null;
             if (_generatedMapTexture != null) UnityEngine.Object.Destroy(_generatedMapTexture);
             _generatedMapTexture = null;
             _generatedMapLayer = null;
