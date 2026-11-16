@@ -1445,7 +1445,35 @@ namespace UnderPressure.Editor
                 _preview.texture = _alphaPreviewTexture;
             }
             else
-                _preview.texture = _workingTexture;
+            {
+                if (_alphaPreviewTexture == null ||
+                    _alphaPreviewTexture.width != _workingTexture.width ||
+                    _alphaPreviewTexture.height != _workingTexture.height)
+                {
+                    if (_alphaPreviewTexture != null)
+                        UnityEngine.Object.Destroy(_alphaPreviewTexture);
+                    _alphaPreviewTexture = new Texture2D(
+                        _workingTexture.width, _workingTexture.height,
+                        TextureFormat.RGBA32, false, false)
+                    {
+                        name = "UP_FogAlphaChannelPreview",
+                        hideFlags = HideFlags.DontSave,
+                        filterMode = FilterMode.Bilinear,
+                        wrapMode = TextureWrapMode.Clamp
+                    };
+                }
+
+                var source = _workingTexture.GetPixels32();
+                var previewPixels = new Color32[source.Length];
+                for (var index = 0; index < source.Length; ++index)
+                {
+                    var alpha = source[index].a;
+                    previewPixels[index] = new Color32(alpha, alpha, alpha, 255);
+                }
+                _alphaPreviewTexture.SetPixels32(previewPixels);
+                _alphaPreviewTexture.Apply(false, false);
+                _preview.texture = _alphaPreviewTexture;
+            }
             _preview.color = Color.white;
         }
 
