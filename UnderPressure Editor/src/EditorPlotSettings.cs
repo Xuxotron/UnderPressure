@@ -871,7 +871,6 @@ namespace UnderPressure.Editor
         private static RectTransform _brushCursor;
         private static Texture2D _brushCursorTexture;
         private static Texture2D _checkerTexture;
-        private static Texture2D _alphaPreviewTexture;
         private static int _paintDirection = 1; // +1 Anadir, -1 Eliminar
         private static int _brushSize = 10;
         private static int _brushMaxOpacity = 100;
@@ -1260,8 +1259,8 @@ namespace UnderPressure.Editor
             RefreshControlTexts();
         }
 
-        // Alpha SI muestra el RGBA real usando su transparencia.
-        // Alpha NO muestra el canal alfa directamente en escala de grises.
+        // Alpha SI muestra el RGBA real y deja visible el mapa inferior.
+        // Alpha NO mantiene el mismo RGBA sobre un fondo blanco.
         // Ninguno de los modos modifica los pixeles de trabajo.
         private static void ToggleAlpha()
         {
@@ -1273,7 +1272,7 @@ namespace UnderPressure.Editor
         private static void RefreshAlphaBackground()
         {
             if (_previewBackground != null)
-                _previewBackground.color = Color.black;
+                _previewBackground.color = _alphaEnabled ? Color.black : Color.white;
             if (_checkerLayer != null)
                 _checkerLayer.gameObject.SetActive(_alphaEnabled);
             RebuildPreview();
@@ -1417,40 +1416,7 @@ namespace UnderPressure.Editor
         private static void RebuildPreview()
         {
             if (_workingTexture == null || _preview == null) return;
-            if (!_alphaEnabled)
-            {
-                if (_alphaPreviewTexture == null ||
-                    _alphaPreviewTexture.width != _workingTexture.width ||
-                    _alphaPreviewTexture.height != _workingTexture.height)
-                {
-                    if (_alphaPreviewTexture != null)
-                        UnityEngine.Object.Destroy(_alphaPreviewTexture);
-                    _alphaPreviewTexture = new Texture2D(
-                        _workingTexture.width, _workingTexture.height,
-                        TextureFormat.RGBA32, false, false)
-                    {
-                        name = "UP_FogAlphaChannelPreview",
-                        hideFlags = HideFlags.DontSave,
-                        filterMode = FilterMode.Bilinear,
-                        wrapMode = TextureWrapMode.Clamp
-                    };
-                }
-
-                var source = _workingTexture.GetPixels32();
-                var previewPixels = new Color32[source.Length];
-                for (var i = 0; i < source.Length; ++i)
-                {
-                    var alpha = source[i].a;
-                    previewPixels[i] = new Color32(alpha, alpha, alpha, 255);
-                }
-                _alphaPreviewTexture.SetPixels32(previewPixels);
-                _alphaPreviewTexture.Apply(false, false);
-                _preview.texture = _alphaPreviewTexture;
-            }
-            else
-            {
-                _preview.texture = _workingTexture;
-            }
+            _preview.texture = _workingTexture;
             _preview.color = Color.white;
         }
 
@@ -1642,8 +1608,6 @@ namespace UnderPressure.Editor
             _brushCursorTexture = null;
             if (_checkerTexture != null) UnityEngine.Object.Destroy(_checkerTexture);
             _checkerTexture = null;
-            if (_alphaPreviewTexture != null) UnityEngine.Object.Destroy(_alphaPreviewTexture);
-            _alphaPreviewTexture = null;
             if (_generatedMapTexture != null) UnityEngine.Object.Destroy(_generatedMapTexture);
             _generatedMapTexture = null;
             _generatedMapLayer = null;
