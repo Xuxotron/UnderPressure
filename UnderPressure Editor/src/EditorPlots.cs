@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using TH20;
 using TMPro;
 using UnityEngine.UI;
@@ -611,6 +612,16 @@ namespace UnderPressure.Editor
 {
     internal static class ScenarioHospitalStyles
     {
+        private sealed class CachedCatalog
+        {
+            internal string OriginalLabel;
+            internal string NoneLabel;
+            internal Catalog Value;
+        }
+
+        private static readonly ConditionalWeakTable<Level, CachedCatalog> Catalogs =
+            new ConditionalWeakTable<Level, CachedCatalog>();
+
         internal sealed class RoomChoice
         {
             internal string Id;
@@ -638,6 +649,10 @@ namespace UnderPressure.Editor
         {
             if (level?.App?.SandboxSettingsConfig?.LevelOptions == null)
                 throw new InvalidOperationException("No esta disponible el catalogo original de hospitales.");
+            if (Catalogs.TryGetValue(level, out var cached) &&
+                string.Equals(cached.OriginalLabel, originalLabel, StringComparison.Ordinal) &&
+                string.Equals(cached.NoneLabel, noneLabel, StringComparison.Ordinal))
+                return cached.Value;
 
             var result = new Catalog();
             AddOriginalRoom(result.Built, originalLabel);
@@ -684,6 +699,13 @@ namespace UnderPressure.Editor
                     Prefabs = (GameObject[])prefabs.Clone()
                 });
             }
+            Catalogs.Remove(level);
+            Catalogs.Add(level, new CachedCatalog
+            {
+                OriginalLabel = originalLabel,
+                NoneLabel = noneLabel,
+                Value = result
+            });
             return result;
         }
 

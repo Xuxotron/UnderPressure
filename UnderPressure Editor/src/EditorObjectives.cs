@@ -50,6 +50,12 @@ namespace UnderPressure.Editor
         private int _objectiveFlagIndex = 9;
         private readonly Dictionary<string, Sprite> _objectiveFlagSprites =
             new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        private readonly TMP_Text[] _objectiveFlagLanguageLabels = new TMP_Text[11];
+        private readonly TMP_Text[] _generalFlagLanguageLabels = new TMP_Text[11];
+        private string[] _objectiveNativeFlagNames;
+        private string _objectiveNativeFlagNamesLanguage;
+        private static System.Reflection.MethodInfo _objectiveTranslationMethod;
+        private static bool _objectiveTranslationMethodSearched;
         private static readonly string[] ObjectiveFlagFileNames =
         {
             "Flag_China.png", "Flag_English.png", "Flag_French.png",
@@ -557,10 +563,9 @@ namespace UnderPressure.Editor
             hitImage.raycastTarget = true;
             var hitButton = hit.GetComponent<Button>();
             hitButton.transition = Selectable.Transition.None;
+            StandardiseClickSound(hitButton);
             hitButton.onClick.AddListener(() =>
             {
-                if (!_objectiveFlagExpanded)
-                    RefreshSharedFlagLanguageLabels();
                 SetObjectiveFlagExpanded(!_objectiveFlagExpanded);
             });
             hit.transform.SetAsFirstSibling();
@@ -674,6 +679,7 @@ namespace UnderPressure.Editor
                     18f, TextAlignmentOptions.MidlineLeft,
                     "UP Objective Flag Language " + i);
                 label.raycastTarget = false;
+                _objectiveFlagLanguageLabels[i] = label;
             }
 
             _objectiveTranslateLanguagesButton = CreateObjectiveButton(
@@ -751,16 +757,30 @@ namespace UnderPressure.Editor
         // No modifica la seleccion de idioma de PreferencesScreen.
         private string ObjectiveNativeFlagName(int index)
         {
-            var fallback = ObjectiveFlagLanguageNames[index];
+            EnsureObjectiveNativeFlagNames();
+            return index >= 0 && index < _objectiveNativeFlagNames.Length
+                ? _objectiveNativeFlagNames[index]
+                : "";
+        }
+
+        private void EnsureObjectiveNativeFlagNames()
+        {
+            var language = EditorLocalization.CurrentLanguageCode();
+            if (_objectiveNativeFlagNames != null &&
+                string.Equals(_objectiveNativeFlagNamesLanguage, language,
+                    StringComparison.OrdinalIgnoreCase)) return;
+
+            _objectiveNativeFlagNames = (string[])ObjectiveFlagLanguageNames.Clone();
+            _objectiveNativeFlagNamesLanguage = language;
             var native = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
                 .FirstOrDefault(screen => screen != null &&
                     (_settingsOverlay == null || !screen.transform.IsChildOf(_settingsOverlay.transform)));
-            if (native == null) return fallback;
+            if (native == null) return;
             var languageTab = GetPreferencesField<Transform>(native, "_languageTab");
-            if (languageTab == null) return fallback;
+            if (languageTab == null) return;
             var dropdown = languageTab.GetComponentsInChildren<TMP_Dropdown>(true)
                 .FirstOrDefault(item => item != null && item.options != null && item.options.Count >= 11);
-            if (dropdown == null) return fallback;
+            if (dropdown == null) return;
 
             // Buscar por codigo de idioma, NO por indice: las preferencias nativas
             // pueden presentar los idiomas en un orden diferente al de los PNG.
@@ -768,18 +788,23 @@ namespace UnderPressure.Editor
                 "ko-KR", "pl-PL", "pt-BR", "ru-RU", "es-ES", "zh-TW" };
             var shortCodes = new[] { "zh", "en", "fr", "de", "it",
                 "ko", "pl", "pt", "ru", "es", "zh" };
-            foreach (var option in dropdown.options)
+            for (var index = 0; index < codes.Length; ++index)
             {
-                if (option == null || string.IsNullOrEmpty(option.text)) continue;
-                var key = option.text;
-                var suffix = key.Substring(key.LastIndexOf('/') + 1);
-                if (!string.Equals(suffix, codes[index], StringComparison.OrdinalIgnoreCase) &&
-                    !(index != 0 && index != 10 &&
-                      string.Equals(suffix, shortCodes[index], StringComparison.OrdinalIgnoreCase)))
-                    continue;
-                return ResolveObjectiveNativeLanguageLabel(key, fallback);
+                foreach (var option in dropdown.options)
+                {
+                    if (option == null || string.IsNullOrEmpty(option.text)) continue;
+                    var key = option.text;
+                    var suffix = key.Substring(key.LastIndexOf('/') + 1);
+                    if (!string.Equals(suffix, codes[index], StringComparison.OrdinalIgnoreCase) &&
+                        !(index != 0 && index != 10 &&
+                          string.Equals(suffix, shortCodes[index], StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    _objectiveNativeFlagNames[index] =
+                        ResolveObjectiveNativeLanguageLabel(
+                            key, _objectiveNativeFlagNames[index]);
+                    break;
+                }
             }
-            return fallback;
         }
 
         private static string ResolveObjectiveNativeLanguageLabel(string key, string fallback)
@@ -787,29 +812,39 @@ namespace UnderPressure.Editor
             // Resolver la misma string I2 que utiliza el menu nativo de idioma.
             try
             {
-                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                if (!_objectiveTranslationMethodSearched)
                 {
-                    var manager = assembly.GetType("I2.Loc.LocalizationManager", false);
-                    if (manager == null) continue;
-                    foreach (var method in manager.GetMethods(
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+                    _objectiveTranslationMethodSearched = true;
+                    foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                     {
-                        if (method.Name != "GetTranslation") continue;
-                        var parameters = method.GetParameters();
-                        if (parameters.Length == 0 || parameters[0].ParameterType != typeof(string)) continue;
-                        var values = new object[parameters.Length];
-                        values[0] = key;
-                        for (var i = 1; i < parameters.Length; i++)
-                            values[i] = parameters[i].HasDefaultValue
-                                ? parameters[i].DefaultValue
-                                : (parameters[i].ParameterType.IsValueType
-                                    ? Activator.CreateInstance(parameters[i].ParameterType) : null);
-                        var localized = method.Invoke(null, values) as string;
-                        if (!string.IsNullOrEmpty(localized) && localized != key &&
-                            localized.IndexOf('/') < 0) return localized;
+                        var manager = assembly.GetType("I2.Loc.LocalizationManager", false);
+                        if (manager == null) continue;
+                        _objectiveTranslationMethod = manager.GetMethods(
+                                System.Reflection.BindingFlags.Public |
+                                System.Reflection.BindingFlags.Static)
+                            .FirstOrDefault(method =>
+                            {
+                                if (method.Name != "GetTranslation") return false;
+                                var parameters = method.GetParameters();
+                                return parameters.Length > 0 &&
+                                       parameters[0].ParameterType == typeof(string);
+                            });
+                        if (_objectiveTranslationMethod != null) break;
                     }
-                    break;
                 }
+                var method = _objectiveTranslationMethod;
+                if (method == null) return fallback;
+                var parameters = method.GetParameters();
+                var values = new object[parameters.Length];
+                values[0] = key;
+                for (var i = 1; i < parameters.Length; i++)
+                    values[i] = parameters[i].HasDefaultValue
+                        ? parameters[i].DefaultValue
+                        : (parameters[i].ParameterType.IsValueType
+                            ? Activator.CreateInstance(parameters[i].ParameterType) : null);
+                var localized = method.Invoke(null, values) as string;
+                if (!string.IsNullOrEmpty(localized) && localized != key &&
+                    localized.IndexOf('/') < 0) return localized;
             }
             catch (Exception) { }
             return fallback;
@@ -894,15 +929,16 @@ namespace UnderPressure.Editor
             RectTransform list, string prefix)
         {
             if (list == null) return;
-            var labels = list.GetComponentsInChildren<TMP_Text>(true);
+            EnsureObjectiveNativeFlagNames();
+            var labels = prefix == "UP Objective Flag Language "
+                ? _objectiveFlagLanguageLabels
+                : _generalFlagLanguageLabels;
             for (var index = 0;
                  index < ObjectiveFlagFileNames.Length; ++index)
             {
-                var name = prefix + index;
-                var label = labels.FirstOrDefault(value =>
-                    value != null && value.gameObject.name == name);
+                var label = labels[index];
                 if (label != null)
-                    label.text = ObjectiveNativeFlagName(index);
+                    label.text = _objectiveNativeFlagNames[index];
             }
         }
 
@@ -963,7 +999,7 @@ namespace UnderPressure.Editor
             float inputWidth, bool integer, float textOffsetX)
         {
             CreateObjectiveLabel(parent, labelValue,
-                labelX, labelY, 108f, 58f, 18f, TextAlignmentOptions.MidlineLeft);
+                labelX, labelY, 108f, 58f, 18f, TextAlignmentOptions.MidlineRight);
 
             var input = CreateObjectiveInput(
                 parent, inputName, inputX, inputY, inputWidth, 36f, "", integer);
@@ -992,7 +1028,7 @@ namespace UnderPressure.Editor
         {
             _objectivePublicHospitalLabel = CreateObjectiveLabel(
                 parent, ObjectivePublicToggleLabel(),
-                861.5f, 11f, 136f, 36f, 18f, TextAlignmentOptions.MidlineLeft);
+                861.5f, 11f, 136f, 36f, 18f, TextAlignmentOptions.MidlineRight);
 
             var toggle = CreateDiseaseToggle(parent, false, value =>
             {
@@ -1033,7 +1069,11 @@ namespace UnderPressure.Editor
         {
             if (toggle == null || toggle.transform.parent == null) return;
             var label = toggle.transform.parent.GetComponentsInChildren<TMP_Text>(true).FirstOrDefault();
-            if (label != null) SetTopLeft(label.rectTransform, x, 0f, width, 36f);
+            if (label != null)
+            {
+                SetTopLeft(label.rectTransform, x, 0f, width, 36f);
+                label.alignment = TextAlignmentOptions.MidlineRight;
+            }
         }
 
         private static void ConfigureObjectiveExactOutline(
@@ -1143,7 +1183,7 @@ namespace UnderPressure.Editor
                 row,
                 EditorLocalization.Get(labelKey),
                 0f, 0f, 108f, 58f, 18f,
-                TextAlignmentOptions.MidlineLeft);
+                TextAlignmentOptions.MidlineRight);
 
             var input = CreateObjectiveInput(
                 row,
@@ -2405,7 +2445,7 @@ namespace UnderPressure.Editor
                 Mathf.Max(40f, width - 38f),
                 36f,
                 18f,
-                TextAlignmentOptions.MidlineLeft);
+                TextAlignmentOptions.MidlineRight);
 
             var toggle = CreateDiseaseToggle(
                 root.transform,

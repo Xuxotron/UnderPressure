@@ -297,7 +297,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.never_spawn_patients"),
                 17f,
-                TextAlignmentOptions.MidlineLeft,
+                TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(neverLabel.rectTransform,
                 793.88f, 10.8449707f, 180f, 38f);
@@ -320,7 +320,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.ignore_frequency"),
                 17f,
-                TextAlignmentOptions.MidlineLeft,
+                TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(ignoreFrequencyLabel.rectTransform,
                 1050.88f, 10.8449707f, 160f, 38f);
@@ -382,7 +382,7 @@ namespace UnderPressure.Editor
         {
             var label = CreateDiseaseText(
                 parent, labelText, 17f,
-                TextAlignmentOptions.MidlineLeft, Color.white);
+                TextAlignmentOptions.MidlineRight, Color.white);
             SetTopLeft(
                 label.rectTransform,
                 labelX, 10.8449707f, labelWidth, 38f);
@@ -420,7 +420,7 @@ namespace UnderPressure.Editor
         {
             var label = CreateDiseaseText(
                 parent, labelText, 17f,
-                TextAlignmentOptions.MidlineLeft, Color.white);
+                TextAlignmentOptions.MidlineRight, Color.white);
             SetTopLeft(
                 label.rectTransform,
                 labelX, 10.8449707f, labelWidth, 38f);
@@ -775,7 +775,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.unlocked"),
                 17f,
-                TextAlignmentOptions.MidlineLeft,
+                TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(unlockedLabel.rectTransform, 378f, 11f, 125f, 38f);
 
@@ -791,7 +791,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.frequency"),
                 17f,
-                TextAlignmentOptions.MidlineLeft,
+                TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(frequencyLabel.rectTransform, 576f, 10f, 111f, 38f);
             _settingsFrequencyTexts.Add(frequencyLabel);
@@ -825,7 +825,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EditorLocalization.Get("editor.scenario_settings.diseases.previous_patients"),
                 17f,
-                TextAlignmentOptions.MidlineLeft,
+                TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(patientsLabel.rectTransform, 822f, 10f, 156f, 38f);
 
@@ -996,13 +996,13 @@ namespace UnderPressure.Editor
                 var button = star.AddComponent<Button>();
                 button.targetGraphic = image;
                 button.transition = Selectable.Transition.None;
+                StandardiseClickSound(button);
                 button.onClick.AddListener(() =>
                 {
                     var next = value.minStarRating == rating ? 0 : rating;
                     value.minStarRating = next;
                     RefreshDiseaseStarRating(images, next);
                 });
-                StandardiseClickSound(button);
             }
         }
 
@@ -1221,11 +1221,11 @@ namespace UnderPressure.Editor
             var button = root.AddComponent<Button>();
             button.targetGraphic = root.GetComponent<Image>();
             button.colors = _style.ButtonColors;
+            StandardiseClickSound(button);
             button.onClick.AddListener(() => clicked());
             var label = CreateDiseaseText(root.transform, value, 18f,
                 TextAlignmentOptions.Center, Color.white);
             label.fontStyle = FontStyles.Normal;
-            StandardiseClickSound(button);
             return button;
         }
 

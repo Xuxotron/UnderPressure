@@ -390,20 +390,22 @@ namespace UnderPressure.Editor
             outline.useGraphicAlpha = false;
         }
 
-        private void AddPlotLabel(string key, float minX, float maxX, float top)
+        private TextMeshProUGUI AddPlotLabel(string key, float minX, float maxX, float top)
         {
             var label = CreateDiseaseText(_settingsPlotDetails,
                 EnsurePlotTrailingColon(EditorLocalization.Get(key)), 18f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
             SetPlotControlRect(label.rectTransform, minX, maxX, top, 44f);
+            return label;
         }
 
         private void AddPlotToggle(string key, float minX, float maxX, float top,
             bool value, Action<bool> changed)
         {
             const float toggleWidth = .045f;
-            AddPlotLabel(key, minX, maxX - toggleWidth - .012f, top);
+            var label = AddPlotLabel(key, minX, maxX - toggleWidth - .012f, top);
+            if (label != null) label.alignment = TextAlignmentOptions.MidlineRight;
             var toggle = CreateDiseaseToggle(_settingsPlotDetails, value, changed);
             if (toggle == null) return;
             SetPlotControlRect(toggle.transform as RectTransform,
@@ -449,7 +451,7 @@ namespace UnderPressure.Editor
             var label = CreateDiseaseText(
                 _settingsPlotDetails,
                 EnsurePlotTrailingColon(EditorLocalization.Get(labelKey)),
-                18f, TextAlignmentOptions.MidlineLeft, Color.white);
+                18f, TextAlignmentOptions.MidlineRight, Color.white);
             label.fontStyle = FontStyles.Normal;
             SetPlotControlRect(label.rectTransform, minX, maxX, top, 44f);
             label.rectTransform.offsetMax = new Vector2(
@@ -573,7 +575,7 @@ namespace UnderPressure.Editor
             {
                 var customLabel = CreateDiseaseText(
                     _settingsPlotDetails, PlotCustomStylesLabel(), 18f,
-                    TextAlignmentOptions.MidlineLeft, Color.white);
+                    TextAlignmentOptions.MidlineRight, Color.white);
                 customLabel.fontStyle = FontStyles.Normal;
                 SetPlotControlRect(customLabel.rectTransform, .025f, .255f, top, 44f);
 

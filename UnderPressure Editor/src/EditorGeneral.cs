@@ -34,6 +34,10 @@ namespace UnderPressure.Editor
         private TMP_InputField _settingsInitialTemperature;
         private TMP_InputField _settingsInitialAttractiveness;
         private TMP_InputField _settingsInitialHygiene;
+        private static GameObject _cachedSingleLineWorkshopPanel;
+        private static Component _cachedSingleLineWorkshopInput;
+        private static GameObject _cachedMultilineWorkshopPanel;
+        private static Component _cachedMultilineWorkshopInput;
         private RectTransform _generalFlagSelector;
         private RectTransform _generalFlagList;
         private Image _generalSelectedFlag;
@@ -1050,10 +1054,9 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             hitImage.raycastTarget = true;
             var hitButton = hit.GetComponent<Button>();
             hitButton.transition = Selectable.Transition.None;
+            StandardiseClickSound(hitButton);
             hitButton.onClick.AddListener(() =>
             {
-                if (!_generalFlagExpanded)
-                    RefreshSharedFlagLanguageLabels();
                 SetGeneralFlagExpanded(!_generalFlagExpanded);
             });
 
@@ -1158,6 +1161,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                     18f, TextAlignmentOptions.MidlineLeft,
                     "UP General Flag Language " + index);
                 label.raycastTarget = false;
+                _generalFlagLanguageLabels[index] = label;
             }
 
             _generalTranslateLanguagesButton = CreateObjectiveButton(
@@ -1421,6 +1425,12 @@ _settingsTabFolderBackgrounds.Length < 3) return;
         private static bool TryGetWorkshopFieldTemplate(bool multiline,
             out GameObject panel, out Component input)
         {
+            panel = multiline
+                ? _cachedMultilineWorkshopPanel : _cachedSingleLineWorkshopPanel;
+            input = multiline
+                ? _cachedMultilineWorkshopInput : _cachedSingleLineWorkshopInput;
+            if (panel != null && input != null) return true;
+
             panel = null;
             input = null;
             var manager = ExtContentUtils.ExtContentManager;
@@ -1434,6 +1444,16 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 ?.GetValue(screen) as GameObject;
             input = AccessTools.Field(typeof(ExtContentGameItemUIScreen), fieldName)
                 ?.GetValue(screen) as Component;
+            if (multiline)
+            {
+                _cachedMultilineWorkshopPanel = panel;
+                _cachedMultilineWorkshopInput = input;
+            }
+            else
+            {
+                _cachedSingleLineWorkshopPanel = panel;
+                _cachedSingleLineWorkshopInput = input;
+            }
             return panel != null && input != null;
         }
 
@@ -1447,6 +1467,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             {
                 tmpLabel.text = value;
                 tmpLabel.color = Color.white;
+                tmpLabel.alignment = TextAlignmentOptions.MidlineRight;
                 return;
             }
             var regularLabel = row.GetComponentsInChildren<Text>(true)
@@ -1456,6 +1477,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             {
                 regularLabel.text = value;
                 regularLabel.color = Color.white;
+                regularLabel.alignment = TextAnchor.MiddleRight;
             }
         }
 

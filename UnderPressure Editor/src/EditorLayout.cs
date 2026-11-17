@@ -1537,12 +1537,12 @@ namespace UnderPressure.Editor
                 if (component != null && component.GetType().FullName == "I2.Loc.Localize")
                     component.enabled = false;
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => action());
             button.interactable = true;
             button.gameObject.SetActive(true);
             var label = button.GetComponentInChildren<TMP_Text>(true);
             if (label != null) label.text = text;
             ApplyButtonStyle(button);
+            button.onClick.AddListener(() => action());
             return button;
         }
 

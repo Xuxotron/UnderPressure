@@ -396,7 +396,7 @@ namespace UnderPressure.Editor
         {
             var rowObject = new GameObject("UP Emergency Compact Input " + label, typeof(RectTransform)); rowObject.transform.SetParent(parent, false); var row = rowObject.transform as RectTransform;
             SetRect(row, new Vector2(.01f, 1f), new Vector2(.99f, 1f), new Vector2(.5f, 1f), new Vector2(0f, -top), new Vector2(0f, height));
-            CreateEmergencyLabel(row, label, 0f, 0f, -172f, height, 18f, TextAlignmentOptions.MidlineLeft);
+            CreateEmergencyLabel(row, label, 0f, 0f, -172f, height, 18f, TextAlignmentOptions.MidlineRight);
             var input = CreateEmergencyInput(row, "UP Emergency Compact Input Control", 0f, 3f, 160f, Mathf.Max(30f, height - 6f), "", integer);
             SetTopRight(input.transform as RectTransform, 0f, 3f, 160f, Mathf.Max(30f, height - 6f)); if (input.textComponent != null) input.textComponent.fontSize = 17f;
             input.contentType = integer ? TMP_InputField.ContentType.IntegerNumber : TMP_InputField.ContentType.DecimalNumber; input.characterLimit = 16; return input;
@@ -556,7 +556,7 @@ namespace UnderPressure.Editor
         {
             var buttonObject = NewImage(name, parent, _style.ButtonSprite, color, true); var rect = buttonObject.transform as RectTransform;
             if (width < 0f) SetEmergencyTopStretch(rect, x, -width, y, height); else if (x < 0f) SetTopRight(rect, -x, y, width, height); else SetTopLeft(rect, x, y, width, height);
-            var button = buttonObject.AddComponent<Button>(); button.targetGraphic = buttonObject.GetComponent<Image>(); button.onClick.RemoveAllListeners(); if (action != null) button.onClick.AddListener(() => action()); ApplyButtonStyle(button, color);
+            var button = buttonObject.AddComponent<Button>(); button.targetGraphic = buttonObject.GetComponent<Image>(); button.onClick.RemoveAllListeners(); ApplyButtonStyle(button, color); if (action != null) button.onClick.AddListener(() => action());
             CreateEmergencyLabel(button.transform, label, 3f, 0f, Mathf.Abs(width) - 6f, height, 18f, TextAlignmentOptions.Center); return button;
         }
 
