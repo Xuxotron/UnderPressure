@@ -556,7 +556,7 @@ namespace UnderPressure.Editor
         {
             var buttonObject = NewImage(name, parent, _style.ButtonSprite, color, true); var rect = buttonObject.transform as RectTransform;
             if (width < 0f) SetEmergencyTopStretch(rect, x, -width, y, height); else if (x < 0f) SetTopRight(rect, -x, y, width, height); else SetTopLeft(rect, x, y, width, height);
-            var button = buttonObject.AddComponent<Button>(); button.targetGraphic = buttonObject.GetComponent<Image>(); button.onClick.RemoveAllListeners(); ApplyButtonStyle(button, color); if (action != null) button.onClick.AddListener(() => action());
+            var button = buttonObject.AddComponent<Button>(); button.targetGraphic = buttonObject.GetComponent<Image>(); button.onClick.RemoveAllListeners(); if (action != null) button.onClick.AddListener(() => action()); ApplyButtonStyle(button, color);
             CreateEmergencyLabel(button.transform, label, 3f, 0f, Mathf.Abs(width) - 6f, height, 18f, TextAlignmentOptions.Center); return button;
         }
 

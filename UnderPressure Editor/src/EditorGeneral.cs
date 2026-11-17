@@ -1054,7 +1054,6 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             hitImage.raycastTarget = true;
             var hitButton = hit.GetComponent<Button>();
             hitButton.transition = Selectable.Transition.None;
-            StandardiseClickSound(hitButton);
             hitButton.onClick.AddListener(() =>
             {
                 SetGeneralFlagExpanded(!_generalFlagExpanded);

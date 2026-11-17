@@ -996,13 +996,13 @@ namespace UnderPressure.Editor
                 var button = star.AddComponent<Button>();
                 button.targetGraphic = image;
                 button.transition = Selectable.Transition.None;
-                StandardiseClickSound(button);
                 button.onClick.AddListener(() =>
                 {
                     var next = value.minStarRating == rating ? 0 : rating;
                     value.minStarRating = next;
                     RefreshDiseaseStarRating(images, next);
                 });
+                StandardiseClickSound(button);
             }
         }
 
@@ -1221,11 +1221,11 @@ namespace UnderPressure.Editor
             var button = root.AddComponent<Button>();
             button.targetGraphic = root.GetComponent<Image>();
             button.colors = _style.ButtonColors;
-            StandardiseClickSound(button);
             button.onClick.AddListener(() => clicked());
             var label = CreateDiseaseText(root.transform, value, 18f,
                 TextAlignmentOptions.Center, Color.white);
             label.fontStyle = FontStyles.Normal;
+            StandardiseClickSound(button);
             return button;
         }
 
