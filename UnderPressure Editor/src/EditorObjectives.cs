@@ -63,6 +63,11 @@ namespace UnderPressure.Editor
             "Korean", "Polish", "Portuguese", "Russian", "Spanish",
             "Chinese (Traditional)"
         };
+        private static readonly string[] ObjectiveFlagLanguageCodes =
+        {
+            "zh-hans", "en", "fr", "de", "it", "ko", "pl", "pt", "ru",
+            "es", "zh-hant"
+        };
         private RectTransform _objectiveStarPanel;
         private RectTransform _objectiveChallengePanel;
         private TMP_Dropdown _settingsNativeDropdownTemplate;
@@ -503,6 +508,8 @@ namespace UnderPressure.Editor
                     var draft = CurrentObjective;
                     if (draft == null || !draft.isStar) return;
                     draft.name = value ?? "";
+                    ScenarioEditorStorage.SetMapText(_level,
+                        ScenarioMapLocalization.StarKey(draft.starIndex), value ?? "");
                     SaveObjectiveDrafts();
                 });
             }
@@ -671,7 +678,7 @@ namespace UnderPressure.Editor
             var translateButton = CreateObjectiveButton(
                 content,
                 "UP Objective Translate Languages",
-                "Traducir Idiomas",
+                EditorLocalization.Get("editor.scenario_settings.translate_languages"),
                 0f, total * rowHeight,
                 309f, buttonHeight - 2f,
                 _style.ButtonColor,
@@ -685,9 +692,14 @@ namespace UnderPressure.Editor
             translateRect.sizeDelta =
                 new Vector2(-2f, buttonHeight - 2f);
 
-            _objectiveFlagIndex = Mathf.Clamp(
-                _objectiveFlagIndex, 0, total - 1);
-            SelectObjectiveFlag(_objectiveFlagIndex);
+            var language = ScenarioEditorStorage.CurrentMapTranslationLanguage(_level);
+            var selected = Array.FindIndex(ObjectiveFlagLanguageCodes, code =>
+                string.Equals(code, language, StringComparison.OrdinalIgnoreCase));
+            _objectiveFlagIndex = Mathf.Clamp(selected < 0 ? 1 : selected, 0, total - 1);
+            ScenarioEditorStorage.SetMapTranslationLanguage(
+                _level, ObjectiveFlagLanguageCodes[_objectiveFlagIndex]);
+            RefreshSharedFlagSelection();
+            RefreshLocalizedScenarioInputs();
             _objectiveFlagSelector.gameObject.SetActive(false);
         }
 
@@ -804,11 +816,54 @@ namespace UnderPressure.Editor
 
         private void SelectObjectiveFlag(int index)
         {
+            SaveCurrentLocalizedScenarioInputs();
             _objectiveFlagIndex = Mathf.Clamp(
                 index, 0, ObjectiveFlagFileNames.Length - 1);
+            ScenarioEditorStorage.SetMapTranslationLanguage(
+                _level, ObjectiveFlagLanguageCodes[_objectiveFlagIndex]);
             RefreshSharedFlagSelection();
+            RefreshLocalizedScenarioInputs();
             SetObjectiveFlagExpanded(false);
             SetGeneralFlagExpanded(false);
+        }
+
+        private void SaveCurrentLocalizedScenarioInputs()
+        {
+            if (_level == null) return;
+            if (_settingsDescriptionPerStar != null)
+                ScenarioEditorStorage.SetMapText(_level,
+                    ScenarioMapLocalization.DescriptionKey,
+                    _settingsDescriptionPerStar.text ?? "");
+            var objective = CurrentObjective;
+            if (_objectiveStarDescriptionInput != null && objective != null &&
+                objective.isStar)
+            {
+                var value = _objectiveStarDescriptionInput.text ?? "";
+                ScenarioEditorStorage.SetMapText(_level,
+                    ScenarioMapLocalization.StarKey(objective.starIndex), value);
+                objective.name = value;
+                SaveObjectiveDrafts();
+            }
+        }
+
+        internal static void FlushLocalizedScenarioInputs(Level level)
+        {
+            if (_active != null && ReferenceEquals(_active._level, level))
+                _active.SaveCurrentLocalizedScenarioInputs();
+        }
+
+        private void RefreshLocalizedScenarioInputs()
+        {
+            if (_level == null) return;
+            _settingsDescriptionPerStar?.SetTextWithoutNotify(
+                ScenarioEditorStorage.GetMapText(_level,
+                    ScenarioMapLocalization.DescriptionKey));
+            var objective = CurrentObjective;
+            if (_objectiveStarDescriptionInput != null && objective != null &&
+                objective.isStar)
+                _objectiveStarDescriptionInput.SetTextWithoutNotify(
+                    ScenarioEditorStorage.GetMapText(_level,
+                        ScenarioMapLocalization.StarKey(objective.starIndex)));
         }
 
         private void RefreshSharedFlagSelection()
@@ -1567,7 +1622,9 @@ namespace UnderPressure.Editor
             if (_objectiveStarDescriptionContainer != null)
                 _objectiveStarDescriptionContainer.gameObject.SetActive(draft.isStar);
             if (_objectiveStarDescriptionInput != null && draft.isStar)
-                _objectiveStarDescriptionInput.SetTextWithoutNotify(draft.name ?? "");
+                _objectiveStarDescriptionInput.SetTextWithoutNotify(
+                    ScenarioEditorStorage.GetMapText(_level,
+                        ScenarioMapLocalization.StarKey(draft.starIndex)));
             var restoreActive = configurationObject.activeSelf;
             if (restoreActive)
                 configurationObject.SetActive(false);
@@ -1715,6 +1772,7 @@ namespace UnderPressure.Editor
         private void SelectObjective(int index)
         {
             if (index < 0 || index >= _objectiveDrafts.Count) return;
+            SaveCurrentLocalizedScenarioInputs();
             _selectedObjective = index;
             RefreshObjectiveList();
             RefreshObjectiveConfiguration();

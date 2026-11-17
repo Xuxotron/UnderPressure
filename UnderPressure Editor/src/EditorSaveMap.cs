@@ -24,6 +24,205 @@ using UnityEngine;
 // Sin lectura de los formatos antiguos de prueba.
 namespace UnderPressure.Editor
 {
+    internal static class ScenarioMapLocalization
+    {
+        internal const string FileName = "translations.csv";
+        internal const string DescriptionKey = "scenario.description";
+        internal const string Star1Key = "scenario.star.1";
+        internal const string Star2Key = "scenario.star.2";
+        internal const string Star3Key = "scenario.star.3";
+        internal static readonly string[] LanguageCodes =
+        {
+            "en", "es", "fr", "de", "it", "pt", "ru", "pl", "ko",
+            "zh-hans", "zh-hant"
+        };
+        private static readonly string[] Keys =
+            { DescriptionKey, Star1Key, Star2Key, Star3Key };
+
+        internal sealed class Table
+        {
+            private readonly Dictionary<string, Dictionary<string, string>> _values =
+                new Dictionary<string, Dictionary<string, string>>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            internal string GetExact(string key, string language)
+            {
+                Dictionary<string, string> translations;
+                string value;
+                return _values.TryGetValue(key ?? "", out translations) &&
+                       translations.TryGetValue(NormalizeLanguage(language), out value)
+                    ? value ?? "" : "";
+            }
+
+            internal string Resolve(string key, string language)
+            {
+                var value = GetExact(key, language);
+                if (!string.IsNullOrEmpty(value)) return value;
+                value = GetExact(key, "en");
+                if (!string.IsNullOrEmpty(value)) return value;
+                foreach (var code in LanguageCodes)
+                {
+                    value = GetExact(key, code);
+                    if (!string.IsNullOrEmpty(value)) return value;
+                }
+                return "";
+            }
+
+            internal void Set(string key, string language, string value)
+            {
+                if (string.IsNullOrWhiteSpace(key)) return;
+                Dictionary<string, string> translations;
+                if (!_values.TryGetValue(key, out translations))
+                {
+                    translations = new Dictionary<string, string>(
+                        StringComparer.OrdinalIgnoreCase);
+                    _values.Add(key, translations);
+                }
+                translations[NormalizeLanguage(language)] = value ?? "";
+            }
+
+            internal Table Clone()
+            {
+                var result = new Table();
+                foreach (var pair in _values)
+                    foreach (var translation in pair.Value)
+                        result.Set(pair.Key, translation.Key, translation.Value);
+                return result;
+            }
+        }
+
+        internal static string StarKey(int star)
+        {
+            if (star == 1) return Star1Key;
+            if (star == 2) return Star2Key;
+            return Star3Key;
+        }
+
+        internal static string NormalizeLanguage(string language)
+        {
+            if (string.IsNullOrWhiteSpace(language)) return "en";
+            var normalized = language.Replace('_', '-').ToLowerInvariant();
+            if (normalized.StartsWith("zh", StringComparison.Ordinal))
+            {
+                if (normalized.Contains("tw") || normalized.Contains("hk") ||
+                    normalized.Contains("mo") || normalized.Contains("hant") ||
+                    normalized.Contains("traditional"))
+                    return "zh-hant";
+                return "zh-hans";
+            }
+            var separator = normalized.IndexOf('-');
+            return separator > 0 ? normalized.Substring(0, separator) : normalized;
+        }
+
+        internal static Table Read(string folder)
+        {
+            var result = new Table();
+            var path = Path.Combine(folder ?? "", FileName);
+            if (!File.Exists(path)) return result;
+            var records = ParseCsv(File.ReadAllText(path, Encoding.UTF8));
+            if (records.Count == 0) return result;
+            var headers = records[0];
+            for (var row = 1; row < records.Count; ++row)
+            {
+                var values = records[row];
+                if (values.Count == 0 || string.IsNullOrWhiteSpace(values[0])) continue;
+                for (var column = 1;
+                     column < headers.Count && column < values.Count; ++column)
+                    result.Set(values[0].Trim(), headers[column].Trim(), values[column]);
+            }
+            return result;
+        }
+
+        internal static void Write(string folder, Table table)
+        {
+            if (table == null) table = new Table();
+            var text = new StringBuilder();
+            text.Append("key");
+            foreach (var language in LanguageCodes)
+                text.Append(',').Append(language);
+            text.AppendLine();
+            foreach (var key in Keys)
+            {
+                text.Append(Escape(key));
+                foreach (var language in LanguageCodes)
+                    text.Append(',').Append(Escape(table.GetExact(key, language)));
+                text.AppendLine();
+            }
+            File.WriteAllText(Path.Combine(folder, FileName), text.ToString(),
+                new UTF8Encoding(false));
+        }
+
+        internal static Table FromLegacy(ScenarioMapFormat.Map header)
+        {
+            var result = new Table();
+            if (header == null) return result;
+            var language = NormalizeLanguage(EditorLocalization.CurrentLanguageCode());
+            result.Set(DescriptionKey, language, header.description ?? "");
+            var descriptions = header.DescriptionPerStar ?? new string[0];
+            for (var star = 1; star <= 3; ++star)
+            {
+                var value = descriptions.Length == 0 ? "" :
+                    descriptions[Math.Min(descriptions.Length - 1, star - 1)] ?? "";
+                var objective = (header.objectives ??
+                    new ScenarioMapFormat.ObjectiveData[0]).FirstOrDefault(item =>
+                        item != null && item.isStar && item.starIndex == star &&
+                        !string.IsNullOrEmpty(item.name));
+                if (objective != null) value = objective.name;
+                result.Set(StarKey(star), language, value);
+            }
+            return result;
+        }
+
+        private static string Escape(string value)
+        {
+            value = value ?? "";
+            if (value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0) return value;
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        private static List<List<string>> ParseCsv(string text)
+        {
+            var records = new List<List<string>>();
+            var row = new List<string>();
+            var value = new StringBuilder();
+            var quoted = false;
+            for (var index = 0; index < (text ?? "").Length; ++index)
+            {
+                var current = text[index];
+                if (current == '"')
+                {
+                    if (quoted && index + 1 < text.Length && text[index + 1] == '"')
+                    {
+                        value.Append('"');
+                        ++index;
+                    }
+                    else quoted = !quoted;
+                }
+                else if (current == ',' && !quoted)
+                {
+                    row.Add(value.ToString());
+                    value.Length = 0;
+                }
+                else if ((current == '\r' || current == '\n') && !quoted)
+                {
+                    row.Add(value.ToString());
+                    value.Length = 0;
+                    if (row.Count > 1 || row[0].Length > 0) records.Add(row);
+                    row = new List<string>();
+                    if (current == '\r' && index + 1 < text.Length &&
+                        text[index + 1] == '\n') ++index;
+                }
+                else value.Append(current);
+            }
+            if (value.Length > 0 || row.Count > 0)
+            {
+                row.Add(value.ToString());
+                records.Add(row);
+            }
+            return records;
+        }
+    }
+
     internal static class ScenarioEditorStorage
     {
         private static ScenarioPlotRuntime.Collection _currentCustomPlots;
@@ -61,6 +260,10 @@ namespace UnderPressure.Editor
         private static ScenarioMapFormat.EmergencyData[] _emergencies =
             new ScenarioMapFormat.EmergencyData[0];
         private static string[] _availableRooms = new string[0];
+        private static Level _mapTranslationsLevel;
+        private static ScenarioMapLocalization.Table _mapTranslations =
+            new ScenarioMapLocalization.Table();
+        private static string _mapTranslationLanguage = "en";
         private static Level _plotSettingsLevel;
         private static readonly List<ScenarioMapFormat.Plot> _plotSettings =
             new List<ScenarioMapFormat.Plot>();
@@ -146,7 +349,75 @@ namespace UnderPressure.Editor
             _namedMap = null;
             _namedMapPath = null;
             ResetScenarioSettings(level);
+            ResetMapTranslations(level);
             ResetPlotSettings(level);
+        }
+
+        internal static string CurrentMapTranslationLanguage(Level level)
+        {
+            EnsureMapTranslations(level);
+            return _mapTranslationLanguage;
+        }
+
+        internal static void SetMapTranslationLanguage(Level level, string language)
+        {
+            EnsureMapTranslations(level);
+            _mapTranslationLanguage = ScenarioMapLocalization.NormalizeLanguage(language);
+        }
+
+        internal static string GetMapText(Level level, string key)
+        {
+            EnsureMapTranslations(level);
+            return _mapTranslations.GetExact(key, _mapTranslationLanguage);
+        }
+
+        internal static void SetMapText(Level level, string key, string value)
+        {
+            EnsureMapTranslations(level);
+            _mapTranslations.Set(key, _mapTranslationLanguage, value ?? "");
+        }
+
+        internal static string[] CurrentStarDescriptions(Level level, string language)
+        {
+            EnsureMapTranslations(level);
+            return Enumerable.Range(1, 3).Select(star =>
+                _mapTranslations.Resolve(ScenarioMapLocalization.StarKey(star), language)).ToArray();
+        }
+
+        private static void EnsureMapTranslations(Level level)
+        {
+            if (!ReferenceEquals(_mapTranslationsLevel, level))
+                ResetMapTranslations(level);
+        }
+
+        private static void ResetMapTranslations(Level level)
+        {
+            _mapTranslationsLevel = level;
+            _mapTranslations = new ScenarioMapLocalization.Table();
+            _mapTranslationLanguage = ScenarioMapLocalization.NormalizeLanguage(
+                EditorLocalization.CurrentLanguageCode());
+            var descriptions = ReadField<string[]>(level?.Config, "DescriptionPerStar") ??
+                               new string[0];
+            for (var star = 1; star <= 3; ++star)
+                _mapTranslations.Set(ScenarioMapLocalization.StarKey(star),
+                    _mapTranslationLanguage,
+                    descriptions.Length == 0 ? "" :
+                    descriptions[Math.Min(descriptions.Length - 1, star - 1)] ?? "");
+        }
+
+        private static void SetMapTranslations(Level level,
+            ScenarioMapLocalization.Table table, ScenarioMapFormat.Map legacy)
+        {
+            _mapTranslationsLevel = level;
+            _mapTranslationLanguage = ScenarioMapLocalization.NormalizeLanguage(
+                EditorLocalization.CurrentLanguageCode());
+            _mapTranslations = (table ?? ScenarioMapLocalization.FromLegacy(legacy)).Clone();
+            var hasAny = !string.IsNullOrEmpty(_mapTranslations.Resolve(
+                ScenarioMapLocalization.DescriptionKey, _mapTranslationLanguage));
+            for (var star = 1; star <= 3 && !hasAny; ++star)
+                hasAny = !string.IsNullOrEmpty(_mapTranslations.Resolve(
+                    ScenarioMapLocalization.StarKey(star), _mapTranslationLanguage));
+            if (!hasAny) _mapTranslations = ScenarioMapLocalization.FromLegacy(legacy);
         }
 
         // Estos datos describen la logica de compra de cada parcela. La geometria,
@@ -822,6 +1093,7 @@ namespace UnderPressure.Editor
         internal static string Save(Level level, string displayName)
         {
             RequireEditor(level);
+            ScenarioEditorDockLayout.FlushLocalizedScenarioInputs(level);
             // Una seleccion multiple se retira temporalmente de la parcela
             // mientras sigue pegada al cursor. Guardar entonces perderia objetos.
             // Los cursores retiran temporalmente los objetos que se estan moviendo
@@ -911,8 +1183,11 @@ namespace UnderPressure.Editor
 
             // Escenario experimental desactivado: scene.json NO se utiliza.
             var settings = CurrentScenarioSettings(level);
-            var description = settings.DescriptionPerStar == null
-                ? "" : string.Join("\n", settings.DescriptionPerStar);
+            EnsureMapTranslations(level);
+            var activeLanguage = CurrentMapTranslationLanguage(level);
+            var description = _mapTranslations.Resolve(
+                ScenarioMapLocalization.DescriptionKey, activeLanguage);
+            var starDescriptions = CurrentStarDescriptions(level, activeLanguage);
             var header = new ScenarioMapFormat.Map
             {
                 sceneFile = "",
@@ -926,7 +1201,7 @@ namespace UnderPressure.Editor
                 plots = refs.ToArray()
             };
             header.DisplayName = settings.DisplayName;
-            header.DescriptionPerStar = settings.DescriptionPerStar;
+            header.DescriptionPerStar = starDescriptions;
             header.InitialBalance = settings.InitialBalance;
             header.FailStateBalanceWarning = settings.FailStateBalanceWarning;
             header.FailStateBalanceGameOver = settings.FailStateBalanceGameOver;
@@ -981,19 +1256,46 @@ namespace UnderPressure.Editor
             }
             // Guardar config.json al final dentro del area temporal. El .upmap anterior
             // no se sustituye hasta que todos los archivos hayan sido verificados.
+            ScenarioMapLocalization.Write(folder, _mapTranslations);
             ScenarioMapFormat.WriteJson(main, header);
             var verified = ScenarioMapFormat.ReadLoose(main);
             if (verified.Plots.Count != saved.Count)
                 throw new InvalidDataException("El mapa guardado no coincide con las parcelas del Editor.");
             VerifySavedObjectives(header.objectives, verified.Header.objectives);
             VerifySavedAvailableRooms(header.availableRooms, verified.Header.availableRooms);
-            ScenarioMapPackage.Publish(folder, package, candidate => ScenarioMapFormat.Read(candidate));
+            VerifySavedTranslations(_mapTranslations, verified.Translations);
+            ScenarioMapPackage.Publish(folder, package, candidate =>
+            {
+                var packaged = ScenarioMapFormat.Read(candidate);
+                VerifySavedTranslations(_mapTranslations, packaged.Translations);
+            });
             UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + package + " (" + refs.Count + " parcelas)");
             MarkCurrentMap(level, name, package);
             ScenarioPlotMapEditor.MarkFogSaved();
             return package;
             }
             finally { ScenarioMapPackage.DeleteDirectory(folder); }
+        }
+
+        private static void VerifySavedTranslations(ScenarioMapLocalization.Table expected,
+            ScenarioMapLocalization.Table actual)
+        {
+            foreach (var language in ScenarioMapLocalization.LanguageCodes)
+            {
+                if (!string.Equals(
+                        expected.GetExact(ScenarioMapLocalization.DescriptionKey, language),
+                        actual.GetExact(ScenarioMapLocalization.DescriptionKey, language),
+                        StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        "La descripcion traducida no coincide con el guardado.");
+                for (var star = 1; star <= 3; ++star)
+                    if (!string.Equals(
+                            expected.GetExact(ScenarioMapLocalization.StarKey(star), language),
+                            actual.GetExact(ScenarioMapLocalization.StarKey(star), language),
+                            StringComparison.Ordinal))
+                        throw new InvalidDataException(
+                            "La descripcion traducida de estrella no coincide con el guardado.");
+            }
         }
 
         // Comparar tambien identidad y transformacion, no solo cantidades.
@@ -1345,6 +1647,7 @@ namespace UnderPressure.Editor
                 world.UpdateNavigation();
                 UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
+                SetMapTranslations(level, map.Translations, map.Header);
                 SetScenarioSettings(level, map.Header);
                 ScenarioEditorDockLayout.NotifyScenarioDataLoaded();
                 SetPlotSettings(level, map.Plots);

@@ -91,6 +91,7 @@ namespace UnderPressure.Editor
             // Enfermedades es una pestaña del mismo editor: al cerrar por Escape,
             // por el botón superior o por la X debe conservar exactamente el mismo
             // borrador que se guardará después dentro del paquete del mapa.
+            SaveCurrentLocalizedScenarioInputs();
             if (_level != null && _settingsDiseasesLoaded)
             {
                 var settings = ScenarioEditorStorage.CurrentScenarioSettings(_level);
@@ -1143,7 +1144,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             var translate = CreateObjectiveButton(
                 rows,
                 "UP Objective Translate Languages",
-                "Traducir Idiomas",
+                EditorLocalization.Get("editor.scenario_settings.translate_languages"),
                 0f, total * rowHeight,
                 309f, buttonHeight - 2f,
                 _style.ButtonColor, () => { });
@@ -1486,8 +1487,9 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _settingsDisplayName.SetTextWithoutNotify(settings.DisplayName ?? "");
             _settingsAuthor?.SetTextWithoutNotify(
                 ScenarioWorkshopMetaStore.Current(_level).author ?? "");
-            _settingsDescriptionPerStar.SetTextWithoutNotify(string.Join("\n",
-                settings.DescriptionPerStar ?? new string[0]));
+            _settingsDescriptionPerStar.SetTextWithoutNotify(
+                ScenarioEditorStorage.GetMapText(_level,
+                    ScenarioMapLocalization.DescriptionKey));
             _settingsInitialBalance.SetTextWithoutNotify(
                 settings.InitialBalance.ToString(CultureInfo.InvariantCulture));
             _settingsFailWarning.SetTextWithoutNotify(
@@ -1510,8 +1512,10 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             ScenarioWorkshopMetaStore.SetAuthor(_level, _settingsAuthor?.text ?? "");
             var description = (_settingsDescriptionPerStar?.text ?? "")
                 .Replace("\r\n", "\n").Replace('\r', '\n');
-            settings.DescriptionPerStar = string.IsNullOrEmpty(description)
-                ? new string[0] : description.Split(new[] { '\n' }, StringSplitOptions.None);
+            ScenarioEditorStorage.SetMapText(_level,
+                ScenarioMapLocalization.DescriptionKey, description);
+            settings.DescriptionPerStar = ScenarioEditorStorage.CurrentStarDescriptions(
+                _level, ScenarioEditorStorage.CurrentMapTranslationLanguage(_level));
             if (!TryReadScenarioInteger(_settingsInitialBalance, out settings.InitialBalance) ||
                 !TryReadScenarioInteger(_settingsFailWarning,
                     out settings.FailStateBalanceWarning) ||

@@ -772,7 +772,7 @@ namespace UnderPressure.Editor
 
             var unlockedLabel = CreateDiseaseText(
                 panel.transform,
-                "Desbloqueada:",
+                EditorLocalization.Get("editor.scenario_settings.diseases.unlocked"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -788,7 +788,7 @@ namespace UnderPressure.Editor
 
             var frequencyLabel = CreateDiseaseText(
                 panel.transform,
-                "Frecuencia:",
+                EditorLocalization.Get("editor.scenario_settings.diseases.frequency"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -822,7 +822,7 @@ namespace UnderPressure.Editor
 
             var patientsLabel = CreateDiseaseText(
                 panel.transform,
-                "Pacientes previos:",
+                EditorLocalization.Get("editor.scenario_settings.diseases.previous_patients"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
@@ -963,7 +963,7 @@ namespace UnderPressure.Editor
         {
             var starsLabel = CreateDiseaseText(
                 parent,
-                "Estrellas:",
+                EditorLocalization.Get("editor.scenario_settings.diseases.stars"),
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);

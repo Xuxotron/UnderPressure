@@ -353,6 +353,8 @@ namespace UnderPressure.Editor
         internal sealed class LoadedMap
         {
             internal Map Header;
+            internal ScenarioMapLocalization.Table Translations =
+                new ScenarioMapLocalization.Table();
             internal Scene SceneData = new Scene();
             internal readonly List<LoadedPlot> Plots = new List<LoadedPlot>();
             internal byte[] FogOfWarPng;
@@ -572,7 +574,12 @@ namespace UnderPressure.Editor
         {
             var header = ReadLooseHeader(file);
             var folder = Path.GetDirectoryName(Path.GetFullPath(file));
-            var result = new LoadedMap { Header = header, ContentFolder = folder };
+            var result = new LoadedMap
+            {
+                Header = header,
+                ContentFolder = folder,
+                Translations = ScenarioMapLocalization.Read(folder)
+            };
             if (!string.IsNullOrEmpty(header.fogOfWarFile))
             {
                 if (header.fogTileWidth <= 0 || header.fogTileHeight <= 0 ||
@@ -1349,6 +1356,7 @@ namespace UnderPressure.Editor
         private static bool _sceneApplied;
         private static bool _terrainApplied;
         private static bool _trafficApplied;
+        private static bool _introductionShown;
         private static ScenarioCareerMapTerrainRetry _retry;
         private static UnderPressureFinanceConfigInstance _runtimeFinanceWrapper;
         private static UnderPressureCharacterConfigInstance _runtimeCharacterWrapper;
@@ -1385,6 +1393,7 @@ namespace UnderPressure.Editor
             _sceneApplied = false;
             _terrainApplied = false;
             _trafficApplied = false;
+            _introductionShown = false;
             ScenarioTraffic.RestoreRuntime();
             RestoreOriginalLandscape();
             RestoreTerrainMeshes();
@@ -1439,8 +1448,21 @@ namespace UnderPressure.Editor
             var clone = (LevelConfig)CloneMethod.Invoke(config, null);
             AccessTools.Field(typeof(LevelConfig), "DisplayName")?.SetValue(
                 clone, header.DisplayName ?? "");
+            var language = EditorLocalization.CurrentLanguageCode();
+            var descriptions = new string[3];
+            for (var star = 1; star <= 3; ++star)
+            {
+                var fallback = header.DescriptionPerStar == null ||
+                               header.DescriptionPerStar.Length == 0
+                    ? "" : header.DescriptionPerStar[Math.Min(
+                        header.DescriptionPerStar.Length - 1, star - 1)] ?? "";
+                var localized = _map.Translations?.Resolve(
+                    ScenarioMapLocalization.StarKey(star), language) ?? "";
+                descriptions[star - 1] = string.IsNullOrEmpty(localized)
+                    ? fallback : localized;
+            }
             AccessTools.Field(typeof(LevelConfig), "DescriptionPerStar")?.SetValue(
-                clone, header.DescriptionPerStar ?? new string[0]);
+                clone, descriptions);
             clone.DisplayNameLocalised = default(LocalisedString);
             clone.DescriptionPerStarLocalised = new LocalisedString[0];
             clone.FailStateBalanceWarning = header.FailStateBalanceWarning;
@@ -1548,6 +1570,27 @@ namespace UnderPressure.Editor
                 ScenarioEditorStorage.ApplyAvailableRoomsToConfig(
                     clone, header.availableRooms, RuntimeScenarioAssets);
             config = clone;
+        }
+
+        internal static void ShowIntroduction(Level level)
+        {
+            if (_introductionShown || !_active || level?.Advisor == null || _map?.Header == null)
+                return;
+            _introductionShown = true;
+            var message = _map.Translations?.Resolve(
+                ScenarioMapLocalization.DescriptionKey,
+                EditorLocalization.CurrentLanguageCode()) ?? "";
+            if (string.IsNullOrWhiteSpace(message))
+                message = _map.Header.description ?? "";
+            if (string.IsNullOrWhiteSpace(message)) return;
+            level.Advisor.PushMessageForce(new AdvisorMessageDefinition
+            {
+                Message = message,
+                Duration = 20f,
+                ShowIndefinitely = false,
+                UserCanDismiss = true,
+                DisplayType = AdvisorDisplayType.Information
+            }, false);
         }
 
         internal static bool TryGetNativeSave(
@@ -2054,7 +2097,11 @@ namespace UnderPressure.Editor
     [HarmonyPatch(typeof(Metagame), "OnLevelLoaded")]
     internal static class ScenarioCareerMapTerrainLoadedPatch
     {
-        private static void Postfix(Level __0) => ScenarioCareerMapLoader.LoadTerrain(__0);
+        private static void Postfix(Level __0, bool __1)
+        {
+            ScenarioCareerMapLoader.LoadTerrain(__0);
+            if (!__1) ScenarioCareerMapLoader.ShowIntroduction(__0);
+        }
     }
 
     [HarmonyPatch(typeof(OpeningScreen), "Show")]
