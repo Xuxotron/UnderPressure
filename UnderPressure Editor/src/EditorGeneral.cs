@@ -1,4 +1,4 @@
-// Updated: 2026-11-16 - Salas de General ajustadas y disponibilidad inicial compartida con Enfermedades.
+// Updated: 2026-11-17 - Selector de idioma compartido en General y ajustes exactos del ultimo override.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -34,6 +34,10 @@ namespace UnderPressure.Editor
         private TMP_InputField _settingsInitialTemperature;
         private TMP_InputField _settingsInitialAttractiveness;
         private TMP_InputField _settingsInitialHygiene;
+        private RectTransform _generalFlagSelector;
+        private RectTransform _generalFlagList;
+        private Image _generalSelectedFlag;
+        private bool _generalFlagExpanded;
         private int _activeSettingsTab;
         internal static bool CloseSettingsPanelIfOpen()
         {
@@ -332,6 +336,8 @@ namespace UnderPressure.Editor
         private void SetSettingsTab(int selectedIndex)
         {
             if (_settingsTabButtons == null || _settingsPages == null) return;
+            if (selectedIndex != 0) SetGeneralFlagExpanded(false);
+            if (selectedIndex != ObjectiveTabIndex) SetObjectiveFlagExpanded(false);
             if (selectedIndex != 3) ScenarioPlotMapEditor.Close();
             if (selectedIndex != 5) ScenarioCharacterViewer.CloseEmbedded();
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
@@ -898,7 +904,8 @@ _settingsTabFolderBackgrounds.Length < 3) return;
         {
             if (_settingsPages == null || _settingsPages.Length == 0 ||
                 _settingsPages[0] == null) return;
-            var content = _settingsPages[0].transform.Find("Scroll View/Viewport/Content");
+            var content = _settingsPages[0].transform.Find(
+                "Scroll View/Viewport/Content");
             if (content == null) return;
 
             _settingsDisplayName = CreateScenarioSettingsInput(content,
@@ -909,8 +916,12 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 false, .52f, .98f);
             SetScenarioSettingsInputLabel(_settingsAuthor, "Autor");
             _settingsDescriptionPerStar = CreateScenarioSettingsInput(content,
-                "editor.scenario_settings.field.description_per_star", 70f, 127f, true,
+                "editor.scenario_settings.field.description_per_star", 70f, 126f, true,
                 false, .02f, .98f);
+
+            ApplyGeneralFlagOverrideGeometry();
+            BuildGeneralFlagSelector(content);
+
             _settingsInitialBalance = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.initial_balance", 202f, 48f, false, true,
                 .02f, .32f, 130f);
@@ -936,6 +947,229 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             BuildGeneralStyleSettings(content);
             BuildGeneralRoomAvailabilitySettings(content);
             RefreshScenarioSettingsFields();
+            RefreshSharedFlagSelection();
+        }
+
+        private void ApplyGeneralFlagOverrideGeometry()
+        {
+            var nameRow = FindScenarioSettingsRow(_settingsDisplayName);
+            if (nameRow != null)
+            {
+                nameRow.anchorMin = new Vector2(.02f, 1f);
+                nameRow.anchorMax = new Vector2(.5f, 1f);
+                nameRow.pivot = new Vector2(.5f, 1f);
+                nameRow.anchoredPosition = new Vector2(48f, -16f);
+                nameRow.sizeDelta = new Vector2(-70f, 48f);
+            }
+
+            var descriptionRow = FindScenarioSettingsRow(
+                _settingsDescriptionPerStar);
+            if (descriptionRow != null)
+            {
+                descriptionRow.anchorMin = new Vector2(.02f, 1f);
+                descriptionRow.anchorMax = new Vector2(.98f, 1f);
+                descriptionRow.pivot = new Vector2(.5f, 1f);
+                descriptionRow.anchoredPosition = new Vector2(0f, -70f);
+                descriptionRow.sizeDelta = new Vector2(0f, 126f);
+
+                var inputContainer = descriptionRow.Find(
+                    "LayoutGroup/DescPanel/InputFieldContainer") as RectTransform;
+                if (inputContainer != null)
+                {
+                    inputContainer.anchorMin = Vector2.zero;
+                    inputContainer.anchorMax = Vector2.one;
+                    inputContainer.pivot = new Vector2(.5f, .5f);
+                    inputContainer.anchoredPosition =
+                        new Vector2(-42.612915f, .487548828f);
+                    inputContainer.sizeDelta =
+                        new Vector2(43.8739967f, -20.7f);
+                }
+            }
+        }
+
+        private static RectTransform FindScenarioSettingsRow(
+            TMP_InputField input)
+        {
+            if (input == null) return null;
+            var current = input.transform;
+            while (current != null &&
+                   !current.name.StartsWith(
+                       "UP Workshop Settings Field ",
+                       StringComparison.Ordinal))
+                current = current.parent;
+            return current as RectTransform;
+        }
+
+        private void BuildGeneralFlagSelector(Transform content)
+        {
+            if (content == null) return;
+            var scrollView = content.parent != null
+                ? content.parent.parent : null;
+            if (scrollView == null) return;
+
+            var container = new GameObject(
+                "UP Objective Star Flag Selector Copy",
+                typeof(RectTransform));
+            container.transform.SetParent(scrollView, false);
+            _generalFlagSelector = container.transform as RectTransform;
+            SetObjectiveExactRect(
+                _generalFlagSelector,
+                Vector2.one, Vector2.one, Vector2.one,
+                new Vector2(-1229f, -4f),
+                new Vector2(75f, 70f));
+            _generalFlagSelector.SetAsLastSibling();
+
+            var hit = new GameObject(
+                "UP Objective Flag Hit Area",
+                typeof(RectTransform), typeof(Image), typeof(Button));
+            hit.transform.SetParent(_generalFlagSelector, false);
+            var hitRect = hit.transform as RectTransform;
+            SetTopLeft(hitRect, -16f, 0f, 100f, 70f);
+            var hitImage = hit.GetComponent<Image>();
+            hitImage.color = new Color(0f, 0f, 0f, 0f);
+            hitImage.raycastTarget = true;
+            var hitButton = hit.GetComponent<Button>();
+            hitButton.transition = Selectable.Transition.None;
+            hitButton.onClick.AddListener(() =>
+            {
+                if (!_generalFlagExpanded)
+                    RefreshSharedFlagLanguageLabels();
+                SetGeneralFlagExpanded(!_generalFlagExpanded);
+            });
+
+            var open = new GameObject(
+                "UP Objective Flag Open", typeof(RectTransform));
+            open.transform.SetParent(_generalFlagSelector, false);
+            SetObjectiveExactRect(
+                open.transform as RectTransform,
+                Vector2.zero, Vector2.one,
+                new Vector2(.5f, .5f),
+                new Vector2(-37.5f, 0f),
+                new Vector2(-75f, 0f));
+
+            var arrow = CreateObjectiveLabel(
+                open.transform, "▼",
+                -13f, 17f, 28f, 36f, 18f,
+                TextAlignmentOptions.Center,
+                "UP Objective Flag Arrow");
+            SetObjectiveExactRect(
+                arrow.rectTransform,
+                new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(-13f, -17f),
+                new Vector2(28f, 36f));
+            arrow.raycastTarget = false;
+
+            _generalSelectedFlag = CreateObjectiveFlagImage(
+                open.transform,
+                "UP Objective Selected Flag",
+                11f, 19f, 61f, 36f);
+            SetObjectiveExactRect(
+                _generalSelectedFlag.rectTransform,
+                new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(11f, -19f),
+                new Vector2(61f, 36f));
+
+            const float rowHeight = 40f;
+            const float buttonHeight = 40f;
+            const float dropdownWidth = 315f;
+            const float dropdownHeight = 484f;
+            var total = ObjectiveFlagFileNames.Length;
+
+            var listObject = NewImage(
+                "UP Objective Flags Dropdown",
+                _generalFlagSelector,
+                _style.ButtonSprite, ObjectivePanelColor, true);
+            _generalFlagList = listObject.transform as RectTransform;
+            SetTopLeft(
+                _generalFlagList, 0f, 72f,
+                dropdownWidth, dropdownHeight);
+            _generalFlagList.SetAsLastSibling();
+
+            RectTransform rows;
+            var scroll = CreateObjectiveVerticalScroll(
+                _generalFlagList,
+                "UP Objective Flag Choices Scroll",
+                2f, 2f, 2f, 2f, out rows);
+            if (scroll.viewport != null)
+            {
+                SetObjectiveExactRect(
+                    scroll.viewport,
+                    Vector2.zero, Vector2.one,
+                    new Vector2(.5f, .5f),
+                    new Vector2(60.5f, 0f),
+                    new Vector2(121f, 0f));
+            }
+            scroll.vertical = false;
+            rows.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Vertical, 480f);
+
+            for (var index = 0; index < total; ++index)
+            {
+                var captured = index;
+                var entry = CreateObjectiveButton(
+                    rows,
+                    "UP Objective Flag Choice " + index,
+                    "", 0f, index * rowHeight,
+                    309f, rowHeight - 2f,
+                    ObjectivePanelColor,
+                    () => SelectObjectiveFlag(captured));
+                var entryRect = entry.transform as RectTransform;
+                entryRect.anchorMin = new Vector2(0f, 1f);
+                entryRect.anchorMax = new Vector2(1f, 1f);
+                entryRect.pivot = new Vector2(.5f, 1f);
+                entryRect.anchoredPosition =
+                    new Vector2(0f, -index * rowHeight);
+                entryRect.sizeDelta =
+                    new Vector2(-2f, rowHeight - 2f);
+
+                var flag = CreateObjectiveFlagImage(
+                    entry.transform,
+                    "UP Objective Flag Icon " + index,
+                    7f, 1f, 61f, 36f);
+                flag.sprite = LoadObjectiveFlag(
+                    ObjectiveFlagFileNames[index]);
+
+                var label = CreateObjectiveLabel(
+                    entry.transform,
+                    ObjectiveNativeFlagName(index),
+                    76f, 0f, 225f, rowHeight - 2f,
+                    18f, TextAlignmentOptions.MidlineLeft,
+                    "UP General Flag Language " + index);
+                label.raycastTarget = false;
+            }
+
+            var translate = CreateObjectiveButton(
+                rows,
+                "UP Objective Translate Languages",
+                "Traducir Idiomas",
+                0f, total * rowHeight,
+                309f, buttonHeight - 2f,
+                _style.ButtonColor, () => { });
+            var translateRect = translate.transform as RectTransform;
+            translateRect.anchorMin = new Vector2(0f, 1f);
+            translateRect.anchorMax = new Vector2(1f, 1f);
+            translateRect.pivot = new Vector2(.5f, 1f);
+            translateRect.anchoredPosition =
+                new Vector2(0f, -total * rowHeight);
+            translateRect.sizeDelta =
+                new Vector2(-2f, buttonHeight - 2f);
+
+            _generalFlagList.gameObject.SetActive(false);
+            RefreshSharedFlagSelection();
+        }
+
+        private void SetGeneralFlagExpanded(bool expanded)
+        {
+            _generalFlagExpanded = expanded;
+            if (_generalFlagList != null)
+                _generalFlagList.gameObject.SetActive(expanded);
+            if (!expanded || _generalFlagSelector == null) return;
+            RefreshSharedFlagLanguageLabels();
+            _generalFlagSelector.SetAsLastSibling();
+            if (_generalFlagList != null)
+                _generalFlagList.SetAsLastSibling();
         }
 
         private void BuildGeneralStyleSettings(Transform content)
@@ -1343,6 +1577,10 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _settingsTabRoots = null;
             _settingsTabFolderBackgrounds = null;
             _settingsPages = null;
+            _generalFlagSelector = null;
+            _generalFlagList = null;
+            _generalSelectedFlag = null;
+            _generalFlagExpanded = false;
             _generalRoomStateLevel = null;
             _generalRoomStates.Clear();
             _roomAvailabilityToggles.Clear();

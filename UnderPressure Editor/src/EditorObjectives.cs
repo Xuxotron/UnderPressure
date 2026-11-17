@@ -1,7 +1,8 @@
-// Updated: 2026-11-16 - Objetivos: restaurar EnsureTrailingColon para los cuatro campos superiores.
+// Updated: 2026-11-17 - Selector de idioma compartido entre General y Objetivos; ultimo override aplicado.
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using TH20;
 using TMPro;
 using UnityEngine;
@@ -38,6 +39,30 @@ namespace UnderPressure.Editor
         private RectTransform _objectiveListBlock;
         private RectTransform _objectiveConfigurationBlock;
         private RectTransform _objectiveHeaderBlock;
+        private RectTransform _objectiveChallengeHeaderControls;
+        private RectTransform _objectiveFlagSelector;
+        private RectTransform _objectiveFlagList;
+        private Image _objectiveSelectedFlag;
+        private TMP_Text _objectiveSelectedFlagName;
+        private TMP_InputField _objectiveStarDescriptionInput;
+        private RectTransform _objectiveStarDescriptionContainer;
+        private bool _objectiveFlagExpanded;
+        private int _objectiveFlagIndex = 9;
+        private readonly Dictionary<string, Sprite> _objectiveFlagSprites =
+            new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        private static readonly string[] ObjectiveFlagFileNames =
+        {
+            "Flag_China.png", "Flag_English.png", "Flag_French.png",
+            "Flag_German.png", "Flag_Italian.png", "Flag_Korea.png",
+            "Flag_Polish.png", "Flag_Portuguese.png", "Flag_Russian.png",
+            "Flag_Spain.png", "Flag_Taiwan.png"
+        };
+        private static readonly string[] ObjectiveFlagLanguageNames =
+        {
+            "Chinese (Simplified)", "English", "French", "German", "Italian",
+            "Korean", "Polish", "Portuguese", "Russian", "Spanish",
+            "Chinese (Traditional)"
+        };
         private RectTransform _objectiveStarPanel;
         private RectTransform _objectiveChallengePanel;
         private TMP_Dropdown _settingsNativeDropdownTemplate;
@@ -78,6 +103,14 @@ namespace UnderPressure.Editor
             _objectiveDrafts.Clear();
             _selectedObjective = 0;
             _objectiveHeaderBlock = null;
+            _objectiveChallengeHeaderControls = null;
+            _objectiveFlagSelector = null;
+            _objectiveFlagList = null;
+            _objectiveSelectedFlag = null;
+            _objectiveSelectedFlagName = null;
+            _objectiveStarDescriptionInput = null;
+            _objectiveStarDescriptionContainer = null;
+            _objectiveFlagExpanded = false;
             _objectivePublicHospitalToggle = null;
             _objectivePublicHospitalLabel = null;
             _objectiveTutorialRequirementsToggle = null;
@@ -193,6 +226,7 @@ namespace UnderPressure.Editor
 
             BuildObjectiveListChildren(pageHeight - 20f);
             BuildObjectiveConfigurationChildren();
+            BuildObjectiveFlagSelector();
         }
 
         private void BuildObjectiveListChildren(float height)
@@ -256,8 +290,17 @@ namespace UnderPressure.Editor
 
             if (_objectiveHeaderBlock != null)
             {
+                // Una capa separada para los controles exclusivos de Retos.
+                // El campo nativo de descripcion queda fuera de esta capa.
+                var controls = new GameObject(
+                    "UP Objective Challenge Header Controls", typeof(RectTransform));
+                controls.transform.SetParent(_objectiveHeaderBlock, false);
+                _objectiveChallengeHeaderControls = controls.transform as RectTransform;
+                SetObjectiveExactRect(_objectiveChallengeHeaderControls,
+                    Vector2.zero, Vector2.one, new Vector2(.5f, .5f),
+                    Vector2.zero, Vector2.zero);
                 _objectiveSelectionTitle = CreateObjectiveLabel(
-                    _objectiveHeaderBlock, "", 0f, 0f, 100f, 38f, 24f,
+                    _objectiveChallengeHeaderControls, "", 0f, 0f, 100f, 38f, 24f,
                     TextAlignmentOptions.MidlineLeft,
                     "UP Objective Selection Title");
                 SetObjectiveExactRect(
@@ -269,23 +312,27 @@ namespace UnderPressure.Editor
                 ConfigureObjectiveTmpText(_objectiveSelectionTitle, 24f, 24f, 24f);
 
                 _objectiveDurationInput = CreateObjectiveHeaderField(
-                    _objectiveHeaderBlock, "editor.objectives.duration",
+                    _objectiveChallengeHeaderControls, "editor.objectives.duration",
                     EnsureTrailingColon(EditorLocalization.Get("editor.objectives.duration")),
                     138.5f, 0f, 223.5f, 12f, 41f, true, 0f);
                 _objectiveProbabilityInput = CreateObjectiveHeaderField(
-                    _objectiveHeaderBlock, "editor.objectives.probability",
+                    _objectiveChallengeHeaderControls, "editor.objectives.probability",
                     EnsureTrailingColon(EditorLocalization.Get("editor.objectives.probability")),
                     301.5f, 1f, 413.5f, 11f, 42f, false, 1f);
                 _objectiveDifficultyInput = CreateObjectiveHeaderField(
-                    _objectiveHeaderBlock, "editor.objectives.difficulty",
+                    _objectiveChallengeHeaderControls, "editor.objectives.difficulty",
                     EnsureTrailingColon(EditorLocalization.Get("editor.objectives.difficulty")),
                     494.5f, 0f, 586.5f, 11f, 39f, true, 0f);
                 _objectiveCooldownInput = CreateObjectiveHeaderField(
-                    _objectiveHeaderBlock, "editor.objectives.cooldown",
+                    _objectiveChallengeHeaderControls, "editor.objectives.cooldown",
                     EnsureTrailingColon(EditorLocalization.Get("editor.objectives.cooldown")),
                     664.5f, 0f, 771.5f, 11f, 47f, false, 0f);
                 _objectivePublicHospitalToggle =
-                    CreateObjectiveHeaderPublicHospitalToggle(_objectiveHeaderBlock);
+                    CreateObjectiveHeaderPublicHospitalToggle(_objectiveChallengeHeaderControls);
+
+                // Clon exacto del campo de descripcion nativo utilizado en el
+                // override 20261117-005111 (DescPanel/InputFieldContainer).
+                BuildObjectiveNativeStarDescription();
             }
 
             var requirements = CreateObjectivePanel(
@@ -338,6 +385,7 @@ namespace UnderPressure.Editor
                 requirements, "UP Objective Requirements Scroll",
                 12f, 92f, 12f, 12f, out _objectiveRequirementContent);
             _objectiveRequirementScroll.scrollSensitivity = 44f;
+
             InstallNativeVerticalScrollbar(
                 requirements, _objectiveRequirementScroll,
                 "UP Objective Requirements Scrollbar", 92f, 12f, false, 22f);
@@ -348,6 +396,471 @@ namespace UnderPressure.Editor
             BindObjectiveInput(_objectiveProbabilityInput, value => CurrentObjective.probability = value);
             BindObjectiveInput(_objectiveDifficultyInput, value => CurrentObjective.difficulty = value);
             BindObjectiveInput(_objectiveCooldownInput, value => CurrentObjective.cooldownSeconds = value);
+        }
+
+        // La bandera y flecha quedan sin marco ni boton visible en reposo.
+        // La lista aparece con fondo propio solamente mientras esta desplegada.
+        private void BuildObjectiveNativeStarDescription()
+        {
+            if (_objectiveContent == null) return;
+
+            RectTransform source = null;
+            if (_settingsPages != null && _settingsPages.Length > 0 &&
+                _settingsPages[0] != null)
+            {
+                source = _settingsPages[0]
+                    .GetComponentsInChildren<RectTransform>(true)
+                    .FirstOrDefault(item => item != null &&
+                        item.name == "InputFieldContainer" &&
+                        item.parent != null && item.parent.name == "DescPanel");
+            }
+            if (source == null && _settingsOverlay != null)
+            {
+                source = _settingsOverlay
+                    .GetComponentsInChildren<RectTransform>(true)
+                    .FirstOrDefault(item => item != null &&
+                        item.name == "InputFieldContainer" &&
+                        item.parent != null && item.parent.name == "DescPanel");
+            }
+            if (source == null)
+            {
+                UnityEngine.Debug.LogWarning(
+                    "UP Objectives: DescPanel/InputFieldContainer nativo no encontrado.");
+                return;
+            }
+
+            var copy = Instantiate(source.gameObject, _objectiveContent, false);
+            copy.name = "InputFieldContainer Copy";
+            copy.SetActive(true);
+            copy.transform.localScale = Vector3.one;
+            DisableLocalisers(copy.transform);
+
+            var rect = copy.transform as RectTransform;
+            SetObjectiveExactRect(
+                rect,
+                Vector2.zero, Vector2.one,
+                new Vector2(.5f, .5f),
+                new Vector2(151.5f, 352f),
+                new Vector2(-365.125977f, -768.699951f));
+
+            var inputRoot = copy.transform.Find("InputField") as RectTransform;
+            if (inputRoot != null)
+            {
+                SetObjectiveExactRect(
+                    inputRoot,
+                    Vector2.zero, Vector2.one,
+                    new Vector2(.5f, .5f),
+                    new Vector2(5f, 0f),
+                    new Vector2(-10f, 0f));
+
+                var editorInput = inputRoot.Find("UP Editor Input") as RectTransform;
+                if (editorInput != null)
+                {
+                    SetObjectiveExactRect(
+                        editorInput,
+                        Vector2.zero, Vector2.one,
+                        new Vector2(.5f, .5f),
+                        new Vector2(17f, 0f),
+                        new Vector2(-34f, 0f));
+
+                    var area = editorInput.Find("Text Area") as RectTransform;
+                    if (area != null)
+                    {
+                        SetObjectiveExactRect(
+                            area,
+                            Vector2.zero, Vector2.one,
+                            new Vector2(.5f, .5f),
+                            new Vector2(-19f, 0f),
+                            new Vector2(18f, -2f));
+
+                        var textRect = area.Find("Text") as RectTransform;
+                        if (textRect != null)
+                        {
+                            SetObjectiveExactRect(
+                                textRect,
+                                Vector2.zero, Vector2.one,
+                                new Vector2(.5f, .5f),
+                                new Vector2(-.5f, -1f),
+                                new Vector2(-9f, 0f));
+                        }
+                    }
+                }
+            }
+
+            _objectiveStarDescriptionInput = copy.GetComponentsInChildren<TMP_InputField>(true)
+                .FirstOrDefault(item => item != null && item.gameObject.activeInHierarchy);
+            if (_objectiveStarDescriptionInput == null)
+                _objectiveStarDescriptionInput = copy.GetComponentInChildren<TMP_InputField>(true);
+
+            if (_objectiveStarDescriptionInput != null)
+            {
+                _objectiveStarDescriptionInput.onEndEdit.RemoveAllListeners();
+                _objectiveStarDescriptionInput.contentType = TMP_InputField.ContentType.Standard;
+                _objectiveStarDescriptionInput.lineType = TMP_InputField.LineType.SingleLine;
+                _objectiveStarDescriptionInput.characterLimit = 0;
+                _objectiveStarDescriptionInput.onEndEdit.AddListener(value =>
+                {
+                    var draft = CurrentObjective;
+                    if (draft == null || !draft.isStar) return;
+                    draft.name = value ?? "";
+                    SaveObjectiveDrafts();
+                });
+            }
+
+            _objectiveStarDescriptionContainer = rect;
+            _objectiveStarDescriptionContainer.SetAsLastSibling();
+        }
+
+        private void BuildObjectiveFlagSelector()
+        {
+            if (_objectiveContent == null) return;
+
+            var container = new GameObject(
+                "UP Objective Star Flag Selector",
+                typeof(RectTransform));
+            container.transform.SetParent(
+                _objectiveHeaderBlock != null
+                    ? _objectiveHeaderBlock
+                    : _objectiveContent,
+                false);
+            _objectiveFlagSelector = container.transform as RectTransform;
+
+            // Posicion y tamano EXACTOS del override 20261117-020211.
+            SetObjectiveExactRect(
+                _objectiveFlagSelector,
+                Vector2.one, Vector2.one, Vector2.one,
+                new Vector2(-990.5f, 7f),
+                new Vector2(75f, 70f));
+            if (_objectiveHeaderBlock != null)
+                _objectiveFlagSelector.SetSiblingIndex(
+                    Mathf.Clamp(1, 0, _objectiveHeaderBlock.childCount - 1));
+            else
+                _objectiveFlagSelector.SetAsLastSibling();
+
+            // Area invisible de pulsacion. No altera ninguna medida visual del override.
+            var hit = new GameObject(
+                "UP Objective Flag Hit Area",
+                typeof(RectTransform), typeof(Image), typeof(Button));
+            hit.transform.SetParent(_objectiveFlagSelector, false);
+            var hitRect = hit.transform as RectTransform;
+            SetTopLeft(hitRect, -16f, 0f, 100f, 70f);
+            var hitImage = hit.GetComponent<Image>();
+            hitImage.color = new Color(0f, 0f, 0f, 0f);
+            hitImage.raycastTarget = true;
+            var hitButton = hit.GetComponent<Button>();
+            hitButton.transition = Selectable.Transition.None;
+            hitButton.onClick.AddListener(() =>
+            {
+                if (!_objectiveFlagExpanded)
+                    RefreshSharedFlagLanguageLabels();
+                SetObjectiveFlagExpanded(!_objectiveFlagExpanded);
+            });
+            hit.transform.SetAsFirstSibling();
+
+            var open = new GameObject(
+                "UP Objective Flag Open",
+                typeof(RectTransform));
+            open.transform.SetParent(_objectiveFlagSelector, false);
+            var openRect = open.transform as RectTransform;
+            SetObjectiveExactRect(
+                openRect,
+                Vector2.zero, Vector2.one,
+                new Vector2(.5f, .5f),
+                new Vector2(-37.5f, 0f),
+                new Vector2(-75f, 0f));
+
+            var arrow = CreateObjectiveLabel(
+                open.transform,
+                "▼",
+                -13f, 17f, 28f, 36f,
+                18f, TextAlignmentOptions.Center,
+                "UP Objective Flag Arrow");
+            SetObjectiveExactRect(
+                arrow.rectTransform,
+                new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(-13f, -17f),
+                new Vector2(28f, 36f));
+            arrow.raycastTarget = false;
+
+            _objectiveSelectedFlag = CreateObjectiveFlagImage(
+                open.transform,
+                "UP Objective Selected Flag",
+                11f, 19f, 61f, 36f);
+            SetObjectiveExactRect(
+                _objectiveSelectedFlag.rectTransform,
+                new Vector2(0f, 1f), new Vector2(0f, 1f),
+                new Vector2(0f, 1f),
+                new Vector2(11f, -19f),
+                new Vector2(61f, 36f));
+
+            // Lista: once idiomas completos + boton final, sin recorte.
+            const float rowHeight = 40f;
+            const float buttonHeight = 40f;
+            const float dropdownWidth = 315f;
+            const float dropdownPadding = 4f;
+            var total = ObjectiveFlagFileNames.Length;
+            var dropdownHeight = dropdownPadding + total * rowHeight + buttonHeight;
+
+            var listObject = NewImage(
+                "UP Objective Flags Dropdown",
+                _objectiveFlagSelector,
+                _style.ButtonSprite, ObjectivePanelColor, true);
+            _objectiveFlagList = listObject.transform as RectTransform;
+            SetTopLeft(
+                _objectiveFlagList,
+                0f, 72f, dropdownWidth, dropdownHeight);
+            _objectiveFlagList.SetAsLastSibling();
+            var listGraphic = listObject.GetComponent<Image>();
+            if (listGraphic != null) listGraphic.raycastTarget = true;
+
+            RectTransform content;
+            var scroll = CreateObjectiveVerticalScroll(
+                _objectiveFlagList,
+                "UP Objective Flag Choices Scroll",
+                2f, 2f, 2f, 2f,
+                out content);
+            if (scroll.viewport != null)
+            {
+                SetObjectiveExactRect(
+                    scroll.viewport,
+                    Vector2.zero, Vector2.one,
+                    new Vector2(.5f, .5f),
+                    new Vector2(60.5f, 0f),
+                    new Vector2(121f, 0f));
+            }
+            scroll.vertical = false;
+            content.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Vertical,
+                total * rowHeight + buttonHeight);
+
+            for (var i = 0; i < total; i++)
+            {
+                var index = i;
+                var entry = CreateObjectiveButton(
+                    content,
+                    "UP Objective Flag Choice " + i,
+                    "",
+                    0f, i * rowHeight,
+                    309f, rowHeight - 2f,
+                    ObjectivePanelColor,
+                    () => SelectObjectiveFlag(index));
+
+                var entryRect = entry.transform as RectTransform;
+                entryRect.anchorMin = new Vector2(0f, 1f);
+                entryRect.anchorMax = new Vector2(1f, 1f);
+                entryRect.pivot = new Vector2(.5f, 1f);
+                entryRect.anchoredPosition = new Vector2(0f, -i * rowHeight);
+                entryRect.sizeDelta = new Vector2(-2f, rowHeight - 2f);
+
+                var flag = CreateObjectiveFlagImage(
+                    entry.transform,
+                    "UP Objective Flag Icon " + i,
+                    7f, 1f, 61f, 36f);
+                flag.sprite = LoadObjectiveFlag(ObjectiveFlagFileNames[i]);
+
+                var label = CreateObjectiveLabel(
+                    entry.transform,
+                    ObjectiveNativeFlagName(i),
+                    76f, 0f, 225f, rowHeight - 2f,
+                    18f, TextAlignmentOptions.MidlineLeft,
+                    "UP Objective Flag Language " + i);
+                label.raycastTarget = false;
+            }
+
+            var translateButton = CreateObjectiveButton(
+                content,
+                "UP Objective Translate Languages",
+                "Traducir Idiomas",
+                0f, total * rowHeight,
+                309f, buttonHeight - 2f,
+                _style.ButtonColor,
+                () => { });
+            var translateRect = translateButton.transform as RectTransform;
+            translateRect.anchorMin = new Vector2(0f, 1f);
+            translateRect.anchorMax = new Vector2(1f, 1f);
+            translateRect.pivot = new Vector2(.5f, 1f);
+            translateRect.anchoredPosition =
+                new Vector2(0f, -total * rowHeight);
+            translateRect.sizeDelta =
+                new Vector2(-2f, buttonHeight - 2f);
+
+            _objectiveFlagIndex = Mathf.Clamp(
+                _objectiveFlagIndex, 0, total - 1);
+            SelectObjectiveFlag(_objectiveFlagIndex);
+            _objectiveFlagSelector.gameObject.SetActive(false);
+        }
+
+        private Image CreateObjectiveFlagImage(Transform parent, string name,
+            float x, float y, float width, float height)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            SetTopLeft(go.transform as RectTransform, x, y, width, height);
+            var image = go.GetComponent<Image>();
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        private Sprite LoadObjectiveFlag(string fileName)
+        {
+            Sprite cached;
+            if (_objectiveFlagSprites.TryGetValue(fileName, out cached)) return cached;
+            Sprite sprite = null;
+            try
+            {
+                var gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                var path = Path.Combine(gameRoot, "Mods", "Assets", fileName);
+                if (File.Exists(path))
+                {
+                    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                    if (ImageConversion.LoadImage(texture, File.ReadAllBytes(path)))
+                    {
+                        texture.filterMode = FilterMode.Bilinear;
+                        sprite = Sprite.Create(texture,
+                            new Rect(0f, 0f, texture.width, texture.height),
+                            new Vector2(.5f, .5f), 100f);
+                    }
+                    else
+                        Destroy(texture);
+                }
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogWarning("UP Objective Flag: " + ex.Message);
+            }
+            _objectiveFlagSprites[fileName] = sprite;
+            return sprite;
+        }
+
+        // Los nombres se toman de las opciones nativas de idioma, si estan disponibles.
+        // No modifica la seleccion de idioma de PreferencesScreen.
+        private string ObjectiveNativeFlagName(int index)
+        {
+            var fallback = ObjectiveFlagLanguageNames[index];
+            var native = Resources.FindObjectsOfTypeAll<PreferencesScreen>()
+                .FirstOrDefault(screen => screen != null &&
+                    (_settingsOverlay == null || !screen.transform.IsChildOf(_settingsOverlay.transform)));
+            if (native == null) return fallback;
+            var languageTab = GetPreferencesField<Transform>(native, "_languageTab");
+            if (languageTab == null) return fallback;
+            var dropdown = languageTab.GetComponentsInChildren<TMP_Dropdown>(true)
+                .FirstOrDefault(item => item != null && item.options != null && item.options.Count >= 11);
+            if (dropdown == null) return fallback;
+
+            // Buscar por codigo de idioma, NO por indice: las preferencias nativas
+            // pueden presentar los idiomas en un orden diferente al de los PNG.
+            var codes = new[] { "zh-CN", "en-GB", "fr-FR", "de-DE", "it-IT",
+                "ko-KR", "pl-PL", "pt-BR", "ru-RU", "es-ES", "zh-TW" };
+            var shortCodes = new[] { "zh", "en", "fr", "de", "it",
+                "ko", "pl", "pt", "ru", "es", "zh" };
+            foreach (var option in dropdown.options)
+            {
+                if (option == null || string.IsNullOrEmpty(option.text)) continue;
+                var key = option.text;
+                var suffix = key.Substring(key.LastIndexOf('/') + 1);
+                if (!string.Equals(suffix, codes[index], StringComparison.OrdinalIgnoreCase) &&
+                    !(index != 0 && index != 10 &&
+                      string.Equals(suffix, shortCodes[index], StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                return ResolveObjectiveNativeLanguageLabel(key, fallback);
+            }
+            return fallback;
+        }
+
+        private static string ResolveObjectiveNativeLanguageLabel(string key, string fallback)
+        {
+            // Resolver la misma string I2 que utiliza el menu nativo de idioma.
+            try
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var manager = assembly.GetType("I2.Loc.LocalizationManager", false);
+                    if (manager == null) continue;
+                    foreach (var method in manager.GetMethods(
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+                    {
+                        if (method.Name != "GetTranslation") continue;
+                        var parameters = method.GetParameters();
+                        if (parameters.Length == 0 || parameters[0].ParameterType != typeof(string)) continue;
+                        var values = new object[parameters.Length];
+                        values[0] = key;
+                        for (var i = 1; i < parameters.Length; i++)
+                            values[i] = parameters[i].HasDefaultValue
+                                ? parameters[i].DefaultValue
+                                : (parameters[i].ParameterType.IsValueType
+                                    ? Activator.CreateInstance(parameters[i].ParameterType) : null);
+                        var localized = method.Invoke(null, values) as string;
+                        if (!string.IsNullOrEmpty(localized) && localized != key &&
+                            localized.IndexOf('/') < 0) return localized;
+                    }
+                    break;
+                }
+            }
+            catch (Exception) { }
+            return fallback;
+        }
+
+        private void SelectObjectiveFlag(int index)
+        {
+            _objectiveFlagIndex = Mathf.Clamp(
+                index, 0, ObjectiveFlagFileNames.Length - 1);
+            RefreshSharedFlagSelection();
+            SetObjectiveFlagExpanded(false);
+            SetGeneralFlagExpanded(false);
+        }
+
+        private void RefreshSharedFlagSelection()
+        {
+            var sprite = LoadObjectiveFlag(
+                ObjectiveFlagFileNames[_objectiveFlagIndex]);
+            if (_objectiveSelectedFlag != null)
+                _objectiveSelectedFlag.sprite = sprite;
+            if (_generalSelectedFlag != null)
+                _generalSelectedFlag.sprite = sprite;
+            if (_objectiveSelectedFlagName != null)
+                _objectiveSelectedFlagName.text =
+                    ObjectiveNativeFlagName(_objectiveFlagIndex);
+        }
+
+        private void RefreshSharedFlagLanguageLabels()
+        {
+            RefreshFlagLanguageLabels(
+                _objectiveFlagList,
+                "UP Objective Flag Language ");
+            RefreshFlagLanguageLabels(
+                _generalFlagList,
+                "UP General Flag Language ");
+        }
+
+        private void RefreshFlagLanguageLabels(
+            RectTransform list, string prefix)
+        {
+            if (list == null) return;
+            var labels = list.GetComponentsInChildren<TMP_Text>(true);
+            for (var index = 0;
+                 index < ObjectiveFlagFileNames.Length; ++index)
+            {
+                var name = prefix + index;
+                var label = labels.FirstOrDefault(value =>
+                    value != null && value.gameObject.name == name);
+                if (label != null)
+                    label.text = ObjectiveNativeFlagName(index);
+            }
+        }
+
+        private void SetObjectiveFlagExpanded(bool expanded)
+        {
+            _objectiveFlagExpanded = expanded;
+            if (_objectiveFlagList != null)
+                _objectiveFlagList.gameObject.SetActive(expanded);
+            if (expanded && _objectiveFlagSelector != null)
+            {
+                RefreshSharedFlagLanguageLabels();
+                _objectiveFlagSelector.SetAsLastSibling();
+                if (_objectiveFlagList != null) _objectiveFlagList.SetAsLastSibling();
+            }
         }
 
         private RectTransform CreateObjectiveNativeHeaderPanel()
@@ -1035,6 +1548,26 @@ namespace UnderPressure.Editor
 
             var configurationObject =
                 _objectiveConfigurationBlock.gameObject;
+            if (_objectiveFlagSelector != null)
+            {
+                _objectiveFlagSelector.gameObject.SetActive(draft.isStar);
+                if (!draft.isStar) SetObjectiveFlagExpanded(false);
+                else _objectiveFlagSelector.SetAsLastSibling();
+            }
+            if (_objectiveChallengeHeaderControls != null)
+                _objectiveChallengeHeaderControls.gameObject.SetActive(!draft.isStar);
+            // Aplicar la anchura del override solo al seleccionar Estrellas;
+            // al volver a Retos se restaura el viewport original.
+            if (_objectiveRequirementScroll != null &&
+                _objectiveRequirementScroll.viewport != null)
+                SetObjectiveExactRect(_objectiveRequirementScroll.viewport,
+                    Vector2.zero, Vector2.one, new Vector2(.5f, .5f),
+                    draft.isStar ? new Vector2(-5.5f, 0f) : Vector2.zero,
+                    draft.isStar ? new Vector2(-11f, 0f) : Vector2.zero);
+            if (_objectiveStarDescriptionContainer != null)
+                _objectiveStarDescriptionContainer.gameObject.SetActive(draft.isStar);
+            if (_objectiveStarDescriptionInput != null && draft.isStar)
+                _objectiveStarDescriptionInput.SetTextWithoutNotify(draft.name ?? "");
             var restoreActive = configurationObject.activeSelf;
             if (restoreActive)
                 configurationObject.SetActive(false);
@@ -1296,15 +1829,16 @@ namespace UnderPressure.Editor
                 CurrentObjective != null &&
                 CurrentObjective.isStar;
 
-            var totalHeight = showLockedStar ? 84f : 0f;
+            // Fija: fila de 39 px + margen de 3 px antes de la recompensa siguiente.
+            var totalHeight = showLockedStar ? 44f : 0f;
             if (requirement)
             {
                 for (var index = 0; index < rules.Length; ++index)
-                    totalHeight += ObjectiveRequirementRowHeight(rules[index]);
+                    totalHeight += ObjectiveRequirementRowHeight(rules[index]) + 4f;
             }
             else
             {
-                totalHeight += rules.Length * 84f;
+                totalHeight += rules.Length * 88f;
             }
 
             content.SetSizeWithCurrentAnchors(
@@ -1319,7 +1853,7 @@ namespace UnderPressure.Editor
                     CurrentObjective.starIndex,
                     0f,
                     84f);
-                top = 84f;
+                top = 44f;
             }
 
             for (var index = 0; index < rules.Length; ++index)
@@ -1376,8 +1910,16 @@ namespace UnderPressure.Editor
                         resultIndex);
                 }
 
+                if (!requirement && resultIndex == 0 && index == 0 &&
+                    CurrentObjective != null && CurrentObjective.isStar)
+                {
+                    // Medida exacta del override para primera fila de Completar.
+                    SetObjectiveExactRect(row, new Vector2(0f, 1f),
+                        new Vector2(1f, 1f), new Vector2(.5f, 1f),
+                        new Vector2(-2.5f, -44f), new Vector2(-5f, 85f));
+                }
                 rowObject.SetActive(true);
-                top += rowHeight;
+                top += rowHeight + 4f;
             }
 
             ClampObjectiveScroll(scroll);
@@ -1582,12 +2124,12 @@ namespace UnderPressure.Editor
                     34f);
             }
 
+            // Geometria exacta del override 20261117-020211 para
+            // requisitos con varias referencias (por ejemplo Curar pacientes).
             const float referenceLeft = 6f;
+            const float referenceWidth = 507.5f;
             const float referenceGap = 6f;
-            var referenceAreaWidth =
-                available - 12f;
-            var referenceWidth =
-                (referenceAreaWidth - referenceGap) * .5f;
+            const float referenceTop = 45f;
 
             for (var index = 0;
                  index < references.Length;
@@ -1597,7 +2139,7 @@ namespace UnderPressure.Editor
                 var column = index % 2;
                 var x = referenceLeft +
                         column * (referenceWidth + referenceGap);
-                var y = 42f + line * 38f;
+                var y = referenceTop + line * 38f;
 
                 CreateObjectiveRequirementReference(
                     row,
@@ -1607,7 +2149,7 @@ namespace UnderPressure.Editor
                     x,
                     y,
                     referenceWidth,
-                     34f);
+                    34f);
             }
         }
 
