@@ -4,6 +4,7 @@ using System;
 using BehaviorDesigner.Runtime;
 using FullInspector;
 using HarmonyLib;
+using I2.Loc;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -88,6 +89,19 @@ namespace UnderPressure.Editor
                     foreach (var translation in pair.Value)
                         result.Set(pair.Key, translation.Key, translation.Value);
                 return result;
+            }
+
+            internal void FillMissingFrom(Table source)
+            {
+                if (source == null) return;
+                foreach (var key in Keys)
+                    foreach (var language in LanguageCodes)
+                        if (string.IsNullOrEmpty(GetExact(key, language)))
+                        {
+                            var value = source.GetExact(key, language);
+                            if (!string.IsNullOrEmpty(value))
+                                Set(key, language, value);
+                        }
             }
         }
 
@@ -409,13 +423,73 @@ namespace UnderPressure.Editor
             _mapTranslations = new ScenarioMapLocalization.Table();
             _mapTranslationLanguage = ScenarioMapLocalization.NormalizeLanguage(
                 EditorLocalization.CurrentLanguageCode());
-            var descriptions = ReadField<string[]>(level?.Config, "DescriptionPerStar") ??
-                               new string[0];
-            for (var star = 1; star <= 3; ++star)
-                _mapTranslations.Set(ScenarioMapLocalization.StarKey(star),
+            PopulateNativeMapTranslations(_mapTranslations, level?.Config);
+        }
+
+        private static void PopulateNativeMapTranslations(
+            ScenarioMapLocalization.Table target, LevelConfig config)
+        {
+            if (target == null || config == null) return;
+            var localised = config.DescriptionPerStarLocalised ??
+                            new LocalisedString[0];
+            foreach (var language in ScenarioMapLocalization.LanguageCodes)
+            {
+                target.Set(
+                    ScenarioMapLocalization.DescriptionKey,
+                    language,
+                    ReadNativeLevelDescription(localised, 0, language));
+                for (var star = 1; star <= 3; ++star)
+                    target.Set(
+                        ScenarioMapLocalization.StarKey(star),
+                        language,
+                        ReadNativeLevelDescription(localised, star, language));
+            }
+
+            // Los niveles antiguos sin términos I2 conservan sus textos
+            // obsoletos únicamente como alternativa del idioma actualmente activo.
+            var legacy = ReadField<string[]>(config, "DescriptionPerStar") ??
+                         new string[0];
+            if (legacy.Length == 0) return;
+            if (string.IsNullOrEmpty(target.GetExact(
+                    ScenarioMapLocalization.DescriptionKey, _mapTranslationLanguage)))
+                target.Set(
+                    ScenarioMapLocalization.DescriptionKey,
                     _mapTranslationLanguage,
-                    descriptions.Length == 0 ? "" :
-                    descriptions[Math.Min(descriptions.Length - 1, star - 1)] ?? "");
+                    legacy[0] ?? "");
+            for (var star = 1; star <= 3; ++star)
+                if (string.IsNullOrEmpty(target.GetExact(
+                        ScenarioMapLocalization.StarKey(star), _mapTranslationLanguage)))
+                    target.Set(
+                        ScenarioMapLocalization.StarKey(star),
+                        _mapTranslationLanguage,
+                        legacy[Math.Min(legacy.Length - 1, star)] ?? "");
+        }
+
+        private static string ReadNativeLevelDescription(
+            LocalisedString[] descriptions, int starIndex, string language)
+        {
+            if (descriptions == null || descriptions.Length == 0) return "";
+            var term = descriptions[Math.Min(descriptions.Length - 1, starIndex)].Term;
+            if (string.IsNullOrWhiteSpace(term) || LocalizationManager.Sources == null)
+                return "";
+            foreach (var source in LocalizationManager.Sources)
+            {
+                if (source == null) continue;
+                var names = source.GetLanguages(false);
+                var codes = source.GetLanguagesCode(true, false);
+                for (var index = 0;
+                     index < names.Count && index < codes.Count; ++index)
+                {
+                    if (!string.Equals(
+                            ScenarioMapLocalization.NormalizeLanguage(codes[index]),
+                            ScenarioMapLocalization.NormalizeLanguage(language),
+                            StringComparison.OrdinalIgnoreCase)) continue;
+                    if (source.TryGetTranslation(
+                            term, out var value, names[index], null, false, false))
+                        return value ?? "";
+                }
+            }
+            return "";
         }
 
         private static void SetMapTranslations(Level level,
@@ -431,6 +505,9 @@ namespace UnderPressure.Editor
                 hasAny = !string.IsNullOrEmpty(_mapTranslations.Resolve(
                     ScenarioMapLocalization.StarKey(star), _mapTranslationLanguage));
             if (!hasAny) _mapTranslations = ScenarioMapLocalization.FromLegacy(legacy);
+            var native = new ScenarioMapLocalization.Table();
+            PopulateNativeMapTranslations(native, level?.Config);
+            _mapTranslations.FillMissingFrom(native);
         }
 
         // Estos datos describen la logica de compra de cada parcela. La geometria,
