@@ -35,12 +35,6 @@ namespace UnderPressure.Editor
         private Transform _translationMessageOriginalParent;
         private int _translationMessageOriginalSibling;
         private GameObject _translationCustomButtons;
-        private RectTransform _translationPanelRect;
-        private Vector2 _translationPanelAnchorMin;
-        private Vector2 _translationPanelAnchorMax;
-        private Vector2 _translationPanelPivot;
-        private Vector2 _translationPanelPosition;
-        private Vector2 _translationPanelSize;
         private Button _translationNativeAcknowledge;
         private Button _translationNativeCancel;
         private bool _translationNativeAcknowledgeActive;
@@ -162,24 +156,6 @@ namespace UnderPressure.Editor
             if (background == null || _translationNativeAcknowledge == null ||
                 _translationNativeCancel == null) return;
 
-            _translationPanelRect = background.rectTransform;
-            _translationPanelAnchorMin = _translationPanelRect.anchorMin;
-            _translationPanelAnchorMax = _translationPanelRect.anchorMax;
-            _translationPanelPivot = _translationPanelRect.pivot;
-            _translationPanelPosition = _translationPanelRect.anchoredPosition;
-            _translationPanelSize = _translationPanelRect.sizeDelta;
-            Canvas.ForceUpdateCanvases();
-            var originalWidth = Mathf.Max(
-                _translationPanelRect.rect.width, _translationPanelSize.x);
-            var originalHeight = Mathf.Max(
-                _translationPanelRect.rect.height, _translationPanelSize.y);
-            _translationPanelRect.anchorMin = new Vector2(.5f, .5f);
-            _translationPanelRect.anchorMax = new Vector2(.5f, .5f);
-            _translationPanelRect.pivot = new Vector2(.5f, .5f);
-            _translationPanelRect.anchoredPosition = Vector2.zero;
-            _translationPanelRect.sizeDelta = new Vector2(
-                Mathf.Clamp(originalWidth * .55f, 520f, 620f),
-                Mathf.Max(originalHeight, 350f));
             if (body != null)
             {
                 body.enableWordWrapping = true;
@@ -194,32 +170,52 @@ namespace UnderPressure.Editor
 
             _translationCustomButtons = new GameObject(
                 "UP Translation Scalable Buttons", typeof(RectTransform));
-            _translationCustomButtons.transform.SetParent(_translationPanelRect, false);
+            _translationCustomButtons.transform.SetParent(background.rectTransform, false);
             var buttonsRect = _translationCustomButtons.transform as RectTransform;
-            buttonsRect.anchorMin = new Vector2(0f, 0f);
-            buttonsRect.anchorMax = new Vector2(1f, 0f);
+            buttonsRect.anchorMin = new Vector2(.5f, 0f);
+            buttonsRect.anchorMax = new Vector2(.5f, 0f);
             buttonsRect.pivot = new Vector2(.5f, 0f);
             buttonsRect.anchoredPosition = new Vector2(0f, 15f);
-            buttonsRect.sizeDelta = new Vector2(-30f, 44f);
+            buttonsRect.sizeDelta = new Vector2(390f, 44f);
 
             var translate = CreateObjectiveButton(
                 buttonsRect, "UP Translation Confirm Scalable",
                 EditorLocalization.Get("editor.scenario_settings.translation.action"),
                 0f, 0f, 100f, 44f, _style.ButtonColor,
                 () => ConfirmAutomaticTranslation(messageBox, sourceIndex));
-            SetRect(translate.transform as RectTransform,
-                new Vector2(0f, 0f), new Vector2(.49f, 1f),
-                new Vector2(.5f, .5f), Vector2.zero, Vector2.zero);
 
             var cancel = CreateObjectiveButton(
                 buttonsRect, "UP Translation Cancel Scalable",
                 EditorLocalization.Get("common.cancel"),
                 0f, 0f, 100f, 44f, _style.ButtonColor,
                 () => CancelAutomaticTranslation(messageBox));
-            SetRect(cancel.transform as RectTransform,
-                new Vector2(.51f, 0f), new Vector2(1f, 1f),
-                new Vector2(.5f, .5f), Vector2.zero, Vector2.zero);
+            var translateWidth = TranslationButtonWidth(translate, 190f);
+            var cancelWidth = TranslationButtonWidth(cancel, 150f);
+            const float gap = 12f;
+            buttonsRect.sizeDelta = new Vector2(translateWidth + gap + cancelWidth, 44f);
+            SetTopLeft(translate.transform as RectTransform,
+                0f, 0f, translateWidth, 44f);
+            SetTopLeft(cancel.transform as RectTransform,
+                translateWidth + gap, 0f, cancelWidth, 44f);
+            CentreTranslationButtonText(translate);
+            CentreTranslationButtonText(cancel);
             _translationCustomButtons.transform.SetAsLastSibling();
+        }
+
+        private static float TranslationButtonWidth(Button button, float fallback)
+        {
+            var text = button?.GetComponentInChildren<TMP_Text>(true);
+            return text == null ? fallback : Mathf.Clamp(text.preferredWidth + 44f, 120f, 240f);
+        }
+
+        private static void CentreTranslationButtonText(Button button)
+        {
+            if (button == null) return;
+            foreach (var text in button.GetComponentsInChildren<TMP_Text>(true))
+            {
+                Stretch(text.rectTransform);
+                text.alignment = TextAlignmentOptions.Center;
+            }
         }
 
         private void ConfirmAutomaticTranslation(MessageBox messageBox, int sourceIndex)
@@ -500,13 +496,6 @@ namespace UnderPressure.Editor
                 _translationNativeCancel.gameObject.SetActive(_translationNativeCancelActive);
             _translationNativeAcknowledge = null;
             _translationNativeCancel = null;
-            if (_translationPanelRect == null) return;
-            _translationPanelRect.anchorMin = _translationPanelAnchorMin;
-            _translationPanelRect.anchorMax = _translationPanelAnchorMax;
-            _translationPanelRect.pivot = _translationPanelPivot;
-            _translationPanelRect.anchoredPosition = _translationPanelPosition;
-            _translationPanelRect.sizeDelta = _translationPanelSize;
-            _translationPanelRect = null;
         }
 
         private void ReleaseTranslationMessageBox()
