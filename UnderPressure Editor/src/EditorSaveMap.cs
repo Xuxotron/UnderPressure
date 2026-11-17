@@ -371,10 +371,23 @@ namespace UnderPressure.Editor
             return _mapTranslations.GetExact(key, _mapTranslationLanguage);
         }
 
+        internal static string GetMapText(Level level, string key, string language)
+        {
+            EnsureMapTranslations(level);
+            return _mapTranslations.GetExact(key, language);
+        }
+
         internal static void SetMapText(Level level, string key, string value)
         {
             EnsureMapTranslations(level);
             _mapTranslations.Set(key, _mapTranslationLanguage, value ?? "");
+        }
+
+        internal static void SetMapText(Level level, string key, string language,
+            string value)
+        {
+            EnsureMapTranslations(level);
+            _mapTranslations.Set(key, language, value ?? "");
         }
 
         internal static string[] CurrentStarDescriptions(Level level, string language)

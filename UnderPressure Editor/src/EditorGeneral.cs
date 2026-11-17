@@ -1141,14 +1141,14 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 label.raycastTarget = false;
             }
 
-            var translate = CreateObjectiveButton(
+            _generalTranslateLanguagesButton = CreateObjectiveButton(
                 rows,
                 "UP Objective Translate Languages",
                 EditorLocalization.Get("editor.scenario_settings.translate_languages"),
                 0f, total * rowHeight,
                 309f, buttonHeight - 2f,
-                _style.ButtonColor, () => { });
-            var translateRect = translate.transform as RectTransform;
+                _style.ButtonColor, ShowTranslateLanguagesConfirmation);
+            var translateRect = _generalTranslateLanguagesButton.transform as RectTransform;
             translateRect.anchorMin = new Vector2(0f, 1f);
             translateRect.anchorMax = new Vector2(1f, 1f);
             translateRect.pivot = new Vector2(.5f, 1f);
@@ -1584,6 +1584,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _generalFlagSelector = null;
             _generalFlagList = null;
             _generalSelectedFlag = null;
+            _generalTranslateLanguagesButton = null;
             _generalFlagExpanded = false;
             _generalRoomStateLevel = null;
             _generalRoomStates.Clear();

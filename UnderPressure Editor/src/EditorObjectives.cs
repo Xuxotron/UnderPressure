@@ -113,6 +113,7 @@ namespace UnderPressure.Editor
             _objectiveFlagList = null;
             _objectiveSelectedFlag = null;
             _objectiveSelectedFlagName = null;
+            _objectiveTranslateLanguagesButton = null;
             _objectiveStarDescriptionInput = null;
             _objectiveStarDescriptionContainer = null;
             _objectiveFlagExpanded = false;
@@ -675,15 +676,15 @@ namespace UnderPressure.Editor
                 label.raycastTarget = false;
             }
 
-            var translateButton = CreateObjectiveButton(
+            _objectiveTranslateLanguagesButton = CreateObjectiveButton(
                 content,
                 "UP Objective Translate Languages",
                 EditorLocalization.Get("editor.scenario_settings.translate_languages"),
                 0f, total * rowHeight,
                 309f, buttonHeight - 2f,
                 _style.ButtonColor,
-                () => { });
-            var translateRect = translateButton.transform as RectTransform;
+                ShowTranslateLanguagesConfirmation);
+            var translateRect = _objectiveTranslateLanguagesButton.transform as RectTransform;
             translateRect.anchorMin = new Vector2(0f, 1f);
             translateRect.anchorMax = new Vector2(1f, 1f);
             translateRect.pivot = new Vector2(.5f, 1f);
