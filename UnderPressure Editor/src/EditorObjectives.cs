@@ -698,15 +698,21 @@ namespace UnderPressure.Editor
             translateRect.sizeDelta =
                 new Vector2(-2f, buttonHeight - 2f);
 
-            var language = ScenarioEditorStorage.CurrentMapTranslationLanguage(_level);
-            var selected = Array.FindIndex(ObjectiveFlagLanguageCodes, code =>
-                string.Equals(code, language, StringComparison.OrdinalIgnoreCase));
-            _objectiveFlagIndex = Mathf.Clamp(selected < 0 ? 1 : selected, 0, total - 1);
-            ScenarioEditorStorage.SetMapTranslationLanguage(
-                _level, ObjectiveFlagLanguageCodes[_objectiveFlagIndex]);
+            SynchronizeObjectiveFlagWithActiveLanguage();
             RefreshSharedFlagSelection();
             RefreshLocalizedScenarioInputs();
             _objectiveFlagSelector.gameObject.SetActive(false);
+        }
+
+        private void SynchronizeObjectiveFlagWithActiveLanguage()
+        {
+            var language = ScenarioEditorStorage.CurrentMapTranslationLanguage(_level);
+            var selected = Array.FindIndex(ObjectiveFlagLanguageCodes, code =>
+                string.Equals(code, language, StringComparison.OrdinalIgnoreCase));
+            _objectiveFlagIndex = Mathf.Clamp(
+                selected < 0 ? 1 : selected, 0, ObjectiveFlagLanguageCodes.Length - 1);
+            ScenarioEditorStorage.SetMapTranslationLanguage(
+                _level, ObjectiveFlagLanguageCodes[_objectiveFlagIndex]);
         }
 
         private Image CreateObjectiveFlagImage(Transform parent, string name,

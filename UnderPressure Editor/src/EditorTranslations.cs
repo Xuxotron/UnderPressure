@@ -34,11 +34,6 @@ namespace UnderPressure.Editor
         private bool _translationInProgress;
         private Transform _translationMessageOriginalParent;
         private int _translationMessageOriginalSibling;
-        private GameObject _translationCustomButtons;
-        private Button _translationNativeAcknowledge;
-        private Button _translationNativeCancel;
-        private bool _translationNativeAcknowledgeActive;
-        private bool _translationNativeCancelActive;
 
         [Serializable]
         private sealed class MyMemoryResponse
@@ -113,7 +108,6 @@ namespace UnderPressure.Editor
                     RestoreTranslationMessageBoxParent();
                 },
                 true);
-            ConfigureTranslationConfirmation(messageBox, sourceIndex);
             AddTranslationConfirmationFlag(messageBox, sourceIndex);
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Traduccion MyMemory: confirmacion visible para " + sourceLanguage + ".");
@@ -139,99 +133,6 @@ namespace UnderPressure.Editor
             image.sprite = sprite;
             image.preserveAspect = true;
             image.raycastTarget = false;
-        }
-
-        private void ConfigureTranslationConfirmation(MessageBox messageBox, int sourceIndex)
-        {
-            var background = AccessTools.Field(typeof(MessageBox), "_bgPanelImage")
-                ?.GetValue(messageBox) as Image;
-            var body = AccessTools.Field(typeof(MessageBox), "_bodyText")
-                ?.GetValue(messageBox) as TMP_Text;
-            _translationNativeAcknowledge =
-                AccessTools.Field(typeof(MessageBox), "_acknowledgeButton")
-                    ?.GetValue(messageBox) as Button;
-            _translationNativeCancel =
-                AccessTools.Field(typeof(MessageBox), "_cancelButton")
-                    ?.GetValue(messageBox) as Button;
-            if (background == null || _translationNativeAcknowledge == null ||
-                _translationNativeCancel == null) return;
-
-            if (body != null)
-            {
-                body.enableWordWrapping = true;
-                body.overflowMode = TextOverflowModes.Overflow;
-            }
-
-            _translationNativeAcknowledgeActive =
-                _translationNativeAcknowledge.gameObject.activeSelf;
-            _translationNativeCancelActive = _translationNativeCancel.gameObject.activeSelf;
-            _translationNativeAcknowledge.gameObject.SetActive(false);
-            _translationNativeCancel.gameObject.SetActive(false);
-
-            _translationCustomButtons = new GameObject(
-                "UP Translation Scalable Buttons", typeof(RectTransform));
-            _translationCustomButtons.transform.SetParent(background.rectTransform, false);
-            var buttonsRect = _translationCustomButtons.transform as RectTransform;
-            buttonsRect.anchorMin = new Vector2(.5f, 0f);
-            buttonsRect.anchorMax = new Vector2(.5f, 0f);
-            buttonsRect.pivot = new Vector2(.5f, 0f);
-            buttonsRect.anchoredPosition = new Vector2(0f, 15f);
-            buttonsRect.sizeDelta = new Vector2(390f, 44f);
-
-            var translate = CreateObjectiveButton(
-                buttonsRect, "UP Translation Confirm Scalable",
-                EditorLocalization.Get("editor.scenario_settings.translation.action"),
-                0f, 0f, 100f, 44f, _style.ButtonColor,
-                () => ConfirmAutomaticTranslation(messageBox, sourceIndex));
-
-            var cancel = CreateObjectiveButton(
-                buttonsRect, "UP Translation Cancel Scalable",
-                EditorLocalization.Get("common.cancel"),
-                0f, 0f, 100f, 44f, _style.ButtonColor,
-                () => CancelAutomaticTranslation(messageBox));
-            var translateWidth = TranslationButtonWidth(translate, 190f);
-            var cancelWidth = TranslationButtonWidth(cancel, 150f);
-            const float gap = 12f;
-            buttonsRect.sizeDelta = new Vector2(translateWidth + gap + cancelWidth, 44f);
-            SetTopLeft(translate.transform as RectTransform,
-                0f, 0f, translateWidth, 44f);
-            SetTopLeft(cancel.transform as RectTransform,
-                translateWidth + gap, 0f, cancelWidth, 44f);
-            CentreTranslationButtonText(translate);
-            CentreTranslationButtonText(cancel);
-            _translationCustomButtons.transform.SetAsLastSibling();
-        }
-
-        private static float TranslationButtonWidth(Button button, float fallback)
-        {
-            var text = button?.GetComponentInChildren<TMP_Text>(true);
-            return text == null ? fallback : Mathf.Clamp(text.preferredWidth + 44f, 120f, 240f);
-        }
-
-        private static void CentreTranslationButtonText(Button button)
-        {
-            if (button == null) return;
-            foreach (var text in button.GetComponentsInChildren<TMP_Text>(true))
-            {
-                Stretch(text.rectTransform);
-                text.alignment = TextAlignmentOptions.Center;
-            }
-        }
-
-        private void ConfirmAutomaticTranslation(MessageBox messageBox, int sourceIndex)
-        {
-            messageBox?.Hide();
-            DestroyTranslationConfirmationFlag();
-            RestoreTranslationMessageBoxParent();
-            if (!_translationInProgress)
-                StartCoroutine(TranslateMapDescriptions(sourceIndex));
-        }
-
-        private void CancelAutomaticTranslation(MessageBox messageBox)
-        {
-            messageBox?.Hide();
-            DestroyTranslationConfirmationFlag();
-            RestoreTranslationMessageBoxParent();
         }
 
         private void DestroyTranslationConfirmationFlag()
@@ -476,26 +377,12 @@ namespace UnderPressure.Editor
         private void RestoreTranslationMessageBoxParent()
         {
             var messageBox = _level?.App?.MessageBox;
-            RestoreTranslationConfirmationLayout();
             if (messageBox == null || _translationMessageOriginalParent == null) return;
             var parent = _translationMessageOriginalParent;
             messageBox.transform.SetParent(parent, false);
             messageBox.transform.SetSiblingIndex(Mathf.Min(
                 _translationMessageOriginalSibling, Mathf.Max(0, parent.childCount - 1)));
             _translationMessageOriginalParent = null;
-        }
-
-        private void RestoreTranslationConfirmationLayout()
-        {
-            if (_translationCustomButtons != null) Destroy(_translationCustomButtons);
-            _translationCustomButtons = null;
-            if (_translationNativeAcknowledge != null)
-                _translationNativeAcknowledge.gameObject.SetActive(
-                    _translationNativeAcknowledgeActive);
-            if (_translationNativeCancel != null)
-                _translationNativeCancel.gameObject.SetActive(_translationNativeCancelActive);
-            _translationNativeAcknowledge = null;
-            _translationNativeCancel = null;
         }
 
         private void ReleaseTranslationMessageBox()

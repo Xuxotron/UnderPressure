@@ -1027,6 +1027,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
         private void BuildGeneralFlagSelector(Transform content)
         {
             if (content == null) return;
+            SynchronizeObjectiveFlagWithActiveLanguage();
             var scrollView = content.parent != null
                 ? content.parent.parent : null;
             if (scrollView == null) return;
