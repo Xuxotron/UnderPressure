@@ -39,6 +39,7 @@ namespace UnderPressure.Editor
         private Image _generalSelectedFlag;
         private bool _generalFlagExpanded;
         private int _activeSettingsTab;
+        private readonly bool[] _settingsTabContentsCurrent = new bool[6];
         internal static bool CloseSettingsPanelIfOpen()
         {
             if (_active == null || _active._settingsOverlay == null ||
@@ -225,6 +226,7 @@ namespace UnderPressure.Editor
             _settingsTabRoots = new Transform[tabKeys.Length];
             _settingsTabFolderBackgrounds = new Transform[tabKeys.Length];
             _settingsPages = new GameObject[tabKeys.Length];
+            Array.Clear(_settingsTabContentsCurrent, 0, _settingsTabContentsCurrent.Length);
             var nativeVideoContents = GetPreferencesField<Transform>(clonedScreen,
                 "_videoTabContents");
             if (nativeVideoContents == null)
@@ -317,6 +319,8 @@ namespace UnderPressure.Editor
             BuildPlotSettingsContents();
             BuildEmergencySettingsContents();
             BuildCharacterSettingsContents();
+            // Parcelas construye su contenido completo durante BuildPlotSettingsContents.
+            _settingsTabContentsCurrent[3] = true;
 
             var close = GetPreferencesField<Button>(clonedScreen, "_closeButton");
             HideSettingsObject(close);
@@ -343,11 +347,26 @@ namespace UnderPressure.Editor
             if (selectedIndex != 5) ScenarioCharacterViewer.CloseEmbedded();
             _activeSettingsTab = Mathf.Clamp(selectedIndex, 0,
                 Mathf.Min(_settingsTabButtons.Length, _settingsPages.Length) - 1);
-            if (_activeSettingsTab == 1) RefreshDiseaseSettingsContents();
-            if (_activeSettingsTab == 2) RefreshObjectiveSettingsContents();
-            if (_activeSettingsTab == 3)
+            if (_activeSettingsTab == 1)
+            {
+                RefreshDiseaseSettingsContents();
+                _settingsTabContentsCurrent[1] = true;
+            }
+            if (_activeSettingsTab == 2 && !_settingsTabContentsCurrent[2])
+            {
+                RefreshObjectiveSettingsContents();
+                _settingsTabContentsCurrent[2] = true;
+            }
+            if (_activeSettingsTab == 3 && !_settingsTabContentsCurrent[3])
+            {
                 RefreshPlotSettingsContents();
-            if (_activeSettingsTab == 4) RefreshEmergencySettingsContents();
+                _settingsTabContentsCurrent[3] = true;
+            }
+            if (_activeSettingsTab == 4 && !_settingsTabContentsCurrent[4])
+            {
+                RefreshEmergencySettingsContents();
+                _settingsTabContentsCurrent[4] = true;
+            }
 
             for (var index = 0; index < _settingsTabButtons.Length; ++index)
             {
@@ -1574,6 +1593,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
 
         private void ReleaseSettingsPanelContents()
         {
+            ReleaseTranslationMessageBox();
             _settingsOverlay = null;
             _settingsCloseButton = null;
             _settingsTabButtons = null;
@@ -1581,6 +1601,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             _settingsTabRoots = null;
             _settingsTabFolderBackgrounds = null;
             _settingsPages = null;
+            Array.Clear(_settingsTabContentsCurrent, 0, _settingsTabContentsCurrent.Length);
             _generalFlagSelector = null;
             _generalFlagList = null;
             _generalSelectedFlag = null;
@@ -1643,8 +1664,10 @@ _settingsTabFolderBackgrounds.Length < 3) return;
 
             // Las salas de tratamiento permanecen en Enfermedades; no se
             // duplican en los dos paneles de la pestaña General.
+            if (_settingsDiseaseCatalog == null)
+                _settingsDiseaseCatalog = ScenarioDiseaseCatalog.Build(_level);
             var treatmentTypes = new HashSet<RoomDefinition.Type>(
-                ScenarioDiseaseCatalog.Build(_level).Rooms
+                _settingsDiseaseCatalog.Rooms
                     .Where(room => room.Definition != null)
                     .Select(room => room.Definition._type));
 

@@ -126,7 +126,8 @@ namespace UnderPressure.Editor
                 return;
             }
             LoadPatientSettingsFromLevel();
-            _settingsDiseaseCatalog = ScenarioDiseaseCatalog.Build(_level);
+            if (_settingsDiseaseCatalog == null)
+                _settingsDiseaseCatalog = ScenarioDiseaseCatalog.Build(_level);
             _settingsIllnesses.Clear();
             var stored = ScenarioEditorStorage.CurrentScenarioSettings(_level).illnesses ??
                          new ScenarioMapFormat.WeightedIllnessData[0];

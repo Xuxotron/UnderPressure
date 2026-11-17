@@ -16,6 +16,8 @@ namespace UnderPressure.Editor
             _active._settingsDiseasesLoaded = false;
             _active._settingsPatientValuesLoaded = false;
             _active._settingsIllnesses.Clear();
+            for (var index = 1; index <= EmergencyTabIndex; ++index)
+                _active._settingsTabContentsCurrent[index] = false;
 
             if (_active._settingsOverlay == null ||
                 !_active._settingsOverlay.activeInHierarchy) return;
@@ -25,6 +27,11 @@ namespace UnderPressure.Editor
                 _active.RefreshObjectiveSettingsContents();
             else if (_active._activeSettingsTab == EmergencyTabIndex)
                 _active.RefreshEmergencySettingsContents();
+            else if (_active._activeSettingsTab == 3)
+                _active.RefreshPlotSettingsContents();
+            if (_active._activeSettingsTab >= 1 &&
+                _active._activeSettingsTab <= EmergencyTabIndex)
+                _active._settingsTabContentsCurrent[_active._activeSettingsTab] = true;
         }
     }
 }

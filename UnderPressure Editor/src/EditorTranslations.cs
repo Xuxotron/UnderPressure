@@ -32,6 +32,8 @@ namespace UnderPressure.Editor
         private Button _objectiveTranslateLanguagesButton;
         private GameObject _translationConfirmationFlag;
         private bool _translationInProgress;
+        private Transform _translationMessageOriginalParent;
+        private int _translationMessageOriginalSibling;
 
         [Serializable]
         private sealed class MyMemoryResponse
@@ -96,10 +98,15 @@ namespace UnderPressure.Editor
                 () =>
                 {
                     DestroyTranslationConfirmationFlag();
+                    RestoreTranslationMessageBoxParent();
                     if (!_translationInProgress)
                         StartCoroutine(TranslateMapDescriptions(sourceIndex));
                 },
-                DestroyTranslationConfirmationFlag,
+                () =>
+                {
+                    DestroyTranslationConfirmationFlag();
+                    RestoreTranslationMessageBoxParent();
+                },
                 true);
             AddTranslationConfirmationFlag(messageBox, sourceIndex);
             UnderPressureEditorPlugin.Log?.LogInfo(
@@ -350,17 +357,38 @@ namespace UnderPressure.Editor
             PlaceTranslationMessageBoxAboveEditor(messageBox);
             messageBox.Show(title ?? "", body ?? "",
                 EditorLocalization.Get(
-                    "editor.scenario_settings.translation.ok"), null);
+                    "editor.scenario_settings.translation.ok"),
+                RestoreTranslationMessageBoxParent);
         }
 
         private void PlaceTranslationMessageBoxAboveEditor(MessageBox messageBox)
         {
             if (messageBox == null) return;
-            // El editor usa un Canvas propio con orden 3000. El MessageBox nativo
-            // debe conservar su estructura y comportamiento, pero dibujarse por
-            // encima mientras el editor esta abierto.
-            EnsureSortingCanvas(messageBox.gameObject, 4000);
+            if (_root == null || messageBox.transform.IsChildOf(_root)) return;
+            _translationMessageOriginalParent = messageBox.transform.parent;
+            _translationMessageOriginalSibling = messageBox.transform.GetSiblingIndex();
+            // Se mueve temporalmente la ventana nativa al Canvas real del editor.
+            // Así conserva intactos su jerarquía, botones, foco y eventos, pero ya
+            // no puede quedar detrás del Canvas del editor (orden 3000).
+            messageBox.transform.SetParent(_root, false);
             messageBox.transform.SetAsLastSibling();
+        }
+
+        private void RestoreTranslationMessageBoxParent()
+        {
+            var messageBox = _level?.App?.MessageBox;
+            if (messageBox == null || _translationMessageOriginalParent == null) return;
+            var parent = _translationMessageOriginalParent;
+            messageBox.transform.SetParent(parent, false);
+            messageBox.transform.SetSiblingIndex(Mathf.Min(
+                _translationMessageOriginalSibling, Mathf.Max(0, parent.childCount - 1)));
+            _translationMessageOriginalParent = null;
+        }
+
+        private void ReleaseTranslationMessageBox()
+        {
+            DestroyTranslationConfirmationFlag();
+            RestoreTranslationMessageBoxParent();
         }
     }
 }
