@@ -81,6 +81,7 @@ namespace UnderPressure.Editor
             var messageBox = _level.App.MessageBox;
             if (messageBox.IsVisibleOrClosing) return;
             DestroyTranslationConfirmationFlag();
+            PlaceTranslationMessageBoxAboveEditor(messageBox);
 
             var body = "\n\n" + EditorLocalization.Format(
                 "editor.scenario_settings.translation.confirm_body",
@@ -101,6 +102,8 @@ namespace UnderPressure.Editor
                 DestroyTranslationConfirmationFlag,
                 true);
             AddTranslationConfirmationFlag(messageBox, sourceIndex);
+            UnderPressureEditorPlugin.Log?.LogInfo(
+                "Traduccion MyMemory: confirmacion visible para " + sourceLanguage + ".");
         }
 
         private void AddTranslationConfirmationFlag(MessageBox messageBox, int sourceIndex)
@@ -344,9 +347,20 @@ namespace UnderPressure.Editor
         {
             var messageBox = _level?.App?.MessageBox;
             if (messageBox == null || messageBox.IsVisibleOrClosing) return;
+            PlaceTranslationMessageBoxAboveEditor(messageBox);
             messageBox.Show(title ?? "", body ?? "",
                 EditorLocalization.Get(
                     "editor.scenario_settings.translation.ok"), null);
+        }
+
+        private void PlaceTranslationMessageBoxAboveEditor(MessageBox messageBox)
+        {
+            if (messageBox == null) return;
+            // El editor usa un Canvas propio con orden 3000. El MessageBox nativo
+            // debe conservar su estructura y comportamiento, pero dibujarse por
+            // encima mientras el editor esta abierto.
+            EnsureSortingCanvas(messageBox.gameObject, 4000);
+            messageBox.transform.SetAsLastSibling();
         }
     }
 }
