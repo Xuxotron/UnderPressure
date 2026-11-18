@@ -1,4 +1,4 @@
-// Updated: 2026-11-11 - MAYUS arrastra hijos al redimensionar; estilos de TMP_InputField/Dropdown se guardan en V8.
+// Updated: 2026-11-17 - Alineacion de texto persistente y probeta de color por pixel real de pantalla (V9).
 // Ctrl+Alt+F12 activa/desactiva. Clic selecciona, arrastrar mueve y 8 tiradores redimensionan.
 
 using System;
@@ -32,7 +32,7 @@ namespace UnderPressure
     /// - Copiar tamaño / Pegar tamaño: reutilizar ancho y alto entre elementos.
     /// - ENTER permite editar color, texto, tamaño/autoajuste, negrita y contorno.
     /// - El contorno puede activarse/desactivarse en cualquier Graphic seleccionado.
-    /// - Probeta: copiar el color exacto de otro elemento UI.
+    /// - Probeta: copiar el color visible exacto del pixel de pantalla bajo el cursor.
     /// - Mantener Espacio: dejar pasar temporalmente los clics al juego para navegar.
     /// - Con el diseñador activo, flechas y rueda quedan reservadas a la UI; el mapa no recibe esos inputs. Al salir, vuelven al mapa.
     /// - Mayus al mover: restringir el movimiento al eje dominante.
@@ -202,6 +202,9 @@ namespace UnderPressure
         private bool _propertyHasText;
         private string _propertyOriginalText = string.Empty;
         private string _propertyDraftText = string.Empty;
+        private bool _propertyHasTextAlignment;
+        private int _propertyOriginalTextAlignmentValue;
+        private int _propertyDraftTextAlignmentValue;
 
         private bool _propertyHasTextStyle;
         private float _propertyOriginalFontSize;
@@ -262,6 +265,7 @@ namespace UnderPressure
             public bool textContentOverride;
             public bool outlineOverride;
             public bool textStyleOverride;
+            public bool textAlignmentOverride;
 
             public bool componentMetadataKnown;
 
@@ -296,6 +300,8 @@ namespace UnderPressure
             public float textFontSizeMax = -1f;
             public bool textBoldKnown;
             public bool textBold;
+            public bool hasTextAlignment;
+            public int textAlignmentValue;
         }
 
         [Serializable]
@@ -341,6 +347,8 @@ namespace UnderPressure
             public float textFontSizeMax = -1f;
             public bool textBoldKnown;
             public bool textBold;
+            public bool hasTextAlignment;
+            public int textAlignmentValue;
         }
 
         private enum UndoKind
@@ -2437,13 +2445,16 @@ CommitPropertyEditor();
                 !OutlineGroupEquals(original, current);
             current.textStyleOverride =
                 !TextStyleGroupEquals(original, current);
+            current.textAlignmentOverride =
+                !TextAlignmentGroupEquals(original, current);
 
             current.componentMetadataKnown =
                 current.layoutElementOverride ||
                 current.contentSizeFitterOverride;
             current.extendedAppearanceKnown =
                 current.outlineOverride ||
-                current.textStyleOverride;
+                current.textStyleOverride ||
+                current.textAlignmentOverride;
 
             return HasAnyOverride(current)
                 ? current
@@ -2471,6 +2482,8 @@ CommitPropertyEditor();
             record.textStyleOverride =
                 record.extendedAppearanceKnown &&
                 record.hasTextStyle;
+            record.textAlignmentOverride =
+                record.hasTextAlignment;
         }
 
         private static bool HasAnyOverride(
@@ -2484,7 +2497,8 @@ CommitPropertyEditor();
                  record.graphicColorOverride ||
                  record.textContentOverride ||
                  record.outlineOverride ||
-                 record.textStyleOverride);
+                 record.textStyleOverride ||
+                 record.textAlignmentOverride);
         }
 
         private static bool RectTransformGroupEquals(
@@ -2611,6 +2625,18 @@ CommitPropertyEditor();
                 Mathf.Approximately(left.textFontSizeMax, right.textFontSizeMax) &&
                 left.textBoldKnown == right.textBoldKnown &&
                 (!left.textBoldKnown || left.textBold == right.textBold);
+        }
+
+        private static bool TextAlignmentGroupEquals(
+            RectLayoutRecord left,
+            RectLayoutRecord right)
+        {
+            if (left == null || right == null ||
+                left.hasTextAlignment != right.hasTextAlignment)
+                return false;
+
+            return !left.hasTextAlignment ||
+                left.textAlignmentValue == right.textAlignmentValue;
         }
 
         private void EnsureReloadBaseline(
@@ -3078,6 +3104,10 @@ CommitPropertyEditor();
                 out textFontSizeMax,
                 out textBold);
 
+            int textAlignmentValue;
+            var hasTextAlignment = TryGetTextAlignmentRaw(
+                rect, out textAlignmentValue);
+
             return new RectLayoutRecord
             {
                 path = path,
@@ -3114,6 +3144,7 @@ CommitPropertyEditor();
                 textContentOverride = hasTextOverride,
                 outlineOverride = true,
                 textStyleOverride = hasTextStyle,
+                textAlignmentOverride = hasTextAlignment,
 
                 componentMetadataKnown = true,
 
@@ -3175,7 +3206,9 @@ CommitPropertyEditor();
                 textFontSizeMin = textFontSizeMin,
                 textFontSizeMax = textFontSizeMax,
                 textBoldKnown = hasTextStyle,
-                textBold = textBold
+                textBold = textBold,
+                hasTextAlignment = hasTextAlignment,
+                textAlignmentValue = textAlignmentValue
             };
         }
 
@@ -3240,6 +3273,10 @@ CommitPropertyEditor();
                     out textFontSizeMax,
                     out textBold);
 
+                int textAlignmentValue;
+                var hasTextAlignment = TryGetTextAlignmentRaw(
+                    rect, out textAlignmentValue);
+
                 result.Add(
                     new RelativeRectLayoutRecord
                     {
@@ -3276,7 +3313,9 @@ CommitPropertyEditor();
                         textFontSizeMin = textFontSizeMin,
                         textFontSizeMax = textFontSizeMax,
                         textBoldKnown = hasTextStyle,
-                        textBold = textBold
+                        textBold = textBold,
+                        hasTextAlignment = hasTextAlignment,
+                        textAlignmentValue = textAlignmentValue
                     });
             }
 
@@ -3310,7 +3349,8 @@ CommitPropertyEditor();
                      lines[0] != "UP_UI_LAYOUT_V5" &&
                      lines[0] != "UP_UI_LAYOUT_V6" &&
                      lines[0] != "UP_UI_LAYOUT_V7" &&
-                     lines[0] != "UP_UI_LAYOUT_V8"))
+                     lines[0] != "UP_UI_LAYOUT_V8" &&
+                     lines[0] != "UP_UI_LAYOUT_V9"))
                     return;
 
                 CloneRecord currentClone = null;
@@ -3423,7 +3463,7 @@ CommitPropertyEditor();
 
                 var lines =
                     new List<string>();
-                lines.Add("UP_UI_LAYOUT_V8");
+                lines.Add("UP_UI_LAYOUT_V9");
 
                 var layoutKeys =
                     new List<string>(
@@ -3625,6 +3665,14 @@ CommitPropertyEditor();
                 fields.Add(record.textBold ? "1" : "0");
             }
 
+            if (record.textAlignmentOverride)
+            {
+                fields.Add("A");
+                fields.Add(record.hasTextAlignment ? "1" : "0");
+                fields.Add(record.textAlignmentValue.ToString(
+                    CultureInfo.InvariantCulture));
+            }
+
             return string.Join("|", fields.ToArray());
         }
 
@@ -3691,6 +3739,9 @@ CommitPropertyEditor();
                 fields.Add(FormatFloat(record.textFontSizeMax));
                 if (record.textBoldKnown)
                     fields.Add(record.textBold ? "1" : "0");
+                fields.Add(record.hasTextAlignment ? "1" : "0");
+                fields.Add(record.textAlignmentValue.ToString(
+                    CultureInfo.InvariantCulture));
             }
 
             return string.Join("|", fields.ToArray());
@@ -3701,7 +3752,8 @@ CommitPropertyEditor();
             return value == "R" || value == "H" ||
                    value == "L" || value == "F" ||
                    value == "G" || value == "T" ||
-                   value == "O" || value == "S";
+                   value == "O" || value == "S" ||
+                   value == "A";
         }
 
         private static bool TryParseV8ElementRecord(
@@ -3880,6 +3932,21 @@ CommitPropertyEditor();
                     parsed.textFontSizeMin = min;
                     parsed.textFontSizeMax = max;
                     parsed.textStyleOverride = true;
+                    parsed.extendedAppearanceKnown = true;
+                    continue;
+                }
+
+                if (tag == "A")
+                {
+                    if (index + 2 > parts.Length)
+                        return false;
+
+                    if (!TryParseBool01(parts[index++], out parsed.hasTextAlignment) ||
+                        !int.TryParse(parts[index++], NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out parsed.textAlignmentValue))
+                        return false;
+
+                    parsed.textAlignmentOverride = true;
                     parsed.extendedAppearanceKnown = true;
                     continue;
                 }
@@ -4229,7 +4296,9 @@ CommitPropertyEditor();
                  parts.Length != 13 &&
                  parts.Length != 20 &&
                  parts.Length != 34 &&
-                 parts.Length != 35))
+                 parts.Length != 35 &&
+                 parts.Length != 36 &&
+                 parts.Length != 37))
                 return false;
 
             Vector2 anchorMin;
@@ -4277,7 +4346,7 @@ CommitPropertyEditor();
                 };
 
             if (parts.Length == 20 ||
-                (parts.Length == 34 || parts.Length == 35))
+                (parts.Length >= 34 && parts.Length <= 37))
             {
                 float colorR;
                 float colorG;
@@ -4323,7 +4392,7 @@ CommitPropertyEditor();
                     DecodeText(parts[19]);
             }
 
-            if (parts.Length == 34 || parts.Length == 35)
+            if (parts.Length >= 34 && parts.Length <= 37)
             {
                 float outlineR;
                 float outlineG;
@@ -4358,11 +4427,26 @@ CommitPropertyEditor();
                 parsed.textFontSize = fontSize;
                 parsed.textFontSizeMin = fontMin;
                 parsed.textFontSizeMax = fontMax;
-                if (parts.Length == 35)
+                if (parts.Length == 35 || parts.Length == 37)
                 {
                     if (!TryParseBool01(parts[34], out parsed.textBold))
                         return false;
                     parsed.textBoldKnown = true;
+                }
+
+                if (parts.Length == 36)
+                {
+                    if (!TryParseBool01(parts[34], out parsed.hasTextAlignment) ||
+                        !int.TryParse(parts[35], NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out parsed.textAlignmentValue))
+                        return false;
+                }
+                else if (parts.Length == 37)
+                {
+                    if (!TryParseBool01(parts[35], out parsed.hasTextAlignment) ||
+                        !int.TryParse(parts[36], NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out parsed.textAlignmentValue))
+                        return false;
                 }
             }
 
@@ -5230,6 +5314,9 @@ CommitPropertyEditor();
                     record.textBoldKnown,
                     record.textBold);
 
+                if (record.hasTextAlignment)
+                    SetTextAlignmentRaw(rect, record.textAlignmentValue);
+
                 rect.gameObject.SetActive(
                     record.activeSelf);
             }
@@ -5278,6 +5365,10 @@ CommitPropertyEditor();
                 record.textFontSizeMax,
                 record.textBoldKnown,
                 record.textBold);
+
+            if (record.textAlignmentOverride &&
+                record.hasTextAlignment)
+                SetTextAlignmentRaw(rect, record.textAlignmentValue);
 
             if (record.layoutElementOverride)
             {
@@ -6965,6 +7056,11 @@ return;
             _propertyDraftText =
                 _propertyOriginalText;
 
+            _propertyHasTextAlignment = TryGetTextAlignmentRaw(
+                _propertyTarget, out _propertyOriginalTextAlignmentValue);
+            _propertyDraftTextAlignmentValue =
+                _propertyOriginalTextAlignmentValue;
+
             _propertyHasTextStyle =
                 TryGetTextStyle(
                     _propertyTarget,
@@ -7083,6 +7179,13 @@ return;
                         _propertyOriginalText);
                 }
 
+                if (_propertyHasTextAlignment)
+                {
+                    SetTextAlignmentRaw(
+                        _propertyTarget,
+                        _propertyOriginalTextAlignmentValue);
+                }
+
                 if (_propertyHasTextStyle)
                 {
                     SetTextStyle(
@@ -7143,6 +7246,9 @@ return;
             _propertyHasText = false;
             _propertyOriginalText = string.Empty;
             _propertyDraftText = string.Empty;
+            _propertyHasTextAlignment = false;
+            _propertyOriginalTextAlignmentValue = 0;
+            _propertyDraftTextAlignmentValue = 0;
             _propertyHasTextStyle = false;
             _propertyOriginalBold = false;
             _propertyDraftBold = false;
@@ -7184,6 +7290,10 @@ return;
                     _propertyOriginalText,
                     _propertyDraftText,
                     StringComparison.Ordinal))
+                return true;
+
+            if (_propertyHasTextAlignment &&
+                _propertyOriginalTextAlignmentValue != _propertyDraftTextAlignmentValue)
                 return true;
 
             if (_propertyHasTextStyle &&
@@ -7230,6 +7340,11 @@ return;
                     _propertyTarget,
                     _propertyDraftText);
             }
+
+            if (_propertyHasTextAlignment)
+                SetTextAlignmentRaw(
+                    _propertyTarget,
+                    _propertyDraftTextAlignmentValue);
 
             if (_propertyHasTextStyle)
             {
@@ -7372,25 +7487,52 @@ return;
                 !_propertyHasColor)
                 return;
 
-            var picked =
-                PickTopmostRectTransform(
-                    screenPoint);
-
-            if (picked == null)
-                return;
-
-            var graphic =
-                picked.GetComponent<Graphic>();
-
-            if (graphic == null)
-                return;
-
-            SetPropertyDraftColor(
-                graphic.color,
-                true,
-                true);
-
             _propertyEyedropperActive = false;
+            StartCoroutine(
+                SamplePropertyColorFromScreen(
+                    screenPoint));
+        }
+
+        private System.Collections.IEnumerator SamplePropertyColorFromScreen(
+            Vector2 screenPoint)
+        {
+            yield return new WaitForEndOfFrame();
+
+            if (!_propertyEditorOpen ||
+                _propertyTarget == null ||
+                !_propertyHasColor ||
+                Screen.width <= 0 ||
+                Screen.height <= 0)
+                yield break;
+
+            var x = Mathf.Clamp(
+                Mathf.FloorToInt(screenPoint.x),
+                0, Screen.width - 1);
+            var y = Mathf.Clamp(
+                Mathf.FloorToInt(screenPoint.y),
+                0, Screen.height - 1);
+
+            var pixel = new Texture2D(
+                1, 1, TextureFormat.RGBA32, false, false);
+
+            try
+            {
+                pixel.ReadPixels(
+                    new Rect(x, y, 1f, 1f),
+                    0, 0, false);
+                pixel.Apply(false, false);
+                var sampled = pixel.GetPixel(0, 0);
+                sampled.a = 1f;
+
+                SetPropertyDraftColor(
+                    sampled,
+                    true,
+                    true);
+            }
+            finally
+            {
+                Destroy(pixel);
+            }
         }
 
         private void CopyPropertyTargetSize()
@@ -7477,6 +7619,8 @@ return;
 
             if (_propertyHasText)
                 height += 58f;
+            if (_propertyHasTextAlignment)
+                height += 36f;
             if (_propertyHasTextStyle)
                 height += 76f;
             if (_propertyCanOutline)
@@ -7622,6 +7766,38 @@ return;
                 {
                     _propertyFocusTextNextGui = false;
                     GUI.FocusControl("UP_UI_DESIGNER_TEXT");
+                }
+
+                y += 36f;
+            }
+
+            if (_propertyHasTextAlignment)
+            {
+                GUI.Label(new Rect(x, y, 82f, 22f), "Alineación");
+
+                var mode = GetTextHorizontalMode(
+                    _propertyTarget,
+                    _propertyDraftTextAlignmentValue);
+
+                if (GUI.Button(
+                        new Rect(x + 86f, y, 92f, 24f),
+                        mode == 0 ? "IZQ ✓" : "IZQ"))
+                {
+                    SetPropertyTextHorizontalMode(0);
+                }
+
+                if (GUI.Button(
+                        new Rect(x + 186f, y, 112f, 24f),
+                        mode == 1 ? "CENTRO ✓" : "CENTRO"))
+                {
+                    SetPropertyTextHorizontalMode(1);
+                }
+
+                if (GUI.Button(
+                        new Rect(x + 306f, y, 92f, 24f),
+                        mode == 2 ? "DER ✓" : "DER"))
+                {
+                    SetPropertyTextHorizontalMode(2);
                 }
 
                 y += 36f;
@@ -7806,8 +7982,8 @@ return;
             GUI.Label(
                 new Rect(x + 270f, y, innerWidth - 270f, 24f),
                 _propertyEyedropperActive
-                    ? "Haz clic en otro elemento UI"
-                    : "Copia su color exacto");
+                    ? "Haz clic en cualquier pixel de pantalla"
+                    : "Copia el color visible exacto");
 
             y += 34f;
 
@@ -8463,6 +8639,139 @@ return;
                     textBoldKnown,
                     textBold);
             }
+        }
+
+        private void SetPropertyTextHorizontalMode(int mode)
+        {
+            if (!_propertyHasTextAlignment ||
+                _propertyTarget == null)
+                return;
+
+            mode = Mathf.Clamp(mode, 0, 2);
+            if (!SetTextHorizontalMode(_propertyTarget, mode))
+                return;
+
+            int raw;
+            if (TryGetTextAlignmentRaw(_propertyTarget, out raw))
+                _propertyDraftTextAlignmentValue = raw;
+        }
+
+        private static bool TryGetTextAlignmentRaw(
+            RectTransform rect,
+            out int value)
+        {
+            value = 0;
+            if (rect == null) return false;
+
+            var tmp = rect.GetComponent<TMP_Text>();
+            if (tmp != null)
+            {
+                value = (int)tmp.alignment;
+                return true;
+            }
+
+            var legacy = rect.GetComponent<Text>();
+            if (legacy != null)
+            {
+                value = (int)legacy.alignment;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool SetTextAlignmentRaw(
+            RectTransform rect,
+            int value)
+        {
+            if (rect == null) return false;
+
+            var tmp = rect.GetComponent<TMP_Text>();
+            if (tmp != null)
+            {
+                tmp.alignment = (TextAlignmentOptions)value;
+                return true;
+            }
+
+            var legacy = rect.GetComponent<Text>();
+            if (legacy != null)
+            {
+                legacy.alignment = (TextAnchor)value;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static int GetTextHorizontalMode(
+            RectTransform rect,
+            int rawValue)
+        {
+            if (rect != null && rect.GetComponent<TMP_Text>() != null)
+            {
+                var horizontal = rawValue & 0xFF;
+                if ((horizontal & 4) != 0) return 2;
+                if ((horizontal & 2) != 0) return 1;
+                return 0;
+            }
+
+            var anchor = (TextAnchor)rawValue;
+            switch (anchor)
+            {
+                case TextAnchor.UpperCenter:
+                case TextAnchor.MiddleCenter:
+                case TextAnchor.LowerCenter:
+                    return 1;
+                case TextAnchor.UpperRight:
+                case TextAnchor.MiddleRight:
+                case TextAnchor.LowerRight:
+                    return 2;
+                default:
+                    return 0;
+            }
+        }
+
+        private static bool SetTextHorizontalMode(
+            RectTransform rect,
+            int mode)
+        {
+            if (rect == null) return false;
+            mode = Mathf.Clamp(mode, 0, 2);
+
+            var tmp = rect.GetComponent<TMP_Text>();
+            if (tmp != null)
+            {
+                var raw = (int)tmp.alignment;
+                var vertical = raw & ~0xFF;
+                var horizontal = mode == 0 ? 1 : (mode == 1 ? 2 : 4);
+                tmp.alignment = (TextAlignmentOptions)(vertical | horizontal);
+                return true;
+            }
+
+            var legacy = rect.GetComponent<Text>();
+            if (legacy != null)
+            {
+                var current = legacy.alignment;
+                var upper = current == TextAnchor.UpperLeft ||
+                            current == TextAnchor.UpperCenter ||
+                            current == TextAnchor.UpperRight;
+                var lower = current == TextAnchor.LowerLeft ||
+                            current == TextAnchor.LowerCenter ||
+                            current == TextAnchor.LowerRight;
+
+                if (upper)
+                    legacy.alignment = mode == 0 ? TextAnchor.UpperLeft :
+                        (mode == 1 ? TextAnchor.UpperCenter : TextAnchor.UpperRight);
+                else if (lower)
+                    legacy.alignment = mode == 0 ? TextAnchor.LowerLeft :
+                        (mode == 1 ? TextAnchor.LowerCenter : TextAnchor.LowerRight);
+                else
+                    legacy.alignment = mode == 0 ? TextAnchor.MiddleLeft :
+                        (mode == 1 ? TextAnchor.MiddleCenter : TextAnchor.MiddleRight);
+                return true;
+            }
+
+            return false;
         }
 
         private static bool TryGetTextStyle(
