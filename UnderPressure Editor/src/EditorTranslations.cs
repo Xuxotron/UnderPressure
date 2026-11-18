@@ -388,6 +388,17 @@ namespace UnderPressure.Editor
             try
             {
                 response = JsonUtility.FromJson<MyMemoryResponse>(json ?? "");
+                if (response != null &&
+                    (response.responseData == null ||
+                     string.IsNullOrWhiteSpace(response.responseData.translatedText)))
+                {
+                    // Esta version de Unity puede omitir objetos de clases anidadas
+                    // al deserializar. Leer responseData por separado conserva el
+                    // JSON exacto de MyMemory sin depender de ese comportamiento.
+                    var responseDataJson = ExtractMyMemoryObject(json, "responseData");
+                    response.responseData =
+                        JsonUtility.FromJson<MyMemoryResponseData>(responseDataJson);
+                }
                 error = "";
                 return response != null;
             }
@@ -397,6 +408,44 @@ namespace UnderPressure.Editor
                 error = exception.Message;
                 return false;
             }
+        }
+
+        private static string ExtractMyMemoryObject(string json, string key)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                throw new FormatException("Respuesta JSON vacia.");
+            var label = "\"" + key + "\"";
+            var at = json.IndexOf(label, StringComparison.Ordinal);
+            if (at < 0)
+                throw new FormatException("Falta el objeto JSON " + key + ".");
+            at += label.Length;
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at++] != ':')
+                throw new FormatException("Campo JSON incorrecto: " + key + ".");
+            while (at < json.Length && char.IsWhiteSpace(json[at])) at++;
+            if (at >= json.Length || json[at] != '{')
+                throw new FormatException("El campo JSON no es un objeto: " + key + ".");
+
+            var start = at;
+            var depth = 0;
+            var quoted = false;
+            var escaped = false;
+            for (; at < json.Length; at++)
+            {
+                var current = json[at];
+                if (quoted)
+                {
+                    if (escaped) escaped = false;
+                    else if (current == '\\') escaped = true;
+                    else if (current == '"') quoted = false;
+                    continue;
+                }
+                if (current == '"') quoted = true;
+                else if (current == '{') depth++;
+                else if (current == '}' && --depth == 0)
+                    return json.Substring(start, at - start + 1);
+            }
+            throw new FormatException("Objeto JSON sin cerrar: " + key + ".");
         }
 
         private static IEnumerable<string> SplitMyMemorySegments(string source)
