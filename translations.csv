@@ -1,32 +1,32 @@
 key,en,es,fr,de,it,pt
-editor.workshop.create_image,Create image,Crear imagen,,,,
-editor.workshop.view,View Workshop,Ver Workshop,,,,
-editor.workshop.update_item,Update item,Actualizar artículo,,,,
-editor.workshop.create_new_item,Create as new item,Crear como artículo nuevo,,,,
-editor.workshop.name,Name:,Nombre:,,,,
-editor.workshop.description,Description:,Descripción:,,,,
-editor.workshop.share_header,Share map on Steam Workshop,Compartir mapa en Steam Workshop,,,,
-editor.workshop.author,Author:,Autor:,,,,
-editor.workshop.choose_thumbnail,Choose thumbnail,Elegir miniatura,,,,
-editor.workshop.delete_image,Delete,Eliminar,,,,
-editor.workshop.publish_menu,Publish on Steam,Publicar en Steam,,,,
-editor.workshop.capture_instruction,Press the space bar to capture,Pulsa la barra espaciadora para capturar,,,,
-editor.workshop.author_line,Author: {0},Autor: {0},,,,
-editor.workshop.error.delete_image,Could not delete the image: {0},No se pudo eliminar la imagen: {0},,,,
-editor.workshop.error.choose_thumbnail,Could not choose the thumbnail: {0},No se pudo elegir la miniatura: {0},,,,
-editor.workshop.error.save_first,Save the map first.,Guarda primero el mapa.,,,,
-editor.workshop.error.max_images,Maximum {0} images per map.,Máximo {0} imágenes por mapa.,,,,
-editor.workshop.error.save_map,Could not save the map: {0},No se pudo guardar el mapa: {0},,,,
-editor.workshop.error.title_required,Enter a title before publishing.,Escribe un título antes de publicar.,,,,
-editor.workshop.error.no_article,This map does not have a Workshop item yet. Use “Create as new item”.,Este mapa todavía no tiene artículo. Usa “Crear como artículo nuevo”.,,,,
-editor.workshop.error.unavailable,Steam Workshop is not available in this session.,Steam Workshop no está disponible en esta sesión.,,,,
-editor.workshop.error.map_missing,The current .upmap does not exist.,No existe el .upmap actual.,,,,
-editor.workshop.error.invalid_published_id,Steam returned an invalid PublishedFileId.,Steam devolvió un PublishedFileId inválido.,,,,
-editor.workshop.error.preview_missing,The Workshop preview image does not exist.,No existe la imagen previa del Workshop.,,,,
-editor.workshop.error.capture_first,Capture an image first.,Captura primero una imagen.,,,,
-editor.workshop.error.parameters_rejected,Steam rejected one or more publication parameters.,Steam rechazó uno o más parámetros de publicación.,,,,
-editor.workshop.error.open_steam,Could not open Steam: {0},No se pudo abrir Steam: {0},,,,
-editor.workshop.error.dependency,Could not add the main mod as a required Workshop item: {0},No se pudo añadir el mod principal como artículo requerido de Workshop: {0},,,,
+editor.workshop.create_image,Create image,Crear imagen,Créer une image,Bild erstellen,Crea immagine,Criar imagem
+editor.workshop.view,View Workshop,Ver Workshop,Voir l'atelier,Workshop ansehen,Visualizza Workshop,Ver oficina
+editor.workshop.update_item,Update item,Actualizar artículo,Mettre à jour l'élément,Artikel aktualisieren,Aggiorna elemento,Atualizar item
+editor.workshop.create_new_item,Create as new item,Crear como artículo nuevo,Créer comme nouvel élément,Als neues Element erstellen,Crea come nuovo elemento,Criar como novo item
+editor.workshop.name,Name:,Nombre:,Nom :,Name:,Nome:,Nome:
+editor.workshop.description,Description:,Descripción:,Descriptif :,Beschreibung:,Descrizione:,Descrição:
+editor.workshop.share_header,Share map on Steam Workshop,Compartir mapa en Steam Workshop,Partager la carte sur Steam Workshop,Teilen Sie die Karte auf Steam Workshop,Condividi la mappa su Steam Workshop,Compartilhe mapa no Steam Workshop
+editor.workshop.author,Author:,Autor:,Auteur :,Autor:,Autore:,Autor:
+editor.workshop.choose_thumbnail,Choose thumbnail,Elegir miniatura,Choisir la vignette,Miniaturbild auswählen,Scegli la miniatura,Escolha a miniatura
+editor.workshop.delete_image,Delete,Eliminar,Supprimer,Entfernen,Elimina,Eliminar
+editor.workshop.publish_menu,Publish on Steam,Publicar en Steam,Publier sur Steam,Auf Steam veröffentlichen,Pubblica su Steam,Publicar no Steam
+editor.workshop.capture_instruction,Press the space bar to capture,Pulsa la barra espaciadora para capturar,Appuyez sur la barre d'espace pour capturer,Drücken Sie zum Aufnehmen die Leertaste,Premi la barra spaziatrice per acquisire,Pressione a barra de espaço para capturar
+editor.workshop.author_line,Author: {0},Autor: {0},Auteur : {0},Autor: {0},Autore: {0},Autor: {0}
+editor.workshop.error.delete_image,Could not delete the image: {0},No se pudo eliminar la imagen: {0},Impossible de supprimer l'image : {0},Das Bild konnte nicht gelöscht werden: {0},Impossibile eliminare l'immagine: {0},Não foi possível excluir a imagem: {0}
+editor.workshop.error.choose_thumbnail,Could not choose the thumbnail: {0},No se pudo elegir la miniatura: {0},Impossible de choisir la miniature : {0},Das Miniaturbild konnte nicht ausgewählt werden: {0},Impossibile scegliere la miniatura: {0},Não foi possível escolher a miniatura: {0}
+editor.workshop.error.save_first,Save the map first.,Guarda primero el mapa.,Enregistrez d'abord la carte.,Speichern Sie zunächst die Karte.,Salva prima la mappa.,Salve o mapa primeiro.
+editor.workshop.error.max_images,Maximum {0} images per map.,Máximo {0} imágenes por mapa.,Maximum {0} images par carte.,Maximal {0} Bilder pro Karte.,Massimo {0} immagini per mappa.,Máximo de {0} imagens por mapa.
+editor.workshop.error.save_map,Could not save the map: {0},No se pudo guardar el mapa: {0},Impossible d'enregistrer la carte : {0},Die Karte konnte nicht gespeichert werden: {0},Impossibile salvare la mappa: {0},Não foi possível salvar o mapa: {0}
+editor.workshop.error.title_required,Enter a title before publishing.,Escribe un título antes de publicar.,Entrez un titre avant de publier.,Geben Sie vor der Veröffentlichung einen Titel ein.,Inserisci un titolo prima della pubblicazione.,Insira um título antes de publicar.
+editor.workshop.error.no_article,This map does not have a Workshop item yet. Use “Create as new item”.,Este mapa todavía no tiene artículo. Usa “Crear como artículo nuevo”.,Cette carte n'a pas encore d'élément d'atelier. Utilisez « Créer comme nouvel élément ».,Diese Karte verfügt noch über keinen Werkstattgegenstand. Verwenden Sie „Als neues Element erstellen“.,"Questa mappa non ha ancora un oggetto del Workshop. Utilizza ""Crea come nuovo elemento"".",Este mapa ainda não possui um item de Oficina. Use “Criar como novo item”.
+editor.workshop.error.unavailable,Steam Workshop is not available in this session.,Steam Workshop no está disponible en esta sesión.,Steam Workshop n'est pas disponible dans cette session.,Steam Workshop ist in dieser Sitzung nicht verfügbar.,Steam Workshop non è disponibile in questa sessione.,O Steam Workshop não está disponível nesta sessão.
+editor.workshop.error.map_missing,The current .upmap does not exist.,No existe el .upmap actual.,Le .upmap actuel n'existe pas.,Die aktuelle .upmap existiert nicht.,L'attuale .upmap non esiste.,O .upmap atual não existe.
+editor.workshop.error.invalid_published_id,Steam returned an invalid PublishedFileId.,Steam devolvió un PublishedFileId inválido.,Steam a renvoyé un PublishingFileId non valide.,Steam hat eine ungültige PublishedFileId zurückgegeben.,Steam ha restituito un PublishedFileId non valido.,O Steam retornou um PublishedFileId inválido.
+editor.workshop.error.preview_missing,The Workshop preview image does not exist.,No existe la imagen previa del Workshop.,L'image d'aperçu de l'atelier n'existe pas.,Das Workshop-Vorschaubild existiert nicht.,L'immagine di anteprima del Workshop non esiste.,A imagem de visualização do Workshop não existe.
+editor.workshop.error.capture_first,Capture an image first.,Captura primero una imagen.,Capturez d’abord une image.,Nehmen Sie zuerst ein Bild auf.,Cattura prima un'immagine.,Capture uma imagem primeiro.
+editor.workshop.error.parameters_rejected,Steam rejected one or more publication parameters.,Steam rechazó uno o más parámetros de publicación.,Steam a rejeté un ou plusieurs paramètres de publication.,Steam hat einen oder mehrere Veröffentlichungsparameter abgelehnt.,Steam ha rifiutato uno o più parametri di pubblicazione.,O Steam rejeitou um ou mais parâmetros de publicação.
+editor.workshop.error.open_steam,Could not open Steam: {0},No se pudo abrir Steam: {0},Impossible d'ouvrir Steam : {0},Steam konnte nicht geöffnet werden: {0},Impossibile aprire Steam: {0},Não foi possível abrir o Steam: {0}
+editor.workshop.error.dependency,Could not add the main mod as a required Workshop item: {0},No se pudo añadir el mod principal como artículo requerido de Workshop: {0},Impossible d'ajouter le mod principal en tant qu'élément obligatoire de l'atelier : {0},Der Haupt-Mod konnte nicht als erforderlicher Workshop-Artikel hinzugefügt werden: {0},Impossibile aggiungere la mod principale come elemento richiesto del Workshop: {0},Não foi possível adicionar o mod principal como item obrigatório do Workshop: {0}
 editor.scenario_settings.plots.list,Plot list,Lista de parcelas,Liste des parcelles,Grundstücksliste,Elenco lotti,Lista de lotes
 editor.scenario_settings.plots.plot,Plot {0},Parcela {0},Parcelle {0},Grundstück {0},Lotto {0},Lote {0}
 editor.scenario_settings.plots.cost,Purchase price,Precio de compra,Prix d'achat,Kaufpreis,Prezzo di acquisto,Preço de compra
@@ -166,14 +166,14 @@ energy.campaign.active_button,Campaign active,Campaña activa,Campagne en cours,
 energy.campaign.header,Energy campaigns,Campañas de energía,Campagnes énergétiques,Energiekampagnen,Campagne energetiche,Campanhas energéticas
 energy.campaign.tooltip,Manage Energy Room campaigns,Gestionar campañas de la Sala de energía,Gérer les campagnes de la salle d'énergie,Kampagnen des Energieraums verwalten,Gestisci le campagne della Sala energia,Gerir campanhas da Sala de energia
 energy.campaign.start_action,Start an energy campaign,Iniciar una campaña de energía,Lancer une campagne énergétique,Eine Energiekampagne starten,Avvia una campagna energetica,Iniciar uma campanha energética
-scenario_editor.menu,Scenario Editor,Editor de escenarios,,,,
-scenario_editor.tooltip,Open the original scenario editor in an isolated session.,Abre el editor original de escenarios en una sesión aislada.,,,,
-scenario_editor.base_scenario,Base scenario,Escenario base,,,,
-scenario_editor.edit,Edit scenario,Editar escenario,,,,
-scenario_editor.return_to_menu,Return to menu,Volver al menú,,,,
-scenario_editor.architect_name,Architect name:,Nombre del arquitecto:,,,,
-scenario_editor.source.local,Local,Local,,,,
-scenario_editor.source.steam,Steam,Steam,,,,
+scenario_editor.menu,Scenario Editor,Editor de escenarios,Éditeur de scénario,Szenario-Editor,Redattore di scenari,Editor de cenário
+scenario_editor.tooltip,Open the original scenario editor in an isolated session.,Abre el editor original de escenarios en una sesión aislada.,Ouvrez l'éditeur de scénario d'origine dans une session isolée.,Öffnen Sie den ursprünglichen Szenario-Editor in einer isolierten Sitzung.,Apri l'editor dello scenario originale in una sessione isolata.,Abra o editor de cenário original em uma sessão isolada.
+scenario_editor.base_scenario,Base scenario,Escenario base,Scénario de base,Basisszenario,Scenario di base,Cenário base
+scenario_editor.edit,Edit scenario,Editar escenario,Modifier le scénario,Szenario bearbeiten,Modifica scenario,Editar cenário
+scenario_editor.return_to_menu,Return to menu,Volver al menú,Retour au menu,Zurück zum Menü,Ritorna al menù,Voltar ao cardápio
+scenario_editor.architect_name,Architect name:,Nombre del arquitecto:,Nom de l'architecte :,Name des Architekten:,Nome dell'architetto:,Nome do arquiteto:
+scenario_editor.source.local,Local,Local,Locale,Lokal,Locale,Locais
+scenario_editor.source.steam,Steam,Steam,Steam,Steam,Steam,Steam
 editor.map.styles,Map styles,Estilos del mapa,Styles de la carte,Kartenstile,Stili della mappa,Estilos do mapa
 editor.map.style.original,Original,Original,Original,Original,Original,Original
 editor.map.style.none,No perimeter,Sin perímetro,Aucun périmètre,Kein Umfang,Nessun perimetro,Sem perímetro
@@ -182,268 +182,268 @@ editor.map.style.built,Built hospital,Hospital construido,Hôpital construit,Geb
 editor.map.style.building,Under construction,Durante construcción,En construction,Im Bau,In costruzione,Em construção
 editor.map.style.unbuilt,Unbuilt plot,Parcela sin construir,Parcelle non construite,Unbebautes Grundstück,Lotto non costruito,Lote não construído
 editor.map.style.help,Styles are saved in the map and applied when it is reopened.,Los estilos se guardan en el mapa y se aplican al volver a abrirlo.,Les styles sont enregistrés dans la carte et appliqués à sa réouverture.,Stile werden in der Karte gespeichert und beim erneuten Öffnen angewendet.,Gli stili vengono salvati nella mappa e applicati alla riapertura.,Os estilos são guardados no mapa e aplicados quando ele é reaberto.
-career.maps.title,Editor levels,Niveles del editor,,,,
-career.maps.custom.description,Custom Under Pressure scenario.,Escenario personalizado de Under Pressure.,,,,
-career.maps.active.error,This hospital is already open. Return to the main menu before starting its custom map.,Este hospital ya está abierto. Vuelve al menú principal antes de iniciar su mapa personalizado.,,,,
-career.maps.open.error,Could not open the selected map.,No se pudo abrir el mapa seleccionado.,,,,
-career.map.more_zoom,More zoom,Más zoom,,,,
-career.map.all_hospitals,All hospitals,Todos los hospitales,,,,
-common.cancel,Cancel,Cancelar,,,,
-common.save,Save,Guardar,,,,
-editor.settings.career,Career,Carrera,,,,
-editor.settings.maps,Maps,Mapas,,,,
-editor.settings.show_new_maps,Show new maps,Mostrar nuevos mapas,,,,
-editor.settings.show_new_maps.description,Shows the custom scenario selector on the Career map.,Muestra el selector de escenarios personalizados en el mapa de Carrera.,,,,
-editor.settings.focus_levels,Focus levels,Enfocar niveles,,,,
-editor.settings.focus_levels.description,Uses the custom camera configured for each hospital on the Career map.,Usa la cámara personalizada configurada para cada hospital en el mapa de Carrera.,,,,
-editor.settings.architect,Architect name,Nombre del arquitecto,,,,
-editor.settings.architect.description,Folder used for newly created maps.,Carpeta utilizada para los mapas nuevos.,,,,
-scenario_editor.hospital,Hospital,Hospital,,,,
-scenario_editor.hospitals,Hospitals,Hospitales,,,,
-scenario_editor.maps,Maps,Mapas,,,,
-scenario_editor.new_map,New map,Nuevo mapa,,,,
-scenario_editor.invalid_map,Invalid or incomplete map,Mapa incorrecto o incompleto,,,,
-scenario_editor.obsolete,Obsolete,Obsoleto,,,,
-editor.objects.title,Objects,Objetos,,,,
-editor.objects.search,Search:,Buscar:,,,,
-editor.objects.show_all,Show all,Ver todo,,,,
-editor.objects.dropdown_arrow,▶,▶,,,,
-editor.layout.title,Map editor,Edición de mapa,,,,
-editor.history.button,History,Historial,,,,
-editor.history.title,Object history,Historial de objetos,,,,
-editor.history.start,Start,Inicio,,,,
-editor.history.objects.modified,Objects modified,Objetos modificados,,,,
-editor.history.moved.one,1 object moved,1 objeto movido,,,,
-editor.history.moved.many,{0} objects moved,{0} objetos movidos,,,,
-editor.history.placed.one,1 object placed,1 objeto colocado,,,,
-editor.history.placed.many,{0} objects placed,{0} objetos colocados,,,,
-editor.history.deleted.one,1 object deleted,1 objeto eliminado,,,,
-editor.history.deleted.many,{0} objects deleted,{0} objetos eliminados,,,,
-editor.terrain.toggle,Terrain,Terreno,,,,
-editor.layer.base,Base,Base,,,,
-editor.layer.built,Build,Build,,,,
-editor.layer.unbuilt,Unbuild,Unbuild,,,,
-editor.toolbar.tile_view,View Tiles,Ver baldosas,,,,
-editor.toolbar.free_camera,Free Camera,Cámara libre,,,,
-editor.toolbar.fixed_camera,Fixed Camera,Cámara fija,,,,
-editor.toolbar.edit_plot,Tiles,Baldosas,,,,
-editor.toolbar.move_plot,Move,Mover,,,,
-editor.toolbar.styles,Styles,Estilos,,,,
-editor.toolbar.settings,Settings,Ajustes,,,,
-editor.scenario_settings.title,Scenario settings,Ajustes del escenario,,,,
-editor.scenario_settings.accept,Accept,Aceptar,,,,
-editor.scenario_settings.tab.general,General,General,,,,
-editor.scenario_settings.tab.diseases,Diseases,Enfermedades,,,,
-editor.scenario_settings.tab.objectives,Objectives,Objetivos,,,,
-editor.scenario_settings.tab.plots,Plots,Parcelas,,,,
-editor.scenario_settings.tab.fog,Fog,Niebla,,,,
-editor.scenario_settings.tab.characters,Characters,Personajes,,,,
-editor.scenario_settings.field.display_name,Name:,Nombre:,,,,
-editor.scenario_settings.field.description_per_star,Description:,Descripción:,,,,
-editor.scenario_settings.field.initial_balance,Initial balance:,Balance inicial:,,,,
-editor.scenario_settings.field.fail_warning,Bankruptcy warning:,Aviso por bancarrota:,,,,
-editor.scenario_settings.field.fail_game_over,Bankruptcy defeat:,Derrota por bancarrota:,,,,
-editor.scenario_settings.field.initial_temperature,Initial temperature:,Temperatura inicial:,,,,
-editor.scenario_settings.field.initial_attractiveness,Initial attractiveness:,Atractivo inicial:,,,,
-editor.scenario_settings.field.initial_hygiene,Initial hygiene:,Higiene inicial:,,,,
-editor.scenario_settings.diseases.select,Select illness...,Seleccionar enfermedad...,,,,
-editor.scenario_settings.diseases.add,Add,Añadir,,,,
-editor.scenario_settings.diseases.illness,Illness:,Enfermedad:,,,,
-editor.scenario_settings.diseases.definition,Definition:,Definición:,,,,
-editor.scenario_settings.diseases.deprecated,Deprecated:,Obsoleta:,,,,
-editor.scenario_settings.diseases.unlocked,Unlocked:,Desbloqueada:,,,,
-editor.scenario_settings.diseases.min_weight,MinWeight:,Peso mín.:,,,,
-editor.scenario_settings.diseases.max_weight,MaxWeight:,Peso máx.:,,,,
-editor.scenario_settings.diseases.min_stars,MinStarRating:,Estrellas mín.:,,,,
-editor.scenario_settings.diseases.min_spawned,MinSpawned:,Pacientes mín.:,,,,
-editor.scenario_settings.diseases.remove,Remove,Eliminar,,,,
-editor.scenario_settings.diseases.max_patients,Maximum patients:,Pacientes máximos:,,,,
-editor.scenario_settings.diseases.arrival_rate,Patient arrival rate:,Ritmo de llegada:,,,,
-editor.scenario_settings.diseases.randomness,Randomness:,Aleatoriedad:,,,,
-editor.scenario_settings.diseases.never_spawn_patients,Do not generate patients:,No generar pacientes:,,,,
-editor.scenario_settings.diseases.ignore_frequency,Ignore frequency:,Ignorar frecuencia:,,,,
-editor.scenario_settings.diseases.frequency,Frequency:,Frecuencia:,,,,
-editor.scenario_settings.diseases.previous_patients,Previous patients:,Pacientes previos:,,,,
-editor.scenario_settings.diseases.stars,Stars:,Estrellas:,,,,
-editor.scenario_settings.translate_languages,Translate languages,Traducir idiomas,,,,
-editor.scenario_settings.translation.confirm_title,Translate languages,Traducir idiomas,,,,
-editor.scenario_settings.translation.confirm_body,"The four descriptions written in {0} will be sent to MyMemory online and automatically translated into the other 10 languages, replacing their current translations.","Las cuatro descripciones escritas en {0} se enviarán a MyMemory online y se traducirán automáticamente a los otros 10 idiomas, reemplazando sus traducciones actuales.",,,,
-editor.scenario_settings.translation.action,Translate,Traducir,,,,
-editor.scenario_settings.translation.no_source,There are no descriptions to translate in the selected language.,No hay descripciones que traducir en el idioma seleccionado.,,,,
-editor.scenario_settings.translation.success,The translations have been saved in the other 10 languages.,Las traducciones se han guardado en los otros 10 idiomas.,,,,
-editor.scenario_settings.translation.error,"Automatic translation could not be completed: {0}","No se ha podido completar la traducción automática: {0}",,,,
-editor.scenario_settings.translation.ok,OK,Aceptar,,,,
-editor.tile.floor,Floor,Suelo,,,,
-editor.tile.arrival_point,Arrival point,Punto de llegada,,,,
-editor.tile.driveway,Driveway,Acceso,,,,
-editor.tile.path,Path,Camino,,,,
-editor.tile.pillar,Pillar,Pilar,,,,
-editor.tile.window,Window,Ventana,,,,
-editor.tile.adjoining,Adjoining,Adyacente,,,,
-editor.map.save,Save map,Guardar mapa,,,,
-editor.map.open,Open map,Abrir mapa,,,,
-editor.map.empty,Empty map,Vaciar mapa,,,,
-editor.map.empty.warning,Empty the map? All objects and terrain changes in the current editor session will be removed. This action cannot be undone.,¿Vaciar el mapa? Se eliminarán todos los objetos y los cambios de terreno de la sesión actual del editor. Esta acción no se puede deshacer.,,,,
-editor.map.empty.accept,Empty,Vaciar,,,,
-editor.map.name,Map name,Nombre del mapa,,,,
-editor.map.new_default,New Map,Nuevo mapa,,,,
-editor.map.none,No maps saved in the maps folder.,Ningún mapa guardado en la carpeta maps.,,,,
-editor.map.close,Close,Cerrar,,,,
-editor.map.saved,Saved: {0},Guardado: {0},,,,
-editor.map.hospital_line,Hospital: {0},Hospital: {0},,,,
-editor.map.map_line,Map: {0},Mapa: {0},,,,
-editor.map.invalid_suffix, (invalid file), (archivo inválido),,,,
-editor.map.other_hospital_suffix, (another hospital), (otro hospital),,,,
-editor.map.test,Test map,Probar mapa,,,,
-editor.plot.default_name,Plot {0},Parcela {0},,,,
-editor.plot.landscape,Landscape,Paisaje,,,,
-editor.traffic.title,Traffic,Tráfico,,,,
-editor.traffic.options,Arrivals and traffic,Llegadas y tráfico,,,,
-editor.traffic.ambient,Ambient,Ambiente,,,,
-editor.traffic.arrivals,Arrivals,Llegadas,,,,
-editor.traffic.departures,Departures,Salidas,,,,
-editor.traffic.ambient_item,Loop traffic,Tráfico en bucle,,,,
-editor.traffic.static_vehicle,Scene vehicle,Vehículo de escena,,,,
-editor.traffic.road_arrival,Road arrival,Llegada por carretera,,,,
-editor.traffic.helipad_arrival,Helipad,Helipuerto,,,,
-editor.traffic.subway,Subway arrival,Llegada de metro,,,,
-editor.traffic.item_arrival,Specific arrival point,Punto de llegada específico,,,,
-editor.traffic.time_portal,Time portal,Portal temporal,,,,
-editor.traffic.time_portal_landing,Time portal landing,Destino de portal temporal,,,,
-editor.traffic.subway_departure,Subway departure,Salida de metro,,,,
-editor.traffic.tunnel_departure,Road tunnel departure,Salida por túnel,,,,
-editor.traffic.move_selected,Move selected,Mover seleccionado,,,,
-editor.plot.add,Add,Añadir,,,,
-editor.plot.add.title,Add plot,Añadir parcela,,,,
-editor.plot.add.error,Could not add the plot.,No se pudo añadir la parcela.,,,,
-editor.plot.delete,Delete,Eliminar,,,,
-editor.plot.delete.title,Delete plot,Eliminar parcela,,,,
-editor.plot.delete.select_first,Select a plot first.,Selecciona primero una parcela.,,,,
-editor.plot.delete.minimum,At least one plot must remain.,Debe quedar al menos una parcela.,,,,
-editor.plot.delete.error,Could not delete the plot.,No se pudo eliminar la parcela.,,,,
-editor.plot.delete.confirm,Delete plot {0}? Its ground and objects will be lost. This action cannot be undone.,¿Eliminar la parcela {0}? Se perderán su suelo y sus objetos. Esta acción no se puede deshacer.,,,,
-editor.plot.isolate.on,Isolate,Aislar,,,,
-editor.plot.isolate.off,Isolate,Aislar,,,,
-editor.scene.layer,Scene (º),Escenario (º),,,,
-editor.terrain.title,Terrain brush,Pincel de terreno,,,,
-editor.terrain.brush,Paint,Pintar,,,,
-editor.terrain.size,Size,Tamaño,,,,
-editor.terrain.opacity,Opacity,Opacidad,,,,
-editor.terrain.clear,Clear map,Limpiar mapa,,,,
-editor.terrain.clear.warning,Clear the map? All unsaved objects and textures will be lost.,¿Limpiar el mapa? Se perderán todos los objetos y las texturas que no hayas guardado.,,,,
-editor.terrain.clear.cancel,Cancel,Cancelar,,,,
-editor.terrain.clear.accept,Clear,Limpiar,,,,
-editor.terrain.raise,Raise,Elevar,,,,
-editor.terrain.lower,Lower,Bajar,,,,
-editor.terrain.flatten,Flatten,Aplanar,,,,
-editor.terrain.fog_of_war,Fog of War,Niebla de guerra,,,,
-editor.terrain.wireframe,Wireframe,Wireframe,,,,
-editor.terrain.wireframe.on,Wireframe: ON,Wireframe: SÍ,,,,
-editor.terrain.wireframe.off,Wireframe: OFF,Wireframe: NO,,,,
-editor.terrain.fog.on,Fog: ON,Niebla: SÍ,,,,
-editor.terrain.fog.off,Fog: OFF,Niebla: NO,,,,
-editor.terrain.mesh_uneditable,Mesh cannot be edited,Malla no editable,,,,
-editor.terrain.sculpting,Sculpting: {0},Modelado: {0},,,,
-editor.terrain.brush.on,Brush: ON,Pincel: SÍ,,,,
-editor.terrain.brush.off,Brush: OFF,Pincel: NO,,,,
-editor.character.button,Characters,Personajes,,,,
-editor.character.close,Close characters,Cerrar personajes,,,,
-editor.character.title,Character viewer,Visor de personajes,,,,
-editor.character.controls,Drag horizontally and vertically · Wheel: zoom,Arrastra horizontal y vertical · Rueda: zoom,,,,
-editor.character.animation,Animation,Animación,,,,
-editor.character.animations,Animations,Animaciones,,,,
-editor.character.random,Random,Aleatorio,,,,
-editor.character.play,Play,Reproducir,,,,
-editor.character.pause,Pause,Pausar,,,,
-editor.character.search_animation,Search animation by name...,Buscar animación por nombre...,,,,
-editor.character.search_list,Search the list...,Buscar en la lista...,,,,
-editor.character.type,Character type,Tipo de personaje,,,,
-editor.character.visible_illnesses,Visible illnesses,Enfermedades visibles,,,,
-editor.character.type.random_patient,Random patient,Paciente aleatorio,,,,
-editor.character.type.male_patient,Male patient,Paciente hombre,,,,
-editor.character.type.female_patient,Female patient,Paciente mujer,,,,
-editor.character.type.doctor,Doctor,Doctor,,,,
-editor.character.type.nurse,Nurse,Enfermero,,,,
-editor.character.type.assistant,Assistant,Asistente,,,,
-editor.character.type.janitor,Janitor,Conserje,,,,
-editor.character.illness.none,No visible illness,Sin enfermedad visible,,,,
-editor.character.illness.patients_only,Patients only,Solo pacientes,,,,
-editor.character.no_results,No results,Sin resultados,,,,
-editor.character.error.definition,Character definition not found.,No se encontró la definición del personaje.,,,,
-editor.character.error.controller,Model loaded; animation controller missing.,Modelo cargado; falta el controlador de animación.,,,,
-editor.character.generated,Character generated · {0} clips loaded in memory,Personaje generado · {0} clips cargados en memoria,,,,
-editor.character.error.generate,Could not generate the character.,No se pudo generar el personaje.,,,,
-editor.character.illness.visual,Visual illness: {0},Enfermedad visual: {0},,,,
-editor.character.error.illness,Error showing illness.,Error al mostrar la enfermedad.,,,,
-editor.character.error.no_clips,The controller contains no replaceable clips.,El controlador no contiene clips sustituibles.,,,,
-editor.character.error.clip,Clip not compatible with this controller: {0},Clip no compatible con este controlador: {0},,,,
-editor.map.save.error,Could not save the map.,No se pudo guardar el mapa.,,,,
-editor.map.open.error,Could not open the map.,No se pudo abrir el mapa.,,,,
-world_map.author.title,World map authoring,Edición del mapamundi,,,,
-world_map.author.position,Cursor: X {0} · Y {1} · Z {2},Cursor: X {0} · Y {1} · Z {2},,,,
-world_map.author.no_surface,Cursor: no map surface,Cursor: ninguna superficie del mapa,,,,
-world_map.author.shortcuts,Ctrl+Alt+F10 show/hide · F9 reload · Ctrl+Alt+C copy all data,Ctrl+Alt+F10 mostrar/ocultar · F9 recargar · Ctrl+Alt+C copiar todos los datos,,,,
-world_map.author.camera_position,Camera position: X {0} · Y {1} · Z {2},Posición de cámara: X {0} · Y {1} · Z {2},,,,
-world_map.author.camera_focal,Focal point: X {0} · Y {1} · Z {2},Punto focal: X {0} · Y {1} · Z {2},,,,
-world_map.author.camera_angles,Euler angles: X {0} · Y {1} · Z {2},Ángulos Euler: X {0} · Y {1} · Z {2},,,,
-world_map.author.camera_native,Native rotation: {0} · Zoom: {1},Rotación nativa: {0} · Zoom: {1},,,,
-world_map.author.camera_direction,Direction: X {0} · Y {1} · Z {2},Dirección: X {0} · Y {1} · Z {2},,,,
-conflux.creators,Creators,Creadores,,,,
-conflux.title,Conflux,Conflux,,,,
-conflux.maps,Maps,Mapas,,,,
-conflux.no_creators,No creators found.,No se encontraron creadores.,,,,
-conflux.select_creator,Select a creator.,Selecciona un creador.,,,,
-conflux.no_maps,This creator has no valid maps.,Este creador no tiene mapas válidos.,,,,
-conflux.select_map,Select a map.,Selecciona un mapa.,,,,
-scenario_editor.no_architects,No architect folders found.,No se encontraron carpetas de arquitectos.,,,,
-editor.fog.button,Fog,Niebla,,,,
-editor.fog.title,Fog of War,Fog of War,,,,
-editor.fog.details,Mask {0}x{1} · Distance {2} · Anchor ({3}; {4}),Máscara {0}x{1} · Distancia {2} · Ancla ({3}; {4}),,,,
-editor.fog.none,This map has no Fog of War mask.,Este mapa no tiene máscara Fog of War.,,,,
-editor.fog.close,Close,Cerrar,,,,
-editor.fog.add,Add,Añadir,,,,
-editor.fog.remove,Remove,Eliminar,,,,
-editor.fog.opacity,Opacity: {0}%,Opacidad: {0}%,,,,
-editor.fog.alpha.on,Alpha: YES,Alpha: SÍ,,,,
-editor.fog.alpha.off,Alpha: NO,Alpha: NO,,,,
-editor.fog.fog.on,Fog: YES,Niebla: SÍ,,,,
-editor.fog.fog.off,Fog: NO,Niebla: NO,,,,
-editor.fog.reset,Reset,Reiniciar,,,,
-editor.fog.map.on,Plot: YES,Parcela: SÍ,,,,
-editor.fog.map.off,Plot: NO,Parcela: NO,,,,
-editor.fog.size,Size: {0} (1-50),Tamaño: {0} (1-50),,,,
-editor.fog.pressure,Pressure: {0} (0-100),Presión: {0} (0-100),,,,
-editor.fog.max_opacity,Maximum opacity: {0}%,Opacidad máxima: {0}%,,,,
-editor.capture.button,Aerial capture,Captura cenital,,,,
-editor.capture.saved,JPG saved,JPG guardado,,,,
-editor.capture.error,Capture error,Error de captura,,,,
-editor.objectives.stars,Stars,Estrellas,,,,
-editor.objectives.challenges,Challenges,Retos,,,,
-editor.objectives.new_challenge,New challenge,Nuevo reto,,,,
-editor.objectives.configuration,Configuration,Configuración,,,,
-editor.objectives.name,Name,Nombre,,,,
-editor.objectives.duration,Duration,Duración,,,,
-editor.objectives.probability,Probability,Probabilidad,,,,
-editor.objectives.difficulty,Difficulty,Dificultad,,,,
-editor.objectives.cooldown,Cooldown,Reaparición,,,,
-editor.objectives.requirements,Requirements,Requisitos,,,,
-editor.objectives.results,Results,Resultados,,,,
-editor.objectives.complete,Complete,Completar,,,,
-editor.objectives.fail,Fail,Fallar,,,,
-editor.objectives.abandon,Abandon,Abandonar,,,,
-editor.objectives.star,Star {0},Estrella {0},,,,
-editor.objectives.challenge,Challenge {0},Reto {0},,,,
-editor.objectives.star_reward,Fixed reward: Star {0},Recompensa fija: Estrella {0},,,,
-editor.objectives.select_room,Select room...,Seleccionar sala...,,,,
-editor.objectives.requirement.earn_money,Earn money,Ganar dinero,,,,
-editor.objectives.requirement.reputation,Reputation,Reputación,,,,
-editor.objectives.requirement.cure_patients,Cure patients,Curar pacientes,,,,
-editor.objectives.requirement.hospital_value,Hospital value,Valor del hospital,,,,
-editor.objectives.requirement.attractiveness,Attractiveness,Atractivo,,,,
-editor.objectives.requirement.staff_morale,Staff morale,Moral del personal,,,,
-editor.objectives.requirement.days_without_death,Days without deaths,Días sin muertes,,,,
-editor.objectives.requirement.build_room,Build room,Construir sala,,,,
-editor.objectives.result.money,Money,Dinero,,,,
-editor.objectives.result.reputation,Reputation,Reputación,,,,
-editor.objectives.result.research_points,Research points,Puntos de investigación,,,,
-editor.objectives.result.unlock_room,Unlock room,Desbloquear sala,,,,
+career.maps.title,Editor levels,Niveles del editor,Niveaux de l'éditeur,Editorebenen,Livelli dell'editor,Níveis de editor
+career.maps.custom.description,Custom Under Pressure scenario.,Escenario personalizado de Under Pressure.,Scénario personnalisé sous pression.,Benutzerdefiniertes Unterdruck-Szenario.,Scenario personalizzato sotto pressione.,Cenário personalizado sob pressão.
+career.maps.active.error,This hospital is already open. Return to the main menu before starting its custom map.,Este hospital ya está abierto. Vuelve al menú principal antes de iniciar su mapa personalizado.,Cet hôpital est déjà ouvert. Revenez au menu principal avant de démarrer sa carte personnalisée.,"Dieses Krankenhaus ist bereits geöffnet. Kehren Sie zum Hauptmenü zurück, bevor Sie die benutzerdefinierte Karte starten.",Questo ospedale è già aperto. Ritorna al menu principale prima di avviare la mappa personalizzata.,Este hospital já está aberto. Retorne ao menu principal antes de iniciar seu mapa personalizado.
+career.maps.open.error,Could not open the selected map.,No se pudo abrir el mapa seleccionado.,Impossible d'ouvrir la carte sélectionnée.,Die ausgewählte Karte konnte nicht geöffnet werden.,Impossibile aprire la mappa selezionata.,Não foi possível abrir o mapa selecionado.
+career.map.more_zoom,More zoom,Más zoom,Plus de zoom,Mehr Zoom,Più zoom,Mais zoom
+career.map.all_hospitals,All hospitals,Todos los hospitales,Tous les hôpitaux,Alle Krankenhäuser,Tutti gli ospedali,Todos os hospitais
+common.cancel,Cancel,Cancelar,Annuler,Abbrechen,Annulla,Cancelar
+common.save,Save,Guardar,Enregistrer,Speichern,Salva,Salvar
+editor.settings.career,Career,Carrera,Carrière,Karriere,Carriera,Carreira
+editor.settings.maps,Maps,Mapas,Cartes,Karten,Mappe,Mapas
+editor.settings.show_new_maps,Show new maps,Mostrar nuevos mapas,Afficher de nouvelles cartes,Neue Karten anzeigen,Mostra nuove mappe,Mostrar novos mapas
+editor.settings.show_new_maps.description,Shows the custom scenario selector on the Career map.,Muestra el selector de escenarios personalizados en el mapa de Carrera.,Affiche le sélecteur de scénario personnalisé sur la carte Carrière.,Zeigt die benutzerdefinierte Szenarioauswahl auf der Karrierekarte an.,Mostra il selettore dello scenario personalizzato sulla mappa Carriera.,Mostra o seletor de cenário personalizado no mapa Carreira.
+editor.settings.focus_levels,Focus levels,Enfocar niveles,Niveaux de concentration,Fokusebenen,Livelli di messa a fuoco,Níveis de foco
+editor.settings.focus_levels.description,Uses the custom camera configured for each hospital on the Career map.,Usa la cámara personalizada configurada para cada hospital en el mapa de Carrera.,Utilise la caméra personnalisée configurée pour chaque hôpital sur la carte Carrière.,"Verwendet die benutzerdefinierte Kamera, die für jedes Krankenhaus auf der Karrierekarte konfiguriert ist.",Utilizza la telecamera personalizzata configurata per ciascun ospedale sulla mappa Carriera.,Usa a câmera personalizada configurada para cada hospital no mapa Carreira.
+editor.settings.architect,Architect name,Nombre del arquitecto,Nom de l'architecte,Name des Architekten,Nome dell'architetto,Nome do arquiteto
+editor.settings.architect.description,Folder used for newly created maps.,Carpeta utilizada para los mapas nuevos.,Dossier utilisé pour les cartes nouvellement créées.,"Ordner, der für neu erstellte Karten verwendet wird.",Cartella utilizzata per le mappe appena create.,Pasta usada para mapas recém-criados.
+scenario_editor.hospital,Hospital,Hospital,Hôpital,Krankenhaus,Ospedale,Hospitais
+scenario_editor.hospitals,Hospitals,Hospitales,Hôpitaux,Krankenhäuser,Ospedali,Hospitais
+scenario_editor.maps,Maps,Mapas,Cartes,Karten,Mappe,Mapas
+scenario_editor.new_map,New map,Nuevo mapa,Nouvelle carte,Neue Karte,Nuova mappa,Novo mapa
+scenario_editor.invalid_map,Invalid or incomplete map,Mapa incorrecto o incompleto,Carte invalide ou incomplète,Ungültige oder unvollständige Karte,Mappa non valida o incompleta,Mapa inválido ou incompleto
+scenario_editor.obsolete,Obsolete,Obsoleto,Obsolète,Veraltet,Obsoleto,Obsoleto
+editor.objects.title,Objects,Objetos,Objets,Objekte,Oggetti,Objetos
+editor.objects.search,Search:,Buscar:,Rechercher :,Suche:,Cerca:,Pesquisar:
+editor.objects.show_all,Show all,Ver todo,Afficher tout,Alle anzeigen,Mostra tutto,Mostrar tudo
+editor.objects.dropdown_arrow,▶,▶,▶,▶,▶,▶
+editor.layout.title,Map editor,Edición de mapa,Editeur de cartes,Karteneditor,Editore di mappe,Editor de mapas
+editor.history.button,History,Historial,Histoire,Geschichte,Storia,História
+editor.history.title,Object history,Historial de objetos,Historique des objets,Objektgeschichte,Storia dell'oggetto,Histórico do objeto
+editor.history.start,Start,Inicio,Commencer,Starten,Inizia,Começar
+editor.history.objects.modified,Objects modified,Objetos modificados,Objets modifiés,Objekte geändert,Oggetti modificati,Objetos modificados
+editor.history.moved.one,1 object moved,1 objeto movido,1 objet déplacé,1 Objekt verschoben,1 oggetto spostato,1 objeto movido
+editor.history.moved.many,{0} objects moved,{0} objetos movidos,{0} objets déplacés,{0} Objekte verschoben,{0} oggetti spostati,{0} objetos movidos
+editor.history.placed.one,1 object placed,1 objeto colocado,1 objet placé,1 Objekt platziert,1 oggetto posizionato,1 objeto colocado
+editor.history.placed.many,{0} objects placed,{0} objetos colocados,{0} objets placés,{0} Objekte platziert,{0} oggetti posizionati,{0} objetos colocados
+editor.history.deleted.one,1 object deleted,1 objeto eliminado,1 objet supprimé,1 Objekt gelöscht,1 oggetto eliminato,1 objeto excluído
+editor.history.deleted.many,{0} objects deleted,{0} objetos eliminados,{0} objets supprimés,{0} Objekte gelöscht,{0} oggetti eliminati,{0} objetos excluídos
+editor.terrain.toggle,Terrain,Terreno,Terrain,Gelände,Terreno,Terreno
+editor.layer.base,Base,Base,Socle,Basis,Fondo,base
+editor.layer.built,Build,Build,Construire,Bauen,Costruisci,Construir
+editor.layer.unbuilt,Unbuild,Unbuild,Déconstruire,Abreißen,Annulla costruzione,Desconstruir
+editor.toolbar.tile_view,View Tiles,Ver baldosas,Afficher les vignettes,Kacheln anzeigen,Visualizza riquadri,Ver blocos
+editor.toolbar.free_camera,Free Camera,Cámara libre,Caméra gratuite,Kostenlose Kamera,Fotocamera gratuita,Câmera grátis
+editor.toolbar.fixed_camera,Fixed Camera,Cámara fija,Caméra fixe,Feste Kamera,Telecamera fissa,Câmera Fixa
+editor.toolbar.edit_plot,Tiles,Baldosas,Tuiles,Fliesen,Piastrelle,Azulejos
+editor.toolbar.move_plot,Move,Mover,Déplacer,Bewegen,Muoviti,Mover
+editor.toolbar.styles,Styles,Estilos,Styles,Stile,Stili,Estilos
+editor.toolbar.settings,Settings,Ajustes,Paramètres,Einstellungen,Impostazioni,Configurações
+editor.scenario_settings.title,Scenario settings,Ajustes del escenario,Paramètres du scénario,Szenarioeinstellungen,Impostazioni dello scenario,Configurações de cenário
+editor.scenario_settings.accept,Accept,Aceptar,Accepter,Akzeptiere,Accetta,Aceitar
+editor.scenario_settings.tab.general,General,General,Général,Allgemein,Generale,Geral
+editor.scenario_settings.tab.diseases,Diseases,Enfermedades,Maladies,Krankheiten,Malattie,Doenças
+editor.scenario_settings.tab.objectives,Objectives,Objetivos,Objectifs,Ziele,Obiettivi,Objetivos
+editor.scenario_settings.tab.plots,Plots,Parcelas,Parcelles,Grundstücke,Trame,Parcelas
+editor.scenario_settings.tab.fog,Fog,Niebla,Brouillard,Nebel,Nebbia,Nevoeiro
+editor.scenario_settings.tab.characters,Characters,Personajes,Personnages,Charaktere,Personaggi,Personagens
+editor.scenario_settings.field.display_name,Name:,Nombre:,Nom :,Name:,Nome:,Nome:
+editor.scenario_settings.field.description_per_star,Description:,Descripción:,Descriptif :,Beschreibung:,Descrizione:,Descrição:
+editor.scenario_settings.field.initial_balance,Initial balance:,Balance inicial:,Solde initial :,Anfangssaldo:,Saldo iniziale:,Saldo inicial:
+editor.scenario_settings.field.fail_warning,Bankruptcy warning:,Aviso por bancarrota:,Avertissement de faillite :,Insolvenzwarnung:,Avviso di fallimento:,Aviso de falência:
+editor.scenario_settings.field.fail_game_over,Bankruptcy defeat:,Derrota por bancarrota:,Défaite de la faillite :,Insolvenzniederlage:,Sconfitta per fallimento:,Derrota na falência:
+editor.scenario_settings.field.initial_temperature,Initial temperature:,Temperatura inicial:,Température initiale :,Anfangstemperatur:,Temperatura iniziale:,Temperatura inicial:
+editor.scenario_settings.field.initial_attractiveness,Initial attractiveness:,Atractivo inicial:,Attractivité initiale :,Anfängliche Attraktivität:,Attrattiva iniziale:,Atratividade inicial:
+editor.scenario_settings.field.initial_hygiene,Initial hygiene:,Higiene inicial:,Hygiène initiale :,Erste Hygiene:,Igiene iniziale:,Higiene inicial:
+editor.scenario_settings.diseases.select,Select illness...,Seleccionar enfermedad...,Sélectionnez la maladie...,Krankheit auswählen...,Seleziona malattia...,Selecione a doença...
+editor.scenario_settings.diseases.add,Add,Añadir,Ajouter,Hinzufügen,Aggiungi,Adicionar
+editor.scenario_settings.diseases.illness,Illness:,Enfermedad:,Maladie :,Krankheit:,Malattia:,Doença:
+editor.scenario_settings.diseases.definition,Definition:,Definición:,Définition :,Definition:,Definizione:,Definição:
+editor.scenario_settings.diseases.deprecated,Deprecated:,Obsoleta:,Obsolète :,Veraltet:,Deprecato:,Obsoleto:
+editor.scenario_settings.diseases.unlocked,Unlocked:,Desbloqueada:,Débloqué :,Freigeschaltet:,sbloccato:,Desbloqueado:
+editor.scenario_settings.diseases.min_weight,MinWeight:,Peso mín.:,Poids minimum :,Min. Gewicht:,Peso minimo:,Peso mínimo:
+editor.scenario_settings.diseases.max_weight,MaxWeight:,Peso máx.:,Poids maximum :,Maximales Gewicht:,Peso massimo:,Peso máximo:
+editor.scenario_settings.diseases.min_stars,MinStarRating:,Estrellas mín.:,Note MinStar :,MinStarRating:,Valutazione MinStar:,Classificação MinStar:
+editor.scenario_settings.diseases.min_spawned,MinSpawned:,Pacientes mín.:,MinSpawned :,MinSpawned:,MinSpawned:,MinSpawned:
+editor.scenario_settings.diseases.remove,Remove,Eliminar,Supprimer,Entfernen,Rimuovi,Remover
+editor.scenario_settings.diseases.max_patients,Maximum patients:,Pacientes máximos:,Patients maximum :,Maximale Patientenzahl:,Numero massimo di pazienti:,Máximo de pacientes:
+editor.scenario_settings.diseases.arrival_rate,Patient arrival rate:,Ritmo de llegada:,Taux d’arrivée des patients :,Patientenankunftsrate:,Tasso di arrivo dei pazienti:,Taxa de chegada de pacientes:
+editor.scenario_settings.diseases.randomness,Randomness:,Aleatoriedad:,Le hasard :,Zufälligkeit:,Casualità:,Aleatoriedade:
+editor.scenario_settings.diseases.never_spawn_patients,Do not generate patients:,No generar pacientes:,Ne génèrez pas de patients :,Keine Patienten generieren:,Non generare pazienti:,Não gere pacientes:
+editor.scenario_settings.diseases.ignore_frequency,Ignore frequency:,Ignorar frecuencia:,Ignorer la fréquence :,Häufigkeit ignorieren:,Ignora la frequenza:,Ignorar frequência:
+editor.scenario_settings.diseases.frequency,Frequency:,Frecuencia:,Fréquence :,Häufigkeit:,Frequenza:,Frequência:
+editor.scenario_settings.diseases.previous_patients,Previous patients:,Pacientes previos:,Patients précédents :,Bisherige Patienten:,Pazienti precedenti:,Pacientes anteriores:
+editor.scenario_settings.diseases.stars,Stars:,Estrellas:,Étoiles :,Sterne:,Stelle:,Estrelas:
+editor.scenario_settings.translate_languages,Translate languages,Traducir idiomas,Traduire des langues,Sprachen übersetzen,Tradurre le lingue,Traduzir idiomas
+editor.scenario_settings.translation.confirm_title,Translate languages,Traducir idiomas,Traduire des langues,Sprachen übersetzen,Tradurre le lingue,Traduzir idiomas
+editor.scenario_settings.translation.confirm_body,"The four descriptions written in {0} will be sent to MyMemory online and automatically translated into the other 10 languages, replacing their current translations.","Las cuatro descripciones escritas en {0} se enviarán a MyMemory online y se traducirán automáticamente a los otros 10 idiomas, reemplazando sus traducciones actuales.","Les quatre descriptions écrites en {0} seront envoyées à MyMemory en ligne et automatiquement traduites dans les 10 autres langues, remplaçant leurs traductions actuelles.","Die vier in {0} geschriebenen Beschreibungen werden online an MyMemory gesendet und automatisch in die anderen 10 Sprachen übersetzt, wodurch ihre aktuellen Übersetzungen ersetzt werden.","Le quattro descrizioni scritte in {0} verranno inviate a MyMemory online e tradotte automaticamente nelle altre 10 lingue, sostituendo le loro traduzioni attuali.","As quatro descrições escritas em {0} serão enviadas para MyMemory on-line e traduzidas automaticamente para os outros 10 idiomas, substituindo as traduções atuais."
+editor.scenario_settings.translation.action,Translate,Traducir,Traduire,Übersetzen,Traduci,Traduzir
+editor.scenario_settings.translation.no_source,There are no descriptions to translate in the selected language.,No hay descripciones que traducir en el idioma seleccionado.,Il n'y a aucune description à traduire dans la langue sélectionnée.,In der ausgewählten Sprache sind keine zu übersetzenden Beschreibungen vorhanden.,Non ci sono descrizioni da tradurre nella lingua selezionata.,Não há descrições para traduzir no idioma selecionado.
+editor.scenario_settings.translation.success,The translations have been saved in the other 10 languages.,Las traducciones se han guardado en los otros 10 idiomas.,Les traductions ont été enregistrées dans les 10 autres langues.,Die Übersetzungen wurden in den anderen 10 Sprachen gespeichert.,Le traduzioni sono state salvate nelle altre 10 lingue.,As traduções foram salvas nos outros 10 idiomas.
+editor.scenario_settings.translation.error,Automatic translation could not be completed: {0},No se ha podido completar la traducción automática: {0},La traduction automatique n'a pas pu être effectuée : {0},Die automatische Übersetzung konnte nicht abgeschlossen werden: {0},Impossibile completare la traduzione automatica: {0},Não foi possível concluir a tradução automática: {0}
+editor.scenario_settings.translation.ok,OK,Aceptar,D'accord,Okay,Va bene,OK
+editor.tile.floor,Floor,Suelo,Sol,Boden,Pavimento,Piso
+editor.tile.arrival_point,Arrival point,Punto de llegada,Point d'arrivée,Ankunftsort,Punto di arrivo,Ponto de chegada
+editor.tile.driveway,Driveway,Acceso,Allée,Auffahrt,Vialetto,Entrada
+editor.tile.path,Path,Camino,Chemin,Pfad,Percorso,Caminho
+editor.tile.pillar,Pillar,Pilar,Pilier,Säule,Pilastro,Pilar
+editor.tile.window,Window,Ventana,Fenêtre,Fenster,Finestra,Janela
+editor.tile.adjoining,Adjoining,Adyacente,Attenant,Angrenzend,Adiacente,Adjacente
+editor.map.save,Save map,Guardar mapa,Enregistrer la carte,Karte speichern,Salva mappa,Salvar mapa
+editor.map.open,Open map,Abrir mapa,Ouvrir la carte,Karte öffnen,Apri la mappa,Abrir mapa
+editor.map.empty,Empty map,Vaciar mapa,Carte vide,Leere Karte,Mappa vuota,Mapa vazio
+editor.map.empty.warning,Empty the map? All objects and terrain changes in the current editor session will be removed. This action cannot be undone.,¿Vaciar el mapa? Se eliminarán todos los objetos y los cambios de terreno de la sesión actual del editor. Esta acción no se puede deshacer.,Vider la carte ? Tous les objets et modifications de terrain dans la session d'édition en cours seront supprimés. Cette action ne peut pas être annulée.,Karte leeren? Alle Objekte und Geländeänderungen in der aktuellen Editorsitzung werden entfernt. Diese Aktion kann nicht rückgängig gemacht werden.,Svuotare la mappa? Tutti gli oggetti e le modifiche al terreno nella sessione corrente dell'editor verranno rimossi. Questa azione non può essere annullata.,Esvaziar o mapa? Todos os objetos e alterações de terreno na sessão atual do editor serão removidos. Esta ação não pode ser desfeita.
+editor.map.empty.accept,Empty,Vaciar,Vide,Leer,Vuoto,Vazio
+editor.map.name,Map name,Nombre del mapa,Nom de la carte,Kartenname,Nome della mappa,Nome do mapa
+editor.map.new_default,New Map,Nuevo mapa,Nouvelle carte,Neue Karte,Nuova mappa,Novo mapa
+editor.map.none,No maps saved in the maps folder.,Ningún mapa guardado en la carpeta maps.,Aucune carte enregistrée dans le dossier Cartes.,Im Kartenordner sind keine Karten gespeichert.,Nessuna mappa salvata nella cartella delle mappe.,Nenhum mapa salvo na pasta de mapas.
+editor.map.close,Close,Cerrar,Fermer,Schließen,Chiudi,Fechar
+editor.map.saved,Saved: {0},Guardado: {0},Enregistré : {0},Gespeichert: {0},Salvato: {0},Salvo: {0}
+editor.map.hospital_line,Hospital: {0},Hospital: {0},Hôpital : {0},Krankenhaus: {0},Ospedale: {0},Hospital: {0}
+editor.map.map_line,Map: {0},Mapa: {0},Carte : {0},Karte: {0},Mappa: {0},Mapa: {0}
+editor.map.invalid_suffix, (invalid file), (archivo inválido), (fichier invalide), (ungültige Datei), (file non valido), (arquivo inválido)
+editor.map.other_hospital_suffix, (another hospital), (otro hospital), (un autre hôpital), (ein anderes Krankenhaus), (un altro ospedale), (outro hospital)
+editor.map.test,Test map,Probar mapa,Carte de test,Testkarte,Mappa di prova,Mapa de teste
+editor.plot.default_name,Plot {0},Parcela {0},Parcelle {0},Grundstück {0},Lotto {0},Lote {0}
+editor.plot.landscape,Landscape,Paisaje,Paysage,Landschaft,Paesaggio,Paisagem
+editor.traffic.title,Traffic,Tráfico,Trafic,Verkehr,Traffico,Trânsito
+editor.traffic.options,Arrivals and traffic,Llegadas y tráfico,Arrivées et trafic,Ankünfte und Verkehr,Arrivi e traffico,Chegadas e trânsito
+editor.traffic.ambient,Ambient,Ambiente,Ambiante,Ambiente,Ambiente,Ambiente
+editor.traffic.arrivals,Arrivals,Llegadas,Arrivées,Ankünfte,Arrivi,Chegadas
+editor.traffic.departures,Departures,Salidas,Départs,Abgänge,Partenze,Partidas
+editor.traffic.ambient_item,Loop traffic,Tráfico en bucle,Trafic en boucle,Schleifenverkehr,Traffico circolare,Tráfego circular
+editor.traffic.static_vehicle,Scene vehicle,Vehículo de escena,Véhicule de scène,Szenenfahrzeug,Veicolo di scena,Veículo de cena
+editor.traffic.road_arrival,Road arrival,Llegada por carretera,Arrivée par la route,Straßenankunft,Arrivo su strada,Chegada na estrada
+editor.traffic.helipad_arrival,Helipad,Helipuerto,Héliport,Hubschrauberlandeplatz,Eliporto,Heliporto
+editor.traffic.subway,Subway arrival,Llegada de metro,Arrivée en métro,Ankunft mit der U-Bahn,Arrivo della metropolitana,Chegada do metrô
+editor.traffic.item_arrival,Specific arrival point,Punto de llegada específico,Point d'arrivée spécifique,Spezifischer Ankunftsort,Punto di arrivo specifico,Ponto de chegada específico
+editor.traffic.time_portal,Time portal,Portal temporal,Portail temporel,Zeitportal,Portale del tempo,Portal do tempo
+editor.traffic.time_portal_landing,Time portal landing,Destino de portal temporal,Atterrissage du portail temporel,Landung im Zeitportal,Atterraggio del portale temporale,Aterrissagem do portal do tempo
+editor.traffic.subway_departure,Subway departure,Salida de metro,Départ du métro,Abfahrt der U-Bahn,Partenza della metropolitana,Partida do metrô
+editor.traffic.tunnel_departure,Road tunnel departure,Salida por túnel,Départ du tunnel routier,Abfahrt durch den Straßentunnel,Partenza del tunnel stradale,Saída do túnel rodoviário
+editor.traffic.move_selected,Move selected,Mover seleccionado,Déplacer la sélection,Ausgewählte Bewegung,Sposta selezionato,Mover selecionado
+editor.plot.add,Add,Añadir,Ajouter,Hinzufügen,Aggiungi,Adicionar
+editor.plot.add.title,Add plot,Añadir parcela,Ajouter un tracé,Handlung hinzufügen,Aggiungi trama,Adicionar gráfico
+editor.plot.add.error,Could not add the plot.,No se pudo añadir la parcela.,Impossible d'ajouter l'intrigue.,Die Handlung konnte nicht hinzugefügt werden.,Impossibile aggiungere la trama.,Não foi possível adicionar o gráfico.
+editor.plot.delete,Delete,Eliminar,Supprimer,Entfernen,Elimina,Eliminar
+editor.plot.delete.title,Delete plot,Eliminar parcela,Supprimer le tracé,Handlung löschen,Elimina trama,Excluir gráfico
+editor.plot.delete.select_first,Select a plot first.,Selecciona primero una parcela.,Sélectionnez d'abord une parcelle.,Wählen Sie zunächst ein Grundstück aus.,Seleziona prima un terreno.,Selecione um gráfico primeiro.
+editor.plot.delete.minimum,At least one plot must remain.,Debe quedar al menos una parcela.,Il doit rester au moins une parcelle.,Es muss mindestens eine Parzelle übrig bleiben.,Deve rimanere almeno un appezzamento.,Pelo menos um lote deve permanecer.
+editor.plot.delete.error,Could not delete the plot.,No se pudo eliminar la parcela.,Impossible de supprimer le tracé.,Der Plot konnte nicht gelöscht werden.,Impossibile eliminare la trama.,Não foi possível excluir o gráfico.
+editor.plot.delete.confirm,Delete plot {0}? Its ground and objects will be lost. This action cannot be undone.,¿Eliminar la parcela {0}? Se perderán su suelo y sus objetos. Esta acción no se puede deshacer.,Supprimer le tracé {0} ? Son terrain et ses objets seront perdus. Cette action ne peut pas être annulée.,Plot {0} löschen? Sein Boden und seine Gegenstände gehen verloren. Diese Aktion kann nicht rückgängig gemacht werden.,Eliminare la trama {0}? Il suo terreno e gli oggetti andranno perduti. Questa azione non può essere annullata.,Excluir gráfico {0}? Seu terreno e objetos serão perdidos. Esta ação não pode ser desfeita.
+editor.plot.isolate.on,Isolate,Aislar,Isoler,Isolieren,Isolare,Isolar
+editor.plot.isolate.off,Isolate,Aislar,Isoler,Isolieren,Isolare,Isolar
+editor.scene.layer,Scene (º),Escenario (º),Scène (º),Szene (º),Scena (º),Cena (º)
+editor.terrain.title,Terrain brush,Pincel de terreno,Brosse de terrain,Geländebürste,Spazzola per terreno,Escova de terreno
+editor.terrain.brush,Paint,Pintar,Peinture,Malen,Dipingere,Pintar
+editor.terrain.size,Size,Tamaño,Taille,Größe,Dimensioni,Tamanho
+editor.terrain.opacity,Opacity,Opacidad,Opacité,Opazität,Opacità,Opacidade
+editor.terrain.clear,Clear map,Limpiar mapa,Effacer la carte,Klare Karte,Mappa chiara,Limpar mapa
+editor.terrain.clear.warning,Clear the map? All unsaved objects and textures will be lost.,¿Limpiar el mapa? Se perderán todos los objetos y las texturas que no hayas guardado.,Effacer la carte ? Tous les objets et textures non enregistrés seront perdus.,Karte löschen? Alle nicht gespeicherten Objekte und Texturen gehen verloren.,Cancellare la mappa? Tutti gli oggetti e le texture non salvati andranno persi.,Limpar o mapa? Todos os objetos e texturas não salvos serão perdidos.
+editor.terrain.clear.cancel,Cancel,Cancelar,Annuler,Abbrechen,Annulla,Cancelar
+editor.terrain.clear.accept,Clear,Limpiar,Effacer,Klar,Chiaro,Limpar
+editor.terrain.raise,Raise,Elevar,Augmenter,Erhöhen,Alzare,Aumentar
+editor.terrain.lower,Lower,Bajar,Inférieur,Niedriger,Più in basso,Inferior
+editor.terrain.flatten,Flatten,Aplanar,Aplatir,Abflachen,Appiattire,Achatar
+editor.terrain.fog_of_war,Fog of War,Niebla de guerra,Brouillard de guerre,Nebel des Krieges,Nebbia di guerra,Névoa da Guerra
+editor.terrain.wireframe,Wireframe,Wireframe,Filaire,Drahtmodell,Wireframe,Estrutura de arame
+editor.terrain.wireframe.on,Wireframe: ON,Wireframe: SÍ,Filaire : activé,Drahtmodell: EIN,Wireframe: attivo,Estrutura de arame: LIGADO
+editor.terrain.wireframe.off,Wireframe: OFF,Wireframe: NO,Filaire : OFF,Drahtmodell: AUS,Wireframe: disattivato,Estrutura de arame: DESLIGADO
+editor.terrain.fog.on,Fog: ON,Niebla: SÍ,Brouillard : ON,Nebel: AN,Nebbia: attiva,Nevoeiro: LIGADO
+editor.terrain.fog.off,Fog: OFF,Niebla: NO,Brouillard : OFF,Nebel: AUS,Nebbia: spenta,Nevoeiro: DESLIGADO
+editor.terrain.mesh_uneditable,Mesh cannot be edited,Malla no editable,Le maillage ne peut pas être modifié,Mesh kann nicht bearbeitet werden,La mesh non può essere modificata,A malha não pode ser editada
+editor.terrain.sculpting,Sculpting: {0},Modelado: {0},Sculpture : {0},Bildhauerei: {0},Scultura: {0},Escultura: {0}
+editor.terrain.brush.on,Brush: ON,Pincel: SÍ,Brosse : ON,Pinsel: EIN,Spazzola: attivata,Pincel: LIGADO
+editor.terrain.brush.off,Brush: OFF,Pincel: NO,Brosse : OFF,Bürste: AUS,Spazzola: spenta,Pincel: DESLIGADO
+editor.character.button,Characters,Personajes,Personnages,Charaktere,Personaggi,Personagens
+editor.character.close,Close characters,Cerrar personajes,Fermer les personnages,Charaktere schließen,Caratteri vicini,Fechar caracteres
+editor.character.title,Character viewer,Visor de personajes,Visionneuse de personnages,Charakterbetrachter,Visualizzatore di caratteri,Visualizador de personagens
+editor.character.controls,Drag horizontally and vertically · Wheel: zoom,Arrastra horizontal y vertical · Rueda: zoom,Faites glisser horizontalement et verticalement · Molette : zoom,Horizontal und vertikal ziehen · Rad: Zoomen,Trascina orizzontalmente e verticalmente · Rotella: zoom,Arrastar horizontalmente e verticalmente · Roda: zoom
+editor.character.animation,Animation,Animación,Animations,Animation,Animazione,Animação
+editor.character.animations,Animations,Animaciones,Animations,Animationen,Animazioni,Animações
+editor.character.random,Random,Aleatorio,Aléatoire,Zufällig,Casuale,Aleatório
+editor.character.play,Play,Reproducir,Jouer,Spielen,Gioca,Jogar
+editor.character.pause,Pause,Pausar,Pause,Pause,Pausa,Pausa
+editor.character.search_animation,Search animation by name...,Buscar animación por nombre...,Rechercher une animation par nom...,Animation nach Namen suchen...,Cerca animazione per nome...,Pesquisar animação por nome...
+editor.character.search_list,Search the list...,Buscar en la lista...,Rechercher dans la liste...,Durchsuchen Sie die Liste...,Cerca nell'elenco...,Pesquise na lista...
+editor.character.type,Character type,Tipo de personaje,Type de caractère,Zeichentyp,Tipo di carattere,Tipo de personagem
+editor.character.visible_illnesses,Visible illnesses,Enfermedades visibles,Maladies visibles,Sichtbare Krankheiten,Malattie visibili,Doenças visíveis
+editor.character.type.random_patient,Random patient,Paciente aleatorio,Patient aléatoire,Zufälliger Patient,Paziente casuale,Paciente aleatório
+editor.character.type.male_patient,Male patient,Paciente hombre,Patient de sexe masculin,Männlicher Patient,Paziente maschio,Paciente masculino
+editor.character.type.female_patient,Female patient,Paciente mujer,Patiente,Patientin,Paziente femminile,Paciente do sexo feminino
+editor.character.type.doctor,Doctor,Doctor,Docteur,Doktor,Dottore,Doutor
+editor.character.type.nurse,Nurse,Enfermero,Infirmière,Krankenschwester,Infermiera,Enfermeira
+editor.character.type.assistant,Assistant,Asistente,Assistante,Assistent,Assistente,Assistente
+editor.character.type.janitor,Janitor,Conserje,Concierge,Hausmeister,Portiere,Zelador
+editor.character.illness.none,No visible illness,Sin enfermedad visible,Aucune maladie visible,Keine sichtbare Krankheit,Nessuna malattia visibile,Nenhuma doença visível
+editor.character.illness.patients_only,Patients only,Solo pacientes,Patients uniquement,Nur für Patienten,Solo pazienti,Somente pacientes
+editor.character.no_results,No results,Sin resultados,Aucun résultat,Keine Ergebnisse,Nessun risultato,Nenhum resultado
+editor.character.error.definition,Character definition not found.,No se encontró la definición del personaje.,Définition du personnage introuvable.,Zeichendefinition nicht gefunden.,Definizione del carattere non trovata.,Definição de personagem não encontrada.
+editor.character.error.controller,Model loaded; animation controller missing.,Modelo cargado; falta el controlador de animación.,Modèle chargé ; contrôleur d'animation manquant.,Modell geladen; Animationscontroller fehlt.,Modello caricato; manca il controller di animazione.,Modelo carregado; controlador de animação ausente.
+editor.character.generated,Character generated · {0} clips loaded in memory,Personaje generado · {0} clips cargados en memoria,Personnage généré · {0} clips chargés en mémoire,Zeichen generiert · {0} Clips im Speicher geladen,Carattere generato · {0} clip caricati in memoria,Caractere gerado · {0} clipes carregados na memória
+editor.character.error.generate,Could not generate the character.,No se pudo generar el personaje.,Impossible de générer le personnage.,Das Zeichen konnte nicht generiert werden.,Impossibile generare il personaggio.,Não foi possível gerar o personagem.
+editor.character.illness.visual,Visual illness: {0},Enfermedad visual: {0},Maladie visuelle : {0},Sehkrankheit: {0},Malattia visiva: {0},Doença visual: {0}
+editor.character.error.illness,Error showing illness.,Error al mostrar la enfermedad.,Erreur indiquant la maladie.,Fehler bei der Krankheitsanzeige.,Errore che mostra la malattia.,Erro ao mostrar doença.
+editor.character.error.no_clips,The controller contains no replaceable clips.,El controlador no contiene clips sustituibles.,Le contrôleur ne contient aucun clip remplaçable.,Der Controller enthält keine austauschbaren Clips.,Il controller non contiene clip sostituibili.,O controlador não contém clipes substituíveis.
+editor.character.error.clip,Clip not compatible with this controller: {0},Clip no compatible con este controlador: {0},Clip non compatible avec cette manette : {0},Clip ist mit diesem Controller nicht kompatibel: {0},Clip non compatibile con questo controller: {0},Clipe não compatível com este controlador: {0}
+editor.map.save.error,Could not save the map.,No se pudo guardar el mapa.,Impossible d'enregistrer la carte.,Die Karte konnte nicht gespeichert werden.,Impossibile salvare la mappa.,Não foi possível salvar o mapa.
+editor.map.open.error,Could not open the map.,No se pudo abrir el mapa.,Impossible d'ouvrir la carte.,Die Karte konnte nicht geöffnet werden.,Impossibile aprire la mappa.,Não foi possível abrir o mapa.
+world_map.author.title,World map authoring,Edición del mapamundi,Création de cartes du monde,Erstellung von Weltkarten,Creazione di mappe del mondo,Criação de mapas mundiais
+world_map.author.position,Cursor: X {0} · Y {1} · Z {2},Cursor: X {0} · Y {1} · Z {2},Curseur : X {0} · Y {1} · Z {2},Cursor: X {0} · Y {1} · Z {2},Cursore: X {0} · Y {1} · Z {2},Cursor: X {0} · Y {1} · Z {2}
+world_map.author.no_surface,Cursor: no map surface,Cursor: ninguna superficie del mapa,Curseur : aucune surface de carte,Cursor: keine Kartenoberfläche,Cursore: nessuna superficie della mappa,Cursor: sem superfície do mapa
+world_map.author.shortcuts,Ctrl+Alt+F10 show/hide · F9 reload · Ctrl+Alt+C copy all data,Ctrl+Alt+F10 mostrar/ocultar · F9 recargar · Ctrl+Alt+C copiar todos los datos,Ctrl+Alt+F10 afficher/masquer · F9 recharger · Ctrl+Alt+C copier toutes les données,Strg+Alt+F10 ein-/ausblenden · F9 neu laden · Strg+Alt+C alle Daten kopieren,Ctrl+Alt+F10 mostra/nascondi · F9 ricarica · Ctrl+Alt+C copia tutti i dati,Ctrl+Alt+F10 mostrar/ocultar · F9 recarregar · Ctrl+Alt+C copiar todos os dados
+world_map.author.camera_position,Camera position: X {0} · Y {1} · Z {2},Posición de cámara: X {0} · Y {1} · Z {2},Position de la caméra : X {0} · Y {1} · Z {2},Kameraposition: X {0} · Y {1} · Z {2},Posizione della telecamera: X {0} · Y {1} · Z {2},Posição da câmera: X {0} · Y {1} · Z {2}
+world_map.author.camera_focal,Focal point: X {0} · Y {1} · Z {2},Punto focal: X {0} · Y {1} · Z {2},Point focal : X {0} · Y {1} · Z {2},Schwerpunkt: X {0} · Y {1} · Z {2},Punto focale: X {0} · Y {1} · Z {2},Ponto focal: X {0} · Y {1} · Z {2}
+world_map.author.camera_angles,Euler angles: X {0} · Y {1} · Z {2},Ángulos Euler: X {0} · Y {1} · Z {2},Angles d'Euler : X {0} · Y {1} · Z {2},Euler-Winkel: X {0} · Y {1} · Z {2},Angoli di Eulero: X {0} · Y {1} · Z {2},Ângulos de Euler: X {0} · Y {1} · Z {2}
+world_map.author.camera_native,Native rotation: {0} · Zoom: {1},Rotación nativa: {0} · Zoom: {1},Rotation native : {0} · Zoom : {1},Native Rotation: {0} · Zoom: {1},Rotazione nativa: {0} · Zoom: {1},Rotação nativa: {0} · Zoom: {1}
+world_map.author.camera_direction,Direction: X {0} · Y {1} · Z {2},Dirección: X {0} · Y {1} · Z {2},Direction : X {0} · Y {1} · Z {2},Richtung: X {0} · Y {1} · Z {2},Direzione: X {0} · Y {1} · Z {2},Direção: X {0} · Y {1} · Z {2}
+conflux.creators,Creators,Creadores,Créateurs,Schöpfer,Creatori,Criadores
+conflux.title,Conflux,Conflux,Conflux,Zusammenfluss,Conflitto,Confluxo
+conflux.maps,Maps,Mapas,Cartes,Karten,Mappe,Mapas
+conflux.no_creators,No creators found.,No se encontraron creadores.,Aucun créateur trouvé.,Keine Ersteller gefunden.,Nessun creatore trovato.,Nenhum criador encontrado.
+conflux.select_creator,Select a creator.,Selecciona un creador.,Sélectionnez un créateur.,Wählen Sie einen Ersteller aus.,Seleziona un creatore.,Selecione um criador.
+conflux.no_maps,This creator has no valid maps.,Este creador no tiene mapas válidos.,Ce créateur n'a aucune carte valide.,Dieser Ersteller hat keine gültigen Karten.,Questo creatore non ha mappe valide.,Este criador não possui mapas válidos.
+conflux.select_map,Select a map.,Selecciona un mapa.,Sélectionnez une carte.,Wählen Sie eine Karte aus.,Seleziona una mappa.,Selecione um mapa.
+scenario_editor.no_architects,No architect folders found.,No se encontraron carpetas de arquitectos.,Aucun dossier d'architecte trouvé.,Keine Architektenordner gefunden.,Nessuna cartella dell'architetto trovata.,Nenhuma pasta de arquiteto encontrada.
+editor.fog.button,Fog,Niebla,Brouillard,Nebel,Nebbia,Nevoeiro
+editor.fog.title,Fog of War,Fog of War,Brouillard de guerre,Nebel des Krieges,Nebbia di guerra,Névoa da Guerra
+editor.fog.details,Mask {0}x{1} · Distance {2} · Anchor ({3}; {4}),Máscara {0}x{1} · Distancia {2} · Ancla ({3}; {4}),Masque {0}x{1} · Distance {2} · Ancrage ({3} ; {4}),Maske {0}x{1} · Abstand {2} · Anker ({3}; {4}),Maschera {0}x{1} · Distanza {2} · Ancora ({3}; {4}),Máscara {0}x{1} · Distância {2} · Âncora ({3}; {4})
+editor.fog.none,This map has no Fog of War mask.,Este mapa no tiene máscara Fog of War.,Cette carte n’a pas de masque Fog of War.,Diese Karte hat keine Fog of War-Maske.,Questa mappa non ha la maschera Nebbia di guerra.,Este mapa não tem máscara de Névoa de Guerra.
+editor.fog.close,Close,Cerrar,Fermer,Schließen,Chiudi,Fechar
+editor.fog.add,Add,Añadir,Ajouter,Hinzufügen,Aggiungi,Adicionar
+editor.fog.remove,Remove,Eliminar,Supprimer,Entfernen,Rimuovi,Remover
+editor.fog.opacity,Opacity: {0}%,Opacidad: {0}%,Opacité : {0} %,Deckkraft: {0} %,Opacità: {0}%,Opacidade: {0}%
+editor.fog.alpha.on,Alpha: YES,Alpha: SÍ,Alpha : OUI,Alpha: JA,Alfa: SI,Alfa: SIM
+editor.fog.alpha.off,Alpha: NO,Alpha: NO,Alpha : NON,Alpha: NEIN,Alfa: NO,Alfa: NÃO
+editor.fog.fog.on,Fog: YES,Niebla: SÍ,Brouillard : OUI,Nebel: JA,Nebbia: SÌ,Nevoeiro: SIM
+editor.fog.fog.off,Fog: NO,Niebla: NO,Brouillard : NON,Nebel: NEIN,Nebbia: NO,Nevoeiro: NÃO
+editor.fog.reset,Reset,Reiniciar,Réinitialiser,Zurücksetzen,Ripristina,Redefinir
+editor.fog.map.on,Plot: YES,Parcela: SÍ,Terrain : OUI,Handlung: JA,Trama: SI,Sinopse: SIM
+editor.fog.map.off,Plot: NO,Parcela: NO,Terrain : NON,Handlung: NEIN,Trama: NO,Sinopse: NÃO
+editor.fog.size,Size: {0} (1-50),Tamaño: {0} (1-50),Taille : {0} (1-50),Größe: {0} (1-50),Taglia: {0} (1-50),Tamanho: {0} (1-50)
+editor.fog.pressure,Pressure: {0} (0-100),Presión: {0} (0-100),Pression : {0} (0-100),Druck: {0} (0-100),Pressione: {0} (0-100),Pressão: {0} (0-100)
+editor.fog.max_opacity,Maximum opacity: {0}%,Opacidad máxima: {0}%,Opacité maximale : {0} %,Maximale Deckkraft: {0} %,Opacità massima: {0}%,Opacidade máxima: {0}%
+editor.capture.button,Aerial capture,Captura cenital,Capture aérienne,Luftaufnahme,Cattura aerea,Captura aérea
+editor.capture.saved,JPG saved,JPG guardado,JPG enregistré,JPG gespeichert,JPG salvato,JPG salvo
+editor.capture.error,Capture error,Error de captura,Erreur de capture,Capture-Fehler,Errore di cattura,Erro de captura
+editor.objectives.stars,Stars,Estrellas,Étoiles,Sterne,Stelle,Estrelas
+editor.objectives.challenges,Challenges,Retos,Défis,Herausforderungen,Sfide,Desafios
+editor.objectives.new_challenge,New challenge,Nuevo reto,Nouveau défi,Neue Herausforderung,Nuova sfida,Novo desafio
+editor.objectives.configuration,Configuration,Configuración,Configuration,Konfiguration,Configurazione,Configuração
+editor.objectives.name,Name,Nombre,Nom,Name,Nome,Nome
+editor.objectives.duration,Duration,Duración,Durée,Dauer,Durata,Duração
+editor.objectives.probability,Probability,Probabilidad,Probabilité,Wahrscheinlichkeit,Probabilità,Probabilidade
+editor.objectives.difficulty,Difficulty,Dificultad,Difficulté,Schwierigkeit,Difficoltà,Dificuldade
+editor.objectives.cooldown,Cooldown,Reaparición,Temps de recharge,Abklingzeit,Raffreddamento,Recarga
+editor.objectives.requirements,Requirements,Requisitos,Exigences,Anforderungen,Requisiti,Requisitos
+editor.objectives.results,Results,Resultados,Résultats,Ergebnisse,Risultati,Resultados
+editor.objectives.complete,Complete,Completar,Terminé,Komplett,Completo,Completo
+editor.objectives.fail,Fail,Fallar,Échec,Scheitern,Fallire,Falha
+editor.objectives.abandon,Abandon,Abandonar,Abandonner,Aufgeben,Abbandonare,Abandonar
+editor.objectives.star,Star {0},Estrella {0},Étoile {0},Stern {0},Stella {0},Estrela {0}
+editor.objectives.challenge,Challenge {0},Reto {0},Défi {0},Herausforderung {0},Sfida {0},Desafio {0}
+editor.objectives.star_reward,Fixed reward: Star {0},Recompensa fija: Estrella {0},Récompense fixe : étoile {0},Feste Belohnung: Stern {0},Ricompensa fissa: Stella {0},Recompensa fixa: Estrela {0}
+editor.objectives.select_room,Select room...,Seleccionar sala...,Sélectionnez la chambre...,Zimmer auswählen...,Seleziona la stanza...,Selecione o quarto...
+editor.objectives.requirement.earn_money,Earn money,Ganar dinero,Gagner de l'argent,Geld verdienen,Guadagna denaro,Ganhe dinheiro
+editor.objectives.requirement.reputation,Reputation,Reputación,Réputation,Ruf,Reputazione,Reputação
+editor.objectives.requirement.cure_patients,Cure patients,Curar pacientes,Guérir les patients,Patienten heilen,Curare i pazienti,Curar pacientes
+editor.objectives.requirement.hospital_value,Hospital value,Valor del hospital,Valeur hospitalière,Krankenhauswert,Valore ospedaliero,Valor hospitalar
+editor.objectives.requirement.attractiveness,Attractiveness,Atractivo,Attractivité,Attraktivität,Attrattiva,Atratividade
+editor.objectives.requirement.staff_morale,Staff morale,Moral del personal,Moral du personnel,Moral der Mitarbeiter,Morale del personale,Moral da equipe
+editor.objectives.requirement.days_without_death,Days without deaths,Días sin muertes,Des jours sans morts,Tage ohne Todesfälle,Giorni senza morti,Dias sem mortes
+editor.objectives.requirement.build_room,Build room,Construir sala,Construire une salle,Raum bauen,Costruisci stanza,Construir sala
+editor.objectives.result.money,Money,Dinero,Argent,Geld,Soldi,Dinheiro
+editor.objectives.result.reputation,Reputation,Reputación,Réputation,Ruf,Reputazione,Reputação
+editor.objectives.result.research_points,Research points,Puntos de investigación,Points de recherche,Forschungspunkte,Punti di ricerca,Pontos de pesquisa
+editor.objectives.result.unlock_room,Unlock room,Desbloquear sala,Déverrouiller la salle,Raum freischalten,Sblocca stanza,Desbloquear sala

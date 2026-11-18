@@ -1,32 +1,32 @@
 key,ru,pl,ko,zh-hans,zh-hant
-editor.workshop.create_image,,,,,
-editor.workshop.view,,,,,
-editor.workshop.update_item,,,,,
-editor.workshop.create_new_item,,,,,
-editor.workshop.name,,,,,
-editor.workshop.description,,,,,
-editor.workshop.share_header,,,,,
-editor.workshop.author,,,,,
-editor.workshop.choose_thumbnail,,,,,
-editor.workshop.delete_image,,,,,
-editor.workshop.publish_menu,,,,,
-editor.workshop.capture_instruction,,,,,
-editor.workshop.author_line,,,,,
-editor.workshop.error.delete_image,,,,,
-editor.workshop.error.choose_thumbnail,,,,,
-editor.workshop.error.save_first,,,,,
-editor.workshop.error.max_images,,,,,
-editor.workshop.error.save_map,,,,,
-editor.workshop.error.title_required,,,,,
-editor.workshop.error.no_article,,,,,
-editor.workshop.error.unavailable,,,,,
-editor.workshop.error.map_missing,,,,,
-editor.workshop.error.invalid_published_id,,,,,
-editor.workshop.error.preview_missing,,,,,
-editor.workshop.error.capture_first,,,,,
-editor.workshop.error.parameters_rejected,,,,,
-editor.workshop.error.open_steam,,,,,
-editor.workshop.error.dependency,,,,,
+editor.workshop.create_image,Создать изображение,Utwórz obraz,이미지 생성,创建图像,創建圖像
+editor.workshop.view,Посмотреть мастер-класс,Obejrzyj Warsztat,워크숍 보기,查看研讨会,查看研討會
+editor.workshop.update_item,Обновить элемент,Aktualizuj element,업데이트 항목,更新项目,更新項目
+editor.workshop.create_new_item,Создать как новый элемент,Utwórz jako nowy element,새 항목으로 만들기,创建为新项目,建立為新項目
+editor.workshop.name,Имя:,Imię:,이름:,姓名：,姓名：
+editor.workshop.description,Описание:,Opis:,설명:,说明：,說明：
+editor.workshop.share_header,Поделиться картой в Мастерской Steam,Udostępnij mapę w Warsztacie Steam,Steam 창작마당에서 지도 공유,在 Steam 创意工坊上分享地图,在 Steam 創意工坊分享地圖
+editor.workshop.author,Автор:,Autor:,작성자:,作者：,作者：
+editor.workshop.choose_thumbnail,Выбрать миниатюру,Wybierz miniaturę,썸네일 선택,选择缩略图,選擇縮圖
+editor.workshop.delete_image,Удалить,Usuń,삭제,删除,刪除
+editor.workshop.publish_menu,Опубликовать в Steam,Opublikuj na Steamie,Steam에 게시,在 Steam 上发布,在 Steam 上發布
+editor.workshop.capture_instruction,"Нажмите пробел, чтобы захватить","Naciśnij spację, aby przechwycić",스페이스바를 눌러 캡쳐하세요,按空格键捕捉,按空白鍵捕捉
+editor.workshop.author_line,Автор: {0},Autor: {0},작성자: {0},作者：{0},作者：{0}
+editor.workshop.error.delete_image,Не удалось удалить изображение: {0},Nie można usunąć obrazu: {0},이미지를 삭제할 수 없습니다: {0},无法删除图像：{0},無法刪除影像：{0}
+editor.workshop.error.choose_thumbnail,Не удалось выбрать миниатюру: {0},Nie można wybrać miniatury: {0},미리보기 이미지를 선택할 수 없습니다: {0},无法选择缩略图：{0},無法選擇縮圖：{0}
+editor.workshop.error.save_first,Сначала сохраните карту.,Najpierw zapisz mapę.,먼저 지도를 저장하세요.,先保存地图。,先保存地圖。
+editor.workshop.error.max_images,Максимум {0} изображений на карте.,Maksymalnie {0} obrazów na mapę.,지도당 최대 {0}개의 이미지입니다.,每张地图最多 {0} 张图片。,每張地圖最多 {0} 張圖片。
+editor.workshop.error.save_map,Не удалось сохранить карту: {0},Nie można zapisać mapy: {0},지도를 저장할 수 없습니다: {0},无法保存地图：{0},無法儲存地圖：{0}
+editor.workshop.error.title_required,Введите название перед публикацией.,Wpisz tytuł przed publikacją.,게시하기 전에 제목을 입력하세요.,发布前输入标题。,發布前輸入標題。
+editor.workshop.error.no_article,На этой карте еще нет предмета Мастерской. Используйте «Создать как новый элемент».,Na tej mapie nie ma jeszcze przedmiotu z warsztatu. Użyj opcji „Utwórz jako nowy element”.,이 지도에는 아직 창작마당 아이템이 없습니다. '새 항목으로 만들기'를 사용하세요.,该地图还没有创意工坊物品。使用“创建新项目”。,該地圖還沒有創意工坊物品。使用“建立新專案”。
+editor.workshop.error.unavailable,Мастерская Steam недоступна в этом сеансе.,Warsztat Steam nie jest dostępny w tej sesji.,이 세션에서는 Steam 창작마당을 이용할 수 없습니다.,Steam 创意工坊在此会话中不可用。,Steam 創意工坊在此會話中無法使用。
+editor.workshop.error.map_missing,Текущий .upmap не существует.,Bieżąca mapa .upmap nie istnieje.,현재 .upmap이 존재하지 않습니다.,当前 .upmap 不存在。,當前 .upmap 不存在。
+editor.workshop.error.invalid_published_id,Steam вернул неверный идентификатор PublishedFileId.,Steam zwrócił nieprawidłowy identyfikator PublishedFileId.,Steam이 잘못된 PublishedFileId를 반환했습니다.,Steam 返回了无效的 PublishedFileId。,Steam 回傳了無效的 PublishedFileId。
+editor.workshop.error.preview_missing,Изображение предварительного просмотра Мастерской не существует.,Obraz podglądu warsztatu nie istnieje.,창작마당 미리보기 이미지가 존재하지 않습니다.,创意工坊预览图像不存在。,創意工坊預覽圖像不存在。
+editor.workshop.error.capture_first,Сначала сделайте снимок.,Najpierw zrób zdjęcie.,먼저 이미지를 캡처하세요.,首先捕获图像。,首先捕捉影像。
+editor.workshop.error.parameters_rejected,Steam отклонил один или несколько параметров публикации.,Steam odrzucił jeden lub więcej parametrów publikacji.,Steam이 하나 이상의 게시 매개변수를 거부했습니다.,Steam 拒绝了一个或多个发布参数。,Steam 拒絕了一個或多個發布參數。
+editor.workshop.error.open_steam,Не удалось открыть Steam: {0},Nie można otworzyć Steama: {0},Steam을 열 수 없습니다: {0},无法打开 Steam：{0},無法開啟 Steam：{0}
+editor.workshop.error.dependency,Не удалось добавить основной мод в качестве обязательного предмета Мастерской: {0},Nie można dodać głównego moda jako wymaganego przedmiotu w warsztacie: {0},기본 모드를 필수 워크샵 항목으로 추가할 수 없습니다: {0},无法将主模组添加为必需的创意工坊项目：{0},無法將主模組新增為必備的創意工坊專案：{0}
 editor.scenario_settings.plots.list,Список участков,Lista działek,부지 목록,地块列表,地塊列表
 editor.scenario_settings.plots.plot,Участок {0},Działka {0},부지 {0},地块 {0},地塊 {0}
 editor.scenario_settings.plots.cost,Цена покупки,Cena zakupu,구매 가격,购买价格,購買價格
@@ -166,13 +166,13 @@ energy.campaign.active_button,Кампания активна,Aktywna kampania,�
 energy.campaign.header,Энергетические кампании,Kampanie energetyczne,에너지 캠페인,能源活动,能源活動
 energy.campaign.tooltip,Управление кампаниями энергетической комнаты,Zarządzaj kampaniami sali energetycznej,전력실의 에너지 캠페인을 관리합니다.,管理供电室的能源活动,管理供電室的能源活動
 energy.campaign.start_action,Начать энергетическую кампанию,Rozpocznij kampanię energetyczną,에너지 캠페인 시작,发起能源活动,發起能源活動
-scenario_editor.menu,,,,,
-scenario_editor.tooltip,,,,,
-scenario_editor.base_scenario,,,,,
-scenario_editor.edit,,,,,
-scenario_editor.return_to_menu,,,,,
-scenario_editor.architect_name,Architect name:,Nombre del arquitecto:,,,,
-scenario_editor.source.local,Local,Local,Local,Local,Local
+scenario_editor.menu,Редактор сценариев,Edytor scenariuszy,시나리오 편집자,场景编辑器,場景編輯器
+scenario_editor.tooltip,Откройте исходный редактор сценариев в изолированном сеансе.,Otwórz oryginalny edytor scenariuszy w izolowanej sesji.,격리된 세션에서 원본 시나리오 편집기를 엽니다.,在隔离会话中打开原始场景编辑器。,在隔離會話中開啟原始場景編輯器。
+scenario_editor.base_scenario,Базовый сценарий,Scenariusz bazowy,기본 시나리오,基础场景,基礎場景
+scenario_editor.edit,Редактировать сценарий,Edytuj scenariusz,시나리오 편집,编辑场景,編輯場景
+scenario_editor.return_to_menu,Вернуться в меню,Wróć do menu,메뉴로 돌아가기,返回菜单,返回選單
+scenario_editor.architect_name,Имя архитектора:,Nazwa architekta:,건축가 이름:,建筑师姓名：,建築師姓名：
+scenario_editor.source.local,Местный,Lokalny,지역,本地,本地
 scenario_editor.source.steam,Steam,Steam,Steam,Steam,Steam
 editor.map.styles,Стили карты,Style mapy,맵 스타일,地图样式,地圖樣式
 editor.map.style.original,Оригинал,Oryginalny,원본,原始,原始
@@ -182,268 +182,268 @@ editor.map.style.built,Построенная больница,Zbudowany szpital
 editor.map.style.building,Во время строительства,W budowie,건설 중,建造中,建造中
 editor.map.style.unbuilt,Незастроенный участок,Niezabudowana działka,미개발 부지,未建造地块,未建造地塊
 editor.map.style.help,Стили сохраняются в карте и применяются при повторном открытии.,Style są zapisywane w mapie i stosowane po jej ponownym otwarciu.,스타일은 맵에 저장되며 다시 열 때 적용됩니다.,样式会保存到地图中并在重新打开时应用。,樣式會儲存到地圖中並在重新開啟時套用。
-career.maps.title,,,,,
-career.maps.custom.description,,,,,
-career.maps.active.error,,,,,
-career.maps.open.error,,,,,
-career.map.more_zoom,,,,,
-career.map.all_hospitals,,,,,
-common.cancel,,,,,
-common.save,,,,,
-editor.settings.career,,,,,
-editor.settings.maps,Maps,Mapas,,,,
-editor.settings.show_new_maps,,,,,
-editor.settings.show_new_maps.description,,,,,
-editor.settings.focus_levels,Focus levels,Enfocar niveles,,,,
-editor.settings.focus_levels.description,Uses the custom camera configured for each hospital on the Career map.,Usa la cámara personalizada configurada para cada hospital en el mapa de Carrera.,,,,
-editor.settings.architect,Architect name,Nombre del arquitecto,,,,
-editor.settings.architect.description,Folder used for newly created maps.,Carpeta utilizada para los mapas nuevos.,,,,
-scenario_editor.hospital,,,,,
-scenario_editor.hospitals,,,,,
-scenario_editor.maps,,,,,
-scenario_editor.new_map,,,,,
-scenario_editor.invalid_map,,,,,
-scenario_editor.obsolete,Obsolete,Obsoleto,Obsolete,Obsolete,Obsolete
-editor.objects.title,,,,,
-editor.objects.search,,,,,
-editor.objects.show_all,,,,,
-editor.objects.dropdown_arrow,▶,▶,,,,
-editor.layout.title,Map editor,Edición de mapa,,,,
-editor.history.button,History,Historial,,,,
-editor.history.title,Object history,Historial de objetos,,,,
-editor.history.start,Start,Inicio,,,,
-editor.history.objects.modified,Objects modified,Objetos modificados,,,,
-editor.history.moved.one,1 object moved,1 objeto movido,,,,
-editor.history.moved.many,{0} objects moved,{0} objetos movidos,,,,
-editor.history.placed.one,1 object placed,1 objeto colocado,,,,
-editor.history.placed.many,{0} objects placed,{0} objetos colocados,,,,
-editor.history.deleted.one,1 object deleted,1 objeto eliminado,,,,
-editor.history.deleted.many,{0} objects deleted,{0} objetos eliminados,,,,
-editor.terrain.toggle,Terrain,Terreno,,,,
-editor.layer.base,,,,,
-editor.layer.built,,,,,
-editor.layer.unbuilt,,,,,
-editor.toolbar.tile_view,View Tiles,Ver baldosas,,,,
-editor.toolbar.free_camera,Free Camera,Cámara libre,,,,
-editor.toolbar.fixed_camera,Fixed Camera,Cámara fija,,,,
-editor.toolbar.edit_plot,Tiles,Baldosas,,,,
-editor.toolbar.move_plot,Move,Mover,,,,
-editor.toolbar.styles,Styles,Estilos,,,,
-editor.toolbar.settings,Settings,Ajustes,,,,
-editor.scenario_settings.title,Scenario settings,Ajustes del escenario,,,,
-editor.scenario_settings.accept,Accept,Aceptar,,,,
-editor.scenario_settings.tab.general,General,General,,,,
-editor.scenario_settings.tab.diseases,Diseases,Enfermedades,,,,
-editor.scenario_settings.tab.objectives,Objectives,Objetivos,,,,
-editor.scenario_settings.tab.plots,Plots,Parcelas,,,,
-editor.scenario_settings.tab.fog,Fog,Niebla,,,,
-editor.scenario_settings.tab.characters,Characters,Personajes,,,,
-editor.scenario_settings.field.display_name,Name:,Nombre:,,,,
-editor.scenario_settings.field.description_per_star,Description:,Descripción:,,,,
-editor.scenario_settings.field.initial_balance,Initial balance:,Balance inicial:,,,,
-editor.scenario_settings.field.fail_warning,Bankruptcy warning:,Aviso por bancarrota:,,,,
-editor.scenario_settings.field.fail_game_over,Bankruptcy defeat:,Derrota por bancarrota:,,,,
-editor.scenario_settings.field.initial_temperature,Initial temperature:,Temperatura inicial:,,,,
-editor.scenario_settings.field.initial_attractiveness,Initial attractiveness:,Atractivo inicial:,,,,
-editor.scenario_settings.field.initial_hygiene,Initial hygiene:,Higiene inicial:,,,,
-editor.scenario_settings.diseases.select,Select illness...,Seleccionar enfermedad...,,,,
-editor.scenario_settings.diseases.add,Add,Añadir,,,,
-editor.scenario_settings.diseases.illness,Illness:,Enfermedad:,,,,
-editor.scenario_settings.diseases.definition,Definition:,Definición:,,,,
-editor.scenario_settings.diseases.deprecated,Deprecated:,Obsoleta:,,,,
-editor.scenario_settings.diseases.unlocked,Unlocked:,Desbloqueada:,,,,
-editor.scenario_settings.diseases.min_weight,MinWeight:,Peso mín.:,,,,
-editor.scenario_settings.diseases.max_weight,MaxWeight:,Peso máx.:,,,,
-editor.scenario_settings.diseases.min_stars,MinStarRating:,Estrellas mín.:,,,,
-editor.scenario_settings.diseases.min_spawned,MinSpawned:,Pacientes mín.:,,,,
-editor.scenario_settings.diseases.remove,Remove,Eliminar,,,,
-editor.scenario_settings.diseases.max_patients,Maximum patients:,Pacientes máximos:,,,,
-editor.scenario_settings.diseases.arrival_rate,Patient arrival rate:,Ritmo de llegada:,,,,
-editor.scenario_settings.diseases.randomness,Randomness:,Aleatoriedad:,,,,
-editor.scenario_settings.diseases.never_spawn_patients,Do not generate patients:,No generar pacientes:,,,,
-editor.scenario_settings.diseases.ignore_frequency,Ignore frequency:,Ignorar frecuencia:,,,,
-editor.scenario_settings.diseases.frequency,,,,,
-editor.scenario_settings.diseases.previous_patients,,,,,
-editor.scenario_settings.diseases.stars,,,,,
-editor.scenario_settings.translate_languages,,,,,
-editor.scenario_settings.translation.confirm_title,,,,,
-editor.scenario_settings.translation.confirm_body,,,,,
-editor.scenario_settings.translation.action,,,,,
-editor.scenario_settings.translation.no_source,,,,,
-editor.scenario_settings.translation.success,,,,,
-editor.scenario_settings.translation.error,,,,,
-editor.scenario_settings.translation.ok,,,,,
-editor.tile.floor,Floor,Suelo,,,,
-editor.tile.arrival_point,Arrival point,Punto de llegada,,,,
-editor.tile.driveway,Driveway,Acceso,,,,
-editor.tile.path,Path,Camino,,,,
-editor.tile.pillar,Pillar,Pilar,,,,
-editor.tile.window,Window,Ventana,,,,
-editor.tile.adjoining,Adjoining,Adyacente,,,,
-editor.map.save,,,,,
-editor.map.open,,,,,
-editor.map.empty,,,,,
-editor.map.empty.warning,,,,,
-editor.map.empty.accept,,,,,
-editor.map.name,,,,,
-editor.map.new_default,,,,,
-editor.map.none,,,,,
-editor.map.close,,,,,
-editor.map.saved,,,,,
-editor.map.hospital_line,,,,,
-editor.map.map_line,,,,,
-editor.map.invalid_suffix,,,,,
-editor.map.other_hospital_suffix,,,,,
-editor.map.test,,,,,
-editor.plot.default_name,,,,,
-editor.plot.landscape,Landscape,Paisaje,,,,
-editor.traffic.title,Traffic,Tráfico,,,,
-editor.traffic.options,Arrivals and traffic,Llegadas y tráfico,,,,
-editor.traffic.ambient,Ambient,Ambiente,,,,
-editor.traffic.arrivals,Arrivals,Llegadas,,,,
-editor.traffic.departures,Departures,Salidas,,,,
-editor.traffic.ambient_item,Loop traffic,Tráfico en bucle,,,,
-editor.traffic.static_vehicle,Scene vehicle,Vehículo de escena,,,,
-editor.traffic.road_arrival,Road arrival,Llegada por carretera,,,,
-editor.traffic.helipad_arrival,Helipad,Helipuerto,,,,
-editor.traffic.subway,Subway arrival,Llegada de metro,,,,
-editor.traffic.item_arrival,Specific arrival point,Punto de llegada específico,,,,
-editor.traffic.time_portal,Time portal,Portal temporal,,,,
-editor.traffic.time_portal_landing,Time portal landing,Destino de portal temporal,,,,
-editor.traffic.subway_departure,Subway departure,Salida de metro,,,,
-editor.traffic.tunnel_departure,Road tunnel departure,Salida por túnel,,,,
-editor.traffic.move_selected,Move selected,Mover seleccionado,,,,
-editor.plot.add,,,,,
-editor.plot.add.title,,,,,
-editor.plot.add.error,,,,,
-editor.plot.delete,,,,,
-editor.plot.delete.title,,,,,
-editor.plot.delete.select_first,,,,,
-editor.plot.delete.minimum,,,,,
-editor.plot.delete.error,,,,,
-editor.plot.delete.confirm,,,,,
-editor.plot.isolate.on,Isolate,Aislar,,,,
-editor.plot.isolate.off,Isolate,Aislar,,,,
-editor.scene.layer,,,,,
-editor.terrain.title,,,,,
-editor.terrain.brush,,,,,
-editor.terrain.size,,,,,
-editor.terrain.opacity,,,,,
-editor.terrain.clear,,,,,
-editor.terrain.clear.warning,,,,,
-editor.terrain.clear.cancel,,,,,
-editor.terrain.clear.accept,,,,,
-editor.terrain.raise,,,,,
-editor.terrain.lower,,,,,
-editor.terrain.flatten,,,,,
-editor.terrain.fog_of_war,Fog of War,Niebla de guerra,,,,
-editor.terrain.wireframe,,,,,
-editor.terrain.wireframe.on,,,,,
-editor.terrain.wireframe.off,,,,,
-editor.terrain.fog.on,Fog: ON,Niebla: SÍ,,,,
-editor.terrain.fog.off,Fog: OFF,Niebla: NO,,,,
-editor.terrain.mesh_uneditable,,,,,
-editor.terrain.sculpting,,,,,
-editor.terrain.brush.on,,,,,
-editor.terrain.brush.off,,,,,
-editor.character.button,,,,,
-editor.character.close,,,,,
-editor.character.title,,,,,
-editor.character.controls,,,,,
-editor.character.animation,,,,,
-editor.character.animations,,,,,
-editor.character.random,,,,,
-editor.character.play,,,,,
-editor.character.pause,,,,,
-editor.character.search_animation,,,,,
-editor.character.search_list,,,,,
-editor.character.type,,,,,
-editor.character.visible_illnesses,,,,,
-editor.character.type.random_patient,,,,,
-editor.character.type.male_patient,,,,,
-editor.character.type.female_patient,,,,,
-editor.character.type.doctor,,,,,
-editor.character.type.nurse,,,,,
-editor.character.type.assistant,,,,,
-editor.character.type.janitor,,,,,
-editor.character.illness.none,,,,,
-editor.character.illness.patients_only,,,,,
-editor.character.no_results,,,,,
-editor.character.error.definition,,,,,
-editor.character.error.controller,,,,,
-editor.character.generated,,,,,
-editor.character.error.generate,,,,,
-editor.character.illness.visual,,,,,
-editor.character.error.illness,,,,,
-editor.character.error.no_clips,,,,,
-editor.character.error.clip,,,,,
-editor.map.save.error,,,,,
-editor.map.open.error,,,,,
-world_map.author.title,,,,,
-world_map.author.position,,,,,
-world_map.author.no_surface,,,,,
-world_map.author.shortcuts,,,,,
-world_map.author.camera_position,,,,,
-world_map.author.camera_focal,,,,,
-world_map.author.camera_angles,,,,,
-world_map.author.camera_native,,,,,
-world_map.author.camera_direction,,,,,
-conflux.creators,,,,,
-conflux.title,,,,,
-conflux.maps,,,,,
-conflux.no_creators,,,,,
-conflux.select_creator,,,,,
-conflux.no_maps,,,,,
-conflux.select_map,,,,,
-scenario_editor.no_architects,,,,,
-editor.fog.button,Fog,Niebla,,,,
-editor.fog.title,,,,,
-editor.fog.details,,,,,
-editor.fog.none,,,,,
-editor.fog.close,,,,,
-editor.fog.add,Add,Añadir,,,,
-editor.fog.remove,Remove,Eliminar,,,,
-editor.fog.opacity,Opacity: {0}%,Opacidad: {0}%,,,,
-editor.fog.alpha.on,Alpha: YES,Alpha: SÍ,,,,
-editor.fog.alpha.off,Alpha: NO,Alpha: NO,,,,
-editor.fog.fog.on,,,,,
-editor.fog.fog.off,,,,,
-editor.fog.reset,Reset,Reiniciar,,,,
-editor.fog.map.on,Plot: YES,Parcela: SÍ,,,,
-editor.fog.map.off,Plot: NO,Parcela: NO,,,,
-editor.fog.size,Size: {0} (1-50),Tamaño: {0} (1-50),,,,
-editor.fog.pressure,Pressure: {0} (0-100),Presión: {0} (0-100),,,,
-editor.fog.max_opacity,Maximum opacity: {0}%,Opacidad máxima: {0}%,,,,
-editor.capture.button,,,,,
-editor.capture.saved,,,,,
-editor.capture.error,,,,,
-editor.objectives.stars,Stars,Estrellas,,,,
-editor.objectives.challenges,Challenges,Retos,,,,
-editor.objectives.new_challenge,New challenge,Nuevo reto,,,,
-editor.objectives.configuration,Configuration,Configuración,,,,
-editor.objectives.name,Name,Nombre,,,,
-editor.objectives.duration,Duration,Duración,,,,
-editor.objectives.probability,Probability,Probabilidad,,,,
-editor.objectives.difficulty,Difficulty,Dificultad,,,,
-editor.objectives.cooldown,Cooldown,Reaparición,,,,
-editor.objectives.requirements,Requirements,Requisitos,,,,
-editor.objectives.results,Results,Resultados,,,,
-editor.objectives.complete,Complete,Completar,,,,
-editor.objectives.fail,Fail,Fallar,,,,
-editor.objectives.abandon,Abandon,Abandonar,,,,
-editor.objectives.star,Star {0},Estrella {0},,,,
-editor.objectives.challenge,Challenge {0},Reto {0},,,,
-editor.objectives.star_reward,Fixed reward: Star {0},Recompensa fija: Estrella {0},,,,
-editor.objectives.select_room,Select room...,Seleccionar sala...,,,,
-editor.objectives.requirement.earn_money,Earn money,Ganar dinero,,,,
-editor.objectives.requirement.reputation,Reputation,Reputación,,,,
-editor.objectives.requirement.cure_patients,Cure patients,Curar pacientes,,,,
-editor.objectives.requirement.hospital_value,Hospital value,Valor del hospital,,,,
-editor.objectives.requirement.attractiveness,Attractiveness,Atractivo,,,,
-editor.objectives.requirement.staff_morale,Staff morale,Moral del personal,,,,
-editor.objectives.requirement.days_without_death,Days without deaths,Días sin muertes,,,,
-editor.objectives.requirement.build_room,Build room,Construir sala,,,,
-editor.objectives.result.money,Money,Dinero,,,,
-editor.objectives.result.reputation,Reputation,Reputación,,,,
-editor.objectives.result.research_points,Research points,Puntos de investigación,,,,
-editor.objectives.result.unlock_room,Unlock room,Desbloquear sala,,,,
+career.maps.title,Уровни редактора,Poziomy redaktora,편집자 수준,编辑级别,編輯級別
+career.maps.custom.description,Пользовательский сценарий «Под давлением».,Niestandardowy scenariusz pod presją.,맞춤형 Under Pressure 시나리오.,自定义承压场景。,自訂承壓場景。
+career.maps.active.error,"Эта больница уже открыта. Вернитесь в главное меню, прежде чем запускать собственную карту.",Ten szpital jest już otwarty. Wróć do menu głównego przed uruchomieniem niestandardowej mapy.,이 병원은 이미 문을 열었습니다. 사용자 정의 지도를 시작하기 전에 기본 메뉴로 돌아가세요.,这家医院已经开业了。在开始自定义地图之前返回主菜单。,這家醫院已經開業了。在開始自訂地圖之前返回主選單。
+career.maps.open.error,Не удалось открыть выбранную карту.,Nie można otworzyć wybranej mapy.,선택한 지도를 열 수 없습니다.,无法打开所选地图。,無法打開所選地圖。
+career.map.more_zoom,Больше масштаба,Więcej zoomu,더 확대/축소,更多变焦,更多變焦
+career.map.all_hospitals,Все больницы,Wszystkie szpitale,모든 병원,所有医院,所有醫院
+common.cancel,Отмена,Anuluj,취소,取消,取消
+common.save,Сохранить,Zapisz,저장,保存,儲存
+editor.settings.career,Карьера,Kariera,경력,职业生涯,職業生涯
+editor.settings.maps,Карты,Mapy,지도,地图,地圖
+editor.settings.show_new_maps,Показать новые карты,Pokaż nowe mapy,새 지도 표시,显示新地图,顯示新地圖
+editor.settings.show_new_maps.description,Показывает выбор пользовательского сценария на карте карьеры.,Pokazuje selektor niestandardowego scenariusza na mapie kariery.,경력 맵에 사용자 정의 시나리오 선택기를 표시합니다.,在职业地图上显示自定义场景选择器。,在職業地圖上顯示自訂場景選擇器。
+editor.settings.focus_levels,Уровни фокусировки,Poziomy ostrości,초점 수준,焦点级别,焦點層級
+editor.settings.focus_levels.description,"Использует пользовательскую камеру, настроенную для каждой больницы на карте карьеры.",Używa niestandardowej kamery skonfigurowanej dla każdego szpitala na mapie kariery.,커리어맵에서 각 병원별로 구성된 커스텀 카메라를 사용합니다.,使用职业地图上为每家医院配置的自定义摄像头。,使用職業地圖上為每家醫院配置的自訂攝影機。
+editor.settings.architect,Имя архитектора,Imię architekta,건축가 이름,建筑师姓名,建築師姓名
+editor.settings.architect.description,"Папка, используемая для вновь созданных карт.",Folder używany do nowo utworzonych map.,새로 생성된 지도에 사용되는 폴더입니다.,用于新创建的地图的文件夹。,用於新建立的地圖的資料夾。
+scenario_editor.hospital,Больница,Szpital,병원,医院,醫院
+scenario_editor.hospitals,Больницы,Szpitale,병원,医院,醫院
+scenario_editor.maps,Карты,Mapy,지도,地图,地圖
+scenario_editor.new_map,Новая карта,Nowa mapa,새로운 지도,新地图,新地圖
+scenario_editor.invalid_map,Неверная или неполная карта,Nieprawidłowa lub niekompletna mapa,유효하지 않거나 불완전한 지도,地图无效或不完整,地圖無效或不完整
+scenario_editor.obsolete,Устаревший,Przestarzałe,더 이상 사용되지 않음,过时的,過時的
+editor.objects.title,Объекты,Obiekty,객체,对象,物件
+editor.objects.search,Поиск:,Szukaj:,검색:,搜索：,搜尋：
+editor.objects.show_all,Показать все,Pokaż wszystko,모두 표시,显示全部,顯示全部
+editor.objects.dropdown_arrow,▶,▶,▶,▶,▶
+editor.layout.title,Редактор карт,Edytor map,지도 편집기,地图编辑器,地圖編輯器
+editor.history.button,История,Historia,역사,历史,歷史
+editor.history.title,История объекта,Historia obiektu,개체 기록,对象历史记录,物件歷史記錄
+editor.history.start,Старт,Zacznij,시작,开始,開始
+editor.history.objects.modified,Объекты изменены,Obiekty zmodyfikowane,수정된 개체,修改的对象,修改的對象
+editor.history.moved.one,1 объект перемещен,1 obiekt został przeniesiony,개체 1개 이동됨,移动了 1 个对象,移動了 1 個對象
+editor.history.moved.many,{0} объектов перемещено,Przeniesiono {0} obiektów,{0}개의 개체가 이동되었습니다.,已移动 {0} 个对象,已移動 {0} 個對象
+editor.history.placed.one,1 объект размещен,Umieszczono 1 obiekt,개체 1개 배치됨,放置了 1 个物体,放置了 1 個物體
+editor.history.placed.many,Размещено {0} объектов,Umieszczono obiekty: {0},{0}개 객체 배치됨,已放置 {0} 个对象,已放置 {0} 個對象
+editor.history.deleted.one,1 объект удален,1 obiekt został usunięty,개체 1개가 삭제되었습니다.,已删除 1 个对象,已刪除 1 個對象
+editor.history.deleted.many,{0} объектов удалено.,Usunięto {0} obiektów,{0}개 개체가 삭제되었습니다.,已删除 {0} 个对象,已刪除 {0} 個對象
+editor.terrain.toggle,Местность,Teren,지형,地形,地形
+editor.layer.base,База,Baza,베이스,基地,基地
+editor.layer.built,Построить,Buduj,빌드,构建,建構
+editor.layer.unbuilt,Разобрать,Rozbiórka,언빌드,取消构建,取消建置
+editor.toolbar.tile_view,Просмотр плиток,Zobacz kafelki,타일 보기,查看图块,查看圖塊
+editor.toolbar.free_camera,Бесплатная камера,Bezpłatny aparat,무료 카메라,免费相机,免費相機
+editor.toolbar.fixed_camera,Фиксированная камера,Naprawiono kamerę,고정 카메라,固定相机,固定相機
+editor.toolbar.edit_plot,Плитка,Płytki,타일,瓷砖,磁磚
+editor.toolbar.move_plot,Переместить,Rusz się,이동,移动,移動
+editor.toolbar.styles,Стили,Style,스타일,风格,風格
+editor.toolbar.settings,Настройки,Ustawienia,설정,设置,設定
+editor.scenario_settings.title,Настройки сценария,Ustawienia scenariusza,시나리오 설정,场景设置,場景設定
+editor.scenario_settings.accept,Принять,Zaakceptuj,수락,接受,接受
+editor.scenario_settings.tab.general,Общий,Generał,일반,一般,一般
+editor.scenario_settings.tab.diseases,Болезни,Choroby,질병,疾病,疾病
+editor.scenario_settings.tab.objectives,Цели,Cele,목표,目标,目標
+editor.scenario_settings.tab.plots,Участки,Działki,플롯,地块,地塊
+editor.scenario_settings.tab.fog,Туман,Mgła,안개,雾,霧
+editor.scenario_settings.tab.characters,Персонажи,Postacie,캐릭터,人物,人物
+editor.scenario_settings.field.display_name,Имя:,Imię:,이름:,姓名：,姓名：
+editor.scenario_settings.field.description_per_star,Описание:,Opis:,설명:,说明：,說明：
+editor.scenario_settings.field.initial_balance,Начальный баланс:,Saldo początkowe:,초기 잔액:,初始余额：,初始餘額：
+editor.scenario_settings.field.fail_warning,Предупреждение о банкротстве:,Ostrzeżenie o upadłości:,파산 경고:,破产警告：,破產警告：
+editor.scenario_settings.field.fail_game_over,Поражение банкротством:,Klęska upadłościowa:,파산 패배:,破产失败：,破產失敗：
+editor.scenario_settings.field.initial_temperature,Начальная температура:,Temperatura początkowa:,초기 온도:,初始温度：,初始溫度：
+editor.scenario_settings.field.initial_attractiveness,Начальная привлекательность:,Początkowa atrakcyjność:,초기 매력:,初始吸引力：,初始吸引力：
+editor.scenario_settings.field.initial_hygiene,Начальная гигиена:,Higiena początkowa:,초기 위생:,初始卫生：,初始衛生：
+editor.scenario_settings.diseases.select,Выберите болезнь...,Wybierz chorobę...,질병을 선택하세요...,选择疾病...,選擇疾病...
+editor.scenario_settings.diseases.add,Добавить,Dodaj,추가,添加,添加
+editor.scenario_settings.diseases.illness,Болезнь:,Choroba:,질병:,疾病：,疾病：
+editor.scenario_settings.diseases.definition,Определение:,Definicja:,정의:,定义：,定義：
+editor.scenario_settings.diseases.deprecated,Устарело:,Przestarzałe:,더 이상 사용되지 않음:,已弃用：,已棄用：
+editor.scenario_settings.diseases.unlocked,Разблокировано:,Odblokowane:,잠금 해제됨:,解锁：,解鎖：
+editor.scenario_settings.diseases.min_weight,МинВес:,Minimalna waga:,최소 무게:,最小重量：,最小重量：
+editor.scenario_settings.diseases.max_weight,Максимальный вес:,Maksymalna waga:,최대 무게:,最大重量：,最大重量：
+editor.scenario_settings.diseases.min_stars,Минзвездный рейтинг:,Min.GwiazdkaOcena:,최소 별점:,最低星级：,最低星級：
+editor.scenario_settings.diseases.min_spawned,Минимальное появление:,Minimalnie spawnowane:,최소 생성:,最小生成数：,最小生成數：
+editor.scenario_settings.diseases.remove,Удалить,Usuń,제거,删除,刪除
+editor.scenario_settings.diseases.max_patients,Максимальное количество пациентов:,Maksymalna liczba pacjentów:,최대 환자 수:,最大患者数：,最大患者數：
+editor.scenario_settings.diseases.arrival_rate,Скорость поступления пациентов:,Wskaźnik przybycia pacjentów:,환자 도착율:,就诊率：,就診率：
+editor.scenario_settings.diseases.randomness,Случайность:,Losowość:,무작위성:,随机性：,隨機性：
+editor.scenario_settings.diseases.never_spawn_patients,Не генерируйте пациентов:,Nie generuj pacjentów:,환자를 생성하지 마십시오:,不产生患者：,不產生患者：
+editor.scenario_settings.diseases.ignore_frequency,Игнорировать частоту:,Ignoruj częstotliwość:,빈도 무시:,忽略频率：,忽略頻率：
+editor.scenario_settings.diseases.frequency,Частота:,Częstotliwość:,빈도:,频率：,頻率：
+editor.scenario_settings.diseases.previous_patients,Предыдущие пациенты:,Poprzedni pacjenci:,이전 환자:,以前的患者：,以前的患者：
+editor.scenario_settings.diseases.stars,Звезды:,Gwiazdy:,별:,星星：,星星：
+editor.scenario_settings.translate_languages,Перевести языки,Tłumacz języki,언어 번역,翻译语言,翻譯語言
+editor.scenario_settings.translation.confirm_title,Перевести языки,Tłumacz języki,언어 번역,翻译语言,翻譯語言
+editor.scenario_settings.translation.confirm_body,"Четыре описания, написанные на {0}, будут отправлены в MyMemory онлайн и автоматически переведены на остальные 10 языков, заменив их текущие переводы.","Cztery opisy napisane w {0} zostaną przesłane do MyMemory online i automatycznie przetłumaczone na pozostałe 10 języków, zastępując ich obecne tłumaczenia.",{0}으로 작성된 4개의 설명은 온라인으로 MyMemory로 전송되고 자동으로 다른 10개 언어로 번역되어 현재 번역을 대체합니다.,用 {0} 编写的四种描述将在线发送到 MyMemory 并自动翻译成其他 10 种语言，替换其当前翻译。,用 {0} 編寫的四種描述將在線發送到 MyMemory 並自動翻譯成其他 10 種語言，替換其當前翻譯。
+editor.scenario_settings.translation.action,Перевести,Przetłumacz,번역하다,翻译,翻譯
+editor.scenario_settings.translation.no_source,Нет описаний для перевода на выбранный язык.,Brak opisów do przetłumaczenia w wybranym języku.,선택한 언어로 번역할 설명이 없습니다.,没有要翻译为所选语言的说明。,沒有要翻譯為所選語言的說明。
+editor.scenario_settings.translation.success,Переводы сохранены на остальных 10 языках.,Tłumaczenia zostały zapisane w pozostałych 10 językach.,번역은 다른 10개 언어로 저장되었습니다.,翻译已保存为其他 10 种语言。,翻譯已儲存為其他 10 種語言。
+editor.scenario_settings.translation.error,Не удалось выполнить автоматический перевод: {0},Nie można ukończyć automatycznego tłumaczenia: {0},자동 번역을 완료할 수 없습니다: {0},自动翻译无法完成：{0},自動翻譯無法完成：{0}
+editor.scenario_settings.translation.ok,ОК,OK,알았어,好的,好的
+editor.tile.floor,Этаж,Podłoga,바닥,楼层,樓層
+editor.tile.arrival_point,Пункт прибытия,Punkt przyjazdu,도착지,到达点,到達點
+editor.tile.driveway,Дорога,Podjazd,진입로,车道,車道
+editor.tile.path,Путь,Ścieżka,경로,路径,路徑
+editor.tile.pillar,Столб,Filar,기둥,支柱,支柱
+editor.tile.window,Окно,Okno,창,窗户,窗戶
+editor.tile.adjoining,Прилегающий,Sąsiadujące,인접,毗邻,毗鄰
+editor.map.save,Сохранить карту,Zapisz mapę,지도 저장,保存地图,儲存地圖
+editor.map.open,Открыть карту,Otwórz mapę,지도 열기,打开地图,打開地圖
+editor.map.empty,Пустая карта,Pusta mapa,빈 지도,空地图,空地圖
+editor.map.empty.warning,Очистить карту? Все объекты и изменения ландшафта в текущем сеансе редактора будут удалены. Это действие невозможно отменить.,Opróżnić mapę? Wszystkie zmiany obiektów i terenu w bieżącej sesji edytora zostaną usunięte. Tej akcji nie można cofnąć.,지도를 비우시겠어요? 현재 편집기 세션의 모든 개체 및 지형 변경 사항이 제거됩니다. 이 작업은 취소할 수 없습니다.,清空地图？当前编辑器会话中的所有对象和地形更改都将被删除。此操作无法撤消。,清空地圖？目前編輯器會話中的所有物件和地形變更都將被刪除。此操作無法撤銷。
+editor.map.empty.accept,Пустой,Pusty,비어 있음,空,空
+editor.map.name,Название карты,Nazwa mapy,지도 이름,地图名称,地圖名稱
+editor.map.new_default,Новая карта,Nowa mapa,새로운 지도,新地图,新地圖
+editor.map.none,В папке карты не сохранено ни одной карты.,W folderze map nie zapisano żadnych map.,지도 폴더에 저장된 지도가 없습니다.,地图文件夹中没有保存地图。,地圖資料夾中沒有儲存地圖。
+editor.map.close,Закрыть,Zamknij,닫기,关闭,關閉
+editor.map.saved,Сохранено: {0},Zapisano: {0},저장됨: {0},已保存：{0},已儲存：{0}
+editor.map.hospital_line,Больница: {0},Szpital: {0},병원: {0},医院：{0},醫院：{0}
+editor.map.map_line,Карта: {0},Mapa: {0},지도: {0},地图：{0},地圖：{0}
+editor.map.invalid_suffix, (неверный файл), (nieprawidłowy plik), (잘못된 파일), （无效文件）, （無效文件）
+editor.map.other_hospital_suffix, (еще одна больница), (inny szpital), (다른병원), （另一家医院）, （另一家醫院）
+editor.map.test,Тестовая карта,Mapa testowa,테스트 지도,测试图,測試圖
+editor.plot.default_name,Участок {0},Działka {0},부지 {0},地块 {0},地塊 {0}
+editor.plot.landscape,Пейзаж,Krajobraz,풍경,风景,風景
+editor.traffic.title,Трафик,Ruch,교통,交通,交通
+editor.traffic.options,Прибытие и трафик,Przyjazdy i ruch,도착 및 교통,到达人数和交通,到達人數和交通
+editor.traffic.ambient,Эмбиент,Otoczenie,주변,环境,環境
+editor.traffic.arrivals,Прибытие,Przyloty,도착,到达航班,到達航班
+editor.traffic.departures,Отправления,Odloty,출발,出发地,出發地
+editor.traffic.ambient_item,Круговой трафик,Ruch w pętli,루프 트래픽,环路交通,環路交通
+editor.traffic.static_vehicle,Автомобиль сцены,Pojazd sceniczny,현장 차량,场景车辆,場景車輛
+editor.traffic.road_arrival,Дорога прибытия,Dojazd drogowy,도로 도착,公路到达,公路到達
+editor.traffic.helipad_arrival,Вертолетная площадка,Lądowisko dla helikopterów,헬기장,直升机停机坪,直升機停機坪
+editor.traffic.subway,Прибытие в метро,Przyjazd metra,지하철 도착,地铁到达,地鐵到達
+editor.traffic.item_arrival,Конкретный пункт прибытия,Konkretny punkt dotarcia,특정 도착 지점,具体到达点,具體到達點
+editor.traffic.time_portal,Временной портал,Portal czasu,타임포털,时间传送门,時間傳送門
+editor.traffic.time_portal_landing,Приземление портала времени,Lądowanie w portalu czasu,타임포털 착륙,时间传送门登陆,時間傳送門登陸
+editor.traffic.subway_departure,Отправление в метро,Odjazd metra,지하철 출발,地铁发车,捷運發車
+editor.traffic.tunnel_departure,Выезд из автомобильного туннеля,Wyjazd tunelem drogowym,도로터널 출발,公路隧道出发,公路隧道出發
+editor.traffic.move_selected,Переместить выбранное,Przesuń wybrane,선택 항목 이동,移动所选内容,移動所選內容
+editor.plot.add,Добавить,Dodaj,추가,添加,添加
+editor.plot.add.title,Добавить сюжет,Dodaj fabułę,플롯 추가,添加情节,添加情節
+editor.plot.add.error,Не удалось добавить сюжет.,Nie udało się dodać fabuły.,플롯을 추가할 수 없습니다.,无法添加情节。,無法添加情節。
+editor.plot.delete,Удалить,Usuń,삭제,删除,刪除
+editor.plot.delete.title,Удалить сюжет,Usuń działkę,플롯 삭제,删除图,刪除圖
+editor.plot.delete.select_first,Сначала выберите сюжет.,Najpierw wybierz działkę.,먼저 플롯을 선택하십시오.,首先选择一个地块。,首先選擇一個地塊。
+editor.plot.delete.minimum,Хотя бы один участок должен остаться.,Musi pozostać przynajmniej jedna działka.,최소한 하나의 플롯이 남아 있어야 합니다.,至少必须保留一块地块。,至少必須保留一塊地。
+editor.plot.delete.error,Не удалось удалить сюжет.,Nie udało się usunąć fabuły.,플롯을 삭제할 수 없습니다.,无法删除情节。,無法刪除情節。
+editor.plot.delete.confirm,Удалить график {0}? Его земля и объекты будут потеряны. Это действие невозможно отменить.,Usunąć działkę {0}? Jego ziemia i obiekty zostaną utracone. Tej akcji nie można cofnąć.,플롯 {0}을(를) 삭제하시겠습니까? 그 땅과 물건은 사라질 것입니다. 이 작업은 취소할 수 없습니다.,删除图 {0}？它的地面和物体将会丢失。此操作无法撤消。,刪除圖 {0}？它的地面和物體將會遺失。此操作無法撤銷。
+editor.plot.isolate.on,Изолировать,Izoluj,격리하다,隔离,隔離
+editor.plot.isolate.off,Изолировать,Izoluj,격리하다,隔离,隔離
+editor.scene.layer,Сцена (°),Scena (°),장면(°),场景（°）,場景（°）
+editor.terrain.title,Кисть для ландшафта,Pędzel terenowy,지형 브러시,地形笔刷,地形筆刷
+editor.terrain.brush,Краска,Farba,페인트,油漆,油漆
+editor.terrain.size,Размер,Rozmiar,크기,尺寸,尺寸
+editor.terrain.opacity,Непрозрачность,Nieprzezroczystość,불투명도,不透明度,不透明度
+editor.terrain.clear,Очистить карту,Wyczyść mapę,지도 지우기,清晰的地图,清晰的地圖
+editor.terrain.clear.warning,Очистить карту? Все несохраненные объекты и текстуры будут потеряны.,Wyczyścić mapę? Wszystkie niezapisane obiekty i tekstury zostaną utracone.,지도를 삭제하시겠습니까? 저장되지 않은 모든 개체와 텍스처는 손실됩니다.,清空地图？所有未保存的对象和纹理都将丢失。,清空地圖？所有未保存的物件和紋理都將遺失。
+editor.terrain.clear.cancel,Отмена,Anuluj,취소,取消,取消
+editor.terrain.clear.accept,Очистить,Jasne,지우기,清除,清除
+editor.terrain.raise,Поднять,Podnieś,인상,提高,提高
+editor.terrain.lower,Нижний,Niższy,낮은,较低,較低
+editor.terrain.flatten,Сгладить,Spłaszczyć,평평하게 하다,展平,展平
+editor.terrain.fog_of_war,Туман войны,Mgła wojny,전쟁의 안개,战争迷雾,戰爭迷霧
+editor.terrain.wireframe,Каркас,Model szkieletowy,와이어프레임,线框,線框
+editor.terrain.wireframe.on,Каркас: ВКЛ.,Model szkieletowy: WŁ,와이어프레임: 켜짐,线框：开,線框：開
+editor.terrain.wireframe.off,Каркас: ВЫКЛ.,Model szkieletowy: WYŁ,와이어프레임: 꺼짐,线框：关闭,線框：關閉
+editor.terrain.fog.on,Туман: ВКЛ.,Mgła: WŁĄCZONA,안개: 켜짐,雾：开,霧：開
+editor.terrain.fog.off,Туман: ВЫКЛ.,Mgła: WYŁĄCZONA,안개: 꺼짐,雾：关闭,霧：關閉
+editor.terrain.mesh_uneditable,Сетка не может быть отредактирована,Nie można edytować siatki,메쉬를 편집할 수 없습니다.,网格无法编辑,網格無法編輯
+editor.terrain.sculpting,Скульптура: {0},Rzeźbienie: {0},조각: {0},雕刻：{0},雕刻：{0}
+editor.terrain.brush.on,Кисть: ВКЛ.,Pędzel: WŁ,브러시: 켜짐,刷：开,刷：開
+editor.terrain.brush.off,Кисть: ВЫКЛ.,Pędzel: WYŁ,브러시: 꺼짐,刷子：关闭,刷子：關閉
+editor.character.button,Персонажи,Postacie,캐릭터,人物,人物
+editor.character.close,Близкие персонажи,Zamknij postacie,문자 닫기,关闭字符,關閉字元
+editor.character.title,Просмотр персонажей,Przeglądarka postaci,캐릭터 뷰어,角色查看器,角色檢視器
+editor.character.controls,Перетащите горизонтально и вертикально · Колесо: масштабирование,Przeciągnij w poziomie i w pionie · Koło: powiększenie,수평 및 수직으로 드래그 · 휠: 확대/축소,水平和垂直拖动 · 滚轮：缩放,水平與垂直拖曳 · 滾輪：縮放
+editor.character.animation,Анимация,Animacja,애니메이션,动画,動畫
+editor.character.animations,Анимации,Animacje,애니메이션,动画,動畫
+editor.character.random,Случайный,Losowe,무작위,随机,隨機
+editor.character.play,Играть,Zagraj,플레이,玩,玩
+editor.character.pause,Пауза,Pauza,일시중지,暂停,暫停
+editor.character.search_animation,Поиск анимации по названию...,Wyszukaj animację według nazwy...,이름으로 애니메이션 검색...,按名称搜索动画...,按名稱搜尋動畫...
+editor.character.search_list,Искать в списке...,Przeszukaj listę...,목록을 검색해 보세요...,搜索列表...,搜尋清單...
+editor.character.type,Тип персонажа,Typ postaci,문자 유형,字符类型,字元類型
+editor.character.visible_illnesses,Видимые болезни,Widoczne choroby,눈에 보이는 질병,可见疾病,可見疾病
+editor.character.type.random_patient,Случайный пациент,Przypadkowy pacjent,무작위 환자,随机患者,隨機患者
+editor.character.type.male_patient,Пациент мужского пола,"Mężczyzna, pacjent",남성 환자,男性患者,男性患者
+editor.character.type.female_patient,Пациентка,Pacjentka,여성 환자,女病人,女病人
+editor.character.type.doctor,Доктор,Doktor,의사,医生,醫生
+editor.character.type.nurse,Медсестра,Pielęgniarka,간호사,护士,護士
+editor.character.type.assistant,Ассистент,Asystent,어시스턴트,助理,助理
+editor.character.type.janitor,Дворник,Woźny,청소부,看门人,看門人
+editor.character.illness.none,Никакой видимой болезни,Żadnych widocznych chorób,눈에 보이는 질병 없음,无明显疾病,無明顯疾病
+editor.character.illness.patients_only,Только пациенты,Tylko pacjenci,환자 전용,仅限患者,僅限患者
+editor.character.no_results,Нет результатов,Brak wyników,결과 없음,没有结果,沒有結果
+editor.character.error.definition,Определение персонажа не найдено.,Nie znaleziono definicji znaku.,문자 정의를 찾을 수 없습니다.,未找到字符定义。,未找到字元定義。
+editor.character.error.controller,Модель загружена; отсутствует контроллер анимации.,Załadowano model; brak kontrolera animacji.,모델이 로드되었습니다. 애니메이션 컨트롤러가 없습니다.,模型已加载；动画控制器丢失。,模型已載入；動畫控制器遺失。
+editor.character.generated,Сгенерирован персонаж · В память загружено {0} клипов,Wygenerowano znak · {0} klipów załadowanych do pamięci,생성된 캐릭터 · 메모리에 로드된 클립 {0}개,已生成角色 · {0} 个剪辑已加载到内存中,已產生角色 · {0} 個剪輯已載入到記憶體中
+editor.character.error.generate,Не удалось создать персонажа.,Nie można wygenerować znaku.,캐릭터를 생성할 수 없습니다.,无法生成角色。,無法生成角色。
+editor.character.illness.visual,Заболевание зрения: {0},Choroba wzroku: {0},시각 질환: {0},视力疾病：{0},視力疾病：{0}
+editor.character.error.illness,"Ошибка, указывающая на болезнь.",Błąd podczas pokazywania choroby.,질병을 표시하는 중에 오류가 발생했습니다.,显示疾病的错误。,顯示疾病的錯誤。
+editor.character.error.no_clips,Контроллер не содержит сменных зажимов.,Kontroler nie zawiera wymiennych klipsów.,컨트롤러에는 교체 가능한 클립이 없습니다.,控制器不包含可更换的夹子。,控制器不包含可更換的夾子。
+editor.character.error.clip,Клип несовместим с этим контроллером: {0},Klip nie jest kompatybilny z tym kontrolerem: {0},이 컨트롤러와 호환되지 않는 클립: {0},剪辑与此控制器不兼容：{0},剪輯與此控制器不相容：{0}
+editor.map.save.error,Не удалось сохранить карту.,Nie udało się zapisać mapy.,지도를 저장할 수 없습니다.,无法保存地图。,無法儲存地圖。
+editor.map.open.error,Не удалось открыть карту.,Nie można otworzyć mapy.,지도를 열 수 없습니다.,无法打开地图。,無法打開地圖。
+world_map.author.title,Создание карты мира,Autorstwo mapy świata,세계지도 저작,世界地图创作,世界地圖創作
+world_map.author.position,Курсор: X {0} · Y {1} · Z {2},Kursor: X {0} · Y {1} · Z {2},커서: X {0} · Y {1} · Z {2},光标：X {0} · Y {1} · Z {2},遊標：X {0} · Y {1} · Z {2}
+world_map.author.no_surface,Курсор: нет поверхности карты,Kursor: brak powierzchni mapy,커서: 지도 표면 없음,光标：无地图表面,遊標：無地圖表面
+world_map.author.shortcuts,Ctrl+Alt+F10 показать/скрыть · F9 перезагрузить · Ctrl+Alt+C скопировать все данные,Ctrl+Alt+F10 pokaż/ukryj · F9 przeładuj · Ctrl+Alt+C skopiuj wszystkie dane,Ctrl+Alt+F10 표시/숨기기 · F9 다시 로드 · Ctrl+Alt+C 모든 데이터 복사,Ctrl+Alt+F10 显示/隐藏 · F9 重新加载 · Ctrl+Alt+C 复制所有数据,Ctrl+Alt+F10 顯示/隱藏 · F9 重新載入 · Ctrl+Alt+C 複製所有數據
+world_map.author.camera_position,Положение камеры: X {0} · Y {1} · Z {2},Pozycja kamery: X {0} · Y {1} · Z {2},카메라 위치: X {0} · Y {1} · Z {2},相机位置：X {0} · Y {1} · Z {2},相機位置：X {0} · Y {1} · Z {2}
+world_map.author.camera_focal,Координационная точка: X {0} · Y {1} · Z {2},Punkt centralny: X {0} · Y {1} · Z {2},초점: X {0} · Y {1} · Z {2},焦点：X {0} · Y {1} · Z {2},焦點：X {0} · Y {1} · Z {2}
+world_map.author.camera_angles,Углы Эйлера: X {0} · Y {1} · Z {2},Kąty Eulera: X {0} · Y {1} · Z {2},오일러 각도: X {0} · Y {1} · Z {2},欧拉角：X {0} · Y {1} · Z {2},歐拉角：X {0} · Y {1} · Z {2}
+world_map.author.camera_native,Собственная ротация: {0} · Масштаб: {1},Natywna rotacja: {0} · Powiększenie: {1},기본 회전: {0} · 확대/축소: {1},本机旋转：{0} · 缩放：{1},本機旋轉：{0} · 縮放：{1}
+world_map.author.camera_direction,Направление: X {0} · Y {1} · Z {2},Kierunek: X {0} · Y {1} · Z {2},방향: X {0} · Y {1} · Z {2},方向：X {0} · Y {1} · Z {2},方向：X {0} · Y {1} · Z {2}
+conflux.creators,Создатели,Twórcy,크리에이터,创作者,創作者
+conflux.title,Конфлюкс,Konfluks,합류,汇流,匯流
+conflux.maps,Карты,Mapy,지도,地图,地圖
+conflux.no_creators,Создатели не найдены.,Nie znaleziono twórców.,크리에이터를 찾을 수 없습니다.,未找到创作者。,未找到創作者。
+conflux.select_creator,Выберите создателя.,Wybierz twórcę.,크리에이터를 선택하세요.,选择一个创作者。,選擇一個創作者。
+conflux.no_maps,У этого автора нет действительных карт.,Ten twórca nie ma prawidłowych map.,이 제작자에게는 유효한 지도가 없습니다.,该创建者没有有效的地图。,該創建者沒有有效的地圖。
+conflux.select_map,Выберите карту.,Wybierz mapę.,지도를 선택하세요.,选择地图。,選擇地圖。
+scenario_editor.no_architects,Папки архитектора не найдены.,Nie znaleziono folderów architekta.,건축가 폴더를 찾을 수 없습니다.,未找到架构师文件夹。,未找到架構師資料夾。
+editor.fog.button,Туман,Mgła,안개,雾,霧
+editor.fog.title,Туман войны,Mgła wojny,전쟁의 안개,战争迷雾,戰爭迷霧
+editor.fog.details,Маска {0}x{1} · Расстояние {2} · Привязка ({3}; {4}),Maska {0}x{1} · Odległość {2} · Kotwica ({3}; {4}),마스크 {0}x{1} · 거리 {2} · 앵커({3}; {4}),遮罩 {0}x{1} · 距离 {2} · 锚点 ({3}; {4}),遮罩 {0}x{1} · 距離 {2} · 錨點 ({3}; {4})
+editor.fog.none,На этой карте нет маски «Туман войны».,Na tej mapie nie ma maski Mgła wojny.,이 맵에는 Fog of War 마스크가 없습니다.,该地图没有战争迷雾面具。,地圖沒有戰爭迷霧面具。
+editor.fog.close,Закрыть,Zamknij,닫기,关闭,關閉
+editor.fog.add,Добавить,Dodaj,추가,添加,添加
+editor.fog.remove,Удалить,Usuń,제거,删除,刪除
+editor.fog.opacity,Непрозрачность: {0} %,Krycie: {0}%,불투명도: {0}%,不透明度：{0}%,不透明度：{0}%
+editor.fog.alpha.on,Альфа: ДА,Alfa: TAK,알파: 예,阿尔法：是的,阿爾法：是的
+editor.fog.alpha.off,Альфа: НЕТ,Alfa: NIE,알파: 아니요,阿尔法：不,阿爾法：不
+editor.fog.fog.on,Туман: ДА,Mgła: TAK,안개: 예,雾：是,霧：是
+editor.fog.fog.off,Туман: НЕТ,Mgła: NIE,안개: 아니다,雾：无,霧：無
+editor.fog.reset,Сброс,Zresetuj,재설정,重置,重置
+editor.fog.map.on,Сюжет: ДА,Fabuła: TAK,줄거리: 예,情节：是的,情節：是的
+editor.fog.map.off,Сюжет: НЕТ,Fabuła: NIE,줄거리: 아니요,情节：没有,情節：沒有
+editor.fog.size,Размер: {0} (1–50),Rozmiar: {0} (1-50),크기: {0}(1-50),尺寸：{0} (1-50),尺寸：{0} (1-50)
+editor.fog.pressure,Давление: {0} (0-100),Ciśnienie: {0} (0-100),압력: {0} (0-100),压力：{0} (0-100),壓力：{0} (0-100)
+editor.fog.max_opacity,Максимальная непрозрачность: {0} %,Maksymalne krycie: {0}%,최대 불투명도: {0}%,最大不透明度：{0}%,最大不透明度：{0}%
+editor.capture.button,Воздушный захват,Przechwytywanie z lotu ptaka,공중 캡처,航拍捕捉,航拍捕捉
+editor.capture.saved,JPG сохранен.,JPG został zapisany,JPG 저장됨,已保存 JPG,已儲存 JPG
+editor.capture.error,Ошибка захвата,Błąd przechwytywania,캡처 오류,捕获错误,捕獲錯誤
+editor.objectives.stars,Звезды,Gwiazdy,별,星星,星星
+editor.objectives.challenges,Проблемы,Wyzwania,도전과제,挑战,挑戰
+editor.objectives.new_challenge,Новый вызов,Nowe wyzwanie,새로운 도전,新挑战,新挑戰
+editor.objectives.configuration,Конфигурация,Konfiguracja,구성,配置,配置
+editor.objectives.name,Имя,Imię,이름,名称,名稱
+editor.objectives.duration,Длительность,Czas trwania,기간,持续时间,持續時間
+editor.objectives.probability,Вероятность,Prawdopodobieństwo,확률,概率,機率
+editor.objectives.difficulty,Сложность,Trudność,난이도,难度,難度
+editor.objectives.cooldown,Перезарядка,Czas odnowienia,쿨다운,冷却时间,冷卻時間
+editor.objectives.requirements,Требования,Wymagania,요구사항,要求,要求
+editor.objectives.results,Результаты,Wyniki,결과,结果,結果
+editor.objectives.complete,Завершить,Kompletny,완료,完成,完成
+editor.objectives.fail,Неудача,Niepowodzenie,실패,失败,失敗
+editor.objectives.abandon,Отказаться,Porzucić,포기하다,放弃,放棄
+editor.objectives.star,Звезда {0},Gwiazdka {0},별표 {0},星号{0},星號{0}
+editor.objectives.challenge,Вызов {0},Wyzwanie {0},챌린지 {0},挑战{0},挑戰{0}
+editor.objectives.star_reward,Фиксированная награда: звезда {0}.,Stała nagroda: Gwiazdka {0},고정 보상: 별 {0},固定奖励：星{0},固定獎勵：星{0}
+editor.objectives.select_room,Выбрать номер...,Wybierz pokój...,방을 선택하세요...,选择房间...,選擇房間...
+editor.objectives.requirement.earn_money,Зарабатывайте деньги,Zarabiaj pieniądze,돈을 벌어,赚钱,賺錢
+editor.objectives.requirement.reputation,Репутация,Reputacja,평판,声誉,聲譽
+editor.objectives.requirement.cure_patients,Лечить пациентов,Leczyć pacjentów,환자를 치료하다,治愈病人,治癒病人
+editor.objectives.requirement.hospital_value,Стоимость больницы,Wartość szpitala,병원 가치,医院价值,醫院價值
+editor.objectives.requirement.attractiveness,Привлекательность,Atrakcyjność,매력,吸引力,吸引力
+editor.objectives.requirement.staff_morale,Моральный дух персонала,Morale personelu,직원 사기,员工士气,員工士氣
+editor.objectives.requirement.days_without_death,Дни без смертей,Dni bez zgonów,사망자가 없는 날,没有死亡的日子,沒有死亡的日子
+editor.objectives.requirement.build_room,Построить комнату,Zbuduj pokój,빌드룸,建造房间,建造房間
+editor.objectives.result.money,Деньги,Pieniądze,돈,钱,錢
+editor.objectives.result.reputation,Репутация,Reputacja,평판,声誉,聲譽
+editor.objectives.result.research_points,Очки исследования,Punkty badawcze,연구 포인트,研究要点,研究要點
+editor.objectives.result.unlock_room,Разблокировать комнату,Odblokuj pokój,방 잠금 해제,解锁房间,解鎖房間
