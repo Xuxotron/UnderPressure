@@ -1351,6 +1351,7 @@ namespace UnderPressure.Editor
             var verified = ScenarioMapFormat.ReadLoose(main);
             if (verified.Plots.Count != saved.Count)
                 throw new InvalidDataException("El mapa guardado no coincide con las parcelas del Editor.");
+            VerifySavedCriticalMapSettings(header, verified.Header);
             VerifySavedObjectives(header.objectives, verified.Header.objectives);
             VerifySavedAvailableRooms(header.availableRooms, verified.Header.availableRooms);
             VerifySavedTranslations(_mapTranslations, verified.Translations);
@@ -1365,6 +1366,19 @@ namespace UnderPressure.Editor
             return package;
             }
             finally { ScenarioMapPackage.DeleteDirectory(folder); }
+        }
+
+        private static void VerifySavedCriticalMapSettings(
+            ScenarioMapFormat.Map before,
+            ScenarioMapFormat.Map after)
+        {
+            if (before == null || after == null ||
+                !string.Equals(before.DisplayName ?? "", after.DisplayName ?? "",
+                    StringComparison.Ordinal) ||
+                before.fogUseCameraBoundingBoxExtents !=
+                after.fogUseCameraBoundingBoxExtents)
+                throw new InvalidDataException(
+                    "El nombre visible o los parámetros de niebla no coinciden con el guardado.");
         }
 
         private static void VerifySavedTranslations(ScenarioMapLocalization.Table expected,

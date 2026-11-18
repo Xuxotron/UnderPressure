@@ -92,6 +92,7 @@ namespace UnderPressure.Editor
         {
             public int version = Version;
             public string name = "";
+            public string displayName = "";
             public string description = "";
             public string terrainManifest = "";
             public string sceneFile = "";
@@ -141,6 +142,7 @@ namespace UnderPressure.Editor
             public int maxDistance;
             public int anchorX;
             public int anchorY;
+            public bool useCameraBoundingBoxExtents;
         }
 
         [Serializable]
@@ -446,7 +448,9 @@ namespace UnderPressure.Editor
                 baseHospitalId = hospital.id ?? "",
                 baseHospitalName = hospital.name ?? "",
                 description = document.description ?? "",
-                DisplayName = document.name ?? "",
+                DisplayName = HasTopLevelField(json, "displayName")
+                    ? document.displayName ?? ""
+                    : document.name ?? "",
                 DescriptionPerStar = string.IsNullOrEmpty(document.description)
                     ? new string[0] : new[] { document.description },
                 InitialBalance = balance.initial,
@@ -482,7 +486,7 @@ namespace UnderPressure.Editor
                 fogMaxDistance = fog.maxDistance,
                 fogAnchorX = fog.anchorX,
                 fogAnchorY = fog.anchorY,
-                fogUseCameraBoundingBoxExtents = false,
+                fogUseCameraBoundingBoxExtents = fog.useCameraBoundingBoxExtents,
                 plotPerimeter = perimeter.type ?? PerimeterNone,
                 perimeterPrefabs = perimeter.prefabs ?? new string[0],
                 builtRoomStyle = roomStyles.built ?? "",
@@ -938,7 +942,8 @@ namespace UnderPressure.Editor
                 height = map.fogTileHeight,
                 maxDistance = map.fogMaxDistance,
                 anchorX = map.fogAnchorX,
-                anchorY = map.fogAnchorY
+                anchorY = map.fogAnchorY,
+                useCameraBoundingBoxExtents = map.fogUseCameraBoundingBoxExtents
             };
             var perimeter = new PerimeterData
             {
@@ -957,6 +962,7 @@ namespace UnderPressure.Editor
             AppendMapLine(text, "version", map.version.ToString(
                 System.Globalization.CultureInfo.InvariantCulture), true);
             AppendMapLine(text, "name", SerializeString(map.name), true);
+            AppendMapLine(text, "displayName", SerializeString(map.DisplayName), true);
             AppendMapLine(text, "baseHospital", "{\"id\":" + SerializeString(hospital.id) +
                 ",\"name\":" + SerializeString(hospital.name) + "}", true);
             AppendMapLine(text, "description", SerializeString(map.description), true);
@@ -1022,7 +1028,9 @@ namespace UnderPressure.Editor
                 ",\"height\":" + Integer(fog.height) +
                 ",\"maxDistance\":" + Integer(fog.maxDistance) +
                 ",\"anchorX\":" + Integer(fog.anchorX) +
-                ",\"anchorY\":" + Integer(fog.anchorY) + "}", true);
+                ",\"anchorY\":" + Integer(fog.anchorY) +
+                ",\"useCameraBoundingBoxExtents\":" +
+                (fog.useCameraBoundingBoxExtents ? "true" : "false") + "}", true);
             AppendMapLine(text, "perimeter", "{\"type\":" + SerializeString(perimeter.type) +
                 ",\"prefabs\":" + SerializeStrings(perimeter.prefabs) + "}", true);
             AppendMapLine(text, "roomStyles", "{\"built\":" + SerializeString(roomStyles.built) +
