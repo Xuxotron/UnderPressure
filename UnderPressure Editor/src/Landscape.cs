@@ -1149,19 +1149,15 @@ namespace UnderPressure.Editor
                 Float(text, "y", entry.y, true);
                 Float(text, "z", entry.z, true);
 
-                // Los objetos normales de parcelas solo pueden girar en Y.
-                // Landscape, en cambio, conserva los tres ejes de la escena.
-                var angles = new Vector3(entry.rotX, entry.rotation, entry.rotZ);
-                Float(text, "rotX", angles.x, false);
-                Float(text, "rotY", entry.rotation, false);
-                Float(text, "rotZ", angles.z, false);
-
-                // localScale por eje. Se omite UNICAMENTE el valor exacto 1.
-                // Valores como 1.0001 se conservan sin tolerancia ni redondeo.
-                var scale = new Vector3(entry.scaX, entry.scaY, entry.scaZ);
-                Scale(text, "scaX", scale.x);
-                Scale(text, "scaY", scale.y);
-                Scale(text, "scaZ", scale.z);
+                // Escribir tambien los valores predeterminados distingue este
+                // formato completo de los landscape.json antiguos, donde la
+                // ausencia indicaba que habia que recuperarlos de la escena.
+                Float(text, "rotX", entry.rotX, true);
+                Float(text, "rotY", entry.rotation, true);
+                Float(text, "rotZ", entry.rotZ, true);
+                Float(text, "scaX", entry.scaX, true);
+                Float(text, "scaY", entry.scaY, true);
+                Float(text, "scaZ", entry.scaZ, true);
                 if (entry.deleted) text.Append(",\"deleted\":true");
                 text.Append('}');
             }
