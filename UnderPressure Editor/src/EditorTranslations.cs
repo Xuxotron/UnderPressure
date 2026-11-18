@@ -349,19 +349,32 @@ namespace UnderPressure.Editor
                             result.Error = parseError;
                             yield break;
                         }
+                        var translatedText =
+                            response?.responseData?.translatedText;
                         if (response == null || response.responseStatus != 200 ||
-                            response.quotaFinished ||
-                            string.IsNullOrWhiteSpace(
-                                response.responseData?.translatedText))
+                            string.IsNullOrWhiteSpace(translatedText))
                         {
+                            UnderPressureEditorPlugin.Log?.LogWarning(
+                                "Traduccion MyMemory rechazada: estado=" +
+                                (response?.responseStatus ?? 0) +
+                                ", cuotaFinalizada=" +
+                                (response?.quotaFinished ?? false) +
+                                ", longitudTexto=" +
+                                (translatedText?.Length ?? 0) +
+                                ", detalle=" +
+                                (response?.responseDetails ?? ""));
                             result.Error = response?.responseDetails;
                             if (string.IsNullOrWhiteSpace(result.Error))
                                 result.Error = "MyMemory HTTP " +
                                     (response?.responseStatus ?? 0);
                             yield break;
                         }
+                        if (response.quotaFinished)
+                            UnderPressureEditorPlugin.Log?.LogInfo(
+                                "Traduccion MyMemory: cuota marcada como finalizada, " +
+                                "pero la respuesta contiene una traduccion valida.");
                         translatedChunks.Add(WebUtility.HtmlDecode(
-                            response.responseData.translatedText));
+                            translatedText));
                     }
                 }
                 translatedLines.Add(string.Join(" ", translatedChunks.ToArray()));
