@@ -705,6 +705,7 @@ namespace UnderPressure.Editor
             SynchronizeObjectiveFlagWithActiveLanguage();
             RefreshSharedFlagSelection();
             RefreshLocalizedScenarioInputs();
+            SetObjectiveFlagExpanded(false);
             _objectiveFlagSelector.gameObject.SetActive(false);
         }
 
