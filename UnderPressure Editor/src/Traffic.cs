@@ -521,8 +521,7 @@ namespace UnderPressure.Editor
         private static void AddCaptured(Dictionary<Transform, HashSet<string>> result,
             Dictionary<Transform, string> names, Transform point, string kind, string name)
         {
-            if (point == null || point.name.StartsWith("UP Traffic Added - ",
-                    StringComparison.Ordinal)) return;
+            if (point == null || InsideTemporaryTrafficObject(point)) return;
             HashSet<string> kinds;
             if (!result.TryGetValue(point, out kinds))
             {
@@ -531,6 +530,16 @@ namespace UnderPressure.Editor
                 names.Add(point, string.IsNullOrEmpty(name) ? point.name : name);
             }
             kinds.Add(kind);
+        }
+
+        private static bool InsideTemporaryTrafficObject(Transform point)
+        {
+            for (var current = point; current != null; current = current.parent)
+                if (current.name.StartsWith("UP Traffic Added - ", StringComparison.Ordinal) ||
+                    current.name.StartsWith("UP Traffic Native Prefab - ",
+                        StringComparison.Ordinal))
+                    return true;
+            return false;
         }
 
         private static Transform VehicleRoot(Transform node)
@@ -1114,10 +1123,20 @@ namespace UnderPressure.Editor
         internal static Data Capture(Data previous = null)
         {
             if (_level == null) _level = ScenarioEditorSession.Level;
-            if (_level != null && Items.Count == 0)
+            if (_level != null && (Items.Count == 0 ||
+                Items.Any(item => item == null || item.Transform == null)))
             {
+                var reactivate = IsActive;
+                if (reactivate) EndNativeEditor();
                 Rebuild();
                 ApplySaved();
+                if (reactivate)
+                {
+                    RefreshMarkers();
+                    BuildNativeProxies();
+                    BeginNativeEditor();
+                }
+                ApplyVisibility();
             }
             var data = new Data();
             data.objects = Items.Where(item => !item.Added)
