@@ -1257,9 +1257,7 @@ namespace UnderPressure.Editor
             var landscape = ScenarioLandscape.Capture(previousLandscape);
             ScenarioMapFormat.WriteJson(landscapePath, landscape);
             var verifiedLandscape = ScenarioLandscape.Read(landscapePath);
-            if (verifiedLandscape.objects.Length != landscape.objects.Length ||
-                verifiedLandscape.added.Length != landscape.added.Length)
-                throw new InvalidDataException("El inventario Landscape no coincide con el guardado.");
+            VerifySavedLandscape(landscape, verifiedLandscape);
 
             var trafficPath = Path.Combine(folder, ScenarioTraffic.FileName);
             var previousTraffic = File.Exists(trafficPath)
@@ -1267,9 +1265,7 @@ namespace UnderPressure.Editor
             var traffic = ScenarioTraffic.Capture(previousTraffic);
             ScenarioMapFormat.WriteJson(trafficPath, traffic);
             var verifiedTraffic = ScenarioTraffic.Read(trafficPath);
-            if (verifiedTraffic.objects.Length != traffic.objects.Length ||
-                verifiedTraffic.added.Length != traffic.added.Length)
-                throw new InvalidDataException("El inventario de trafico no coincide con el guardado.");
+            VerifySavedTraffic(traffic, verifiedTraffic);
 
             // Escenario experimental desactivado: scene.json NO se utiliza.
             var settings = CurrentScenarioSettings(level);
@@ -1351,14 +1347,29 @@ namespace UnderPressure.Editor
             var verified = ScenarioMapFormat.ReadLoose(main);
             if (verified.Plots.Count != saved.Count)
                 throw new InvalidDataException("El mapa guardado no coincide con las parcelas del Editor.");
-            VerifySavedCriticalMapSettings(header, verified.Header);
+            VerifySavedMapSettings(header, verified.Header);
+            VerifySavedIllnesses(header.illnesses, verified.Header.illnesses);
             VerifySavedObjectives(header.objectives, verified.Header.objectives);
+            VerifySavedEmergencies(header.emergencies, verified.Header.emergencies);
             VerifySavedAvailableRooms(header.availableRooms, verified.Header.availableRooms);
             VerifySavedTranslations(_mapTranslations, verified.Translations);
+            VerifySavedFog(folder, header, verified);
             ScenarioMapPackage.Publish(folder, package, candidate =>
             {
                 var packaged = ScenarioMapFormat.Read(candidate);
+                VerifySavedMapSettings(header, packaged.Header);
+                VerifySavedIllnesses(header.illnesses, packaged.Header.illnesses);
+                VerifySavedObjectives(header.objectives, packaged.Header.objectives);
+                VerifySavedEmergencies(header.emergencies, packaged.Header.emergencies);
+                VerifySavedAvailableRooms(header.availableRooms, packaged.Header.availableRooms);
                 VerifySavedTranslations(_mapTranslations, packaged.Translations);
+                VerifySavedFog(folder, header, packaged);
+                VerifySavedPackagedPlots(saved, packaged.Plots);
+                VerifySavedLandscape(landscape, ScenarioLandscape.Read(Path.Combine(
+                    packaged.ContentFolder, packaged.Header.landscapeFile)));
+                VerifySavedTraffic(traffic, ScenarioTraffic.Read(Path.Combine(
+                    packaged.ContentFolder, packaged.Header.trafficFile)));
+                VerifyPackagedFiles(folder, packaged.ContentFolder);
             });
             UnderPressureEditorPlugin.Log?.LogInfo("Mapa exportado y verificado: " + package + " (" + refs.Count + " parcelas)");
             MarkCurrentMap(level, name, package);
@@ -1368,17 +1379,359 @@ namespace UnderPressure.Editor
             finally { ScenarioMapPackage.DeleteDirectory(folder); }
         }
 
-        private static void VerifySavedCriticalMapSettings(
+        private static void VerifySavedMapSettings(
             ScenarioMapFormat.Map before,
             ScenarioMapFormat.Map after)
         {
             if (before == null || after == null ||
+                before.version != after.version ||
+                !SameText(before.name, after.name) ||
+                !SameText(before.baseHospitalId, after.baseHospitalId) ||
+                !SameText(before.baseHospitalName, after.baseHospitalName) ||
+                !SameText(before.description, after.description) ||
                 !string.Equals(before.DisplayName ?? "", after.DisplayName ?? "",
                     StringComparison.Ordinal) ||
+                before.InitialBalance != after.InitialBalance ||
+                before.FailStateBalanceWarning != after.FailStateBalanceWarning ||
+                before.FailStateBalanceGameOver != after.FailStateBalanceGameOver ||
+                before.patientSettingsConfigured != after.patientSettingsConfigured ||
+                before.maxPatients != after.maxPatients ||
+                !SameFloat(before.patientSpawnRate, after.patientSpawnRate) ||
+                before.neverSpawnPatients != after.neverSpawnPatients ||
+                before.usePatientSelector != after.usePatientSelector ||
+                !SameFloat(before.patientSelectionRandomJitter,
+                    after.patientSelectionRandomJitter) ||
+                before.environmentSettingsConfigured != after.environmentSettingsConfigured ||
+                !SameFloat(before.initialTemperature, after.initialTemperature) ||
+                !SameFloat(before.initialAttractiveness, after.initialAttractiveness) ||
+                !SameFloat(before.initialHygiene, after.initialHygiene) ||
+                before.scenarioSettingsConfigured != after.scenarioSettingsConfigured ||
+                before.illnessesConfigured != after.illnessesConfigured ||
+                before.availableRoomsConfigured != after.availableRoomsConfigured ||
+                before.objectivesConfigured != after.objectivesConfigured ||
+                before.emergenciesConfigured != after.emergenciesConfigured ||
+                !SameText(before.terrainManifest, after.terrainManifest) ||
+                !SameText(before.fogOfWarFile, after.fogOfWarFile) ||
+                before.fogTileWidth != after.fogTileWidth ||
+                before.fogTileHeight != after.fogTileHeight ||
+                before.fogMaxDistance != after.fogMaxDistance ||
+                before.fogAnchorX != after.fogAnchorX ||
+                before.fogAnchorY != after.fogAnchorY ||
                 before.fogUseCameraBoundingBoxExtents !=
-                after.fogUseCameraBoundingBoxExtents)
+                after.fogUseCameraBoundingBoxExtents ||
+                !SameText(before.plotPerimeter, after.plotPerimeter) ||
+                !SameTexts(before.perimeterPrefabs, after.perimeterPrefabs) ||
+                !SameText(before.builtRoomStyle, after.builtRoomStyle) ||
+                !SameText(before.buildingRoomStyle, after.buildingRoomStyle) ||
+                !SameText(before.unbuiltRoomStyle, after.unbuiltRoomStyle) ||
+                !SameText(before.sceneFile, after.sceneFile) ||
+                !SameText(before.landscapeFile, after.landscapeFile) ||
+                !SameText(before.trafficFile, after.trafficFile) ||
+                !SamePlotReferences(before.plots, after.plots))
                 throw new InvalidDataException(
-                    "El nombre visible o los parámetros de niebla no coinciden con el guardado.");
+                    "Los parámetros generales del mapa no coinciden con el guardado.");
+        }
+
+        private static bool SameText(string left, string right) =>
+            string.Equals(left ?? "", right ?? "", StringComparison.Ordinal);
+
+        private static bool SameTexts(string[] left, string[] right)
+        {
+            left = left ?? new string[0];
+            right = right ?? new string[0];
+            return left.Length == right.Length && left.Zip(right, SameText).All(value => value);
+        }
+
+        private static bool SameFloat(float left, float right) =>
+            float.IsNaN(left) && float.IsNaN(right) || Math.Abs(left - right) <= 0.001f;
+
+        private static bool SamePlotReferences(
+            ScenarioMapFormat.PlotReference[] left,
+            ScenarioMapFormat.PlotReference[] right)
+        {
+            left = left ?? new ScenarioMapFormat.PlotReference[0];
+            right = right ?? new ScenarioMapFormat.PlotReference[0];
+            if (left.Length != right.Length) return false;
+            for (var index = 0; index < left.Length; ++index)
+                if (left[index] == null || right[index] == null ||
+                    left[index].index != right[index].index ||
+                    !SameText(left[index].dataFile, right[index].dataFile) ||
+                    !SameText(left[index].imageFile, right[index].imageFile))
+                    return false;
+            return true;
+        }
+
+        private static void VerifySavedIllnesses(
+            ScenarioMapFormat.WeightedIllnessData[] before,
+            ScenarioMapFormat.WeightedIllnessData[] after)
+        {
+            before = before ?? new ScenarioMapFormat.WeightedIllnessData[0];
+            after = after ?? new ScenarioMapFormat.WeightedIllnessData[0];
+            if (before.Length != after.Length)
+                throw new InvalidDataException(
+                    "La cantidad de enfermedades no coincide con el guardado.");
+            for (var index = 0; index < before.Length; ++index)
+            {
+                var left = before[index];
+                var right = after[index];
+                if (left == null || right == null ||
+                    !SameText(left.definition, right.definition) ||
+                    !SameText(left.room, right.room) ||
+                    left.deprecated != right.deprecated ||
+                    left.unlocked != right.unlocked ||
+                    left.minWeight != right.minWeight ||
+                    left.maxWeight != right.maxWeight ||
+                    left.minStarRating != right.minStarRating ||
+                    left.minPatientsSpawned != right.minPatientsSpawned)
+                    throw new InvalidDataException(
+                        "La enfermedad " + index + " no coincide con el guardado.");
+            }
+        }
+
+        private static void VerifySavedEmergencies(
+            ScenarioMapFormat.EmergencyData[] before,
+            ScenarioMapFormat.EmergencyData[] after)
+        {
+            before = before ?? new ScenarioMapFormat.EmergencyData[0];
+            after = after ?? new ScenarioMapFormat.EmergencyData[0];
+            if (before.Length != after.Length)
+                throw new InvalidDataException(
+                    "La cantidad de emergencias no coincide con el guardado.");
+            for (var index = 0; index < before.Length; ++index)
+            {
+                var left = before[index];
+                var right = after[index];
+                if (left == null || right == null ||
+                    !SameText(left.template, right.template) ||
+                    left.scheduleIndex != right.scheduleIndex ||
+                    !SameText(left.scheduleName, right.scheduleName) ||
+                    left.scheduleEnabled != right.scheduleEnabled ||
+                    left.scheduleStartsWithCooldown != right.scheduleStartsWithCooldown ||
+                    left.minimumCooldownDays != right.minimumCooldownDays ||
+                    left.maximumCooldownDays != right.maximumCooldownDays ||
+                    left.weight != right.weight ||
+                    left.failureAction != right.failureAction ||
+                    left.scoreType != right.scoreType ||
+                    !SameText(left.arrivalMethod, right.arrivalMethod) ||
+                    !SameText(left.arrivalMethodType, right.arrivalMethodType) ||
+                    left.issueWarning != right.issueWarning ||
+                    left.rejectable != right.rejectable ||
+                    left.patients != right.patients ||
+                    !SameFloat(left.diagnosis, right.diagnosis) ||
+                    left.success != right.success ||
+                    !SameFloat(left.arrivalRate, right.arrivalRate) ||
+                    left.durationDays != right.durationDays ||
+                    left.daysUntilStart != right.daysUntilStart ||
+                    !SameTexts(left.illnesses, right.illnesses) ||
+                    !SameEmergencyRules(left.prerequisites, right.prerequisites) ||
+                    !SameEmergencyRules(left.rewards, right.rewards))
+                    throw new InvalidDataException(
+                        "La emergencia " + index + " no coincide con el guardado.");
+            }
+        }
+
+        private static bool SameEmergencyRules(
+            ScenarioMapFormat.EmergencyRuleData[] left,
+            ScenarioMapFormat.EmergencyRuleData[] right)
+        {
+            left = left ?? new ScenarioMapFormat.EmergencyRuleData[0];
+            right = right ?? new ScenarioMapFormat.EmergencyRuleData[0];
+            if (left.Length != right.Length) return false;
+            for (var index = 0; index < left.Length; ++index)
+                if (left[index] == null || right[index] == null ||
+                    left[index].type != right[index].type ||
+                    !SameText(left[index].value, right[index].value) ||
+                    !SameText(left[index].reference, right[index].reference) ||
+                    left[index].lessThan != right[index].lessThan)
+                    return false;
+            return true;
+        }
+
+        private static void VerifySavedFog(string folder,
+            ScenarioMapFormat.Map expectedHeader, ScenarioMapFormat.LoadedMap actual)
+        {
+            if (string.IsNullOrEmpty(expectedHeader?.fogOfWarFile))
+            {
+                if (actual?.FogOfWarPng != null && actual.FogOfWarPng.Length != 0)
+                    throw new InvalidDataException(
+                        "El mapa guardado contiene una máscara de niebla inesperada.");
+                return;
+            }
+            var expectedPath = Path.Combine(folder, expectedHeader.fogOfWarFile);
+            if (!File.Exists(expectedPath) || actual?.FogOfWarPng == null ||
+                !File.ReadAllBytes(expectedPath).SequenceEqual(actual.FogOfWarPng))
+                throw new InvalidDataException(
+                    "La máscara de niebla no coincide con el guardado.");
+        }
+
+        private static void VerifySavedPackagedPlots(
+            IList<Tuple<string, ScenarioMapFormat.Plot, string, byte[]>> expected,
+            IList<ScenarioMapFormat.LoadedPlot> actual)
+        {
+            if (expected == null || actual == null || expected.Count != actual.Count)
+                throw new InvalidDataException(
+                    "La cantidad de parcelas del paquete no coincide con el guardado.");
+            for (var index = 0; index < expected.Count; ++index)
+            {
+                var before = expected[index];
+                var after = actual[index];
+                VerifySavedPlotSettings(before.Item2, after?.Data, before.Item1);
+                if (after?.Data == null ||
+                    before.Item2.baseItems.Length != after.Data.baseItems.Length ||
+                    before.Item2.builtItems.Length != after.Data.builtItems.Length ||
+                    before.Item2.unbuiltItems.Length != after.Data.unbuiltItems.Length ||
+                    after.ImagePng == null || !before.Item4.SequenceEqual(after.ImagePng))
+                    throw new InvalidDataException(
+                        "El contenido de " + before.Item1 + " no coincide con el paquete.");
+                VerifySavedItems(before.Item2.baseItems, after.Data.baseItems,
+                    before.Item1, "Base");
+                VerifySavedItems(before.Item2.builtItems, after.Data.builtItems,
+                    before.Item1, "Built");
+                VerifySavedItems(before.Item2.unbuiltItems, after.Data.unbuiltItems,
+                    before.Item1, "Unbuilt");
+            }
+        }
+
+        private static void VerifySavedLandscape(ScenarioLandscape.Data before,
+            ScenarioLandscape.Data after)
+        {
+            var leftObjects = before?.objects ?? new ScenarioLandscape.ObjectEntry[0];
+            var rightObjects = after?.objects ?? new ScenarioLandscape.ObjectEntry[0];
+            var leftAdded = before?.added ?? new ScenarioLandscape.Addition[0];
+            var rightAdded = after?.added ?? new ScenarioLandscape.Addition[0];
+            if (before == null || after == null || before.version != after.version ||
+                leftObjects.Length != rightObjects.Length ||
+                leftAdded.Length != rightAdded.Length)
+                throw new InvalidDataException(
+                    "El inventario Landscape no coincide con el guardado.");
+            for (var index = 0; index < leftObjects.Length; ++index)
+            {
+                var left = leftObjects[index];
+                var right = rightObjects[index];
+                if (left == null || right == null ||
+                    !SameText(left.id, right.id) || !SameText(left.name, right.name) ||
+                    !SameText(left.hierarchy, right.hierarchy) ||
+                    !SameText(left.prefab, right.prefab) ||
+                    !SameText(left.guid, right.guid) || !SameText(left.tag, right.tag) ||
+                    !SameFloat(left.originalX, right.originalX) ||
+                    !SameFloat(left.originalY, right.originalY) ||
+                    !SameFloat(left.originalZ, right.originalZ) ||
+                    !SameFloat(left.originalRotation, right.originalRotation) ||
+                    !SameFloat(left.x, right.x) || !SameFloat(left.y, right.y) ||
+                    !SameFloat(left.z, right.z) ||
+                    !SameFloat(left.rotation, right.rotation) ||
+                    !SameFloat(left.rotX, right.rotX) ||
+                    !SameFloat(left.rotY, right.rotY) ||
+                    !SameFloat(left.rotZ, right.rotZ) ||
+                    !SameFloat(left.scaX, right.scaX) ||
+                    !SameFloat(left.scaY, right.scaY) ||
+                    !SameFloat(left.scaZ, right.scaZ) || left.deleted != right.deleted)
+                    throw new InvalidDataException(
+                        "El objeto Landscape " + index + " no coincide con el guardado.");
+            }
+            for (var index = 0; index < leftAdded.Length; ++index)
+            {
+                var left = leftAdded[index];
+                var right = rightAdded[index];
+                if (left == null || right == null ||
+                    !SameText(left.guid, right.guid) || !SameText(left.tag, right.tag) ||
+                    !SameText(left.prefab, right.prefab) ||
+                    !SameFloat(left.x, right.x) || !SameFloat(left.y, right.y) ||
+                    !SameFloat(left.z, right.z) ||
+                    !SameFloat(left.rotation, right.rotation) ||
+                    !SameFloat(left.rotX, right.rotX) ||
+                    !SameFloat(left.rotY, right.rotY) ||
+                    !SameFloat(left.rotZ, right.rotZ) ||
+                    !SameFloat(left.scaX, right.scaX) ||
+                    !SameFloat(left.scaY, right.scaY) ||
+                    !SameFloat(left.scaZ, right.scaZ))
+                    throw new InvalidDataException(
+                        "El objeto Landscape añadido " + index +
+                        " no coincide con el guardado.");
+            }
+        }
+
+        private static void VerifySavedTraffic(ScenarioTraffic.Data before,
+            ScenarioTraffic.Data after)
+        {
+            var leftObjects = before?.objects ?? new ScenarioTraffic.ObjectEntry[0];
+            var rightObjects = after?.objects ?? new ScenarioTraffic.ObjectEntry[0];
+            var leftAdded = before?.added ?? new ScenarioTraffic.Addition[0];
+            var rightAdded = after?.added ?? new ScenarioTraffic.Addition[0];
+            if (before == null || after == null || before.version != after.version ||
+                leftObjects.Length != rightObjects.Length ||
+                leftAdded.Length != rightAdded.Length)
+                throw new InvalidDataException(
+                    "El inventario de tráfico no coincide con el guardado.");
+            for (var index = 0; index < leftObjects.Length; ++index)
+            {
+                var left = leftObjects[index];
+                var right = rightObjects[index];
+                if (left == null || right == null ||
+                    !SameText(left.id, right.id) || !SameText(left.name, right.name) ||
+                    !SameText(left.hierarchy, right.hierarchy) ||
+                    !SameTexts(left.components, right.components) ||
+                    !SameFloat(left.originalX, right.originalX) ||
+                    !SameFloat(left.originalY, right.originalY) ||
+                    !SameFloat(left.originalZ, right.originalZ) ||
+                    !SameFloat(left.originalRotation, right.originalRotation) ||
+                    !SameFloat(left.x, right.x) || !SameFloat(left.y, right.y) ||
+                    !SameFloat(left.z, right.z) ||
+                    !SameFloat(left.rotation, right.rotation))
+                    throw new InvalidDataException(
+                        "El objeto de tráfico " + index +
+                        " no coincide con el guardado.");
+            }
+            for (var index = 0; index < leftAdded.Length; ++index)
+            {
+                var left = leftAdded[index];
+                var right = rightAdded[index];
+                if (left == null || right == null ||
+                    !SameText(left.id, right.id) || !SameText(left.name, right.name) ||
+                    !SameTexts(left.components, right.components) ||
+                    !SameFloat(left.x, right.x) || !SameFloat(left.y, right.y) ||
+                    !SameFloat(left.z, right.z) ||
+                    !SameFloat(left.rotation, right.rotation))
+                    throw new InvalidDataException(
+                        "El punto de tráfico añadido " + index +
+                        " no coincide con el guardado.");
+            }
+        }
+
+        private static void VerifyPackagedFiles(string sourceFolder, string packagedFolder)
+        {
+            var source = Directory.GetFiles(sourceFolder, "*", SearchOption.TopDirectoryOnly)
+                .ToDictionary(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
+            var packaged = Directory.GetFiles(packagedFolder, "*", SearchOption.TopDirectoryOnly)
+                .ToDictionary(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
+            if (source.Count != packaged.Count || source.Keys.Any(name =>
+                    !packaged.ContainsKey(name) ||
+                    !SameFileContents(source[name], packaged[name])))
+                throw new InvalidDataException(
+                    "Los archivos del paquete .upmap no coinciden con el guardado.");
+        }
+
+        private static bool SameFileContents(string leftPath, string rightPath)
+        {
+            var leftInfo = new FileInfo(leftPath);
+            var rightInfo = new FileInfo(rightPath);
+            if (!leftInfo.Exists || !rightInfo.Exists || leftInfo.Length != rightInfo.Length)
+                return false;
+            using (var left = File.OpenRead(leftPath))
+            using (var right = File.OpenRead(rightPath))
+            {
+                var leftBuffer = new byte[81920];
+                var rightBuffer = new byte[81920];
+                while (true)
+                {
+                    var leftRead = left.Read(leftBuffer, 0, leftBuffer.Length);
+                    var rightRead = right.Read(rightBuffer, 0, rightBuffer.Length);
+                    if (leftRead != rightRead) return false;
+                    if (leftRead == 0) return true;
+                    for (var index = 0; index < leftRead; ++index)
+                        if (leftBuffer[index] != rightBuffer[index]) return false;
+                }
+            }
         }
 
         private static void VerifySavedTranslations(ScenarioMapLocalization.Table expected,
