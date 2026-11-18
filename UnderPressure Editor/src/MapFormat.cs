@@ -380,7 +380,8 @@ namespace UnderPressure.Editor
                 if (!string.Equals(Path.GetExtension(file), ScenarioMapPackage.Extension,
                         StringComparison.OrdinalIgnoreCase))
                     return false;
-                var prefix = ScenarioMapPackage.ReadTextPrefix(file, ConfigFileName, 4096);
+                var prefix = ScenarioMapPackage.ReadTextPrefix(
+                    file, ConfigFileName, 4096, MaxHeaderBytes);
                 var match = VersionField.Match(prefix);
                 return match.Success && int.TryParse(match.Groups[1].Value,
                     System.Globalization.NumberStyles.Integer,

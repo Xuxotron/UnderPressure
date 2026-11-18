@@ -20,6 +20,7 @@ namespace UnderPressure.Editor
         private const ushort Utf8Flag = 0x0800;
         private const ushort StoredMethod = 0;
         private const ushort DeflateMethod = 8;
+        private const int PrefixCompressionAllowance = 64 * 1024;
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, CacheEntry> Cache =
             new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
@@ -139,10 +140,11 @@ namespace UnderPressure.Editor
             }
         }
 
-        internal static string ReadTextPrefix(string package, string entryName, int maximumBytes)
+        internal static string ReadTextPrefix(string package, string entryName,
+            int maximumBytes, int maximumEntryBytes)
         {
             ValidateEntryName(entryName);
-            if (maximumBytes < 1)
+            if (maximumBytes < 1 || maximumEntryBytes < maximumBytes)
                 throw new ArgumentOutOfRangeException(nameof(maximumBytes));
             using (var stream = File.OpenRead(package))
             using (var reader = new BinaryReader(stream, Encoding.UTF8, true))
@@ -152,9 +154,13 @@ namespace UnderPressure.Editor
                     entry.Name, entryName, StringComparison.OrdinalIgnoreCase)).ToArray();
                 if (matches.Length != 1)
                     throw new InvalidDataException("Entrada inexistente o duplicada: " + entryName);
-                var bytes = ReadEntry(stream, reader, matches[0]);
-                var length = Math.Min(bytes.Length, maximumBytes);
-                return Encoding.UTF8.GetString(bytes, 0, length);
+                var entry = matches[0];
+                if (entry.Length > maximumEntryBytes ||
+                    entry.CompressedSize > maximumEntryBytes +
+                    (long)PrefixCompressionAllowance)
+                    throw new InvalidDataException("Entrada demasiado grande: " + entryName);
+                return Encoding.UTF8.GetString(
+                    ReadEntryPrefix(stream, reader, entry, maximumBytes));
             }
         }
 
@@ -395,6 +401,68 @@ namespace UnderPressure.Editor
             if (bytes.Length != entry.Length || ComputeCrc32(bytes) != entry.Crc32)
                 throw new InvalidDataException("CRC ZIP incorrecto: " + entry.Name);
             return bytes;
+        }
+
+        private static byte[] ReadEntryPrefix(Stream stream, BinaryReader reader,
+            PackageEntry entry, int maximumBytes)
+        {
+            stream.Position = entry.LocalHeaderOffset;
+            if (reader.ReadUInt32() != LocalHeaderSignature)
+                throw new InvalidDataException(
+                    "Cabecera local ZIP incorrecta: " + entry.Name);
+            reader.ReadUInt16();
+            var flags = reader.ReadUInt16();
+            var method = reader.ReadUInt16();
+            reader.ReadUInt16();
+            reader.ReadUInt16();
+            reader.ReadUInt32();
+            reader.ReadUInt32();
+            reader.ReadUInt32();
+            var nameLength = reader.ReadUInt16();
+            var extraLength = reader.ReadUInt16();
+            if ((flags & 1) != 0 || method != entry.Method ||
+                (method != StoredMethod && method != DeflateMethod))
+                throw new InvalidDataException("Entrada ZIP incompatible: " + entry.Name);
+            SkipExact(stream, nameLength + extraLength);
+            if (entry.CompressedSize > int.MaxValue || entry.Length > int.MaxValue ||
+                stream.Position + entry.CompressedSize > stream.Length)
+                throw new InvalidDataException(
+                    "Entrada ZIP demasiado grande o incompleta: " + entry.Name);
+
+            if (entry.Method == StoredMethod)
+            {
+                var length = Math.Min((int)entry.Length, maximumBytes);
+                var stored = reader.ReadBytes(length);
+                if (stored.Length != length)
+                    throw new InvalidDataException("Entrada ZIP incompleta: " + entry.Name);
+                return stored;
+            }
+
+            var compressed = reader.ReadBytes((int)entry.CompressedSize);
+            if (compressed.Length != entry.CompressedSize)
+                throw new InvalidDataException("Entrada ZIP incompleta: " + entry.Name);
+            return InflatePrefix(compressed, maximumBytes, entry.Name);
+        }
+
+        private static byte[] InflatePrefix(byte[] compressed, int maximumBytes, string name)
+        {
+            using (var input = new MemoryStream(compressed, false))
+            using (var inflater = new DeflateStream(input, CompressionMode.Decompress, false))
+            using (var output = new MemoryStream(maximumBytes))
+            {
+                var buffer = new byte[Math.Min(81920, maximumBytes)];
+                while (output.Length < maximumBytes)
+                {
+                    var remaining = maximumBytes - (int)output.Length;
+                    var read = inflater.Read(buffer, 0, Math.Min(buffer.Length, remaining));
+                    if (read == 0) break;
+                    output.Write(buffer, 0, read);
+                }
+                if (output.Length == 0 && compressed.Length != 0)
+                    throw new InvalidDataException(
+                        "No se pudo leer el prefijo ZIP: " + name);
+                return output.ToArray();
+            }
         }
 
         private static byte[] Inflate(byte[] compressed, int expectedLength, string name)
