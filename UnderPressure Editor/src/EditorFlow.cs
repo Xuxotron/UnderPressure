@@ -408,14 +408,11 @@ namespace UnderPressure.Editor
             var result = new List<MapChoice>();
             foreach (var file in ScenarioMapSources.EnumerateEnabledMaps())
             {
-                if (ScenarioMapSources.IsLocalMapPath(file))
-                {
-                    string mapAuthor;
-                    if (!ScenarioMapSources.TryGetAuthor(file, out mapAuthor) ||
-                        !string.Equals(mapAuthor, architect,
-                            StringComparison.CurrentCultureIgnoreCase))
-                        continue;
-                }
+                string mapAuthor;
+                if (!ScenarioMapSources.TryGetAuthor(file, out mapAuthor) ||
+                    !string.Equals(mapAuthor, architect,
+                        StringComparison.CurrentCultureIgnoreCase))
+                    continue;
                 TryAddMapChoice(result, file, hospitalId);
             }
 
@@ -732,8 +729,6 @@ namespace UnderPressure.Editor
 
             foreach (var map in ScenarioMapSources.EnumerateEnabledMaps())
             {
-                if (!ScenarioMapSources.IsLocalMapPath(map))
-                    continue;
                 string author;
                 if (ScenarioMapSources.TryGetAuthor(map, out author))
                     names.Add(author);

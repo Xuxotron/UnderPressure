@@ -39,6 +39,7 @@ namespace UnderPressure.Editor
         {
             public int version = Version;
             public string name = "";
+            public string author = "";
             public string baseHospitalId = "";
             public string baseHospitalName = "";
             public string description = "";
@@ -92,6 +93,7 @@ namespace UnderPressure.Editor
         {
             public int version = Version;
             public string name = "";
+            public string author = "";
             public string displayName = "";
             public string description = "";
             public string terrainManifest = "";
@@ -446,6 +448,7 @@ namespace UnderPressure.Editor
             {
                 version = document.version,
                 name = document.name ?? "",
+                author = document.author ?? "",
                 baseHospitalId = hospital.id ?? "",
                 baseHospitalName = hospital.name ?? "",
                 description = document.description ?? "",
@@ -508,6 +511,7 @@ namespace UnderPressure.Editor
                 header.perimeterPrefabs = new string[0];
             if (header == null ||
                 header.plots == null || header.plots.Length > 128 ||
+                HasInvalidAuthor(header.author) ||
                 header.perimeterPrefabs.Length > 32 ||
                 HasInvalidStyleId(header.builtRoomStyle) ||
                 HasInvalidStyleId(header.buildingRoomStyle) ||
@@ -529,6 +533,12 @@ namespace UnderPressure.Editor
                 Array.Exists(header.perimeterPrefabs, HasInvalidStyleId))
                 throw new InvalidDataException("config.json contiene datos no permitidos.");
             return header;
+        }
+
+        private static bool HasInvalidAuthor(string value)
+        {
+            return value != null && (value.Length > 120 ||
+                value.IndexOfAny(new[] {'\r', '\n'}) >= 0);
         }
 
         private static bool HasInvalidStyleId(string value)
@@ -963,6 +973,7 @@ namespace UnderPressure.Editor
             AppendMapLine(text, "version", map.version.ToString(
                 System.Globalization.CultureInfo.InvariantCulture), true);
             AppendMapLine(text, "name", SerializeString(map.name), true);
+            AppendMapLine(text, "author", SerializeString(map.author), true);
             AppendMapLine(text, "displayName", SerializeString(map.DisplayName), true);
             AppendMapLine(text, "baseHospital", "{\"id\":" + SerializeString(hospital.id) +
                 ",\"name\":" + SerializeString(hospital.name) + "}", true);

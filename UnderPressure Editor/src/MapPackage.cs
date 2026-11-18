@@ -48,6 +48,10 @@ namespace UnderPressure.Editor
         internal static IEnumerable<string> Enumerate(string root)
         {
             if (!Directory.Exists(root)) yield break;
+            foreach (var package in Directory.GetFiles(root, SearchPattern,
+                         SearchOption.TopDirectoryOnly))
+                yield return package;
+            // Compatibilidad de lectura con la organización antigua por autor.
             foreach (var creator in Directory.GetDirectories(root, "*", SearchOption.TopDirectoryOnly))
             {
                 var name = Path.GetFileName(creator);
@@ -69,6 +73,9 @@ namespace UnderPressure.Editor
                 Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var creator = Path.GetDirectoryName(full);
             if (string.IsNullOrEmpty(creator)) return false;
+            if (string.Equals(creator, rootFull, StringComparison.OrdinalIgnoreCase))
+                return true;
+            // Compatibilidad de lectura con maps/<autor>/<mapa>.upmap.
             var parent = Path.GetDirectoryName(creator);
             return string.Equals(parent, rootFull, StringComparison.OrdinalIgnoreCase);
         }

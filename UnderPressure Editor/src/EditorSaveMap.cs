@@ -315,13 +315,6 @@ namespace UnderPressure.Editor
             return Path.Combine(folder, entryName);
         }
 
-        internal static string FolderForArchitect(string architect)
-        {
-            var name = string.IsNullOrWhiteSpace(architect)
-                ? UnderPressureEditorPlugin.ArchitectName : architect.Trim();
-            return Path.Combine(Folder, SafeName(name));
-        }
-
         internal static bool TryReadCurrentFog(Level level,
             out ScenarioMapFormat.Map header, out byte[] png)
         {
@@ -623,6 +616,14 @@ namespace UnderPressure.Editor
             return ReferenceEquals(_architectLevel, level) &&
                    !string.IsNullOrWhiteSpace(_architectName)
                 ? _architectName : UnderPressureEditorPlugin.ArchitectName;
+        }
+
+        internal static void SetCurrentAuthor(Level level, string author)
+        {
+            _architectLevel = level;
+            _architectName = string.IsNullOrWhiteSpace(author)
+                ? UnderPressureEditorPlugin.ArchitectName
+                : author.Trim();
         }
         internal static string CurrentPerimeterMode(Level level)
         {
@@ -1201,9 +1202,9 @@ namespace UnderPressure.Editor
                 throw new ArgumentException("Introduce un nombre de mapa de 1 a 80 caracteres.");
             var baseId = level.Config.UniqueId;
             var baseName = level.Config.GetLocalisedDisplayName();
-            var creatorFolder = FolderForArchitect(CurrentArchitect(level));
-            Directory.CreateDirectory(creatorFolder);
-            var package = Path.Combine(creatorFolder, SafeName(name) + ScenarioMapPackage.Extension);
+            Directory.CreateDirectory(Folder);
+            var package = Path.Combine(Folder,
+                SafeName(name) + ScenarioMapPackage.Extension);
             var folder = ScenarioMapPackage.CreateStagingDirectory();
             try
             {
@@ -1280,6 +1281,7 @@ namespace UnderPressure.Editor
                 landscapeFile = ScenarioLandscape.FileName,
                 trafficFile = ScenarioTraffic.FileName,
                 name = name,
+                author = CurrentArchitect(level),
                 baseHospitalId = baseId,
                 baseHospitalName = baseName,
                 description = description,
@@ -1386,6 +1388,7 @@ namespace UnderPressure.Editor
             if (before == null || after == null ||
                 before.version != after.version ||
                 !SameText(before.name, after.name) ||
+                !SameText(before.author, after.author) ||
                 !SameText(before.baseHospitalId, after.baseHospitalId) ||
                 !SameText(before.baseHospitalName, after.baseHospitalName) ||
                 !SameText(before.description, after.description) ||
@@ -2122,8 +2125,11 @@ namespace UnderPressure.Editor
                 ScenarioTraffic.SetMapFile(Path.Combine(map.ContentFolder, trafficFile));
                 ScenarioEditorStorageMenu.NotifyLoadedMap();
                 MarkCurrentMap(level, map.Header.name, full);
-                _architectLevel = level;
-                _architectName = ArchitectFromPath(full);
+                string author;
+                SetCurrentAuthor(level, ScenarioMapSources.TryGetAuthor(
+                    full, map.Header, out author)
+                    ? author
+                    : UnderPressureEditorPlugin.ArchitectName);
             }
             catch
             {
@@ -2649,22 +2655,6 @@ namespace UnderPressure.Editor
             return value;
         }
 
-        private static string ArchitectFromPath(string mapPath)
-        {
-            var root = Path.GetFullPath(Folder).TrimEnd(
-                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-                Path.DirectorySeparatorChar;
-            var full = Path.GetFullPath(mapPath);
-            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                return UnderPressureEditorPlugin.ArchitectName;
-            var relative = full.Substring(root.Length);
-            var separator = relative.IndexOfAny(new[]
-            {
-                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar
-            });
-            return separator > 0 ? relative.Substring(0, separator) :
-                UnderPressureEditorPlugin.ArchitectName;
-        }
     }
 
     // Capa global de decoracion: no es una parcela, no ocupa una casilla de

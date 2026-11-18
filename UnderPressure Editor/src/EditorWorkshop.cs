@@ -149,6 +149,7 @@ namespace UnderPressure.Editor
         {
             var data = Current(level);
             data.author = (author ?? "").Trim();
+            ScenarioEditorStorage.SetCurrentAuthor(level, data.author);
             PersistIfPossible(level);
         }
 
@@ -516,19 +517,12 @@ namespace UnderPressure.Editor
         private static void Postfix(Level level, string path)
         {
             ScenarioWorkshopMetaStore.Reset(level);
-
-            if (!ScenarioWorkshopLibrary.IsWorkshopMapPath(path)) return;
             try
             {
-                var data = ScenarioWorkshopMetaStore.Current(level);
-                var architect = !string.IsNullOrWhiteSpace(data.author)
-                    ? data.author
-                    : UnderPressureEditorPlugin.ArchitectName;
-
-                AccessTools.Field(typeof(ScenarioEditorStorage), "_architectLevel")
-                    ?.SetValue(null, level);
-                AccessTools.Field(typeof(ScenarioEditorStorage), "_architectName")
-                    ?.SetValue(null, architect);
+                string author;
+                if (!ScenarioMapSources.TryGetAuthor(path, out author)) return;
+                ScenarioWorkshopMetaStore.Current(level).author = author;
+                ScenarioEditorStorage.SetCurrentAuthor(level, author);
             }
             catch (Exception exception)
             {
@@ -742,8 +736,31 @@ namespace UnderPressure.Editor
 
         internal static bool TryGetAuthor(string path, out string author)
         {
+            ScenarioMapFormat.Map header = null;
+            try { header = ScenarioMapFormat.ReadHeader(path); }
+            catch { }
+            return TryGetAuthor(path, header, out author);
+        }
+
+        internal static bool TryGetAuthor(string path,
+            ScenarioMapFormat.Map header, out string author)
+        {
             author = null;
             if (string.IsNullOrWhiteSpace(path)) return false;
+
+            if (!string.IsNullOrWhiteSpace(header?.author))
+            {
+                author = header.author.Trim();
+                return true;
+            }
+
+            ScenarioWorkshopMetaData metadata;
+            if (ScenarioWorkshopMetaStore.TryReadFromMap(path, out metadata) &&
+                !string.IsNullOrWhiteSpace(metadata.author))
+            {
+                author = metadata.author.Trim();
+                return true;
+            }
 
             if (IsLocalMapPath(path))
             {
