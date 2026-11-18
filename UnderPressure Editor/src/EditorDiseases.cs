@@ -269,7 +269,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EnsureDiseaseTrailingColon(EditorLocalization.Get("editor.scenario_settings.diseases.max_patients")),
                 _settingsMaxPatients,
-                20.8800049f, 164f,
+                12.8800049f, 164f,
                 180.88f, 49f,
                 value => _settingsMaxPatients = Mathf.Max(1, value),
                 "UP Patient Max Patients");
@@ -278,7 +278,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EnsureDiseaseTrailingColon(EditorLocalization.Get("editor.scenario_settings.diseases.arrival_rate")),
                 _settingsPatientSpawnRate,
-                301.88f, 140f,
+                262.88f, 174f,
                 443.88f, 47f,
                 value => _settingsPatientSpawnRate = Mathf.Max(0f, value),
                 "UP Patient Spawn Rate");
@@ -287,7 +287,7 @@ namespace UnderPressure.Editor
                 panel.transform,
                 EnsureDiseaseTrailingColon(EditorLocalization.Get("editor.scenario_settings.diseases.randomness")),
                 _settingsPatientSelectionRandomJitter,
-                568.88f, 121f,
+                519.88f, 155f,
                 680.88f, 49f,
                 value => _settingsPatientSelectionRandomJitter =
                     Mathf.Clamp01(value),
@@ -300,7 +300,7 @@ namespace UnderPressure.Editor
                 TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(neverLabel.rectTransform,
-                793.88f, 10.8449707f, 180f, 38f);
+                757.88f, 10.8449707f, 208f, 38f);
 
             var never = CreateDiseaseToggle(
                 panel.transform,
@@ -323,7 +323,7 @@ namespace UnderPressure.Editor
                 TextAlignmentOptions.MidlineRight,
                 Color.white);
             SetTopLeft(ignoreFrequencyLabel.rectTransform,
-                1050.88f, 10.8449707f, 160f, 38f);
+                1051.88f, 10.8449707f, 160f, 38f);
 
             // El dato nativo significa "usar selector ponderado".
             // La interfaz expone la intencion inversa: activado = ignorar
@@ -691,6 +691,23 @@ namespace UnderPressure.Editor
                     AddDisease(room, choices[selector.value].Id);
                 });
             SetTopLeft((RectTransform)add.transform, 675f, 8f, 116f, 44f);
+            var addOutline = add.GetComponent<Outline>() ??
+                             add.gameObject.AddComponent<Outline>();
+            addOutline.enabled = true;
+            addOutline.effectColor = Color.white;
+            addOutline.effectDistance = new Vector2(1f, -1f);
+            addOutline.useGraphicAlpha = true;
+
+            var addText = add.transform.Find("Texto");
+            if (addText != null)
+            {
+                var textOutline = addText.GetComponent<Outline>() ??
+                                  addText.gameObject.AddComponent<Outline>();
+                textOutline.enabled = false;
+                textOutline.effectColor = Color.black;
+                textOutline.effectDistance = new Vector2(1f, -1f);
+                textOutline.useGraphicAlpha = true;
+            }
 
             var roomAvailabilityId = room.Definition == null
                 ? "" : room.Definition._type.ToString();
@@ -777,7 +794,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineRight,
                 Color.white);
-            SetTopLeft(unlockedLabel.rectTransform, 378f, 11f, 125f, 38f);
+            SetTopLeft(unlockedLabel.rectTransform, 373f, 11f, 125f, 38f);
 
             var unlocked = CreateDiseaseToggle(panel.transform, value.unlocked,
                 state => value.unlocked = state);
@@ -793,7 +810,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineRight,
                 Color.white);
-            SetTopLeft(frequencyLabel.rectTransform, 576f, 10f, 111f, 38f);
+            SetTopLeft(frequencyLabel.rectTransform, 558f, 10f, 111f, 38f);
             _settingsFrequencyTexts.Add(frequencyLabel);
 
             var minimumFrequency = CreateDiseaseIntegerInput(
@@ -827,7 +844,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineRight,
                 Color.white);
-            SetTopLeft(patientsLabel.rectTransform, 822f, 10f, 156f, 38f);
+            SetTopLeft(patientsLabel.rectTransform, 809f, 10f, 156f, 38f);
 
             CreateDiseaseIntegerInput(
                 panel.transform,
@@ -968,7 +985,7 @@ namespace UnderPressure.Editor
                 17f,
                 TextAlignmentOptions.MidlineLeft,
                 Color.white);
-            SetTopLeft(starsLabel.rectTransform, 1044f, 10f, 87f, 38f);
+            SetTopLeft(starsLabel.rectTransform, 1041f, 10f, 74f, 38f);
 
             value.minStarRating = Mathf.Clamp(value.minStarRating, 0, 3);
             if (!ResolveNativeDiseaseStarSprites()) return;

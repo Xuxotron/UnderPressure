@@ -208,6 +208,7 @@ namespace UnderPressure.Editor
             BuildEmergencyConfigurationChildren();
             BuildEmergencyRuleBlockChildren(_emergencyPrerequisiteBlock, EmergencyUi("Prerrequisitos", "Prerequisites"), EmergencyPrerequisiteTypes, true);
             BuildEmergencyRuleBlockChildren(_emergencyRewardBlock, EmergencyUi("Recompensas", "Rewards"), EmergencyRewardTypes, false);
+            ApplyImportedEmergencyLayout();
             RestoreEmergencyPanelColors();
             _selectedEmergency = 0;
         }
@@ -218,6 +219,25 @@ namespace UnderPressure.Editor
             RestoreEmergencyPanelColor(_emergencyConfigBlock);
             RestoreEmergencyPanelColor(_emergencyPrerequisiteBlock);
             RestoreEmergencyPanelColor(_emergencyRewardBlock);
+        }
+
+        private void ApplyImportedEmergencyLayout()
+        {
+            if (_emergencyListBlock == null) return;
+            SetEmergencyBakedRect(_emergencyListBlock,
+                0f, 1f, 0f, 1f, 0f, 1f, 0f, 0f, 245f, 331f);
+            SetEmergencyBakedRect(
+                _emergencyListBlock.Find("UP Emergency Add") as RectTransform,
+                0f, 1f, 0f, 1f, 0f, 1f, 5f, -340f, 189f, 38f);
+            SetEmergencyBakedRect(
+                _emergencyListBlock.Find("UP Emergency Add/Text") as RectTransform,
+                0f, 1f, 0f, 1f, 0f, 1f, 3f, 0f, 180f, 38f);
+            SetEmergencyBakedRect(
+                _emergencyListBlock.Find("UP Emergency Delete") as RectTransform,
+                0f, 1f, 0f, 1f, 0f, 1f, 202f, -340f, 40f, 38f);
+            SetEmergencyBakedRect(
+                _emergencyListBlock.Find("UP Emergency List Scrollbar") as RectTransform,
+                1f, 0f, 1f, 1f, 1f, .5f, -2f, -12.5f, 21f, -55f);
         }
 
         private static void RestoreEmergencyPanelColor(RectTransform panel)

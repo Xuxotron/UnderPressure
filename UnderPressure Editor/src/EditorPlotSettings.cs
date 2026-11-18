@@ -50,8 +50,8 @@ namespace UnderPressure.Editor
                 _style.ButtonSprite, _style.PanelColor, false);
             ApplyPlotSettingsPanelStyle(
                 listPanel,
-                new Color(.803157866f, .8786105f, .921052635f, 1f),
-                3f);
+                new Color(.992f, .99712f, 1f, 1f),
+                2f);
             var listRect = listPanel.transform as RectTransform;
             listRect.anchorMin = new Vector2(0f, 0f);
             listRect.anchorMax = new Vector2(0f, 1f);
@@ -122,7 +122,10 @@ namespace UnderPressure.Editor
                 new Vector2(-20f, PlotMapButtonHeight));
             foreach (var mapText in
                      _settingsPlotMapButton.GetComponentsInChildren<TMP_Text>(true))
+            {
                 ConfigureObjectiveTmpText(mapText, 25f, 18f, 72f);
+                SetTopLeft(mapText.rectTransform, 3f, 0f, 169f, 48f);
+            }
             ApplyObjectiveSelectionOutline(_settingsPlotMapButton, false);
 
             var detailsPanel = NewImage("Editor de parcela", _settingsPlotRoot,
@@ -131,8 +134,8 @@ namespace UnderPressure.Editor
                 false);
             ApplyPlotSettingsPanelStyle(
                 detailsPanel,
-                new Color(.6392157f, .8509804f, .9843137f, 1f),
-                3f);
+                new Color(.985515833f, .988048851f, .9894737f, 1f),
+                2f);
             _settingsPlotDetails = detailsPanel.transform as RectTransform;
             _settingsPlotDetails.anchorMin = new Vector2(0f, 0f);
             _settingsPlotDetails.anchorMax = new Vector2(1f, 1f);
@@ -172,6 +175,12 @@ namespace UnderPressure.Editor
                     selected ? LayerBuildOrange : _style.ButtonColor,
                     () => SelectPlotSettings(captured));
                 ApplyObjectiveSelectionOutline(button, selected);
+                var outline = button.GetComponent<Outline>() ??
+                              button.gameObject.AddComponent<Outline>();
+                outline.enabled = true;
+                outline.effectColor = Color.white;
+                outline.effectDistance = new Vector2(3f, -3f);
+                outline.useGraphicAlpha = true;
 
                 var rect = button.transform as RectTransform;
                 rect.anchorMin = new Vector2(0f, 1f);
@@ -345,6 +354,34 @@ namespace UnderPressure.Editor
             outline.effectColor = outlineColor;
             outline.effectDistance = new Vector2(distance, -distance);
             outline.useGraphicAlpha = false;
+        }
+
+        private void ApplyImportedPlotOverridesFinalState()
+        {
+            if (_settingsPlotRoot == null) return;
+
+            var listPanel = _settingsPlotRoot.Find("Parcelas");
+            if (listPanel != null)
+                ApplyPlotSettingsPanelStyle(listPanel.gameObject,
+                    new Color(.992f, .99712f, 1f, 1f), 2f);
+
+            if (_settingsPlotDetails != null)
+                ApplyPlotSettingsPanelStyle(_settingsPlotDetails.gameObject,
+                    new Color(.985515833f, .988048851f, .9894737f, 1f), 2f);
+
+            if (_settingsPlotList == null) return;
+            for (var index = 0; index < _settingsPlotList.childCount; ++index)
+            {
+                var choice = _settingsPlotList.GetChild(index);
+                if (choice == null || !choice.name.StartsWith(
+                        "UP Plot Choice ", StringComparison.Ordinal)) continue;
+                var outline = choice.GetComponent<Outline>() ??
+                              choice.gameObject.AddComponent<Outline>();
+                outline.enabled = true;
+                outline.effectColor = Color.white;
+                outline.effectDistance = new Vector2(3f, -3f);
+                outline.useGraphicAlpha = true;
+            }
         }
 
         private List<string> BuildPlotNames(IList<HospitalPlot> plots)

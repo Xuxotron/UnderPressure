@@ -256,6 +256,8 @@ namespace UnderPressure.Editor
                     ? nativeVideoContents
                     : Instantiate(nativeVideoContents, nativeVideoContents.parent, false);
                 page.name = "UP Scenario Settings Contents " + index;
+                if (index == 4 && page.parent != null)
+                    page.SetSiblingIndex(Mathf.Min(3, page.parent.childCount - 1));
                 _settingsPages[index] = page.gameObject;
             }
             var languageRoot = GetPreferencesField<Transform>(clonedScreen, "_languageTab");
@@ -337,6 +339,7 @@ namespace UnderPressure.Editor
             ApplySettingsContentFrameColor();
             ApplyLatestSavedSettingsUi();
             ReapplySettingsDesignerStructure();
+            ApplyImportedSettingsOverridesFinalState();
             SetSettingsTab(0);
             clone.SetActive(true);
             _settingsOverlay.SetActive(false);
@@ -407,6 +410,10 @@ namespace UnderPressure.Editor
 
             if (_activeSettingsTab == 1)
                 _settingsDiseaseSurface?.SetAsLastSibling();
+            else if (_activeSettingsTab == 4 && _settingsPages[4] != null &&
+                     _settingsPages[4].transform.parent != null)
+                _settingsPages[4].transform.SetSiblingIndex(Mathf.Min(
+                    3, _settingsPages[4].transform.parent.childCount - 1));
             else
                 _settingsPages[_activeSettingsTab]?.transform.SetAsLastSibling();
 
@@ -924,6 +931,80 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                     _settingsOverlay.transform);
         }
 
+        private void ApplyImportedSettingsOverridesFinalState()
+        {
+            ApplyImportedGeneralOverridesFinalState();
+            ApplyImportedPlotOverridesFinalState();
+        }
+
+        private void ApplyImportedGeneralOverridesFinalState()
+        {
+            if (_settingsPages == null || _settingsPages.Length == 0 ||
+                _settingsPages[0] == null) return;
+
+            var content = _settingsPages[0].transform.Find(
+                "Scroll View/Viewport/Content");
+            if (content == null) return;
+
+            SetRect(content as RectTransform,
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0f, 1f), new Vector2(0f, 3.43322754E-05f),
+                Vector2.zero);
+
+            RemoveImportedDeletedObject(content, "Boton Original");
+            RemoveImportedDeletedObject(content, "Texto");
+
+            ApplyImportedGeneralRoomPanelFinalState(
+                content.Find("UP General Common Rooms") as RectTransform,
+                .02f, .49f, 6f);
+            ApplyImportedGeneralRoomPanelFinalState(
+                content.Find("UP General Diagnosis Rooms") as RectTransform,
+                .51f, .98f, 0f);
+        }
+
+        private static void RemoveImportedDeletedObject(
+            Transform parent, string objectName)
+        {
+            if (parent == null) return;
+            var value = parent.Find(objectName);
+            if (value == null || value.parent != parent) return;
+            value.gameObject.SetActive(false);
+            Destroy(value.gameObject);
+        }
+
+        private static void ApplyImportedGeneralRoomPanelFinalState(
+            RectTransform panel, float minX, float maxX, float horizontalOffset)
+        {
+            if (panel == null) return;
+
+            SetRect(panel, new Vector2(minX, 1f), new Vector2(maxX, 1f),
+                new Vector2(.5f, 1f), new Vector2(horizontalOffset, -402f),
+                new Vector2(0f, 390f));
+
+            var panelImage = panel.GetComponent<Image>();
+            if (panelImage != null)
+                panelImage.color = new Color(
+                    .1882353f, .533333361f, .7529412f, 1f);
+            ConfigureObjectiveExactOutline(panel, true,
+                new Color(.6392157f, .8509804f, .9843137f, 1f),
+                new Vector2(3f, -3f));
+
+            var rows = panel.Find("Lista de salas/Viewport/Content");
+            if (rows == null) return;
+            for (var index = 0; index < rows.childCount; ++index)
+            {
+                var row = rows.GetChild(index) as RectTransform;
+                if (row == null || !row.name.StartsWith(
+                        "UP General Room ", StringComparison.Ordinal)) continue;
+                var rowImage = row.GetComponent<Image>();
+                if (rowImage != null)
+                    rowImage.color = new Color(
+                        .07450981f, .356862754f, .572549045f, 1f);
+                ConfigureObjectiveExactOutline(row, false, Color.white,
+                    new Vector2(1f, -1f));
+            }
+        }
+
         private void BuildGeneralSettingsContents()
         {
             if (_settingsPages == null || _settingsPages.Length == 0 ||
@@ -931,6 +1012,10 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             var content = _settingsPages[0].transform.Find(
                 "Scroll View/Viewport/Content");
             if (content == null) return;
+            SetRect(content as RectTransform,
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0f, 1f), new Vector2(0f, 3.43322754E-05f),
+                Vector2.zero);
 
             _settingsDisplayName = CreateScenarioSettingsInput(content,
                 "editor.scenario_settings.field.display_name", 16f, 48f, false,
@@ -1699,7 +1784,7 @@ _settingsTabFolderBackgrounds.Length < 3) return;
 
             // Los paneles quedan en la zona inferior, sin modificar el
             // ScrollRect ni la geometria de los campos superiores de General.
-            const float panelTop = 412f;
+            const float panelTop = 402f;
             const float panelHeight = 390f;
 
             BuildGeneralRoomPanel(content, "UP General Common Rooms",
@@ -1722,9 +1807,16 @@ _settingsTabFolderBackgrounds.Length < 3) return;
                 panel.AddComponent<LayoutElement>();
             panelLayout.ignoreLayout = true;
             var panelRect = panel.transform as RectTransform;
+            var horizontalOffset = name == "UP General Common Rooms" ? 6f : 0f;
             SetRect(panelRect, new Vector2(minX, 1f), new Vector2(maxX, 1f),
-                new Vector2(.5f, 1f), new Vector2(0f, -top),
+                new Vector2(.5f, 1f), new Vector2(horizontalOffset, -top),
                 new Vector2(0f, height));
+            var panelImage = panel.GetComponent<Image>();
+            if (panelImage != null)
+                panelImage.color = new Color(.1882353f, .533333361f, .7529412f, 1f);
+            ConfigureObjectiveExactOutline(panelRect, true,
+                new Color(.6392157f, .8509804f, .9843137f, 1f),
+                new Vector2(3f, -3f));
 
             var titleText = CreateDiseaseText(panel.transform, title, 24f,
                 TextAlignmentOptions.MidlineLeft, Color.white);
@@ -1789,6 +1881,11 @@ _settingsTabFolderBackgrounds.Length < 3) return;
             rect.pivot = new Vector2(.5f, 1f);
             rect.anchoredPosition = new Vector2(0f, -index * 53f);
             rect.sizeDelta = new Vector2(-10f, 49f);
+            var rowImage = row.GetComponent<Image>();
+            if (rowImage != null)
+                rowImage.color = new Color(.07450981f, .356862754f, .572549045f, 1f);
+            ConfigureObjectiveExactOutline(rect, false, Color.white,
+                new Vector2(1f, -1f));
 
             if (room.Icon != null)
             {

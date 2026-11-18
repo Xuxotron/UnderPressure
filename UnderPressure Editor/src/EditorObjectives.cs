@@ -380,7 +380,9 @@ namespace UnderPressure.Editor
                     RefreshObjectiveRequirementTypeDropdown();
                     RefreshObjectiveRequirements();
                 });
-            ApplyObjectiveFilterLabelRect(_objectiveTutorialRequirementsToggle, 0f, 72f);
+            ApplyObjectiveFilterLabelRect(_objectiveTutorialRequirementsToggle, 5f, 79f);
+            ApplyObjectiveRequirementFilterBackground(
+                _objectiveTutorialRequirementsToggle, 10f);
 
             _objectiveDlcRequirementsToggle = CreateObjectiveRequirementFilterToggle(
                 requirements, "UP Objective DLC Requirements Toggle", "DLCs:",
@@ -391,7 +393,9 @@ namespace UnderPressure.Editor
                     RefreshObjectiveRequirementTypeDropdown();
                     RefreshObjectiveRequirements();
                 });
-            ApplyObjectiveFilterLabelRect(_objectiveDlcRequirementsToggle, 0f, 34f);
+            ApplyObjectiveFilterLabelRect(_objectiveDlcRequirementsToggle, 17f, 57f);
+            ApplyObjectiveRequirementFilterBackground(
+                _objectiveDlcRequirementsToggle, 20f);
 
             _objectiveRequirementScroll = CreateObjectiveVerticalScroll(
                 requirements, "UP Objective Requirements Scroll",
@@ -1078,6 +1082,35 @@ namespace UnderPressure.Editor
             {
                 SetTopLeft(label.rectTransform, x, 0f, width, 36f);
                 label.alignment = TextAlignmentOptions.MidlineRight;
+            }
+        }
+
+        private static void ApplyObjectiveRequirementFilterBackground(
+            Toggle toggle, float x)
+        {
+            if (toggle == null || toggle.transform.parent == null) return;
+            var background = toggle.transform.Find("Background") as RectTransform;
+            if (background == null) return;
+
+            background.SetParent(toggle.transform.parent, false);
+            background.SetSiblingIndex(0);
+            SetObjectiveExactRect(background,
+                new Vector2(.5f, .5f), new Vector2(.5f, .5f),
+                new Vector2(.5f, .5f), new Vector2(x, 0f),
+                new Vector2(40f, 40f));
+
+            var layout = background.GetComponent<LayoutElement>();
+            if (layout != null) UnityEngine.Object.Destroy(layout);
+            var fitter = background.GetComponent<ContentSizeFitter>();
+            if (fitter != null) UnityEngine.Object.Destroy(fitter);
+            foreach (var outline in background.GetComponents<Outline>())
+                UnityEngine.Object.Destroy(outline);
+
+            var image = background.GetComponent<Image>();
+            if (image != null)
+            {
+                image.color = new Color(.80392164f, .80392164f, .80392164f, 1f);
+                toggle.targetGraphic = image;
             }
         }
 
@@ -2014,6 +2047,16 @@ namespace UnderPressure.Editor
                         resultIndex);
                 }
 
+                var compactThreeReferenceRequirement = requirement &&
+                    ScenarioObjectiveRequirements.HasValue(rule.type) &&
+                    ScenarioObjectiveRequirements.ReferenceKinds(rule.type).Length == 3;
+                if (compactThreeReferenceRequirement)
+                {
+                    SetObjectiveExactRect(row, new Vector2(0f, 1f),
+                        new Vector2(1f, 1f), new Vector2(.5f, 1f),
+                        new Vector2(0f, 2f - top), new Vector2(0f, 87f));
+                }
+
                 if (!requirement && resultIndex == 0 && index == 0 &&
                     CurrentObjective != null && CurrentObjective.isStar)
                 {
@@ -2214,6 +2257,22 @@ namespace UnderPressure.Editor
                 return;
             }
 
+            if (hasValue && references.Length == 3)
+            {
+                CreateObjectiveRequirementValue(
+                    row, rule, 445.439972f, 7f, 66.56006f, 34f);
+                CreateObjectiveRequirementReference(
+                    row, rule, references[2], 2,
+                    519f, 7f, 459.5f, 34f);
+                CreateObjectiveRequirementReference(
+                    row, rule, references[0], 0,
+                    6f, 45f, 507.5f, 34f);
+                CreateObjectiveRequirementReference(
+                    row, rule, references[1], 1,
+                    519.5f, 45f, 507.5f, 34f);
+                return;
+            }
+
             if (hasValue)
             {
                 var valueX = 12f + typeWidth;
@@ -2268,6 +2327,10 @@ namespace UnderPressure.Editor
             if (references.Length <= 1)
                 return 46f;
 
+            if (references.Length == 3 &&
+                ScenarioObjectiveRequirements.HasValue(rule?.type))
+                return 87f;
+
             var extraLines =
                 (references.Length + 1) / 2;
             return 46f + extraLines * 38f;
@@ -2295,6 +2358,16 @@ namespace UnderPressure.Editor
 
             input.contentType =
                 TMP_InputField.ContentType.DecimalNumber;
+            if (Mathf.Approximately(x, 445.439972f) &&
+                Mathf.Approximately(y, 7f) &&
+                Mathf.Approximately(width, 66.56006f))
+            {
+                var textArea = input.transform.Find("Text Area") as RectTransform;
+                if (textArea != null)
+                    SetObjectiveExactRect(textArea, Vector2.zero, Vector2.one,
+                        new Vector2(.5f, .5f), new Vector2(2f, 0f),
+                        new Vector2(-10f, 0f));
+            }
             input.onEndEdit.AddListener(value =>
             {
                 rule.value = value ?? "";
