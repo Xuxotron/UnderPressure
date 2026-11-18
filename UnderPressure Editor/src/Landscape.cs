@@ -1139,6 +1139,12 @@ namespace UnderPressure.Editor
                 Property(text, "prefab", entry.prefab);
                 Property(text, "guid", entry.guid);
                 Property(text, "tag", entry.tag);
+                // La identidad estable se calcula con la posicion original y
+                // debe conservarse junto a la transformacion editable.
+                Float(text, "originalX", entry.originalX, true);
+                Float(text, "originalY", entry.originalY, true);
+                Float(text, "originalZ", entry.originalZ, true);
+                Float(text, "originalRotation", entry.originalRotation, true);
                 Float(text, "x", entry.x, true);
                 Float(text, "y", entry.y, true);
                 Float(text, "z", entry.z, true);
