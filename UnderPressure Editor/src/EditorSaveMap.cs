@@ -5635,12 +5635,8 @@ PriorVisibility.Clear();
                 "editor.map.open", ScenarioEditorStorageMenu.ShowLoadFromPause);
             Configure(RestartField?.GetValue(__instance) as Button,
                 "editor.map.empty", ScenarioEditorStorageMenu.ShowEmptyMapFromPause);
-            var quitToMap = QuitToMapField?.GetValue(__instance) as Button;
-            if (quitToMap != null)
-            {
-                quitToMap.onClick.RemoveAllListeners();
-                quitToMap.onClick.AddListener(ScenarioEditorFlow.ExitToWorldMap);
-            }
+            ConfigureDisabled(QuitToMapField?.GetValue(__instance) as Button,
+                "editor.map.test");
             var quitToMenu = QuitToMenuField?.GetValue(__instance) as Button;
             if (quitToMenu != null && __0 != null)
             {
@@ -5753,6 +5749,24 @@ PriorVisibility.Clear();
             button.onClick.RemoveAllListeners();
             button.onClick.AddListener(() => action());
             button.interactable = true;
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.text = EditorLocalization.Get(key);
+                return;
+            }
+            var ordinary = button.GetComponentInChildren<Text>(true);
+            if (ordinary != null) ordinary.text = EditorLocalization.Get(key);
+        }
+
+        private static void ConfigureDisabled(Button button, string key)
+        {
+            if (button == null) return;
+            foreach (var component in button.GetComponentsInChildren<MonoBehaviour>(true))
+                if (component != null && component.GetType().FullName == "I2.Loc.Localize")
+                    component.enabled = false;
+            button.onClick.RemoveAllListeners();
+            button.interactable = false;
             var label = button.GetComponentInChildren<TMP_Text>(true);
             if (label != null)
             {
