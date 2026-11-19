@@ -19,7 +19,7 @@ namespace UnderPressure.PowerGrid
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure.powergrid.experimental";
         public const string PluginName = "Bajo Presion - Red electrica experimental";
-        public const string PluginVersion = "0.1.1";
+        public const string PluginVersion = "1.2";
 
         internal static ModLogSource Log { get; private set; }
         internal static Sprite BatterySprite { get; private set; }

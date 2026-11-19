@@ -20,7 +20,7 @@ namespace UnderPressure
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure";
         public const string PluginName = "Bajo Presión";
-        public const string PluginVersion = "0.1.1";
+        public const string PluginVersion = "1.2";
 
         private Harmony _harmony;
 

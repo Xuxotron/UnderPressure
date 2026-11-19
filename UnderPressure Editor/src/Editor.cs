@@ -25,7 +25,7 @@ namespace UnderPressure.Editor
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure.editor";
         public const string PluginName = "Bajo Presión - Editor de escenarios";
-        public const string PluginVersion = "0.1.1";
+        public const string PluginVersion = "1.2";
 
         internal static ModLogSource Log { get; private set; }
         internal static ConfigEntry<bool> ShowNewMapsSetting { get; private set; }
