@@ -74,6 +74,10 @@ namespace UnderPressure.Storey
         private static readonly FieldInfo FootprintObject =
             AccessTools.Field(typeof(HospitalPlotFootprintVisual), "_gameObject");
         private static readonly FieldInfo CursorPlane = AccessTools.Field(typeof(CursorManager), "_planeOffset");
+        private static readonly FieldInfo CursorVisualisation =
+            AccessTools.Field(typeof(CursorManager), "_visualisation");
+        private static readonly FieldInfo CursorSmoothed =
+            AccessTools.Field(typeof(CursorManager), "_worldPositionSmoothed");
         private static readonly FieldInfo CursorMode = AccessTools.Field(typeof(CursorManager), "_mode");
         private static readonly FieldInfo CursorModes = AccessTools.Field(typeof(CursorManager), "_modeStack");
         private static readonly FieldInfo PrerequisitePlots =
@@ -91,6 +95,10 @@ namespace UnderPressure.Storey
             new Dictionary<WorldState, Plane>();
         private static readonly Dictionary<HospitalPlotFootprintPerimeter, Plane> PerimeterPlanes =
             new Dictionary<HospitalPlotFootprintPerimeter, Plane>();
+        private static readonly Dictionary<FloorPlan, Plane> FloorPlanes =
+            new Dictionary<FloorPlan, Plane>();
+        private static readonly Dictionary<Transform, Plane> VisualPlanes =
+            new Dictionary<Transform, Plane>();
         private static readonly Dictionary<HospitalPlot, bool> PlotVisibility =
             new Dictionary<HospitalPlot, bool>();
         private static readonly Dictionary<RoomFloorPlanVisual, List<HiddenObject>> HiddenInterior =
@@ -388,7 +396,9 @@ namespace UnderPressure.Storey
         {
             if (_changingVisibility) return;
             var floor = VisualFloorPlan?.GetValue(visual) as FloorPlan;
-            RefreshInterior(PlotLevel?.GetValue(floor?.HospitalMap?.Plot) as Level);
+            var plot = floor?.HospitalMap?.Plot;
+            if (plot == null) return;
+            RefreshInterior(PlotLevel?.GetValue(plot) as Level);
         }
 
         private static void RefreshInterior(Level level)
@@ -482,6 +492,27 @@ namespace UnderPressure.Storey
         internal static void RegisterRoomVisual(RoomFloorPlanVisual visual, WorldState world) =>
             FindPlane(world)?.AttachRoot(VisualContainer?.GetValue(visual) as Transform);
 
+        internal static void RegisterFloorPlan(RoomFloorPlanVisual visual, FloorPlan floor)
+        {
+            var plane = FindPlane(floor?.WorldState);
+            if (plane == null || floor == null) return;
+            FloorPlanes[floor] = plane;
+            var container = VisualContainer?.GetValue(visual) as Transform;
+            plane.AttachRoot(container);
+            if (container != null) VisualPlanes[container] = plane;
+            if (plane.Storey == StoreyApi.UpperStorey)
+                plane.Visuals?.RoomLightingManager?.RegenerateInteriorVolumeLights();
+        }
+
+        internal static void RegisterRoomItem(RoomItemVisual visual, RoomItem item)
+        {
+            var plane = FindPlane(item?.FloorPlan?.WorldState);
+            var root = visual?.GameObject?.transform;
+            if (plane == null || root == null) return;
+            VisualPlanes[root] = plane;
+            if (item.OwningRoom != null) plane.AttachRoot(root);
+        }
+
         internal static void RegisterFootprint(HospitalPlotFootprintVisual visual,
             HospitalPlot plot) => FindPlane(plot)?.AttachRoot(
                 (FootprintObject?.GetValue(visual) as GameObject)?.transform);
@@ -503,6 +534,20 @@ namespace UnderPressure.Storey
                 state.NativeCursorPlane = value;
                 if (state.ActiveStorey == StoreyApi.UpperStorey)
                     value += StoreyApi.UpperVisualHeight;
+                return;
+            }
+        }
+
+        internal static void PresentCursor(CursorManager cursor)
+        {
+            if (cursor == null) return;
+            foreach (var state in Levels.Values)
+            {
+                if (!ReferenceEquals(state.Level.CursorManager, cursor)) continue;
+                if (state.ActiveStorey != StoreyApi.UpperStorey || state.Upper?.Root == null) return;
+                var visual = CursorVisualisation?.GetValue(cursor) as GameObject;
+                if (visual != null && CursorSmoothed?.GetValue(cursor) is Vector3 logical)
+                    visual.transform.position = state.Upper.Root.TransformPoint(logical);
                 return;
             }
         }
@@ -574,16 +619,11 @@ namespace UnderPressure.Storey
         internal static void AdjustLightingOrigin(bool[,] tiles, ref Vector3 origin)
         {
             if (tiles == null) return;
-            foreach (var state in Levels.Values)
+            foreach (var entry in FloorPlanes)
             {
-                var plane = state.Upper;
-                if (plane?.World?.AllRooms == null || plane.Root == null) continue;
-                foreach (var room in plane.World.AllRooms)
-                {
-                    if (!ReferenceEquals(room?.FloorPlan?.Tiles, tiles)) continue;
-                    origin = plane.Root.TransformPoint(origin);
-                    return;
-                }
+                if (!ReferenceEquals(entry.Key?.Tiles, tiles) || entry.Value?.Root == null) continue;
+                origin = entry.Value.Root.TransformPoint(origin);
+                return;
             }
         }
 
@@ -615,7 +655,8 @@ namespace UnderPressure.Storey
                 try { state.DestroyUpper(); } catch { }
             foreach (var visual in HiddenInterior.Keys.ToArray()) RestoreInterior(visual);
             Levels.Clear(); PreparedUpper.Clear(); WorldPlanes.Clear();
-            PerimeterPlanes.Clear(); PlotVisibility.Clear();
+            PerimeterPlanes.Clear(); FloorPlanes.Clear(); VisualPlanes.Clear();
+            PlotVisibility.Clear();
             DefinitionStoreys.Clear(); DefinitionOrders.Clear(); _nextOrder = 0;
         }
 
@@ -646,6 +687,8 @@ namespace UnderPressure.Storey
         private static Plane FindPlane(Transform value)
         {
             if (value == null) return null;
+            for (var current = value; current != null; current = current.parent)
+                if (VisualPlanes.TryGetValue(current, out var registered)) return registered;
             foreach (var state in Levels.Values)
                 if (state.Upper?.Root != null &&
                     (ReferenceEquals(value, state.Upper.Root) || value.IsChildOf(state.Upper.Root)))
@@ -663,6 +706,10 @@ namespace UnderPressure.Storey
             if (plane?.World != null) WorldPlanes.Remove(plane.World);
             foreach (var value in PerimeterPlanes.Where(entry => ReferenceEquals(entry.Value, plane))
                          .Select(entry => entry.Key).ToArray()) PerimeterPlanes.Remove(value);
+            foreach (var value in FloorPlanes.Where(entry => ReferenceEquals(entry.Value, plane))
+                         .Select(entry => entry.Key).ToArray()) FloorPlanes.Remove(value);
+            foreach (var value in VisualPlanes.Where(entry => ReferenceEquals(entry.Value, plane))
+                         .Select(entry => entry.Key).ToArray()) VisualPlanes.Remove(value);
         }
 
         private static WorldState.Config EmptyUpperConfig(WorldState.Config source)
@@ -1009,6 +1056,16 @@ namespace UnderPressure.Storey
         private static IEnumerable<CodeInstruction> Transpiler(
             IEnumerable<CodeInstruction> instructions) =>
             StoreyRuntime.ConvertPositionSetters(instructions);
+
+        private static void Postfix(RoomFloorPlanVisual __instance, FloorPlan __0) =>
+            StoreyRuntime.RegisterFloorPlan(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
+    internal static class StoreyRoomItemUpdatePatch
+    {
+        private static void Prefix(RoomItemVisual __instance, RoomItem __0) =>
+            StoreyRuntime.RegisterRoomItem(__instance, __0);
     }
 
     [HarmonyPatch(typeof(RoomItemVisual), "set_WorldPosition")]
@@ -1058,6 +1115,11 @@ namespace UnderPressure.Storey
     internal static class StoreyCursorPlanePatch
     { private static void Prefix(CursorManager __instance, ref float __0) =>
         StoreyRuntime.AdjustCursorPlane(__instance, ref __0); }
+
+    [HarmonyPatch(typeof(CursorManager), "UpdateCursorPosition")]
+    internal static class StoreyCursorVisualPatch
+    { private static void Postfix(CursorManager __instance) =>
+        StoreyRuntime.PresentCursor(__instance); }
 
     // El segundo WorldState comparte el gestor visual nativo. Su cálculo exterior
     // no debe sustituir el estado de iluminación del mapa inferior.
