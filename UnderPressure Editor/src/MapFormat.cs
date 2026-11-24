@@ -1755,10 +1755,9 @@ namespace UnderPressure.Editor
                 // pero el mapa personalizado debe mostrar sus propias modificaciones.
                 cloned.createBaseLandscapeItems = true;
                 // El segundo mapa contiene exclusivamente sus parcelas. No crea
-                // terreno, niebla ni paisaje propios; su presentación completa se
+                // terreno ni paisaje propios; su presentación completa se
                 // desplaza después a +2 m por UnderPressure.Storey.
                 upper.createBaseLandscapeItems = false;
-                upper.FogOfWarDefinition = null;
                 if (!string.IsNullOrEmpty(_map.Header.fogOfWarFile))
                 {
                     _runtimeFog = ScenarioEditorFogOfWar.CreateDefinition(

@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using FullInspector;
 using HarmonyLib;
 using TH20;
@@ -73,10 +74,6 @@ namespace UnderPressure.Storey
         private static readonly FieldInfo FootprintObject =
             AccessTools.Field(typeof(HospitalPlotFootprintVisual), "_gameObject");
         private static readonly FieldInfo CursorPlane = AccessTools.Field(typeof(CursorManager), "_planeOffset");
-        private static readonly FieldInfo CursorVisualisation =
-            AccessTools.Field(typeof(CursorManager), "_visualisation");
-        private static readonly FieldInfo CursorSmoothed =
-            AccessTools.Field(typeof(CursorManager), "_worldPositionSmoothed");
         private static readonly FieldInfo CursorMode = AccessTools.Field(typeof(CursorManager), "_mode");
         private static readonly FieldInfo CursorModes = AccessTools.Field(typeof(CursorManager), "_modeStack");
         private static readonly FieldInfo PrerequisitePlots =
@@ -94,8 +91,6 @@ namespace UnderPressure.Storey
             new Dictionary<WorldState, Plane>();
         private static readonly Dictionary<HospitalPlotFootprintPerimeter, Plane> PerimeterPlanes =
             new Dictionary<HospitalPlotFootprintPerimeter, Plane>();
-        private static readonly Dictionary<RoomItemVisual, FloorPlan> ItemFloors =
-            new Dictionary<RoomItemVisual, FloorPlan>();
         private static readonly Dictionary<HospitalPlot, bool> PlotVisibility =
             new Dictionary<HospitalPlot, bool>();
         private static readonly Dictionary<RoomFloorPlanVisual, List<HiddenObject>> HiddenInterior =
@@ -242,7 +237,6 @@ namespace UnderPressure.Storey
                     if (buildImmediately)
                     {
                         using (target.Enter())
-                        using (target.BeginLogical())
                         {
                             initialReplacement.BuyAndBuildImmediately();
                             initialReplacement.Close();
@@ -267,7 +261,6 @@ namespace UnderPressure.Storey
             try
             {
                 using (target.Enter())
-                using (target.BeginLogical())
                 {
                     var built = definition.Built;
                     if (buildImmediately) definition.Built = true;
@@ -347,11 +340,7 @@ namespace UnderPressure.Storey
         {
             var plane = GetPlane(level, storey, false);
             if (plane?.World == null) return;
-            using (plane.Enter())
-            using (plane.BeginLogical())
-            {
-                plane.World.UpdateNavigation();
-            }
+            using (plane.Enter()) plane.World.UpdateNavigation();
         }
 
         internal static void BeforeLevelDestroy(Level level)
@@ -374,11 +363,7 @@ namespace UnderPressure.Storey
                 return;
             if (level.MetagameMap != null && level.MetagameMap.IsVisible) return;
             var inactive = state.ActiveStorey == StoreyApi.UpperStorey ? state.Lower : state.Upper;
-            using (inactive.Enter())
-            using (inactive.BeginLogical())
-            {
-                inactive.World.Update(deltaTime);
-            }
+            using (inactive.Enter()) inactive.World.Update(deltaTime);
         }
 
         internal static void SelectPlot(HospitalPlot plot)
@@ -494,37 +479,6 @@ namespace UnderPressure.Storey
                          ?.HospitalMap?.Plot, plot)).ToArray()) RestoreInterior(visual);
         }
 
-        internal static LogicalScope BeginVisual(RoomFloorPlanVisual visual, FloorPlan floor = null)
-        {
-            floor = floor ?? VisualFloorPlan?.GetValue(visual) as FloorPlan;
-            return FindPlane(floor?.WorldState)?.BeginLogical();
-        }
-
-        internal static void EndVisual(RoomFloorPlanVisual visual, FloorPlan floor,
-            LogicalScope scope)
-        {
-            try
-            {
-                floor = floor ?? VisualFloorPlan?.GetValue(visual) as FloorPlan;
-                FindPlane(floor?.WorldState)?.AttachRoot(VisualContainer?.GetValue(visual) as Transform);
-            }
-            finally { scope?.Dispose(); }
-        }
-
-        internal static LogicalScope BeginItem(RoomItemVisual visual, RoomItem item)
-        {
-            if (visual != null && item?.FloorPlan != null) ItemFloors[visual] = item.FloorPlan;
-            return FindPlane(item?.FloorPlan?.WorldState)?.BeginLogical();
-        }
-
-        internal static LogicalScope BeginItem(RoomItemVisual visual) =>
-            visual != null && ItemFloors.TryGetValue(visual, out var floor)
-                ? FindPlane(floor?.WorldState)?.BeginLogical() : null;
-
-        internal static LogicalScope BeginPerimeter(HospitalPlotFootprintPerimeter value) =>
-            value != null && PerimeterPlanes.TryGetValue(value, out var plane)
-                ? plane.BeginLogical() : null;
-
         internal static void RegisterRoomVisual(RoomFloorPlanVisual visual, WorldState world) =>
             FindPlane(world)?.AttachRoot(VisualContainer?.GetValue(visual) as Transform);
 
@@ -553,19 +507,90 @@ namespace UnderPressure.Storey
             }
         }
 
-        internal static void PresentCursor(CursorManager cursor)
+        // Convierte una coordenada logica del mapa al espacio de su planta. Los datos
+        // continúan en X/Z y la altura existe una sola vez, en la raiz de la planta.
+        internal static void SetLogicalPosition(Transform value, Vector3 logicalPosition)
         {
-            if (cursor == null) return;
+            if (value == null) return;
+            var plane = FindPlane(value);
+            value.position = plane?.Root != null
+                ? plane.Root.TransformPoint(logicalPosition)
+                : logicalPosition;
+        }
+
+        internal static GameObject InstantiateLogical(GameObject prefab, Vector3 logicalPosition,
+            Quaternion logicalRotation, Transform parent)
+        {
+            var plane = FindPlane(parent);
+            if (plane?.Root == null)
+                return UnityEngine.Object.Instantiate(prefab, logicalPosition, logicalRotation, parent);
+            var instance = UnityEngine.Object.Instantiate(prefab, parent, false);
+            instance.transform.position = plane.Root.TransformPoint(logicalPosition);
+            instance.transform.rotation = plane.Root.rotation * logicalRotation;
+            return instance;
+        }
+
+        internal static IEnumerable<CodeInstruction> ConvertPositionSetters(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var nativeSetter = AccessTools.PropertySetter(typeof(Transform), nameof(Transform.position));
+            var logicalSetter = AccessTools.Method(typeof(StoreyRuntime), nameof(SetLogicalPosition));
+            foreach (var instruction in instructions)
+            {
+                if (instruction.Calls(nativeSetter))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = logicalSetter;
+                }
+                yield return instruction;
+            }
+        }
+
+        internal static IEnumerable<CodeInstruction> ConvertPerimeterInstantiation(
+            IEnumerable<CodeInstruction> instructions)
+        {
+            var logicalInstantiate = AccessTools.Method(typeof(StoreyRuntime),
+                nameof(InstantiateLogical));
+            foreach (var instruction in instructions)
+            {
+                if ((instruction.opcode == OpCodes.Call || instruction.opcode == OpCodes.Callvirt) &&
+                    instruction.operand is MethodInfo method && method.Name == nameof(UnityEngine.Object.Instantiate) &&
+                    method.DeclaringType == typeof(UnityEngine.Object) &&
+                    method.GetParameters().Length == 4)
+                    instruction.operand = logicalInstantiate;
+                yield return instruction;
+            }
+        }
+
+        internal static bool AllowLightingCalculation(WorldState world)
+        {
+            if (_creatingUpperWorld) return false;
+            var plane = FindPlane(world);
+            if (plane?.Storey != StoreyApi.UpperStorey) return true;
+            plane.Visuals?.RoomLightingManager?.RegenerateInteriorVolumeLights();
+            return false;
+        }
+
+        internal static void AdjustLightingOrigin(bool[,] tiles, ref Vector3 origin)
+        {
+            if (tiles == null) return;
             foreach (var state in Levels.Values)
             {
-                if (!ReferenceEquals(state.Level.CursorManager, cursor) ||
-                    state.ActiveStorey != StoreyApi.UpperStorey) continue;
-                var visual = CursorVisualisation?.GetValue(cursor) as GameObject;
-                if (visual != null && CursorSmoothed?.GetValue(cursor) is Vector3 logical)
-                    visual.transform.position = logical +
-                        Vector3.up * StoreyApi.UpperVisualHeight;
-                return;
+                var plane = state.Upper;
+                if (plane?.World?.AllRooms == null || plane.Root == null) continue;
+                foreach (var room in plane.World.AllRooms)
+                {
+                    if (!ReferenceEquals(room?.FloorPlan?.Tiles, tiles)) continue;
+                    origin = plane.Root.TransformPoint(origin);
+                    return;
+                }
             }
+        }
+
+        internal static void AdjustMenuAnchor(Room room, ref Vector3 position)
+        {
+            var plane = FindPlane(room?.FloorPlan?.WorldState);
+            if (plane?.Root != null) position = plane.Root.TransformPoint(position);
         }
 
         internal static bool AllowTerrainCache() => !_creatingUpperWorld;
@@ -590,7 +615,7 @@ namespace UnderPressure.Storey
                 try { state.DestroyUpper(); } catch { }
             foreach (var visual in HiddenInterior.Keys.ToArray()) RestoreInterior(visual);
             Levels.Clear(); PreparedUpper.Clear(); WorldPlanes.Clear();
-            PerimeterPlanes.Clear(); ItemFloors.Clear(); PlotVisibility.Clear();
+            PerimeterPlanes.Clear(); PlotVisibility.Clear();
             DefinitionStoreys.Clear(); DefinitionOrders.Clear(); _nextOrder = 0;
         }
 
@@ -618,6 +643,15 @@ namespace UnderPressure.Storey
             world != null && WorldPlanes.TryGetValue(world, out var plane) ? plane : null;
         private static Plane FindPlane(HospitalPlot plot) =>
             FindPlane(PlotWorld?.GetValue(plot) as WorldState);
+        private static Plane FindPlane(Transform value)
+        {
+            if (value == null) return null;
+            foreach (var state in Levels.Values)
+                if (state.Upper?.Root != null &&
+                    (ReferenceEquals(value, state.Upper.Root) || value.IsChildOf(state.Upper.Root)))
+                    return state.Upper;
+            return null;
+        }
 
         private static void RegisterPlane(Plane plane)
         {
@@ -637,7 +671,6 @@ namespace UnderPressure.Storey
                 BindingFlags.Instance | BindingFlags.NonPublic).Invoke(source, null);
             clone.HospitalPlots = new List<SharedInstance<HospitalPlotDefinition>>();
             clone.createBaseLandscapeItems = false;
-            clone.FogOfWarDefinition = null;
             return clone;
         }
 
@@ -675,9 +708,8 @@ namespace UnderPressure.Storey
                 DestroyUpper();
                 if (config?.HospitalPlots == null || config.HospitalPlots.Count == 0) return null;
                 config.createBaseLandscapeItems = false;
-                config.FogOfWarDefinition = null;
                 var root = new GameObject("Under Pressure - Upper Map - " + Level.UniqueID);
-                root.transform.position = Vector3.zero;
+                root.transform.position = Vector3.up * StoreyApi.UpperVisualHeight;
                 var events = new BuildEvents();
                 // VisualManager es un servicio unico del nivel. Crear un segundo
                 // ejemplar duplicaria sus camaras, luces y callbacks globales.
@@ -689,13 +721,9 @@ namespace UnderPressure.Storey
                 try
                 {
                     using (new ConstructionBindingScope(Level, plane))
-                    using (plane.BeginLogical())
                     {
                         var dataConfig = Level.Config.GetDataViewManagerConfig();
                         var buildConfig = Level.Config.GetBuildingLogicConfig();
-                        var renderer = PostProcessingRendererProxy.Instance;
-                        var previousPostProcessing = renderer?.PostProcessRendererData;
-                        var previousFog = previousPostProcessing?.FogOfWarDefinition;
                         try
                         {
                             _creatingUpperWorld = true;
@@ -710,6 +738,9 @@ namespace UnderPressure.Storey
                                     dataConfig.ValueMaterial, buildConfig.RoomItemEditConfig);
                             }
                             finally { config.HospitalPlots = definitions; }
+                            // Registrar el mapa antes de crear su primera parcela hace que
+                            // todos sus visuales nazcan directamente bajo la raiz superior.
+                            WorldPlanes[plane.World] = plane;
                             foreach (var definition in definitions)
                             {
                                 if (definition?.Instance == null) continue;
@@ -721,12 +752,7 @@ namespace UnderPressure.Storey
                         finally
                         {
                             _creatingUpperWorld = false;
-                            if (renderer != null)
-                                renderer.PostProcessRendererData = previousPostProcessing;
-                            if (previousPostProcessing != null)
-                                previousPostProcessing.FogOfWarDefinition = previousFog;
                         }
-                        WorldPlanes[plane.World] = plane;
                         plane.Data = new DataViewManager(dataConfig, Level, plane.World, visuals);
                         plane.Building = new BuildingLogic(buildConfig, Level, plane.World,
                             visuals, plane.Data, events);
@@ -789,7 +815,6 @@ namespace UnderPressure.Storey
             internal BuildingLogic Building;
             internal readonly GameObject RootObject;
             internal Transform Root => RootObject == null ? null : RootObject.transform;
-            private int _logicalDepth;
 
             internal Plane(StoreyLevel owner, int storey, WorldState.Config config,
                 WorldState world, BuildEvents events, VisualManager visuals,
@@ -800,22 +825,10 @@ namespace UnderPressure.Storey
             }
 
             internal IDisposable Enter() => new BindingScope(Owner.Level, this, true);
-            internal LogicalScope BeginLogical()
-            {
-                if (Storey != StoreyApi.UpperStorey || Root == null) return null;
-                if (_logicalDepth++ == 0) Root.position = Vector3.zero;
-                return new LogicalScope(this);
-            }
-            internal void EndLogical()
-            {
-                if (Root == null || _logicalDepth <= 0) return;
-                if (--_logicalDepth == 0) Root.position = Vector3.up * StoreyApi.UpperVisualHeight;
-            }
             internal void Present(bool value)
             {
                 if (RootObject == null) return;
-                Root.position = _logicalDepth == 0 ? Vector3.up * StoreyApi.UpperVisualHeight :
-                    Vector3.zero;
+                Root.position = Vector3.up * StoreyApi.UpperVisualHeight;
                 RootObject.SetActive(value);
             }
             internal void AttachAll()
@@ -852,13 +865,6 @@ namespace UnderPressure.Storey
                 if (RootObject != null) UnityEngine.Object.Destroy(RootObject);
                 World = null; Data = null; Building = null;
             }
-        }
-
-        internal sealed class LogicalScope : IDisposable
-        {
-            private Plane _plane;
-            internal LogicalScope(Plane plane) { _plane = plane; }
-            public void Dispose() { var value = _plane; _plane = null; value?.EndLogical(); }
         }
 
         private sealed class BindingScope : IDisposable
@@ -1000,64 +1006,41 @@ namespace UnderPressure.Storey
     [HarmonyPatch(typeof(RoomFloorPlanVisual), "UpdateFromRoom")]
     internal static class StoreyRoomVisualUpdatePatch
     {
-        private static void Prefix(RoomFloorPlanVisual __instance, FloorPlan __0,
-            ref StoreyRuntime.LogicalScope __state) =>
-            __state = StoreyRuntime.BeginVisual(__instance, __0);
-        private static void Postfix(RoomFloorPlanVisual __instance, FloorPlan __0,
-            StoreyRuntime.LogicalScope __state) => StoreyRuntime.EndVisual(__instance, __0, __state);
-        private static Exception Finalizer(RoomFloorPlanVisual __instance, FloorPlan __0,
-            StoreyRuntime.LogicalScope __state, Exception __exception)
-        { StoreyRuntime.EndVisual(__instance, __0, __state); return __exception; }
-    }
-
-    [HarmonyPatch]
-    internal static class StoreyRoomVisualMutationPatch
-    {
-        private static IEnumerable<MethodBase> TargetMethods()
-        {
-            yield return AccessTools.Method(typeof(RoomFloorPlanVisual), "CreateWallObjects");
-            yield return AccessTools.Method(typeof(RoomFloorPlanVisual), "CreateFloorTileObjects");
-        }
-        private static void Prefix(RoomFloorPlanVisual __instance,
-            ref StoreyRuntime.LogicalScope __state) =>
-            __state = StoreyRuntime.BeginVisual(__instance);
-        private static void Postfix(StoreyRuntime.LogicalScope __state) => __state?.Dispose();
-        private static Exception Finalizer(StoreyRuntime.LogicalScope __state, Exception value)
-        { __state?.Dispose(); return value; }
-    }
-
-    [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
-    internal static class StoreyRoomItemUpdatePatch
-    {
-        private static void Prefix(RoomItemVisual __instance, RoomItem __0,
-            ref StoreyRuntime.LogicalScope __state) =>
-            __state = StoreyRuntime.BeginItem(__instance, __0);
-        private static void Postfix(StoreyRuntime.LogicalScope __state) => __state?.Dispose();
-        private static Exception Finalizer(StoreyRuntime.LogicalScope __state, Exception value)
-        { __state?.Dispose(); return value; }
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions) =>
+            StoreyRuntime.ConvertPositionSetters(instructions);
     }
 
     [HarmonyPatch(typeof(RoomItemVisual), "set_WorldPosition")]
     internal static class StoreyRoomItemPositionPatch
     {
-        private static void Prefix(RoomItemVisual __instance,
-            ref StoreyRuntime.LogicalScope __state) =>
-            __state = StoreyRuntime.BeginItem(__instance);
-        private static void Postfix(StoreyRuntime.LogicalScope __state) => __state?.Dispose();
-        private static Exception Finalizer(StoreyRuntime.LogicalScope __state, Exception value)
-        { __state?.Dispose(); return value; }
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions) =>
+            StoreyRuntime.ConvertPositionSetters(instructions);
     }
 
-    [HarmonyPatch(typeof(HospitalPlotFootprintPerimeter),
-        nameof(HospitalPlotFootprintPerimeter.Refresh))]
-    internal static class StoreyPerimeterPatch
+    // Las paredes de pasillo usan posiciones absolutas aunque estén dentro del
+    // contenedor de la sala. Se convierten al espacio de la planta propietaria.
+    [HarmonyPatch]
+    internal static class StoreyCorridorPositionPatch
     {
-        private static void Prefix(HospitalPlotFootprintPerimeter __instance,
-            ref StoreyRuntime.LogicalScope __state) =>
-            __state = StoreyRuntime.BeginPerimeter(__instance);
-        private static void Postfix(StoreyRuntime.LogicalScope __state) => __state?.Dispose();
-        private static Exception Finalizer(StoreyRuntime.LogicalScope __state, Exception value)
-        { __state?.Dispose(); return value; }
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(CorridorWallsVisual), "CreateWallObjects");
+            yield return AccessTools.Method(typeof(CorridorWallsVisual), "AddPillarObject");
+        }
+
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions) =>
+            StoreyRuntime.ConvertPositionSetters(instructions);
+    }
+
+    [HarmonyPatch(typeof(HospitalPlotFootprintPerimeter), "AddWall")]
+    internal static class StoreyPerimeterInstantiationPatch
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> instructions) =>
+            StoreyRuntime.ConvertPerimeterInstantiation(instructions);
     }
 
     [HarmonyPatch(typeof(HospitalPlotFootprintVisual), MethodType.Constructor,
@@ -1076,10 +1059,28 @@ namespace UnderPressure.Storey
     { private static void Prefix(CursorManager __instance, ref float __0) =>
         StoreyRuntime.AdjustCursorPlane(__instance, ref __0); }
 
-    [HarmonyPatch(typeof(CursorManager), "UpdateCursorPosition")]
-    internal static class StoreyCursorVisualPatch
-    { private static void Postfix(CursorManager __instance) =>
-        StoreyRuntime.PresentCursor(__instance); }
+    // El segundo WorldState comparte el gestor visual nativo. Su cálculo exterior
+    // no debe sustituir el estado de iluminación del mapa inferior.
+    [HarmonyPatch(typeof(WorldState), "CalculateLighting")]
+    internal static class StoreyUpperLightingPatch
+    {
+        private static bool Prefix(WorldState __instance) =>
+            StoreyRuntime.AllowLightingCalculation(__instance);
+    }
+
+    [HarmonyPatch(typeof(RoomLightingManager), "GenerateCombinedLights")]
+    internal static class StoreyInteriorLightingOriginPatch
+    {
+        private static void Prefix(bool[,] __1, ref Vector3 __2) =>
+            StoreyRuntime.AdjustLightingOrigin(__1, ref __2);
+    }
+
+    [HarmonyPatch(typeof(Room), nameof(Room.GetMenuAnchorPosition))]
+    internal static class StoreyMenuAnchorPatch
+    {
+        private static void Postfix(Room __instance, ref Vector3 __result) =>
+            StoreyRuntime.AdjustMenuAnchor(__instance, ref __result);
+    }
 
     // El mapa superior no posee terreno: no debe capturar ni restaurar las
     // capas del Terrain compartido por la escena inferior.
