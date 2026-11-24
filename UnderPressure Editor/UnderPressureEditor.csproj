@@ -16,7 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UnderPressure Base\UnderPressure.csproj" />
-    <ProjectReference Include="..\UnderPressure Storey\UnderPressureStorey.csproj" />
     <Reference Include="Assembly-CSharp">
       <HintPath>..\Libs\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>

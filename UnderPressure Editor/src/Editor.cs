@@ -21,8 +21,6 @@ namespace UnderPressure.Editor
 {
     [ModPlugin(PluginGuid, PluginName, PluginVersion)]
     [ModDependency("artef.twopointhospital.underpressure", ModDependencyAttribute.DependencyFlags.HardDependency)]
-    [ModDependency("artef.twopointhospital.underpressure.storey",
-        ModDependencyAttribute.DependencyFlags.HardDependency)]
     public sealed class UnderPressureEditorPlugin : BaseModComponent
     {
         public const string PluginGuid = "artef.twopointhospital.underpressure.editor";

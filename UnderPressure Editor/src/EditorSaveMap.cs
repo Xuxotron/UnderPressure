@@ -521,9 +521,7 @@ namespace UnderPressure.Editor
 
         private static void SynchronisePlotSettings(Level level)
         {
-            var plots = level == null
-                ? null
-                : global::UnderPressure.Storey.StoreyApi.GetPlots(level);
+            var plots = level?.WorldState?.HospitalPlots;
             if (plots == null) return;
             while (_plotSettings.Count > plots.Count)
                 _plotSettings.RemoveAt(_plotSettings.Count - 1);
@@ -544,7 +542,6 @@ namespace UnderPressure.Editor
             return new ScenarioMapFormat.Plot
             {
                 index = index,
-                storey = global::UnderPressure.Storey.StoreyApi.GetStorey(definition),
                 nameTerm = definition.NameLocalised.Term,
                 cost = definition.Cost,
                 color = definition.Color,
@@ -572,7 +569,6 @@ namespace UnderPressure.Editor
             return new ScenarioMapFormat.Plot
             {
                 index = source.index,
-                storey = source.storey,
                 nameTerm = source.nameTerm ?? "",
                 cost = source.cost,
                 color = source.color,
@@ -1214,7 +1210,7 @@ namespace UnderPressure.Editor
             {
             if (File.Exists(package)) ScenarioMapPackage.Extract(package, folder);
             var main = Path.Combine(folder, ScenarioMapFormat.ConfigFileName);
-            var worldPlots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
+            var worldPlots = level.WorldState.HospitalPlots;
             var plotSettings = CurrentPlotSettings(level);
             var refs = new List<ScenarioMapFormat.PlotReference>();
             var saved = new List<Tuple<string, ScenarioMapFormat.Plot, string, byte[]>>();
@@ -1787,7 +1783,6 @@ namespace UnderPressure.Editor
         {
             if (before == null || after == null ||
                 before.index != after.index ||
-                before.storey != after.storey ||
                 !string.Equals(before.nameTerm ?? "", after.nameTerm ?? "", StringComparison.Ordinal) ||
                 before.cost != after.cost ||
                 !SameColor(before.color, after.color) ||
@@ -2058,8 +2053,7 @@ namespace UnderPressure.Editor
             var map = ScenarioMapFormat.Read(full);
             if (!string.Equals(map.Header.baseHospitalId, level.Config.UniqueId, StringComparison.Ordinal))
                 throw new InvalidDataException("El mapa corresponde al hospital " + map.Header.baseHospitalName);
-            var world = global::UnderPressure.Storey.StoreyApi.GetWorldState(
-                level, global::UnderPressure.Storey.StoreyApi.LowerStorey);
+            var world = level.WorldState;
             var templates = level.Config.GetWorldStateConfig()?.HospitalPlots;
             var prepared = ScenarioPlotRuntime.Build(map, templates, level.App.Metagame);
             // No importar decoracion global experimental.
@@ -2079,18 +2073,17 @@ namespace UnderPressure.Editor
                     throw new InvalidDataException("El PNG debe conservar el tamano del lienzo base del hospital.");
                 StopActiveEditorTools(level);
                 var previousStyles = CurrentStyles(level);
-            var originalPlots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
-            var originalDefinitions = originalPlots.Select(plot => plot.Definition).ToList();
+            var originalDefinitions = world.HospitalPlots.Select(plot => plot.Definition).ToList();
                 try
                 {
-                    ReplacePlots(level, prepared.Definitions, prepared.Wrappers, map.Header);
+                    ReplacePlots(level, prepared.Definitions, map.Header);
                     RebindNativeEditorPlots(level);
                 }
                 catch
                 {
                     try
                     {
-                        ReplacePlots(level, originalDefinitions, null, previousStyles);
+                        ReplacePlots(level, originalDefinitions, previousStyles);
                         RebindNativeEditorPlots(level);
                     }
                     catch (Exception ex)
@@ -2107,17 +2100,12 @@ namespace UnderPressure.Editor
                 var selected = AccessTools.Field(typeof(CursorEditHospital), "_hospitalPlot");
                 CursorEditHospital activeCursor;
                 if (level.CursorManager.TryGetActiveMode<CursorEditHospital>(out activeCursor) &&
-                    !ReferenceEquals(selected?.GetValue(activeCursor),
-                        global::UnderPressure.Storey.StoreyApi.GetPlots(level)[0]))
+                    !ReferenceEquals(selected?.GetValue(activeCursor), world.HospitalPlots[0]))
                     throw new InvalidOperationException("La seleccion de parcelas no se ha sincronizado.");
                 previous?.DestroyAssets();
-                global::UnderPressure.Storey.StoreyApi.Recalculate(level,
-                    global::UnderPressure.Storey.StoreyApi.LowerStorey);
-                global::UnderPressure.Storey.StoreyApi.Recalculate(level,
-                    global::UnderPressure.Storey.StoreyApi.UpperStorey);
-                UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " +
-                    global::UnderPressure.Storey.StoreyApi.GetPlots(level).Count +
-                    " parcelas repartidas entre dos mapas: " + full);
+                world.CalculateLighting();
+                world.UpdateNavigation();
+                UnderPressureEditorPlugin.Log?.LogInfo("Mapa cargado con " + world.HospitalPlots.Count + " parcelas: " + full);
                 SetStyles(level, map.Header);
                 SetMapTranslations(level, map.Translations, map.Header);
                 SetScenarioSettings(level, map.Header);
@@ -2170,41 +2158,12 @@ namespace UnderPressure.Editor
         }
 
         private static void ReplacePlots(Level level, IList<HospitalPlotDefinition> definitions,
-            IList<UnderPressurePlotInstance> suppliedWrappers, ScenarioMapFormat.Map styles)
+            ScenarioMapFormat.Map styles)
         {
-            var world = global::UnderPressure.Storey.StoreyApi.GetWorldState(
-                level, global::UnderPressure.Storey.StoreyApi.LowerStorey);
+            var world = level.WorldState;
             var worldConfig = WorldConfigField?.GetValue(world) as WorldState.Config;
             if (worldConfig == null)
                 throw new InvalidOperationException("No se pudo acceder a la configuracion visual del hospital.");
-            var wrappers = new List<SharedInstance<HospitalPlotDefinition>>();
-            for (var index = 0; index < definitions.Count; ++index)
-                wrappers.Add(suppliedWrappers != null && index < suppliedWrappers.Count
-                    ? suppliedWrappers[index]
-                    : SharedInstanceUtils.GetSharedInstance<HospitalPlotDefinition>(
-                        definitions[index]));
-            var lowerDefinitions = new List<HospitalPlotDefinition>();
-            var lowerWrappers = new List<SharedInstance<HospitalPlotDefinition>>();
-            var upperDefinitions = new List<HospitalPlotDefinition>();
-            var upperWrappers = new List<SharedInstance<HospitalPlotDefinition>>();
-            for (var index = 0; index < definitions.Count; ++index)
-            {
-                if (global::UnderPressure.Storey.StoreyApi.GetStorey(definitions[index]) ==
-                    global::UnderPressure.Storey.StoreyApi.UpperStorey)
-                {
-                    upperDefinitions.Add(definitions[index]);
-                    upperWrappers.Add(wrappers[index]);
-                }
-                else
-                {
-                    lowerDefinitions.Add(definitions[index]);
-                    lowerWrappers.Add(wrappers[index]);
-                }
-            }
-            if (lowerDefinitions.Count == 0)
-                throw new InvalidDataException("El mapa debe conservar al menos una parcela inferior.");
-
-            global::UnderPressure.Storey.StoreyApi.ReplaceUpperWorld(level, null);
             var existing = world.HospitalPlots.ToArray();
             foreach (var plot in existing)
             {
@@ -2212,28 +2171,18 @@ namespace UnderPressure.Editor
                 plot.Destroy();
             }
             world.HospitalPlots.Clear();
-            worldConfig.HospitalPlots = lowerWrappers;
             var previousPrefabs = worldConfig.PerimeterPrefabs;
             var previousBuilt = worldConfig._roomBuiltDefinition;
             var previousBuilding = worldConfig._roomBuildingDefinition;
             var previousUnbuilt = worldConfig._roomUnbuiltDefinition;
             try
             {
-                ScenarioHospitalStyles.Apply(level, styles, worldConfig, lowerDefinitions);
-                foreach (var definition in lowerDefinitions)
+                ScenarioHospitalStyles.Apply(level, styles, worldConfig, definitions);
+                foreach (var definition in definitions)
                 {
                     var plot = new HospitalPlot(definition, world, level);
                     world.HospitalPlots.Add(plot);
                     level.HospitalEditEvents.OnHospitalPlotUpdated?.Invoke(plot);
-                }
-                if (upperDefinitions.Count != 0)
-                {
-                    var upperConfig = (WorldState.Config)CloneMethod.Invoke(worldConfig, null);
-                    upperConfig.HospitalPlots = upperWrappers;
-                    upperConfig.createBaseLandscapeItems = false;
-                    upperConfig.FogOfWarDefinition = null;
-                    ScenarioHospitalStyles.Apply(level, styles, upperConfig, upperDefinitions);
-                    global::UnderPressure.Storey.StoreyApi.ReplaceUpperWorld(level, upperConfig);
                 }
             }
             finally
@@ -2250,7 +2199,6 @@ namespace UnderPressure.Editor
         // actualizarlas es imprescindible ANTES de permitir otra seleccion.
         private static void RebindNativeEditorPlots(Level level)
         {
-            var allPlots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
             CursorEditHospital cursor;
             if (level.CursorManager == null ||
                 !level.CursorManager.TryGetActiveMode<CursorEditHospital>(out cursor) || cursor == null)
@@ -2269,10 +2217,8 @@ namespace UnderPressure.Editor
             foreach (var preview in previews.Values)
                 if (preview != null) UnityEngine.Object.Destroy(preview);
             previews.Clear();
-            foreach (var plot in allPlots)
+            foreach (var plot in level.WorldState.HospitalPlots)
             {
-                global::UnderPressure.Storey.StoreyApi.SetActiveStorey(level,
-                    global::UnderPressure.Storey.StoreyApi.GetStorey(plot.Definition));
                 // Repetir SOLO el inicio nativo del Editor, no reconstruir parcelas
                 // existentes ni dejar las nuevas en estado Unbuilt con vallas.
                 plot.BuyAndBuildImmediately();
@@ -2284,11 +2230,11 @@ namespace UnderPressure.Editor
                     previews.TryGetValue(plot, out var tilePreview) && tilePreview != null)
                     tilePreview.SetActive(plot.IsVisible());
             }
-            if (allPlots.Count == 0)
+            if (level.WorldState.HospitalPlots.Count == 0)
                 throw new InvalidOperationException("No quedan parcelas para seleccionar en el Editor.");
             // CursorEditHospital hace esta misma llamada directa al iniciarse. Repetirla
             // aqui evita depender del estado visible del menu durante la carga del mapa.
-            select.Invoke(cursor, new object[] { allPlots[0] });
+            select.Invoke(cursor, new object[] { level.WorldState.HospitalPlots[0] });
             UnderPressureEditorPlugin.Log?.LogInfo(
                 "Editor: controles 3D sincronizados con " + previews.Count + " parcelas.");
         }
@@ -2299,9 +2245,8 @@ namespace UnderPressure.Editor
         {
             RequireEditor(level);
             var world = level.WorldState;
-            var allPlots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
             var originalPlots = world.HospitalPlots.ToArray();
-            if (originalPlots.Length == 0 || allPlots.Count >= 128)
+            if (originalPlots.Length == 0 || originalPlots.Length >= 128)
                 throw new InvalidOperationException("No se pueden crear mas parcelas.");
 
             // El editor puede estar en la paleta de objetos (CursorEditHospitalItem):
@@ -2394,9 +2339,6 @@ namespace UnderPressure.Editor
             GameObject buttonObject = null;
             ScenarioPlotRuntime.Collection collection = null;
             bool createdCollection = false;
-            HospitalPlotDefinition def = null;
-            UnderPressurePlotInstance wrapper = null;
-            WorldState.Config addedWorldConfig = null;
             try
             {
                 var pixels = new Color32[width * height];
@@ -2409,7 +2351,7 @@ namespace UnderPressure.Editor
                 newTexture.SetPixels32(pixels);
                 newTexture.Apply(false, false);
 
-                def = (HospitalPlotDefinition)CloneMethod.Invoke(template, null);
+                var def = (HospitalPlotDefinition)CloneMethod.Invoke(template, null);
                 def.FloorImage = newTexture;
                 def.Cost = 10000;
                 def.InitiallyOpen = false;
@@ -2423,8 +2365,6 @@ namespace UnderPressure.Editor
                 ItemsField.SetValue(def, new List<HospitalPlotItem>());
                 BuiltField.SetValue(def, new List<HospitalPlotItem>());
                 UnbuiltField.SetValue(def, new List<HospitalPlotItem>());
-                global::UnderPressure.Storey.StoreyApi.RegisterDefinition(def,
-                    global::UnderPressure.Storey.StoreyApi.GetActiveStorey(level));
 
                 var worldConfig = WorldConfigField?.GetValue(world) as WorldState.Config;
                 if (worldConfig == null)
@@ -2468,7 +2408,7 @@ namespace UnderPressure.Editor
                     "_text")?.GetValue(control) as TMP_Text;
                 if (label != null)
                     label.text = EditorLocalization.Format(
-                        "editor.plot.default_name", allPlots.Count + 1);
+                        "editor.plot.default_name", originalPlots.Length + 1);
                 ScenarioEditorDockLayout.NotifyPlotListChanged();
 
                 if (_currentCustomPlots == null)
@@ -2477,15 +2417,8 @@ namespace UnderPressure.Editor
                     createdCollection = true;
                 }
                 collection = _currentCustomPlots;
-                wrapper = ScriptableObject.CreateInstance<UnderPressurePlotInstance>();
-                wrapper.name = "UP_EDITOR_NEW_PLOT_INSTANCE";
-                wrapper.hideFlags = HideFlags.DontSave;
-                wrapper.Instance = def;
                 collection.Textures.Add(newTexture);
                 collection.Definitions.Add(def);
-                collection.Wrappers.Add(wrapper);
-                worldConfig.HospitalPlots.Add(wrapper);
-                addedWorldConfig = worldConfig;
 
                 if (world.HospitalPlots.Count != originalPlots.Length + 1 ||
                     !originalPlots.SequenceEqual(world.HospitalPlots.Take(originalPlots.Length)))
@@ -2495,7 +2428,7 @@ namespace UnderPressure.Editor
                 world.UpdateNavigation();
                 UnderPressureEditorPlugin.Log?.LogInfo("Parcela " + (originalPlots.Length + 1) +
                     " agregada sin modificar las " + originalPlots.Length + " parcelas anteriores.");
-                return allPlots.Count;
+                return originalPlots.Length;
             }
             catch
             {
@@ -2515,16 +2448,11 @@ namespace UnderPressure.Editor
                 if (collection != null)
                 {
                     collection.Textures.Remove(newTexture);
-                    collection.Definitions.Remove(def);
-                    collection.Wrappers.Remove(wrapper);
+                    collection.Definitions.Remove(added?.Definition);
                     if (createdCollection && collection.Definitions.Count == 0)
                         _currentCustomPlots = null;
                 }
-                addedWorldConfig?.HospitalPlots?.Remove(wrapper);
-                if (wrapper != null) UnityEngine.Object.Destroy(wrapper);
                 UnityEngine.Object.Destroy(newTexture);
-                if (def != null)
-                    global::UnderPressure.Storey.StoreyApi.UnregisterDefinition(def);
                 throw;
             }
         }
@@ -2552,38 +2480,18 @@ namespace UnderPressure.Editor
 
         // Borra la parcela seleccionada, no necesariamente la ultima. Las otras
         // instancias y botones nativos permanecen intactos.
-        internal static HospitalPlot ChangePlotStorey(Level level, int index, int storey)
-        {
-            RequireEditor(level);
-            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
-            if (index < 0 || index >= plots.Count)
-                throw new ArgumentOutOfRangeException(nameof(index));
-            StopActiveEditorTools(level);
-            var replacement = global::UnderPressure.Storey.StoreyApi.SetPlotStorey(
-                level, plots[index], storey, true);
-            RebindNativeEditorPlots(level);
-            RefreshPlotButtons(level, index);
-            ScenarioEditorDockLayout.NotifyPlotListChanged();
-            return replacement;
-        }
-
         internal static void DeletePlot(Level level, HospitalPlot selected)
         {
             RequireEditor(level);
-            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
+            var world = level.WorldState;
+            var plots = world.HospitalPlots;
             if (plots.Count <= 1)
                 throw new InvalidOperationException("El hospital debe conservar al menos una parcela.");
-            if (global::UnderPressure.Storey.StoreyApi.GetStorey(selected.Definition) ==
-                    global::UnderPressure.Storey.StoreyApi.LowerStorey &&
-                global::UnderPressure.Storey.StoreyApi.GetPlots(level,
-                    global::UnderPressure.Storey.StoreyApi.LowerStorey).Count <= 1)
-                throw new InvalidOperationException("El hospital debe conservar una parcela inferior.");
             int index = -1;
             for (var i = 0; i < plots.Count; i++)
                 if (ReferenceEquals(plots[i], selected)) { index = i; break; }
             if (index < 0)
                 throw new InvalidOperationException("Selecciona la parcela que quieres eliminar.");
-            var selectedDefinition = selected.Definition;
 
             StopActiveEditorTools(level);
             var menu = FindNativeEditorMenu(level);
@@ -2616,14 +2524,13 @@ namespace UnderPressure.Editor
             }
             control.gameObject.SetActive(false);
             UnityEngine.Object.Destroy(control.gameObject);
-            global::UnderPressure.Storey.StoreyApi.RemovePlot(level, selected);
-            if (ReferenceEquals(_plotSettingsLevel, level) && index < _plotSettings.Count)
-                _plotSettings.RemoveAt(index);
-            plots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
+            if (selected.HospitalMap != null) world.DestroyHospitalMap(selected.HospitalMap);
+            selected.Destroy();
+            plots.RemoveAt(index);
             ScenarioEditorDockLayout.NotifyPlotListChanged();
             foreach (var remaining in plots)
             {
-                if (ReferenceEquals(remaining.Definition.MergeInto?.Instance, selectedDefinition))
+                if (ReferenceEquals(remaining.Definition.MergeInto?.Instance, selected.Definition))
                     remaining.Definition.MergeInto = null;
                 // Una parcela borrada nunca debe quedar como requisito de otra.
                 var requirements = remaining.Definition.Prerequisites;
@@ -2635,32 +2542,18 @@ namespace UnderPressure.Editor
                     if (bought == null) continue;
                     var targets = prereqField.GetValue(bought) as SharedInstance<HospitalPlotDefinition>[];
                     if (targets != null && targets.Any(item =>
-                        ReferenceEquals(item?.Instance, selectedDefinition)))
+                        ReferenceEquals(item?.Instance, selected.Definition)))
                         requirements.RemoveAt(i);
                 }
             }
-            if (_currentCustomPlots != null)
-            {
-                var definition = selectedDefinition;
-                var wrapper = _currentCustomPlots.Wrappers.FirstOrDefault(item =>
-                    ReferenceEquals(item?.Instance, definition));
-                var texture = definition?.FloorImage;
-                _currentCustomPlots.Definitions.Remove(definition);
-                if (wrapper != null)
-                {
-                    _currentCustomPlots.Wrappers.Remove(wrapper);
-                    UnityEngine.Object.Destroy(wrapper);
-                }
-                if (texture != null && _currentCustomPlots.Textures.Remove(texture))
-                    UnityEngine.Object.Destroy(texture);
-            }
+            world.CalculateLighting();
+            world.UpdateNavigation();
             UnderPressureEditorPlugin.Log?.LogInfo("Parcela " + (index + 1) +
                 " eliminada, quedan " + plots.Count + " parcelas.");
         }
 
         private static void RefreshPlotButtons(Level level, int selectedIndex = 0)
         {
-            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
             var menu = FindNativeEditorMenu(level);
             if (menu == null)
                 throw new InvalidOperationException("No se encontro el menu nativo de parcelas del Editor.");
@@ -2670,7 +2563,7 @@ namespace UnderPressure.Editor
             var colors = AccessTools.Field(menuType, "_editFrameColors")?.GetValue(menu) as Color[];
             if (root == null || prefab == null || colors == null)
                 throw new InvalidOperationException("No se encontraron los controles nativos de parcelas.");
-            if (plots.Count == 0)
+            if (level.WorldState.HospitalPlots == null || level.WorldState.HospitalPlots.Count == 0)
                 throw new InvalidOperationException("No quedan parcelas para mostrar en el Editor.");
             var old = root.GetComponentsInChildren<PlotSelectionItem>(true);
             foreach (var entry in old)
@@ -2678,19 +2571,19 @@ namespace UnderPressure.Editor
                 entry.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(entry.gameObject);
             }
-            for (var i = 0; i < plots.Count; i++)
+            for (var i = 0; i < level.WorldState.HospitalPlots.Count; i++)
             {
                 var obj = UnityEngine.Object.Instantiate(prefab, root, false);
                 var control = obj.GetComponent<PlotSelectionItem>();
-                control.Setup(plots[i], i == selectedIndex, level.HospitalEditEvents, colors);
+                control.Setup(level.WorldState.HospitalPlots[i], i == selectedIndex, level.HospitalEditEvents, colors);
                 var label = AccessTools.Field(typeof(PlotSelectionItem),
                     "_text")?.GetValue(control) as TMP_Text;
                 if (label != null)
                     label.text = EditorLocalization.Format("editor.plot.default_name", i + 1);
             }
-            if (plots.Count > 0)
+            if (level.WorldState.HospitalPlots.Count > 0)
                 level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(
-                    plots[Mathf.Clamp(selectedIndex, 0, plots.Count - 1)]);
+                    level.WorldState.HospitalPlots[Mathf.Clamp(selectedIndex, 0, level.WorldState.HospitalPlots.Count - 1)]);
         }
 
         // El nombre visible se deriva siempre de la posición de la parcela y
@@ -3380,7 +3273,7 @@ namespace UnderPressure.Editor
 
         private static bool AlreadyNative(Level level, RoomItemDefinition definition, Vector3 point)
         {
-            foreach (var plot in global::UnderPressure.Storey.StoreyApi.GetPlots(level))
+            foreach (var plot in level.WorldState.HospitalPlots)
             {
                 var items = plot?.HospitalMap?.FloorPlan?.LandscapeItems;
                 if (items == null) continue;
@@ -3689,8 +3582,8 @@ namespace UnderPressure.Editor
             AddTrafficLayerButtons();
             AddPlotIsolationButton();
             InitialisePlotActions();
-            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(level);
-            _selectedPlot = plots.Count > 0 ? plots[0] : null;
+            _selectedPlot = level.WorldState.HospitalPlots.Count > 0
+                ? level.WorldState.HospitalPlots[0] : null;
             RefreshContextToolbarButtons();
             level.HospitalEditEvents.OnSelectHospitalPlot += OnPlotSelected;
             AddMapIdentity();
@@ -4431,7 +4324,7 @@ rect.pivot = new Vector2(1f, 1f);
             if (enabled)
             {
                 _plotVisibilityBeforeIsolation.Clear();
-                foreach (var plot in global::UnderPressure.Storey.StoreyApi.GetPlots(_level))
+                foreach (var plot in _level.WorldState.HospitalPlots)
                     if (plot != null) _plotVisibilityBeforeIsolation[plot] = plot.IsVisible();
                 _plotIsolation = true;
                 ApplyPlotIsolation();
@@ -4446,8 +4339,8 @@ rect.pivot = new Vector2(1f, 1f);
 
         private void ApplyPlotIsolation()
         {
-            if (!_plotIsolation || _level == null) return;
-            foreach (var plot in global::UnderPressure.Storey.StoreyApi.GetPlots(_level))
+            if (!_plotIsolation || _level?.WorldState?.HospitalPlots == null) return;
+            foreach (var plot in _level.WorldState.HospitalPlots)
             {
                 if (plot == null) continue;
                 if (!_plotVisibilityBeforeIsolation.ContainsKey(plot))
@@ -4494,10 +4387,6 @@ rect.pivot = new Vector2(1f, 1f);
             // interfaz. No salir de Escenario si NO se ha escogido otra parcela.
             var changed = !ReferenceEquals(_selectedPlot, plot);
             _selectedPlot = plot;
-            if (plot != null)
-                global::UnderPressure.Storey.StoreyApi.SetActiveStorey(
-                    _level,
-                    global::UnderPressure.Storey.StoreyApi.GetStorey(plot.Definition));
             if (changed || ScenarioLandscape.IsActive || ScenarioTraffic.IsActive)
             {
                 ScenarioEditorScene.Deselect();
@@ -4847,7 +4736,7 @@ rect.pivot = new Vector2(1f, 1f);
             for (int i = 0; i < ScenarioEditorHotkeyMap.PlotKeys.Length; i++)
             {
                 if (!input.GetKeyDown(ScenarioEditorHotkeyMap.PlotKeys[i])) continue;
-                var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
+                var plots = _level.WorldState?.HospitalPlots;
                 if (plots != null && i < plots.Count)
                     _level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plots[i]);
                 return;
@@ -4908,9 +4797,7 @@ rect.pivot = new Vector2(1f, 1f);
             _active._initialVisibilityFrames = 12;
             // Los antiguos objetos HospitalPlot se destruyeron al cargar.
             // Olvidar esas referencias y aplicar el bloqueo a las parcelas nuevas.
-            var plots = _active._level == null
-                ? null
-                : global::UnderPressure.Storey.StoreyApi.GetPlots(_active._level);
+            var plots = _active._level?.WorldState?.HospitalPlots;
             if (plots != null)
                 foreach (var old in _active._plotVisibilityBeforeIsolation.Keys.ToArray())
                     if (!plots.Contains(old))
@@ -4923,9 +4810,7 @@ rect.pivot = new Vector2(1f, 1f);
         // encender sus casillas para que aparezca la decoracion.
         private void ReapplyVisiblePlotItems()
         {
-            var plots = _level == null
-                ? null
-                : global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
+            var plots = _level?.WorldState?.HospitalPlots;
             if (plots == null) return;
             foreach (var plot in plots)
             {
@@ -4996,9 +4881,7 @@ rect.pivot = new Vector2(1f, 1f);
 
         private HospitalPlot SelectedPlot()
         {
-            var plots = _level == null
-                ? null
-                : global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
+            var plots = _level?.WorldState?.HospitalPlots;
             if (plots == null || plots.Count == 0) return null;
             return plots.FirstOrDefault(plot => ReferenceEquals(plot, _selectedPlot));
         }
@@ -5019,18 +4902,13 @@ rect.pivot = new Vector2(1f, 1f);
                     T("editor.plot.delete.select_first"));
                 return;
             }
-            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
-            if (plots.Count <= 1 ||
-                (global::UnderPressure.Storey.StoreyApi.GetStorey(selected.Definition) ==
-                     global::UnderPressure.Storey.StoreyApi.LowerStorey &&
-                 global::UnderPressure.Storey.StoreyApi.GetPlots(_level,
-                     global::UnderPressure.Storey.StoreyApi.LowerStorey).Count <= 1))
+            if (_level.WorldState.HospitalPlots.Count <= 1)
             {
                 ShowError(T("editor.plot.delete.title"),
                     T("editor.plot.delete.minimum"));
                 return;
             }
-            var index = plots.IndexOf(selected);
+            var index = _level.WorldState.HospitalPlots.IndexOf(selected);
             BuildDialog(T("editor.plot.delete.title"));
             if (_dialog == null) return;
             AddText(_dialogPanel,
@@ -5644,8 +5522,8 @@ rect.pivot = new Vector2(1f, 1f);
         {
             if (!ScenarioEditorFlow.IsRunning) return;
             var level = ScenarioEditorSession.Level;
-            if (level == null) return;
-            foreach (var plot in global::UnderPressure.Storey.StoreyApi.GetPlots(level))
+            if (level?.WorldState?.HospitalPlots == null) return;
+            foreach (var plot in level.WorldState.HospitalPlots)
                 if (plot?.HospitalMap != null)
                     Hide(plot.HospitalMap.FootprintPerimeter);
         }

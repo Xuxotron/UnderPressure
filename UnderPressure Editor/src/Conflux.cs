@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -18,6 +19,7 @@ namespace UnderPressure.Editor
         private sealed class CreatorChoice
         {
             internal string Name;
+            internal string Folder;
             internal readonly List<MapChoice> Maps = new List<MapChoice>();
         }
 
@@ -136,54 +138,52 @@ namespace UnderPressure.Editor
         private void LoadCreators()
         {
             _creators.Clear();
-            var creators = new Dictionary<string, CreatorChoice>(
-                StringComparer.OrdinalIgnoreCase);
-            foreach (var path in ScenarioMapSources.EnumerateEnabledMaps(true))
+            var root = Path.GetFullPath(ScenarioEditorStorage.Folder);
+            if (!Directory.Exists(root)) return;
+            foreach (var creatorFolder in Directory.GetDirectories(root, "*", SearchOption.TopDirectoryOnly))
             {
-                try
+                var creatorName = Path.GetFileName(creatorFolder);
+                if (string.IsNullOrWhiteSpace(creatorName) ||
+                    creatorName.StartsWith("_", StringComparison.Ordinal))
+                    continue;
+                var creator = new CreatorChoice
                 {
-                    var header = ScenarioMapFormat.ReadHeader(path);
-                    var creatorName = header.author?.Trim();
-                    if (string.IsNullOrWhiteSpace(creatorName))
+                    Name = creatorName,
+                    Folder = creatorFolder
+                };
+                foreach (var path in Directory.GetFiles(creatorFolder,
+                             ScenarioMapPackage.SearchPattern,
+                             SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        var header = ScenarioMapFormat.ReadHeader(path);
+                        var hospital = _map.Metagame.LevelList
+                            .GetLevelConfigByID(header.baseHospitalId);
+                        if (hospital == null)
+                        {
+                            UnderPressureEditorPlugin.Log?.LogWarning(
+                                "Conflux ignora un mapa sin hospital base: " + path);
+                            continue;
+                        }
+                        var description = string.IsNullOrWhiteSpace(header.description)
+                            ? T("career.maps.custom.description") : header.description;
+                        if (description.Length > 1400)
+                            description = description.Substring(0, 1400);
+                        creator.Maps.Add(new MapChoice
+                        {
+                            Path = path,
+                            Name = header.name,
+                            Description = description,
+                            BaseHospital = hospital
+                        });
+                    }
+                    catch (Exception exception)
                     {
                         UnderPressureEditorPlugin.Log?.LogWarning(
-                            "Conflux ignora un mapa sin autor en config.json: " + path);
-                        continue;
+                            "Conflux ignora un mapa incorrecto: " + path + ": " + exception.Message);
                     }
-                    var hospital = _map.Metagame.LevelList
-                        .GetLevelConfigByID(header.baseHospitalId);
-                    if (hospital == null)
-                    {
-                        UnderPressureEditorPlugin.Log?.LogWarning(
-                            "Conflux ignora un mapa sin hospital base: " + path);
-                        continue;
-                    }
-                    CreatorChoice creator;
-                    if (!creators.TryGetValue(creatorName, out creator))
-                    {
-                        creator = new CreatorChoice { Name = creatorName };
-                        creators.Add(creatorName, creator);
-                    }
-                    var description = string.IsNullOrWhiteSpace(header.description)
-                        ? T("career.maps.custom.description") : header.description;
-                    if (description.Length > 1400)
-                        description = description.Substring(0, 1400);
-                    creator.Maps.Add(new MapChoice
-                    {
-                        Path = path,
-                        Name = header.name,
-                        Description = description,
-                        BaseHospital = hospital
-                    });
                 }
-                catch (Exception exception)
-                {
-                    UnderPressureEditorPlugin.Log?.LogWarning(
-                        "Conflux ignora un mapa incorrecto: " + path + ": " + exception.Message);
-                }
-            }
-            foreach (var creator in creators.Values)
-            {
                 creator.Maps.Sort((left, right) =>
                     StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name));
                 if (creator.Maps.Count > 0) _creators.Add(creator);

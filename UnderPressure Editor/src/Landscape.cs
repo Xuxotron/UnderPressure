@@ -1042,10 +1042,7 @@ namespace UnderPressure.Editor
         private static HashSet<Transform> GetPlotVisualRoots()
         {
             var roots = new HashSet<Transform>();
-            var level = ScenarioEditorSession.Level;
-            var plots = level == null
-                ? null
-                : global::UnderPressure.Storey.StoreyApi.GetPlots(level);
+            var plots = ScenarioEditorSession.Level?.WorldState?.HospitalPlots;
             if (plots == null) return roots;
             foreach (var plot in plots)
             {

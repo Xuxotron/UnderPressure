@@ -266,7 +266,6 @@ namespace UnderPressure.Editor
         internal sealed class Plot
         {
             public int index;
-            public int storey;
             public string nameTerm = "";
             public int cost;
             public Color color = Color.white;
@@ -1726,38 +1725,13 @@ namespace UnderPressure.Editor
             try
             {
                 var cloned = (WorldState.Config)CloneMethod.Invoke(config, null);
-                var upper = (WorldState.Config)CloneMethod.Invoke(config, null);
-                var lowerWrappers = new List<FullInspector.SharedInstance<HospitalPlotDefinition>>();
-                var upperWrappers = new List<FullInspector.SharedInstance<HospitalPlotDefinition>>();
-                var lowerDefinitions = new List<HospitalPlotDefinition>();
-                var upperDefinitions = new List<HospitalPlotDefinition>();
-                for (var index = 0; index < _plotAssets.Wrappers.Count; ++index)
-                {
-                    var wrapper = _plotAssets.Wrappers[index];
-                    var definition = _plotAssets.Definitions[index];
-                    if (global::UnderPressure.Storey.StoreyApi.GetStorey(definition) ==
-                        global::UnderPressure.Storey.StoreyApi.UpperStorey)
-                    {
-                        upperWrappers.Add(wrapper);
-                        upperDefinitions.Add(definition);
-                    }
-                    else
-                    {
-                        lowerWrappers.Add(wrapper);
-                        lowerDefinitions.Add(definition);
-                    }
-                }
-                cloned.HospitalPlots = lowerWrappers;
-                upper.HospitalPlots = upperWrappers;
+                cloned.HospitalPlots = _plotAssets.Wrappers
+                    .ConvertAll<FullInspector.SharedInstance<HospitalPlotDefinition>>(item => item);
                 // RoomFloorPlanVisual no crea los VISUALES de la capa Base
                 // cuando este flag es false (valor nativo de muchos hospitales).
                 // La escena original los contiene precocinados para el juego base,
                 // pero el mapa personalizado debe mostrar sus propias modificaciones.
                 cloned.createBaseLandscapeItems = true;
-                // El segundo mapa contiene exclusivamente sus parcelas. No crea
-                // terreno ni paisaje propios; su presentación completa se
-                // desplaza después a +2 m por UnderPressure.Storey.
-                upper.createBaseLandscapeItems = false;
                 if (!string.IsNullOrEmpty(_map.Header.fogOfWarFile))
                 {
                     _runtimeFog = ScenarioEditorFogOfWar.CreateDefinition(
@@ -1770,16 +1744,12 @@ namespace UnderPressure.Editor
                     cloned.initialAttractiveness = _map.Header.initialAttractiveness;
                     cloned.initialHygiene = _map.Header.initialHygiene;
                 }
-                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, lowerDefinitions);
-                ScenarioHospitalStyles.Apply(level, _map.Header, upper, upperDefinitions);
-                global::UnderPressure.Storey.StoreyApi.PrepareUpperWorld(
-                    level, upperWrappers.Count == 0 ? null : upper);
+                ScenarioHospitalStyles.Apply(level, _map.Header, cloned, _plotAssets.Definitions);
                 config = cloned;
                 _active = true;
                 _worldConfigApplied = true;
                 UnderPressureEditorPlugin.Log?.LogInfo(
-                    "Carrera: mapas preparados con " + lowerWrappers.Count +
-                    " parcelas inferiores y " + upperWrappers.Count + " superiores.");
+                    "Carrera: WorldState creado con " + cloned.HospitalPlots.Count + " parcelas personalizadas.");
             }
             catch
             {
@@ -1891,9 +1861,8 @@ namespace UnderPressure.Editor
             var editableColliders = new HashSet<Collider>();
             var baseObjects = 0;
             var baseVisuals = 0;
-            foreach (var plot in level == null
-                         ? new List<HospitalPlot>()
-                         : global::UnderPressure.Storey.StoreyApi.GetPlots(level))
+            foreach (var plot in level.WorldState?.HospitalPlots ??
+                new List<HospitalPlot>())
             {
                 var items = plot?.HospitalMap?.FloorPlan?.LandscapeItems;
                 if (items == null) continue;
@@ -2186,8 +2155,6 @@ namespace UnderPressure.Editor
             internal readonly List<Texture2D> Textures = new List<Texture2D>();
             internal void DestroyAssets()
             {
-                foreach (var definition in Definitions)
-                    global::UnderPressure.Storey.StoreyApi.UnregisterDefinition(definition);
                 foreach (var wrapper in Wrappers)
                     if (wrapper != null) UnityEngine.Object.Destroy(wrapper);
                 foreach (var texture in Textures)
@@ -2241,12 +2208,6 @@ namespace UnderPressure.Editor
                     definition.AmbulanceBayEntranceSide = (GridDirection)model.ambulanceBayEntranceSide;
                     definition.BuildObjectiveAutoStart = model.buildObjectiveAutoStart;
                     definition.BuildObjectiveStartOnPrereqsMet = model.buildObjectiveStartOnPrereqsMet;
-                    if (model.storey != global::UnderPressure.Storey.StoreyApi.LowerStorey &&
-                        model.storey != global::UnderPressure.Storey.StoreyApi.UpperStorey)
-                        throw new InvalidDataException(
-                            "Planta invalida en la parcela " + index + ": " + model.storey);
-                    global::UnderPressure.Storey.StoreyApi.RegisterDefinition(
-                        definition, model.storey);
                     if (!string.IsNullOrEmpty(model.nameTerm))
                         definition.NameLocalised = new TH20.LocalisedString(model.nameTerm);
                     // El campo MergeInto se resuelve una vez creadas todas las referencias.
@@ -2273,13 +2234,7 @@ namespace UnderPressure.Editor
                     var merged = config.mergeInto;
                     if (merged < -1 || merged >= result.Wrappers.Count || merged == i)
                         throw new InvalidDataException("Referencia MergeInto invalida en parcela " + i);
-                    if (merged >= 0)
-                    {
-                        if (config.storey != map.Plots[merged].Data.storey)
-                            throw new InvalidDataException(
-                                "No se pueden fusionar parcelas de plantas distintas: " + i);
-                        result.Definitions[i].MergeInto = result.Wrappers[merged];
-                    }
+                    if (merged >= 0) result.Definitions[i].MergeInto = result.Wrappers[merged];
                     var prereqs = new List<HospitalPlotPrerequisite>();
                     if (config.prerequisites != null)
                         foreach (var entry in config.prerequisites)
@@ -2300,11 +2255,6 @@ namespace UnderPressure.Editor
                         }
                     result.Definitions[i].Prerequisites = prereqs;
                 }
-                if (!result.Definitions.Any(definition =>
-                        global::UnderPressure.Storey.StoreyApi.GetStorey(definition) ==
-                        global::UnderPressure.Storey.StoreyApi.LowerStorey))
-                    throw new InvalidDataException(
-                        "El mapa debe conservar al menos una parcela inferior.");
                 return result;
             }
             catch
