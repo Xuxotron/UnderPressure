@@ -550,6 +550,43 @@ namespace UnderPressure.Editor
             active.RefreshPlotPanelForCount();
         }
 
+        internal static void TogglePlotStoreyShortcut(HospitalPlot plot)
+        {
+            var active = _active;
+            var spatialPlots = active?._level == null
+                ? null
+                : global::UnderPressure.Storey.StoreyApi.GetPlots(active._level);
+            if (active == null || plot == null || spatialPlots == null) return;
+            var settings = ScenarioEditorStorage.CurrentPlotSettings(active._level);
+            var index = -1;
+            for (var candidate = 0; candidate < spatialPlots.Count; ++candidate)
+                if (ReferenceEquals(spatialPlots[candidate], plot))
+                {
+                    index = candidate;
+                    break;
+                }
+            if (index < 0 || index >= settings.Count) return;
+
+            var selected = settings[index];
+            var storey = selected.storey == global::UnderPressure.Storey.StoreyApi.UpperStorey
+                ? global::UnderPressure.Storey.StoreyApi.LowerStorey
+                : global::UnderPressure.Storey.StoreyApi.UpperStorey;
+            if (storey == global::UnderPressure.Storey.StoreyApi.UpperStorey &&
+                global::UnderPressure.Storey.StoreyApi.GetPlots(active._level,
+                    global::UnderPressure.Storey.StoreyApi.LowerStorey).Count <= 1)
+                return;
+            selected.storey = storey;
+            if (selected.mergeInto >= 0 && selected.mergeInto < settings.Count &&
+                settings[selected.mergeInto].storey != storey)
+                selected.mergeInto = -1;
+            ScenarioEditorStorage.ChangePlotStorey(active._level, index, storey);
+
+            foreach (var skin in active._plotPanel
+                         .GetComponentsInChildren<ScenarioEditorPlotRowSkin>(true))
+                skin.RefreshStoreyArrow();
+            active.RefreshPlotSettingsContents();
+        }
+
         private void Initialise(EditHospitalMenu menu, Level level,
             ScenarioEditorStorageMenu storage, Button template, RectTransform plotViewport)
         {
@@ -663,6 +700,9 @@ namespace UnderPressure.Editor
         private void ToggleTerrain()
         {
             _terrainOpen = !_terrainOpen;
+            if (_terrainOpen && _level != null)
+                global::UnderPressure.Storey.StoreyApi.SetActiveStorey(_level,
+                    global::UnderPressure.Storey.StoreyApi.LowerStorey);
             ScenarioEditorTerrainPainter.SetDockVisible(_terrainOpen);
             ApplyLayout(true);
         }
@@ -924,7 +964,9 @@ namespace UnderPressure.Editor
                 var preferred = LayoutUtility.GetPreferredHeight(content);
                 if (preferred > 1f) return 84f + preferred + 46f;
             }
-            var count = Mathf.Max(1, _level?.WorldState?.HospitalPlots?.Count ?? 1);
+            var count = Mathf.Max(1, _level == null
+                ? 1
+                : global::UnderPressure.Storey.StoreyApi.GetPlots(_level).Count);
             return 163f + count * 36f;
         }
 
@@ -1089,7 +1131,7 @@ namespace UnderPressure.Editor
             return null;
         }
 
-        // CADA PARCELA: ancho, alto, texto a la izquierda y 5 checks a la derecha.
+        // CADA PARCELA: ancho, alto, texto y cinco checks nativos sin alterar.
         // Ajustar checkSize/checkGap aqui; colores en ScenarioEditorPlotRowSkin.
         private static void CompactPlotRow(PlotSelectionItem row, Sprite sprite,
             Color normal, Color selected)
@@ -1101,7 +1143,7 @@ namespace UnderPressure.Editor
             const float checkSize = 23f;
             const float checkGap = 1f;
             const float labelInset = 9f;
-            // 5 * 23 + 4 * 1 = 119 px; todos quedan dentro de 195 px.
+            // 5 * 23 + 4 * 1 = 119 px; medidas originales aprobadas.
             const float checksStart = rowWidth - (5f * checkSize + 4f * checkGap);
             const float labelRight = checksStart - 3f;
             var rowLayout = row.GetComponent<LayoutElement>() ??
@@ -1182,6 +1224,21 @@ namespace UnderPressure.Editor
             var skin = row.GetComponent<ScenarioEditorPlotRowSkin>() ??
                 row.gameObject.AddComponent<ScenarioEditorPlotRowSkin>();
             skin.Initialise(row, sprite, normal, selected);
+            var storeyRect = skin.StoreyButton?.transform as RectTransform;
+            if (storeyRect != null)
+            {
+                storeyRect.SetParent(rowRoot, false);
+                storeyRect.SetAsLastSibling();
+                storeyRect.anchorMin = storeyRect.anchorMax = new Vector2(0f, .5f);
+                storeyRect.pivot = new Vector2(0f, .5f);
+                // Icono independiente en el hueco libre a la izquierda del dolar.
+                storeyRect.anchoredPosition = new Vector2(checksStart - 17f, 0f);
+                storeyRect.sizeDelta = new Vector2(16f, checkSize);
+                storeyRect.localScale = Vector3.one;
+                var element = skin.StoreyButton.GetComponent<LayoutElement>() ??
+                    skin.StoreyButton.gameObject.AddComponent<LayoutElement>();
+                element.ignoreLayout = true;
+            }
         }
 
         // BARRA SUPERIOR: Baldosas y Llegadas comparten exactamente el mismo
@@ -1823,11 +1880,16 @@ namespace UnderPressure.Editor
         private Color[] _toggleColors;
         private Toggle _visibilityToggle;
         private GameObject _visibilityMark;
+        private HospitalPlot _plot;
+        private Button _storeyButton;
+        private TMP_Text _storeyArrow;
         private Sprite _sprite;
         private Color _normal;
         private Color _selectedColor;
         private bool _selected;
         private bool _initialised;
+
+        internal Button StoreyButton => _storeyButton;
 
         internal void Initialise(PlotSelectionItem row, Sprite sprite,
             Color normal, Color selected)
@@ -1841,6 +1903,8 @@ namespace UnderPressure.Editor
                     .GetValue(row) as Button;
                 _label = AccessTools.Field(typeof(PlotSelectionItem), "_text")?
                     .GetValue(row) as TMP_Text;
+                _plot = AccessTools.Field(typeof(PlotSelectionItem), "_plot")?
+                    .GetValue(row) as HospitalPlot;
                 var nativeSelected = AccessTools.Field(typeof(PlotSelectionItem), "_selectedColor")?
                     .GetValue(row);
                 if (_button?.targetGraphic != null && nativeSelected is Color)
@@ -1858,10 +1922,20 @@ namespace UnderPressure.Editor
                     toggle.targetGraphic == null ? Color.white : toggle.targetGraphic.color).ToArray();
                 _visibilityToggle = AccessTools.Field(typeof(PlotSelectionItem), "_toggleVisible")?
                     .GetValue(row) as Toggle;
+                CreateStoreyButton();
                 CreateVisibilityMark();
                 _initialised = true;
             }
             Apply();
+        }
+
+        internal void RefreshStoreyArrow()
+        {
+            if (_storeyArrow == null || _plot == null) return;
+            _storeyArrow.text = global::UnderPressure.Storey.StoreyApi.GetStorey(
+                _plot.Definition) == global::UnderPressure.Storey.StoreyApi.UpperStorey
+                ? "↑"
+                : "↓";
         }
 
         internal void SetSelected(bool selected)
@@ -1906,6 +1980,45 @@ namespace UnderPressure.Editor
                 if (toggle?.graphic is Graphic mark) mark.color = Color.white;
             }
             RefreshVisibilityMark(_visibilityToggle != null && !_visibilityToggle.isOn);
+            RefreshStoreyArrow();
+        }
+
+        private void CreateStoreyButton()
+        {
+            if (_storeyButton != null) return;
+            var root = new GameObject("UP Atajo de planta", typeof(RectTransform),
+                typeof(Button));
+            root.transform.SetParent(transform, false);
+            _storeyButton = root.GetComponent<Button>();
+            var sound = root.AddComponent<ButtonSFX>();
+            sound.AudioEvent = ButtonSFX.ButtonAudioEvent.Default;
+            var colors = _storeyButton.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.pressedColor = new Color(.82f, .82f, .82f, 1f);
+            colors.selectedColor = Color.white;
+            colors.colorMultiplier = 1f;
+            _storeyButton.colors = colors;
+            _storeyButton.onClick.AddListener(() =>
+                ScenarioEditorDockLayout.TogglePlotStoreyShortcut(_plot));
+
+            var arrowObject = new GameObject("Flecha", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            arrowObject.transform.SetParent(root.transform, false);
+            var arrowRect = (RectTransform)arrowObject.transform;
+            arrowRect.anchorMin = Vector2.zero;
+            arrowRect.anchorMax = Vector2.one;
+            arrowRect.offsetMin = Vector2.zero;
+            arrowRect.offsetMax = Vector2.zero;
+            _storeyArrow = arrowObject.GetComponent<TextMeshProUGUI>();
+            if (_label != null) _storeyArrow.font = _label.font;
+            _storeyArrow.fontSize = 16f;
+            _storeyArrow.fontStyle = FontStyles.Bold;
+            _storeyArrow.alignment = TextAlignmentOptions.Center;
+            _storeyArrow.color = Color.white;
+            _storeyArrow.raycastTarget = true;
+            _storeyButton.targetGraphic = _storeyArrow;
+            RefreshStoreyArrow();
         }
 
         private void CreateVisibilityMark()
@@ -1952,6 +2065,7 @@ namespace UnderPressure.Editor
         {
             if (_visibilityToggle != null)
                 _visibilityToggle.onValueChanged.RemoveListener(RefreshVisibilityMarkFromToggle);
+            if (_storeyButton != null) _storeyButton.onClick.RemoveAllListeners();
         }
 
         private static float ColorDistance(Color first, Color second) =>

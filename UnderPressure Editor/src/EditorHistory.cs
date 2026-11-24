@@ -180,7 +180,7 @@ namespace UnderPressure.Editor
         {
             if (!_initialVisibilityPending || !IsValid()) return;
             _initialVisibilityPending = false;
-            var plots = _level.WorldState.HospitalPlots;
+            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
             for (int i = 0; i < plots.Count; i++)
             {
                 var plot = plots[i];
@@ -259,7 +259,7 @@ namespace UnderPressure.Editor
 
         private bool PlotsChanged()
         {
-            var plots = _level.WorldState.HospitalPlots;
+            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
             if (_plotIdentity == null || _plotIdentity.Length != plots.Count) return true;
             for (int i = 0; i < plots.Count; ++i)
             {
@@ -285,7 +285,7 @@ namespace UnderPressure.Editor
             {
                 if (++_initialFrames < 12 || IsBusy() ||
                     Time.unscaledTime < _ignoreChangesUntil) return;
-                _plotIdentity = _level.WorldState.HospitalPlots.ToArray();
+                _plotIdentity = global::UnderPressure.Storey.StoreyApi.GetPlots(_level).ToArray();
                 _plotCenters = _plotIdentity.Select(plot =>
                     plot?.HospitalMap?.FloorPlan == null ? Vector3.zero :
                     plot.HospitalMap.FloorPlan.WorldBounds.Center.ToWorldPosition()).ToArray();
@@ -519,7 +519,7 @@ namespace UnderPressure.Editor
             // Solo LEER los objetos: Capture() modifica el inventario de
             // origen y generaba operaciones ficticias al registrar el historial.
             var state = new State();
-            var plots = _level.WorldState.HospitalPlots;
+            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
             // Los ids existentes se preservan siempre. Solo reconectar con la
             // posicion logica si Unity ha reemplazado la instancia del item.
             var liveIds = new HashSet<int>();
@@ -956,11 +956,15 @@ namespace UnderPressure.Editor
 
         private void RestoreState(State desired)
         {
+            var previousStorey = global::UnderPressure.Storey.StoreyApi.GetActiveStorey(_level);
+            try
+            {
             // 1. Restaurar objetos de las parcelas por identidad logica.
             // Las instancias destruidas se recrean desde su definicion original.
             var targetNative = desired.Native.ToDictionary(x => x.Id);
             var currentNative = new Dictionary<int, LandscapeRoomItem>();
-            foreach (var plot in _level.WorldState.HospitalPlots)
+            var plots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
+            foreach (var plot in plots)
                 foreach (var item in plot?.HospitalMap?.FloorPlan?.LandscapeItems ??
                     new List<LandscapeRoomItem>())
                 {
@@ -975,6 +979,7 @@ namespace UnderPressure.Editor
                 var item = pair.Value;
                 var plot = item.FloorPlan?.HospitalMap?.Plot;
                 if (plot != null) touched.Add(plot);
+                ActivatePlotStorey(plot);
                 _level.BuildEvents.OnRoomItemDestroy?.Invoke(item);
                 // Algunas decoraciones no tienen visual de sala y el evento
                 // nativo no las retira en ese caso.
@@ -989,7 +994,8 @@ namespace UnderPressure.Editor
             }
             foreach (var record in desired.Native)
             {
-                var plot = _level.WorldState.HospitalPlots[record.Plot];
+                var plot = plots[record.Plot];
+                ActivatePlotStorey(plot);
                 var floor = plot?.HospitalMap?.FloorPlan;
                 if (floor == null || record.Definition == null)
                     throw new InvalidOperationException("Parcela u objeto no disponible durante Undo.");
@@ -1066,9 +1072,12 @@ namespace UnderPressure.Editor
                 }
             }
             foreach (var plot in touched)
+            {
+                ActivatePlotStorey(plot);
                 if (plot?.HospitalMap?.RoomVisual != null)
                     plot.HospitalMap.RoomVisual.UpdateFromRoom(
                         plot.HospitalMap.FloorPlan, Vector3.zero, 0f);
+            }
 
             // 2. Decoracion de la capa global de Escenario.
             var targetScene = desired.Scene.ToDictionary(x => x.Id);
@@ -1123,6 +1132,18 @@ namespace UnderPressure.Editor
             }
             ScenarioTraffic.ApplyHistory(desired.Traffic);
             // No recalcular iluminacion global por un cambio de objeto.
+            }
+            finally
+            {
+                global::UnderPressure.Storey.StoreyApi.SetActiveStorey(_level, previousStorey);
+            }
+        }
+
+        private void ActivatePlotStorey(HospitalPlot plot)
+        {
+            if (plot?.Definition == null) return;
+            global::UnderPressure.Storey.StoreyApi.SetActiveStorey(_level,
+                global::UnderPressure.Storey.StoreyApi.GetStorey(plot.Definition));
         }
     }
 

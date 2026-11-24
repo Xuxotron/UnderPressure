@@ -447,3 +447,6 @@ editor.objectives.result.money,Деньги,Pieniądze,돈,钱,錢
 editor.objectives.result.reputation,Репутация,Reputacja,평판,声誉,聲譽
 editor.objectives.result.research_points,Очки исследования,Punkty badawcze,연구 포인트,研究要点,研究要點
 editor.objectives.result.unlock_room,Разблокировать комнату,Odblokuj pokój,방 잠금 해제,解锁房间,解鎖房間
+editor.scenario_settings.plots.upper_storey,Верхний этаж,Górna kondygnacja,위층,上层,上層
+storey.view_upper,Показать верхний этаж,Pokaż górną kondygnację,위층 표시,显示上层,顯示上層
+storey.view_lower,Показать нижний этаж,Pokaż dolną kondygnację,아래층 표시,显示下层,顯示下層

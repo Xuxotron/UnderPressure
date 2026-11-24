@@ -751,9 +751,10 @@ namespace UnderPressure.Editor
 
         private static void BuildNativeProxies()
         {
-            if (!IsActive || _level?.WorldState?.HospitalPlots == null ||
-                NativeByRoomItem.Count != 0) return;
-            _nativeHostPlot = _level.WorldState.HospitalPlots.FirstOrDefault(plot =>
+            if (!IsActive || _level == null || NativeByRoomItem.Count != 0) return;
+            _nativeHostPlot = global::UnderPressure.Storey.StoreyApi
+                .GetPlots(_level, global::UnderPressure.Storey.StoreyApi.LowerStorey)
+                .FirstOrDefault(plot =>
                 plot?.HospitalMap?.FloorPlan != null && plot.HospitalMap.RoomVisual != null);
             if (_nativeHostPlot == null) return;
             foreach (var item in Items)
@@ -770,8 +771,10 @@ namespace UnderPressure.Editor
         {
             if (!IsActive || item?.Transform == null || NativeBySource.ContainsKey(item)) return;
             if (_nativeHostPlot == null)
-                _nativeHostPlot = _level?.WorldState?.HospitalPlots?.FirstOrDefault(plot =>
-                    plot?.HospitalMap?.FloorPlan != null && plot.HospitalMap.RoomVisual != null);
+                _nativeHostPlot = _level == null ? null : global::UnderPressure.Storey.StoreyApi
+                    .GetPlots(_level, global::UnderPressure.Storey.StoreyApi.LowerStorey)
+                    .FirstOrDefault(plot => plot?.HospitalMap?.FloorPlan != null &&
+                                            plot.HospitalMap.RoomVisual != null);
             var floor = _nativeHostPlot?.HospitalMap?.FloorPlan;
             var sourceVisual = item.Components.Contains(Ambient) ||
                 item.Components.Contains(StaticVehicle) ? item.Transform.gameObject : item.Marker;

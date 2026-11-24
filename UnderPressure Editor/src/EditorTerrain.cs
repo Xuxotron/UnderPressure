@@ -1441,12 +1441,14 @@ namespace UnderPressure.Editor
                 RestoreSculptMeshes();
                 _sculptClearedByUser = true;
                 ClearPlacedLandscape(level);
-                foreach (var plot in level.WorldState.HospitalPlots)
+                var lowerWorld = global::UnderPressure.Storey.StoreyApi.GetWorldState(level,
+                    global::UnderPressure.Storey.StoreyApi.LowerStorey);
+                foreach (var plot in lowerWorld.HospitalPlots)
                 {
                     if (plot?.HospitalMap != null)
                         plot.HospitalMap.Build(false);
                 }
-                level.WorldState.CalculateLighting();
+                lowerWorld.CalculateLighting();
                 UnderPressureEditorPlugin.Log?.LogInfo("Terrain painter: limpiar mapa ejecutado.");
             }
             catch (Exception exception)
@@ -1470,7 +1472,8 @@ namespace UnderPressure.Editor
         private static void ClearPlacedLandscape(Level level)
         {
             if (level == null) return;
-            foreach (var plot in level.WorldState.HospitalPlots)
+            foreach (var plot in global::UnderPressure.Storey.StoreyApi.GetPlots(level,
+                         global::UnderPressure.Storey.StoreyApi.LowerStorey))
             {
                 var definition = plot?.Definition;
                 if (definition == null) continue;

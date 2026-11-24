@@ -147,9 +147,8 @@ namespace UnderPressure.Editor
 
         private void RefreshPlotSettingsContents()
         {
-            if (_settingsPlotList == null || _settingsPlotDetails == null ||
-                _level?.WorldState?.HospitalPlots == null) return;
-            var spatialPlots = _level.WorldState.HospitalPlots;
+            if (_settingsPlotList == null || _settingsPlotDetails == null || _level == null) return;
+            var spatialPlots = global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
             var plots = ScenarioEditorStorage.CurrentPlotSettings(_level);
             if (!_settingsPlotMapSelected)
                 _settingsPlotSelectedIndex = Mathf.Clamp(_settingsPlotSelectedIndex, 0,
@@ -237,13 +236,17 @@ namespace UnderPressure.Editor
                 new Vector2(-980f, -738f));
 
             CreatePlotIntegerField("editor.scenario_settings.plots.cost",
-                .025f, .325f, 72f, plot.cost,
+                .025f, .235f, 72f, plot.cost,
                 value => plot.cost = value);
+            AddPlotToggle("editor.scenario_settings.plots.upper_storey",
+                .25f, .46f, 72f,
+                plot.storey == global::UnderPressure.Storey.StoreyApi.UpperStorey,
+                value => SetPlotStorey(value));
             AddPlotToggle("editor.scenario_settings.plots.initially_open",
-                .345f, .655f, 72f, plot.initiallyOpen,
+                .475f, .72f, 72f, plot.initiallyOpen,
                 value => plot.initiallyOpen = value);
             AddPlotToggle("editor.scenario_settings.plots.hide_until_available",
-                .675f, .985f, 72f, plot.hideUntilAvailable,
+                .735f, .985f, 72f, plot.hideUntilAvailable,
                 value => plot.hideUntilAvailable = value);
 
             AddPlotLabel("editor.scenario_settings.plots.initial_state",
@@ -685,11 +688,11 @@ namespace UnderPressure.Editor
 
         private void ApplyLivePlotRoomStyles(IList<ScenarioMapFormat.Plot> plots)
         {
-            if (_level?.WorldState?.HospitalPlots == null) return;
+            if (_level == null) return;
             ScenarioHospitalStyles.ApplyPlotRoomStyles(
                 _level,
                 plots,
-                _level.WorldState.HospitalPlots
+                global::UnderPressure.Storey.StoreyApi.GetPlots(_level)
                     .Select(value => value?.Definition)
                     .ToList(),
                 ScenarioEditorStorage.CurrentStyles(_level));
@@ -799,10 +802,48 @@ namespace UnderPressure.Editor
                 return;
             }
 
+            // Una fusion nativa comparte el mismo plano espacial; entre plantas no es valida.
+            if (plot.storey != plots[targetIndex].storey)
+            {
+                plot.mergeInto = -1;
+                RefreshPlotSettingsContents();
+                return;
+            }
+
             plot.mergeInto = targetIndex;
             if (!_settingsPlotRequirements.Contains(targetIndex))
                 _settingsPlotRequirements.Add(targetIndex);
             ApplyPlotRequirements(plot, plots.Count);
+            RefreshPlotSettingsContents();
+        }
+
+        private void SetPlotStorey(bool upper)
+        {
+            var settings = ScenarioEditorStorage.CurrentPlotSettings(_level);
+            var spatialPlots = _level == null
+                ? null
+                : global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
+            if (spatialPlots == null || _settingsPlotSelectedIndex < 0 ||
+                _settingsPlotSelectedIndex >= settings.Count ||
+                _settingsPlotSelectedIndex >= spatialPlots.Count) return;
+            var storey = upper
+                ? global::UnderPressure.Storey.StoreyApi.UpperStorey
+                : global::UnderPressure.Storey.StoreyApi.LowerStorey;
+            var selected = settings[_settingsPlotSelectedIndex];
+            if (storey == global::UnderPressure.Storey.StoreyApi.UpperStorey &&
+                selected.storey == global::UnderPressure.Storey.StoreyApi.LowerStorey &&
+                global::UnderPressure.Storey.StoreyApi.GetPlots(_level,
+                    global::UnderPressure.Storey.StoreyApi.LowerStorey).Count <= 1)
+            {
+                RefreshPlotSettingsContents();
+                return;
+            }
+            selected.storey = storey;
+            if (selected.mergeInto >= 0 && selected.mergeInto < settings.Count &&
+                settings[selected.mergeInto].storey != storey)
+                selected.mergeInto = -1;
+            ScenarioEditorStorage.ChangePlotStorey(
+                _level, _settingsPlotSelectedIndex, storey);
             RefreshPlotSettingsContents();
         }
 
@@ -1594,7 +1635,9 @@ namespace UnderPressure.Editor
             _plotLayerRoot = Ui("PlotLayers", parent);
             Stretch((RectTransform)_plotLayerRoot.transform);
             _plotLayerRoot.SetActive(_plotsEnabled);
-            var plots = _level?.WorldState?.HospitalPlots;
+            var plots = _level == null
+                ? null
+                : global::UnderPressure.Storey.StoreyApi.GetPlots(_level);
             if (plots == null || _workingTexture == null) return;
             var count = 0;
             foreach (var plot in plots)

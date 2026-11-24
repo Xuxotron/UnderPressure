@@ -68,7 +68,8 @@ namespace UnderPressure.Editor
 
                 // Es esencial duplicar no solo la textura: el editor cambia tambien
                 // las listas y las posiciones de los HospitalPlotItem originales.
-                foreach (var plot in level.WorldState.HospitalPlots)
+                foreach (var plot in global::UnderPressure.Storey.StoreyApi.GetPlots(level,
+                             global::UnderPressure.Storey.StoreyApi.LowerStorey))
                 {
                     if (plot?.Definition == null || plot.Definition.FloorImage == null) continue;
                     var definition = plot.Definition;
