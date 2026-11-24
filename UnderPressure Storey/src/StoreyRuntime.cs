@@ -299,9 +299,6 @@ namespace UnderPressure.Storey
             PlotVisibility.Remove(plot);
             PlotVisibility[replacement] = visible;
             replacement.SetVisible(visible);
-            if (source.Storey == StoreyApi.UpperStorey &&
-                source.World.HospitalPlots.Count == 0)
-                state.DestroyUpper();
             state.Activate(storey);
             return replacement;
         }
@@ -315,7 +312,7 @@ namespace UnderPressure.Storey
             UnregisterDefinition(definition);
             if (plane.Storey == StoreyApi.UpperStorey && plane.World.HospitalPlots.Count == 0)
             {
-                GetLevel(level, true).DestroyUpper();
+                GetLevel(level, true).Activate(StoreyApi.LowerStorey);
                 RefreshInterior(level);
                 return;
             }
@@ -353,14 +350,16 @@ namespace UnderPressure.Storey
 
         internal static void BeforeLevelDestroy(Level level)
         {
-            if (level != null && Levels.TryGetValue(level, out var state))
-                state.Activate(StoreyApi.LowerStorey);
+            if (level == null || !Levels.TryGetValue(level, out var state)) return;
+            state.Activate(StoreyApi.LowerStorey);
+            // El mapa superior depende todavía del Level, sus BuildEvents y el
+            // VisualManager compartido. Debe cerrarse antes del Destroy nativo.
+            state.DestroyUpper();
         }
 
         internal static void AfterLevelDestroy(Level level)
         {
-            if (level == null || !Levels.TryGetValue(level, out var state)) return;
-            state.DestroyUpper();
+            if (level == null) return;
             Levels.Remove(level);
             PreparedUpper.Remove(level);
         }
@@ -843,10 +842,16 @@ namespace UnderPressure.Storey
             {
                 if (Upper == null) return;
                 var plane = Upper; Upper = null;
-                using (new BindingScope(Level, plane, true)) plane.Destroy();
-                UnregisterPlane(plane);
-                ActiveStorey = StoreyApi.LowerStorey;
-                ApplyBindings(Level, Lower, true);
+                try
+                {
+                    using (new BindingScope(Level, plane, true)) plane.Destroy();
+                }
+                finally
+                {
+                    UnregisterPlane(plane);
+                    ActiveStorey = StoreyApi.LowerStorey;
+                    ApplyBindings(Level, Lower, true);
+                }
             }
         }
 
@@ -906,7 +911,9 @@ namespace UnderPressure.Storey
             }
             internal void Destroy()
             {
-                Building?.Destroy(); Data?.Destroy(); World?.Destroy();
+                // Conserva el mismo orden relativo que Level.Destroy: primero
+                // DataViewManager, después BuildingLogic y finalmente WorldState.
+                Data?.Destroy(); Building?.Destroy(); World?.Destroy();
                 if (!ReferenceEquals(Visuals, Owner.Lower.Visuals)) Visuals?.Destroy();
                 Events?.Destroy();
                 if (RootObject != null) UnityEngine.Object.Destroy(RootObject);
