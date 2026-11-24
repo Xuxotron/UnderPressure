@@ -499,8 +499,6 @@ namespace UnderPressure.Storey
             var container = VisualContainer?.GetValue(visual) as Transform;
             plane.AttachRoot(container);
             if (container != null) VisualPlanes[container] = plane;
-            if (plane.Storey == StoreyApi.UpperStorey)
-                plane.Visuals?.RoomLightingManager?.RegenerateInteriorVolumeLights();
         }
 
         internal static void RegisterRoomItem(RoomItemVisual visual, RoomItem item)
@@ -611,7 +609,6 @@ namespace UnderPressure.Storey
             if (_creatingUpperWorld) return false;
             var plane = FindPlane(world);
             if (plane?.Storey != StoreyApi.UpperStorey) return true;
-            plane.Visuals?.RoomLightingManager?.RegenerateInteriorVolumeLights();
             return false;
         }
 
@@ -764,6 +761,7 @@ namespace UnderPressure.Storey
                     visuals, null, null, root);
                 Upper = plane;
                 RegisterPlane(plane);
+                plane.ConnectSharedVisualEvents();
                 try
                 {
                     using (new ConstructionBindingScope(Level, plane))
@@ -867,6 +865,7 @@ namespace UnderPressure.Storey
             internal BuildingLogic Building;
             internal readonly GameObject RootObject;
             internal Transform Root => RootObject == null ? null : RootObject.transform;
+            private SharedRoomLightingEvents _roomLightingEvents;
 
             internal Plane(StoreyLevel owner, int storey, WorldState.Config config,
                 WorldState world, BuildEvents events, VisualManager visuals,
@@ -877,6 +876,13 @@ namespace UnderPressure.Storey
             }
 
             internal IDisposable Enter() => new BindingScope(Owner.Level, this, true);
+            internal void ConnectSharedVisualEvents()
+            {
+                if (Storey != StoreyApi.UpperStorey || Events == null ||
+                    Visuals?.RoomLightingManager == null) return;
+                _roomLightingEvents = new SharedRoomLightingEvents(
+                    Events, Visuals.RoomLightingManager);
+            }
             internal void Present(bool value)
             {
                 if (RootObject == null) return;
@@ -913,11 +919,61 @@ namespace UnderPressure.Storey
             {
                 // Conserva el mismo orden relativo que Level.Destroy: primero
                 // DataViewManager, después BuildingLogic y finalmente WorldState.
-                Data?.Destroy(); Building?.Destroy(); World?.Destroy();
-                if (!ReferenceEquals(Visuals, Owner.Lower.Visuals)) Visuals?.Destroy();
-                Events?.Destroy();
-                if (RootObject != null) UnityEngine.Object.Destroy(RootObject);
-                World = null; Data = null; Building = null;
+                try
+                {
+                    Data?.Destroy(); Building?.Destroy(); World?.Destroy();
+                    if (!ReferenceEquals(Visuals, Owner.Lower.Visuals)) Visuals?.Destroy();
+                }
+                finally
+                {
+                    _roomLightingEvents?.Destroy();
+                    _roomLightingEvents = null;
+                    Events?.Destroy();
+                    if (RootObject != null) UnityEngine.Object.Destroy(RootObject);
+                    World = null; Data = null; Building = null;
+                }
+            }
+        }
+
+        // VisualManager es unico en el Level. Su RoomLightingManager se registra
+        // nativamente en los BuildEvents inferiores; el segundo mapa debe registrar
+        // exactamente los mismos callbacks para retirar también sus FloorPlan.
+        private sealed class SharedRoomLightingEvents
+        {
+            private readonly BuildEvents _events;
+            private readonly List<KeyValuePair<FieldInfo, Delegate>> _handlers =
+                new List<KeyValuePair<FieldInfo, Delegate>>();
+
+            internal SharedRoomLightingEvents(BuildEvents events, RoomLightingManager manager)
+            {
+                _events = events;
+                Add(manager, "OnRoomItemAdded", "OnRoomItemAdded");
+                Add(manager, "OnRoomItemVisualCreated", "OnRoomItemVisualCreated");
+                Add(manager, "OnRoomItemVisualDestroyed", "OnRoomItemVisualDestroyed");
+                Add(manager, "OnRoomDeleted", "OnRoomDeleted");
+                Add(manager, "OnRoomVisibilityChanged", "OnRoomVisibilityChanged");
+                Add(manager, "OnRoomOpened", "OnRoomOpened");
+                Add(manager, "OnRoomClosed", "OnRoomClosed");
+                Add(manager, "OnRoomLightingChanged", "OnRoomLightingChanged");
+            }
+
+            private void Add(RoomLightingManager manager, string eventField, string methodName)
+            {
+                var field = AccessTools.Field(typeof(BuildEvents), eventField);
+                var method = AccessTools.Method(typeof(RoomLightingManager), methodName);
+                if (field == null || method == null)
+                    throw new MissingMemberException(typeof(RoomLightingManager).FullName, methodName);
+                var handler = Delegate.CreateDelegate(field.FieldType, manager, method);
+                field.SetValue(_events, Delegate.Combine(field.GetValue(_events) as Delegate, handler));
+                _handlers.Add(new KeyValuePair<FieldInfo, Delegate>(field, handler));
+            }
+
+            internal void Destroy()
+            {
+                foreach (var entry in _handlers)
+                    entry.Key.SetValue(_events, Delegate.Remove(
+                        entry.Key.GetValue(_events) as Delegate, entry.Value));
+                _handlers.Clear();
             }
         }
 
