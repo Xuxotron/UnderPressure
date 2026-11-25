@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -53,6 +54,18 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
+        private static readonly FieldInfo ExteriorVolumeLights =
+            AccessTools.Field(typeof(RoomLightingManager), "_cachedExteriorVolumeLights");
+        private static readonly FieldInfo ExteriorPropertyBlocks =
+            AccessTools.Field(typeof(RoomLightingManager), "_cachedExteriorPropertyBlock");
+        private static readonly FieldInfo ExteriorInstancingData =
+            AccessTools.Field(typeof(RoomLightingManager), "_cachedExteriorInstancingData");
+        private static readonly FieldInfo RoomLightConfig =
+            AccessTools.Field(typeof(RoomLightingManager), "_config");
+        private static readonly FieldInfo RoomLightHeight =
+            AccessTools.Field(typeof(RoomLightingManager), "_roomLightHeight");
+        private static readonly FieldInfo RoomLightBaseBias =
+            AccessTools.Field(typeof(RoomLightingManager), "_roomLightBaseBias");
         private static readonly Dictionary<Level, WorldState.Config> Configs =
             new Dictionary<Level, WorldState.Config>();
         private static readonly List<HospitalPlot> PlotOrder = new List<HospitalPlot>();
@@ -402,6 +415,7 @@ namespace UnderPressure.Storey
                 PlotStoreys[plot] = target;
                 UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
                     ReferenceEquals(target, _upper) ? 1 : 0);
+                RecalculateWorldLighting();
                 Activate(select ? target : source);
                 RefreshRowArrows();
                 if (select) level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plot);
@@ -455,6 +469,87 @@ namespace UnderPressure.Storey
                 ReferenceEquals(storey, _upper)
                     ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f,
                 anchor.Y * GridCoord.CellSize);
+        }
+
+        internal static void RegenerateExteriorLighting(RoomLightingManager manager,
+            bool[,] exteriorState, Vector3 origin)
+        {
+            if (manager == null) return;
+            if (_lower?.State == null || _upper?.State == null)
+            {
+                manager.RegenerateExteriorVolumeLights(exteriorState, origin);
+                return;
+            }
+
+            var lights = ExteriorVolumeLights.GetValue(manager) as IList;
+            var properties = ExteriorPropertyBlocks.GetValue(manager) as IList;
+            var instancing = ExteriorInstancingData.GetValue(manager) as IList;
+            if (lights == null || properties == null || instancing == null)
+                throw new InvalidOperationException(
+                    "No están disponibles las cachés nativas de iluminación exterior.");
+
+            var allLights = new List<object>();
+            var allProperties = new List<object>();
+            var allInstancing = new List<object>();
+            AppendExteriorLayer(manager, _lower, allLights, allProperties, allInstancing);
+            AppendExteriorLayer(manager, _upper, allLights, allProperties, allInstancing);
+
+            lights.Clear();
+            properties.Clear();
+            instancing.Clear();
+            foreach (var value in allLights) lights.Add(value);
+            foreach (var value in allProperties) properties.Add(value);
+            foreach (var value in allInstancing) instancing.Add(value);
+        }
+
+        private static void AppendExteriorLayer(RoomLightingManager manager,
+            StoreyInstance storey, ICollection<object> lights,
+            ICollection<object> properties, ICollection<object> instancing)
+        {
+            var values = storey?.State?.ExteriorState.Values;
+            if (values == null || storey.State.HospitalPlots.Count == 0) return;
+            var anchor = storey.State.Anchor;
+            var origin = new Vector3(anchor.X * GridCoord.CellSize,
+                storey.Root.transform.position.y, anchor.Y * GridCoord.CellSize);
+            manager.RegenerateExteriorVolumeLights(values, origin);
+
+            var nativeLights = ExteriorVolumeLights.GetValue(manager) as IList;
+            var nativeProperties = ExteriorPropertyBlocks.GetValue(manager) as IList;
+            var nativeInstancing = ExteriorInstancingData.GetValue(manager) as IList;
+            if (nativeLights == null || nativeProperties == null || nativeInstancing == null ||
+                (nativeProperties.Count != 0 && nativeProperties.Count != nativeLights.Count) ||
+                (nativeInstancing.Count != 0 && nativeInstancing.Count != nativeLights.Count))
+                throw new InvalidOperationException(
+                    "Las cachés nativas de iluminación exterior no están alineadas.");
+            foreach (var value in nativeLights) lights.Add(value);
+            foreach (var value in nativeProperties) properties.Add(value);
+            foreach (var value in nativeInstancing) instancing.Add(value);
+        }
+
+        internal static float ShadowCastingFloorY(RoomLightingManager manager,
+            Vector3 volumeCenter)
+        {
+            var config = RoomLightConfig.GetValue(manager) as RoomLightingManagerConfig;
+            if (config == null) return 0f;
+            var height = (float)RoomLightHeight.GetValue(manager);
+            var bias = (float)RoomLightBaseBias.GetValue(manager);
+            var nativeCenter = bias + .5f * Mathf.Max(0f, height - bias) +
+                               config.RoomLightOffset.y;
+            var floor = volumeCenter.y - nativeCenter;
+            return Mathf.Round(floor / UnderPressure.StoreyMapRegistry.StoreyHeight) *
+                   UnderPressure.StoreyMapRegistry.StoreyHeight;
+        }
+
+        internal static void RegenerateInteriorLighting()
+        {
+            _lower?.Level?.VisualManager?.RoomLightingManager?
+                .RegenerateInteriorVolumeLights();
+        }
+
+        private static void RecalculateWorldLighting()
+        {
+            _lower?.State?.CalculateLighting();
+            _upper?.State?.CalculateLighting();
         }
 
         internal static void AttachToolbar(EditHospitalMenu menu, Level level)
@@ -660,7 +755,34 @@ namespace UnderPressure.Storey
     [HarmonyPatch(typeof(WorldState), "CalculateLighting")]
     internal static class StoreyLightingIsolationPatch
     {
-        private static bool Prefix() => !StoreyRuntime.Constructing;
+        private static readonly MethodInfo NativeExterior = AccessTools.Method(
+            typeof(RoomLightingManager), nameof(RoomLightingManager.RegenerateExteriorVolumeLights));
+        private static readonly MethodInfo Replacement = AccessTools.Method(
+            typeof(StoreyRuntime), nameof(StoreyRuntime.RegenerateExteriorLighting));
+
+        private static void Prefix(WorldState __instance, out StoreyInstance __state) =>
+            StoreyRuntime.EnterWorld(__instance, out __state);
+
+        private static void Postfix(StoreyInstance __state) =>
+            StoreyRuntime.ExitContext(__state);
+
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> source)
+        {
+            var replaced = false;
+            foreach (var code in source)
+            {
+                if (code.Calls(NativeExterior))
+                {
+                    replaced = true;
+                    yield return new CodeInstruction(OpCodes.Call, Replacement)
+                        .MoveLabelsFrom(code);
+                }
+                else yield return code;
+            }
+            if (!replaced) throw new InvalidOperationException(
+                "No se encontró la regeneración nativa de iluminación exterior.");
+        }
     }
 
     [HarmonyPatch(typeof(HospitalMap), "RemoveTerrainDetailMeshes")]
@@ -701,6 +823,7 @@ namespace UnderPressure.Storey
     internal static class StoreyNativePlotSelectionPatch
     {
         private static void Prefix(HospitalPlot __0) => StoreyRuntime.ActivatePlot(__0);
+        private static void Postfix() => StoreyRuntime.RegenerateInteriorLighting();
     }
 
     [HarmonyPatch(typeof(GridCoord), nameof(GridCoord.GridCoordToWorldPosition),
@@ -744,21 +867,44 @@ namespace UnderPressure.Storey
             AccessTools.Method(typeof(GridCoordUtils), nameof(GridCoordUtils.ToWorldPosition));
         private static readonly MethodInfo Replacement =
             AccessTools.Method(typeof(StoreyRuntime), nameof(StoreyRuntime.FloorPlanWorldOrigin));
+        private static readonly FieldInfo VectorY =
+            AccessTools.Field(typeof(Vector3), nameof(Vector3.y));
+        private static readonly MethodInfo ShadowFloor = AccessTools.Method(
+            typeof(StoreyRuntime), nameof(StoreyRuntime.ShadowCastingFloorY));
 
         private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> source)
         {
             var codes = source.ToList();
+            var replacedOrigin = false;
+            var replacedShadowFloor = false;
             for (var index = 0; index + 1 < codes.Count; ++index)
             {
-                if (!codes[index].Calls(AnchorGetter) || !codes[index + 1].Calls(ToWorld)) continue;
-                codes[index] = new CodeInstruction(OpCodes.Call, Replacement)
-                    .MoveLabelsFrom(codes[index]);
-                codes[index + 1].opcode = OpCodes.Nop;
-                codes[index + 1].operand = null;
-                return codes;
+                if (codes[index].Calls(AnchorGetter) && codes[index + 1].Calls(ToWorld))
+                {
+                    codes[index] = new CodeInstruction(OpCodes.Call, Replacement)
+                        .MoveLabelsFrom(codes[index]);
+                    codes[index + 1].opcode = OpCodes.Nop;
+                    codes[index + 1].operand = null;
+                    replacedOrigin = true;
+                }
+                if (index + 2 >= codes.Count || codes[index].opcode != OpCodes.Ldloca_S ||
+                    codes[index + 1].opcode != OpCodes.Ldc_R4 ||
+                    !(codes[index + 1].operand is float value) || value != 0f ||
+                    codes[index + 2].opcode != OpCodes.Stfld ||
+                    !Equals(codes[index + 2].operand, VectorY)) continue;
+                codes[index + 1] = new CodeInstruction(OpCodes.Ldarg_0)
+                    .MoveLabelsFrom(codes[index + 1]);
+                codes.Insert(index + 2,
+                    new CodeInstruction(OpCodes.Ldloc, codes[index].operand));
+                codes.Insert(index + 3, new CodeInstruction(OpCodes.Call, ShadowFloor));
+                replacedShadowFloor = true;
+                index += 4;
             }
-            throw new InvalidOperationException(
+            if (!replacedOrigin) throw new InvalidOperationException(
                 "No se encontró el origen nativo de iluminación interior.");
+            if (!replacedShadowFloor) throw new InvalidOperationException(
+                "No se encontró la altura nativa del volumen de sombra interior.");
+            return codes;
         }
     }
 
