@@ -386,13 +386,18 @@ namespace UnderPressure.Storey
             var toggle = AccessTools.Field(typeof(PlotSelectionItem), "_toggleState")?
                 .GetValue(row) as Toggle;
             var toggleRect = toggle?.transform as RectTransform;
+            var rowRect = row.transform as RectTransform;
             var rect = _button?.transform as RectTransform;
-            if (toggleRect == null || rect == null) return;
+            if (toggleRect == null || rowRect == null || rect == null) return;
+            var corners = new Vector3[4];
+            toggleRect.GetWorldCorners(corners);
+            var dollarLeft = rowRect.InverseTransformPoint(corners[0]).x;
             rect.SetParent(row.transform, false);
             rect.SetAsLastSibling();
             rect.anchorMin = rect.anchorMax = new Vector2(0f, .5f);
-            rect.pivot = new Vector2(0f, .5f);
-            rect.anchoredPosition = new Vector2(toggleRect.anchoredPosition.x - 17f, 0f);
+            rect.pivot = new Vector2(1f, .5f);
+            rect.anchoredPosition = new Vector2(
+                dollarLeft - rowRect.rect.xMin - 1f, 0f);
             rect.sizeDelta = new Vector2(16f, toggleRect.rect.height);
             rect.localScale = Vector3.one;
             var layout = _button.GetComponent<LayoutElement>() ??
