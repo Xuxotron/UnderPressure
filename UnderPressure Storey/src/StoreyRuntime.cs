@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using TH20;
 using TMPro;
@@ -43,16 +45,37 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(HospitalPlot), "_hospitalMap");
         private static readonly FieldInfo StateNavMesh =
             AccessTools.Field(typeof(WorldState), "_navMesh");
+        private static readonly FieldInfo LevelWorldState =
+            AccessTools.Field(typeof(Level), "_worldState");
+        private static readonly FieldInfo PlotWorldState =
+            AccessTools.Field(typeof(HospitalPlot), "_worldState");
+        private static readonly FieldInfo CursorWorldState =
+            AccessTools.Field(typeof(CursorEditHospital), "_worldState");
+        private static readonly MethodInfo LightingRoomDeleted =
+            AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
         private static readonly Dictionary<Level, WorldState.Config> Configs =
             new Dictionary<Level, WorldState.Config>();
+        private static readonly List<HospitalPlot> PlotOrder = new List<HospitalPlot>();
+        private static readonly Dictionary<HospitalPlot, StoreyInstance> PlotStoreys =
+            new Dictionary<HospitalPlot, StoreyInstance>();
+        private static readonly Dictionary<HospitalMap, StoreyInstance> MapStoreys =
+            new Dictionary<HospitalMap, StoreyInstance>();
 
         private static StoreyInstance _lower;
         private static StoreyInstance _upper;
         private static StoreyInstance _constructing;
+        private static StoreyInstance _active;
         private static GameObject _toolbar;
         private static Material _gridMaterial;
 
         internal static bool Constructing => _constructing != null;
+        internal static float ConstructionHeight =>
+            _constructing?.Root.transform.position.y ?? 0f;
+
+        internal static void Register() => UnderPressure.StoreyMapRegistry.RegisterRuntime(
+            GetPlots, GetWorld, TogglePlot, Refresh, ActivateGround, OnPlotAdded, OnPlotRemoved);
+
+        internal static void Unregister() => UnderPressure.StoreyMapRegistry.UnregisterRuntime();
 
         internal static void CaptureConfig(WorldState.Config config, Level level)
         {
@@ -72,7 +95,16 @@ namespace UnderPressure.Storey
             }
 
             Destroy(false);
-            _lower = new StoreyInstance(level, null, 0) { State = level.WorldState };
+            _lower = new StoreyInstance(level, level.BuildEvents, 0) { State = level.WorldState };
+            PlotOrder.Clear();
+            PlotStoreys.Clear();
+            MapStoreys.Clear();
+            foreach (var plot in _lower.State.HospitalPlots)
+            {
+                PlotOrder.Add(plot);
+                PlotStoreys[plot] = _lower;
+                if (plot.HospitalMap != null) MapStoreys[plot.HospitalMap] = _lower;
+            }
             if (!TryGetBounds(_lower.State, out var bounds)) return false;
             BuildVectorGrid(_lower, bounds);
 
@@ -100,6 +132,10 @@ namespace UnderPressure.Storey
                 _upper = upper;
                 RemoveUpperSeed();
                 BuildVectorGrid(upper, bounds);
+                Activate(_lower);
+                foreach (var plot in PlotOrder.Where(plot =>
+                             UnderPressure.StoreyMapRegistry.GetStorey(plot) == 1).ToArray())
+                    MovePlot(plot, _upper, false);
                 StoreyPlugin.Log?.LogInfo(
                     "Segundo WorldState creado; rejillas vectoriales en Y=0 e Y=2.");
                 return true;
@@ -128,6 +164,7 @@ namespace UnderPressure.Storey
             _upper.State.HospitalPlots.RemoveAt(0);
             if (seed.HospitalMap != null)
             {
+                RemoveFromSharedLighting(seed.HospitalMap);
                 _upper.State.DestroyHospitalMap(seed.HospitalMap);
                 PlotMap.SetValue(seed, null);
             }
@@ -241,6 +278,185 @@ namespace UnderPressure.Storey
             control.Bind(row, plot);
         }
 
+        private static IList<HospitalPlot> GetPlots(Level level) =>
+            _lower != null && ReferenceEquals(_lower.Level, level)
+                ? PlotOrder.ToArray()
+                : (IList<HospitalPlot>)level?.WorldState?.HospitalPlots ?? new HospitalPlot[0];
+
+        private static WorldState GetWorld(HospitalPlot plot) =>
+            plot != null && PlotStoreys.TryGetValue(plot, out var storey)
+                ? storey.State : null;
+
+        private static void Refresh(Level level)
+        {
+            if (level == null) return;
+            Destroy(false);
+            if (!Ensure(level)) throw new InvalidOperationException(
+                "No se pudo reconstruir el segundo WorldState.");
+        }
+
+        private static void ActivateGround(Level level)
+        {
+            if (_lower != null && ReferenceEquals(_lower.Level, level)) Activate(_lower);
+        }
+
+        private static void OnPlotAdded(Level level, HospitalPlot plot)
+        {
+            if (plot == null || _active == null || !ReferenceEquals(_active.Level, level)) return;
+            if (!PlotOrder.Contains(plot)) PlotOrder.Add(plot);
+            PlotStoreys[plot] = _active;
+            if (plot.HospitalMap != null) MapStoreys[plot.HospitalMap] = _active;
+            UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
+                ReferenceEquals(_active, _upper) ? 1 : 0);
+        }
+
+        private static void OnPlotRemoved(Level level, HospitalPlot plot)
+        {
+            if (plot == null || _lower == null || !ReferenceEquals(_lower.Level, level)) return;
+            PlotOrder.Remove(plot);
+            PlotStoreys.Remove(plot);
+            if (plot.HospitalMap != null) MapStoreys.Remove(plot.HospitalMap);
+        }
+
+        internal static int GetStorey(FloorPlan floorPlan)
+        {
+            var map = floorPlan?.HospitalMap;
+            return map != null && MapStoreys.TryGetValue(map, out var storey) &&
+                   ReferenceEquals(storey, _upper) ? 1 : 0;
+        }
+
+        internal static bool EnterFloorPlan(FloorPlan floorPlan, out StoreyInstance previous)
+        {
+            previous = _constructing;
+            var map = floorPlan?.HospitalMap;
+            if (map != null && MapStoreys.TryGetValue(map, out var storey))
+                _constructing = storey;
+            return true;
+        }
+
+        internal static bool EnterWorld(WorldState world, out StoreyInstance previous)
+        {
+            previous = _constructing;
+            if (_upper != null && ReferenceEquals(world, _upper.State)) _constructing = _upper;
+            else if (_lower != null && ReferenceEquals(world, _lower.State)) _constructing = _lower;
+            return true;
+        }
+
+        internal static void ExitContext(StoreyInstance previous) => _constructing = previous;
+
+        private static void Activate(StoreyInstance storey)
+        {
+            if (storey?.State == null || storey.Level == null) return;
+            _active = storey;
+            LevelWorldState.SetValue(storey.Level, storey.State);
+            LevelBuildEvents.SetValue(storey.Level, storey.Events);
+            if (storey.Level.CursorManager != null &&
+                storey.Level.CursorManager.TryGetActiveMode<CursorEditHospital>(out var cursor))
+                CursorWorldState.SetValue(cursor, storey.State);
+            storey.Level.CursorManager?.SetPlaneOffset(
+                ReferenceEquals(storey, _upper) ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f);
+        }
+
+        internal static void ActivatePlot(HospitalPlot plot)
+        {
+            if (plot != null && PlotStoreys.TryGetValue(plot, out var storey)) Activate(storey);
+        }
+
+        internal static void TogglePlot(HospitalPlot plot)
+        {
+            if (plot == null || !PlotStoreys.TryGetValue(plot, out var source) ||
+                _lower == null || _upper == null) return;
+            var target = ReferenceEquals(source, _upper) ? _lower : _upper;
+            MovePlot(plot, target, true);
+        }
+
+        private static void MovePlot(HospitalPlot plot, StoreyInstance target, bool select)
+        {
+            if (plot == null || target == null ||
+                !PlotStoreys.TryGetValue(plot, out var source) || ReferenceEquals(source, target))
+                return;
+            var level = source.Level;
+            var oldMap = plot.HospitalMap;
+            HospitalMap newMap = null;
+            try
+            {
+                _constructing = target;
+                LevelBuildEvents.SetValue(level, target.Events);
+                newMap = target.State.CreateHospitalMap(plot, false);
+                MapStoreys[newMap] = target;
+                if (plot.Built) target.State.SetBuiltHospitalMap(newMap);
+                else target.State.SetUnbuiltHospitalPlot(newMap);
+
+                _constructing = source;
+                LevelBuildEvents.SetValue(level, source.Events);
+                if (oldMap != null)
+                {
+                    if (ReferenceEquals(source, _upper)) RemoveFromSharedLighting(oldMap);
+                    MapStoreys.Remove(oldMap);
+                    source.State.DestroyHospitalMap(oldMap);
+                }
+                source.State.HospitalPlots.Remove(plot);
+                PlotWorldState.SetValue(plot, target.State);
+                PlotMap.SetValue(plot, newMap);
+                if (!target.State.HospitalPlots.Contains(plot)) target.State.HospitalPlots.Add(plot);
+                PlotStoreys[plot] = target;
+                UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
+                    ReferenceEquals(target, _upper) ? 1 : 0);
+                Activate(select ? target : source);
+                RefreshRowArrows();
+                if (select) level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plot);
+            }
+            catch (Exception exception)
+            {
+                StoreyPlugin.Log?.LogError("No se pudo trasladar la parcela sin destruir el origen: " + exception);
+                if (newMap != null)
+                {
+                    try
+                    {
+                        _constructing = target;
+                        LevelBuildEvents.SetValue(level, target.Events);
+                        RemoveFromSharedLighting(newMap);
+                        target.State.DestroyHospitalMap(newMap);
+                    }
+                    catch (Exception cleanup)
+                    {
+                        StoreyPlugin.Log?.LogError("No se pudo limpiar el mapa destino fallido: " + cleanup);
+                    }
+                    MapStoreys.Remove(newMap);
+                }
+                Activate(source);
+            }
+            finally
+            {
+                _constructing = null;
+            }
+        }
+
+        private static void RemoveFromSharedLighting(HospitalMap map)
+        {
+            if (map?.Room == null || _lower?.Level?.VisualManager?.RoomLightingManager == null) return;
+            LightingRoomDeleted.Invoke(_lower.Level.VisualManager.RoomLightingManager,
+                new object[] { map.Room });
+        }
+
+        private static void RefreshRowArrows()
+        {
+            foreach (var control in Resources.FindObjectsOfTypeAll<StoreyPlotRowControl>())
+                control.RefreshArrow();
+        }
+
+        internal static Vector3 FloorPlanWorldOrigin(FloorPlan floorPlan)
+        {
+            var anchor = floorPlan.Anchor;
+            var map = floorPlan.HospitalMap;
+            var storey = map != null && MapStoreys.TryGetValue(map, out var registered)
+                ? registered : _constructing;
+            return new Vector3(anchor.X * GridCoord.CellSize,
+                ReferenceEquals(storey, _upper)
+                    ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f,
+                anchor.Y * GridCoord.CellSize);
+        }
+
         internal static void AttachToolbar(EditHospitalMenu menu, Level level)
         {
             if (menu == null || !Ensure(level)) return;
@@ -303,11 +519,25 @@ namespace UnderPressure.Storey
 
         internal static void Destroy(bool clearConfigs)
         {
+            var lower = _lower;
+            var upper = _upper;
+            if (lower?.Level != null && lower.State != null)
+            {
+                LevelWorldState.SetValue(lower.Level, lower.State);
+                LevelBuildEvents.SetValue(lower.Level, lower.Events);
+            }
+            if (upper != null)
+                foreach (var plot in upper.State?.HospitalPlots.ToArray() ??
+                         new HospitalPlot[0])
+                    if (plot?.HospitalMap != null) RemoveFromSharedLighting(plot.HospitalMap);
             if (_toolbar != null) UnityEngine.Object.Destroy(_toolbar);
             _toolbar = null;
             if (_lower != null) UnityEngine.Object.Destroy(_lower.Root);
             _lower = null;
-            var upper = _upper;
+            _active = null;
+            PlotOrder.Clear();
+            PlotStoreys.Clear();
+            MapStoreys.Clear();
             _upper = null;
             _constructing = null;
             if (upper != null)
@@ -339,17 +569,24 @@ namespace UnderPressure.Storey
 
     internal sealed class StoreyPlotRowControl : MonoBehaviour
     {
+        private HospitalPlot _plot;
         private Button _button;
         private TMP_Text _arrow;
 
         internal void Bind(PlotSelectionItem row, HospitalPlot plot)
         {
+            _plot = plot;
             if (_button == null) Create(row);
             Position(row);
-            _arrow.text = UnderPressure.StoreyMapRegistry.GetStorey(plot) ==
+            RefreshArrow();
+            _button.interactable = true;
+        }
+
+        internal void RefreshArrow()
+        {
+            if (_arrow == null) return;
+            _arrow.text = UnderPressure.StoreyMapRegistry.GetStorey(_plot) ==
                           UnderPressure.StoreyMapRegistry.UpperStorey ? "↑" : "↓";
-            // El control se conserva, pero no debe ejecutar el antiguo traslado visual.
-            _button.interactable = false;
         }
 
         private void Create(PlotSelectionItem row)
@@ -358,6 +595,7 @@ namespace UnderPressure.Storey
                 typeof(Button));
             root.transform.SetParent(row.transform, false);
             _button = root.GetComponent<Button>();
+            _button.onClick.AddListener(() => UnderPressure.StoreyMapRegistry.Toggle(_plot));
             var sound = root.AddComponent<ButtonSFX>();
             sound.AudioEvent = ButtonSFX.ButtonAudioEvent.Default;
 
@@ -404,6 +642,8 @@ namespace UnderPressure.Storey
                 _button.gameObject.AddComponent<LayoutElement>();
             layout.ignoreLayout = true;
         }
+
+        private void OnDestroy() => _button?.onClick.RemoveAllListeners();
     }
 
     [HarmonyPatch(typeof(WorldState), MethodType.Constructor,
@@ -419,12 +659,6 @@ namespace UnderPressure.Storey
 
     [HarmonyPatch(typeof(WorldState), "CalculateLighting")]
     internal static class StoreyLightingIsolationPatch
-    {
-        private static bool Prefix() => !StoreyRuntime.Constructing;
-    }
-
-    [HarmonyPatch(typeof(WorldState), "BuildRoom")]
-    internal static class StoreyRoomBuildIsolationPatch
     {
         private static bool Prefix() => !StoreyRuntime.Constructing;
     }
@@ -451,6 +685,81 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(PlotSelectionItem __instance, HospitalPlot __0) =>
             StoreyRuntime.BindPlotRow(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(PlotSelectionItem), "<Setup>b__11_0")]
+    internal static class StoreyPlotSelectionPatch
+    {
+        private static readonly FieldInfo PlotField =
+            AccessTools.Field(typeof(PlotSelectionItem), "_plot");
+
+        private static void Prefix(PlotSelectionItem __instance) =>
+            StoreyRuntime.ActivatePlot(PlotField.GetValue(__instance) as HospitalPlot);
+    }
+
+    [HarmonyPatch(typeof(CursorEditHospital), "OnSelectHospitalPlot")]
+    internal static class StoreyNativePlotSelectionPatch
+    {
+        private static void Prefix(HospitalPlot __0) => StoreyRuntime.ActivatePlot(__0);
+    }
+
+    [HarmonyPatch(typeof(GridCoord), nameof(GridCoord.GridCoordToWorldPosition),
+        new[] { typeof(int), typeof(int) })]
+    internal static class StoreyGridCoordinatePatch
+    {
+        private static void Postfix(ref Vector3 __result) =>
+            __result.y += StoreyRuntime.ConstructionHeight;
+    }
+
+    [HarmonyPatch(typeof(FloorPlan), nameof(FloorPlan.GetAnchorWorldPos))]
+    internal static class StoreyFloorPlanAnchorPatch
+    {
+        private static void Prefix(FloorPlan __instance, out StoreyInstance __state) =>
+            StoreyRuntime.EnterFloorPlan(__instance, out __state);
+        private static void Postfix(StoreyInstance __state) => StoreyRuntime.ExitContext(__state);
+    }
+
+    [HarmonyPatch(typeof(RoomFloorPlanVisual), "UpdateFromRoom")]
+    internal static class StoreyFloorPlanVisualPatch
+    {
+        private static void Prefix(FloorPlan __0, out StoreyInstance __state) =>
+            StoreyRuntime.EnterFloorPlan(__0, out __state);
+        private static void Postfix(StoreyInstance __state) => StoreyRuntime.ExitContext(__state);
+    }
+
+    [HarmonyPatch(typeof(CorridorWallsVisual), "CreateWallObjects")]
+    internal static class StoreyCorridorWallsPatch
+    {
+        private static void Prefix(WorldState __3, out StoreyInstance __state) =>
+            StoreyRuntime.EnterWorld(__3, out __state);
+        private static void Postfix(StoreyInstance __state) => StoreyRuntime.ExitContext(__state);
+    }
+
+    [HarmonyPatch(typeof(RoomLightingManager), "RegenerateInteriorVolumeLights")]
+    internal static class StoreyInteriorLightingOriginPatch
+    {
+        private static readonly MethodInfo AnchorGetter =
+            AccessTools.PropertyGetter(typeof(FloorPlan), nameof(FloorPlan.Anchor));
+        private static readonly MethodInfo ToWorld =
+            AccessTools.Method(typeof(GridCoordUtils), nameof(GridCoordUtils.ToWorldPosition));
+        private static readonly MethodInfo Replacement =
+            AccessTools.Method(typeof(StoreyRuntime), nameof(StoreyRuntime.FloorPlanWorldOrigin));
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> source)
+        {
+            var codes = source.ToList();
+            for (var index = 0; index + 1 < codes.Count; ++index)
+            {
+                if (!codes[index].Calls(AnchorGetter) || !codes[index + 1].Calls(ToWorld)) continue;
+                codes[index] = new CodeInstruction(OpCodes.Call, Replacement)
+                    .MoveLabelsFrom(codes[index]);
+                codes[index + 1].opcode = OpCodes.Nop;
+                codes[index + 1].operand = null;
+                return codes;
+            }
+            throw new InvalidOperationException(
+                "No se encontró el origen nativo de iluminación interior.");
+        }
     }
 
     [HarmonyPatch(typeof(Level), "Destroy")]
