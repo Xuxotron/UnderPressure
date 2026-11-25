@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -54,12 +53,6 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
-        private static readonly FieldInfo ExteriorVolumeLights =
-            AccessTools.Field(typeof(RoomLightingManager), "_cachedExteriorVolumeLights");
-        private static readonly FieldInfo ExteriorPropertyBlocks =
-            AccessTools.Field(typeof(RoomLightingManager), "_cachedExteriorPropertyBlock");
-        private static readonly FieldInfo ExteriorInstancingData =
-            AccessTools.Field(typeof(RoomLightingManager), "_cachedExteriorInstancingData");
         private static readonly FieldInfo RoomLightConfig =
             AccessTools.Field(typeof(RoomLightingManager), "_config");
         private static readonly FieldInfo RoomLightHeight =
@@ -475,55 +468,16 @@ namespace UnderPressure.Storey
             bool[,] exteriorState, Vector3 origin)
         {
             if (manager == null) return;
-            if (_lower?.State == null || _upper?.State == null)
+            var lowerState = _lower?.State?.ExteriorState.Values;
+            if (lowerState == null)
             {
                 manager.RegenerateExteriorVolumeLights(exteriorState, origin);
                 return;
             }
-
-            var lights = ExteriorVolumeLights.GetValue(manager) as IList;
-            var properties = ExteriorPropertyBlocks.GetValue(manager) as IList;
-            var instancing = ExteriorInstancingData.GetValue(manager) as IList;
-            if (lights == null || properties == null || instancing == null)
-                throw new InvalidOperationException(
-                    "No están disponibles las cachés nativas de iluminación exterior.");
-
-            var allLights = new List<object>();
-            var allProperties = new List<object>();
-            var allInstancing = new List<object>();
-            AppendExteriorLayer(manager, _lower, allLights, allProperties, allInstancing);
-            AppendExteriorLayer(manager, _upper, allLights, allProperties, allInstancing);
-
-            lights.Clear();
-            properties.Clear();
-            instancing.Clear();
-            foreach (var value in allLights) lights.Add(value);
-            foreach (var value in allProperties) properties.Add(value);
-            foreach (var value in allInstancing) instancing.Add(value);
-        }
-
-        private static void AppendExteriorLayer(RoomLightingManager manager,
-            StoreyInstance storey, ICollection<object> lights,
-            ICollection<object> properties, ICollection<object> instancing)
-        {
-            var values = storey?.State?.ExteriorState.Values;
-            if (values == null || storey.State.HospitalPlots.Count == 0) return;
-            var anchor = storey.State.Anchor;
-            var origin = new Vector3(anchor.X * GridCoord.CellSize,
-                storey.Root.transform.position.y, anchor.Y * GridCoord.CellSize);
-            manager.RegenerateExteriorVolumeLights(values, origin);
-
-            var nativeLights = ExteriorVolumeLights.GetValue(manager) as IList;
-            var nativeProperties = ExteriorPropertyBlocks.GetValue(manager) as IList;
-            var nativeInstancing = ExteriorInstancingData.GetValue(manager) as IList;
-            if (nativeLights == null || nativeProperties == null || nativeInstancing == null ||
-                (nativeProperties.Count != 0 && nativeProperties.Count != nativeLights.Count) ||
-                (nativeInstancing.Count != 0 && nativeInstancing.Count != nativeLights.Count))
-                throw new InvalidOperationException(
-                    "Las cachés nativas de iluminación exterior no están alineadas.");
-            foreach (var value in nativeLights) lights.Add(value);
-            foreach (var value in nativeProperties) properties.Add(value);
-            foreach (var value in nativeInstancing) instancing.Add(value);
+            var anchor = _lower.State.Anchor;
+            var lowerOrigin = new Vector3(anchor.X * GridCoord.CellSize, 0f,
+                anchor.Y * GridCoord.CellSize);
+            manager.RegenerateExteriorVolumeLights(lowerState, lowerOrigin);
         }
 
         internal static float ShadowCastingFloorY(RoomLightingManager manager,
