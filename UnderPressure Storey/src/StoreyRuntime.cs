@@ -42,6 +42,17 @@ namespace UnderPressure.Storey
                 StoreyHeight);
         }
 
+        public static void ApplyVisualOrigin(
+            RoomFloorPlanVisual visual,
+            HospitalPlotDefinition definition)
+        {
+            var root = visual?.GameObject?.transform;
+            if (root == null) return;
+            var position = root.position;
+            position.y = GetMapOffset(definition).y;
+            root.position = position;
+        }
+
         internal static void Clear() => Storeys.Clear();
     }
 
@@ -56,6 +67,41 @@ namespace UnderPressure.Storey
             if (StoreyApi.GetStorey(definition) != StoreyApi.UpperStorey)
                 return;
             cellOffset += StoreyApi.GetMapOffset(definition);
+        }
+    }
+
+    // Algunos cursores nativos actualizan directamente una visual y omiten el
+    // cellOffset que UpdateFromRoom sí propaga. Completar el mismo parámetro
+    // conserva todas las coordenadas lógicas del objeto en Y=0.
+    [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
+    internal static class StoreyRoomItemOffsetPatch
+    {
+        private static void Prefix(RoomItem item, ref Vector3 cellOffset)
+        {
+            var definition = item?.FloorPlan?.HospitalMap?.Plot?.Definition;
+            if (StoreyApi.GetStorey(definition) != StoreyApi.UpperStorey ||
+                !Mathf.Approximately(cellOffset.y, 0f))
+                return;
+            cellOffset += StoreyApi.GetMapOffset(definition);
+        }
+    }
+
+    // El editor nativo crea el plano temporal de arrastre con HospitalMap=null.
+    // Asociarlo al mapa seleccionado permite que use el mismo origen visual.
+    [HarmonyPatch(typeof(CursorEditHospitalItem), MethodType.Constructor)]
+    internal static class StoreyLandscapeBlueprintPatch
+    {
+        private static readonly FieldInfo PlotField =
+            AccessTools.Field(typeof(CursorEditHospitalItem), "_hospitalPlot");
+        private static readonly FieldInfo BlueprintField =
+            AccessTools.Field(typeof(CursorEditHospitalItem), "_dragFloorPlan");
+
+        private static void Postfix(CursorEditHospitalItem __instance)
+        {
+            var plot = PlotField?.GetValue(__instance) as HospitalPlot;
+            var blueprint = BlueprintField?.GetValue(__instance) as BlueprintFloorPlan;
+            if (plot?.HospitalMap == null || blueprint == null) return;
+            blueprint.SetHospitalMap(plot.HospitalMap);
         }
     }
 

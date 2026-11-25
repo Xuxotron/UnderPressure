@@ -560,7 +560,8 @@ namespace UnderPressure.Editor
 
             var map = plot.HospitalMap;
             if (map?.FloorPlan != null && map.RoomVisual != null)
-                map.RoomVisual.UpdateFromRoom(map.FloorPlan, Vector3.zero, 0f);
+                UnderPressure.Storey.StoreyApi.ApplyVisualOrigin(
+                    map.RoomVisual, plot.Definition);
             if (map != null)
                 foreach (var room in active._level.WorldState.AllRooms)
                 {
@@ -568,8 +569,8 @@ namespace UnderPressure.Editor
                         !ReferenceEquals(room.FloorPlan.HospitalMap, map) ||
                         ReferenceEquals(room, map.Room))
                         continue;
-                    room.FloorPlanVisual.UpdateFromRoom(
-                        room.FloorPlan, Vector3.zero, 0f);
+                    UnderPressure.Storey.StoreyApi.ApplyVisualOrigin(
+                        room.FloorPlanVisual, plot.Definition);
                 }
 
             active._level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plot);
