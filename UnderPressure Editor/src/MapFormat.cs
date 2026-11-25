@@ -266,6 +266,7 @@ namespace UnderPressure.Editor
         internal sealed class Plot
         {
             public int index;
+            public int storey;
             public string nameTerm = "";
             public int cost;
             public Color color = Color.white;
@@ -659,6 +660,9 @@ namespace UnderPressure.Editor
             var plot = JsonUtility.FromJson<Plot>(json);
             if (plot == null)
                 throw new InvalidDataException("Parcela JSON ilegible: " + Path.GetFileName(path));
+            if (plot.storey != UnderPressure.StoreyMapRegistry.GroundStorey &&
+                plot.storey != UnderPressure.StoreyMapRegistry.UpperStorey)
+                throw new InvalidDataException("La planta de la parcela debe ser 0 o 1.");
             plot.baseItems = HasTopLevelField(json, "baseItems")
                 ? ParseCompactPlotItems(json, "baseItems") : new Item[0];
             plot.builtItems = HasTopLevelField(json, "builtItems")
@@ -2192,6 +2196,7 @@ namespace UnderPressure.Editor
                         throw new InvalidDataException("Todos los PNG deben usar el mismo lienzo del hospital.");
 
                     var definition = (HospitalPlotDefinition)CloneMethod.Invoke(source, null);
+                    UnderPressure.StoreyMapRegistry.SetStorey(definition, model.storey);
                     definition.FloorImage = texture;
                     definition.Cost = model.cost;
                     definition.Color = model.color;
