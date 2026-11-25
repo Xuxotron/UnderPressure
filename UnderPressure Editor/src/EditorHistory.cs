@@ -180,7 +180,7 @@ namespace UnderPressure.Editor
         {
             if (!_initialVisibilityPending || !IsValid()) return;
             _initialVisibilityPending = false;
-            var plots = _level.WorldState.HospitalPlots;
+            var plots = StoreyMapRegistry.GetPlots(_level);
             for (int i = 0; i < plots.Count; i++)
             {
                 var plot = plots[i];
@@ -259,7 +259,7 @@ namespace UnderPressure.Editor
 
         private bool PlotsChanged()
         {
-            var plots = _level.WorldState.HospitalPlots;
+            var plots = StoreyMapRegistry.GetPlots(_level);
             if (_plotIdentity == null || _plotIdentity.Length != plots.Count) return true;
             for (int i = 0; i < plots.Count; ++i)
             {
@@ -285,7 +285,7 @@ namespace UnderPressure.Editor
             {
                 if (++_initialFrames < 12 || IsBusy() ||
                     Time.unscaledTime < _ignoreChangesUntil) return;
-                _plotIdentity = _level.WorldState.HospitalPlots.ToArray();
+                _plotIdentity = StoreyMapRegistry.GetPlots(_level).ToArray();
                 _plotCenters = _plotIdentity.Select(plot =>
                     plot?.HospitalMap?.FloorPlan == null ? Vector3.zero :
                     plot.HospitalMap.FloorPlan.WorldBounds.Center.ToWorldPosition()).ToArray();
@@ -519,7 +519,7 @@ namespace UnderPressure.Editor
             // Solo LEER los objetos: Capture() modifica el inventario de
             // origen y generaba operaciones ficticias al registrar el historial.
             var state = new State();
-            var plots = _level.WorldState.HospitalPlots;
+            var plots = StoreyMapRegistry.GetPlots(_level);
             // Los ids existentes se preservan siempre. Solo reconectar con la
             // posicion logica si Unity ha reemplazado la instancia del item.
             var liveIds = new HashSet<int>();
@@ -960,7 +960,7 @@ namespace UnderPressure.Editor
             // Las instancias destruidas se recrean desde su definicion original.
             var targetNative = desired.Native.ToDictionary(x => x.Id);
             var currentNative = new Dictionary<int, LandscapeRoomItem>();
-            foreach (var plot in _level.WorldState.HospitalPlots)
+            foreach (var plot in StoreyMapRegistry.GetPlots(_level))
                 foreach (var item in plot?.HospitalMap?.FloorPlan?.LandscapeItems ??
                     new List<LandscapeRoomItem>())
                 {
@@ -989,7 +989,7 @@ namespace UnderPressure.Editor
             }
             foreach (var record in desired.Native)
             {
-                var plot = _level.WorldState.HospitalPlots[record.Plot];
+                var plot = StoreyMapRegistry.GetPlots(_level)[record.Plot];
                 var floor = plot?.HospitalMap?.FloorPlan;
                 if (floor == null || record.Definition == null)
                     throw new InvalidOperationException("Parcela u objeto no disponible durante Undo.");
