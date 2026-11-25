@@ -220,18 +220,16 @@ namespace UnderPressure.Storey
         internal static Transform ConstructingContentRoot() =>
             _constructing?.ContentRoot.transform;
 
-        internal static void ShowLowerGrid()
+        internal static void ToggleLowerGrid()
         {
-            if (_lower == null || _upper == null) return;
-            _upper.GridRoot.SetActive(false);
-            _lower.GridRoot.SetActive(true);
+            if (_lower == null) return;
+            _lower.GridRoot.SetActive(!_lower.GridRoot.activeSelf);
         }
 
-        internal static void ShowUpperGrid()
+        internal static void ToggleUpperGrid()
         {
-            if (_lower == null || _upper == null) return;
-            _lower.GridRoot.SetActive(false);
-            _upper.GridRoot.SetActive(true);
+            if (_upper == null) return;
+            _upper.GridRoot.SetActive(!_upper.GridRoot.activeSelf);
         }
 
         internal static void AttachToolbar(EditHospitalMenu menu, Level level)
@@ -251,9 +249,9 @@ namespace UnderPressure.Storey
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = Vector2.zero;
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
-                "storey.view.lower_grid"), 110f, ShowLowerGrid);
+                "storey.view.lower_grid"), 110f, ToggleLowerGrid);
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
-                "storey.view.upper_grid"), 330f, ShowUpperGrid);
+                "storey.view.upper_grid"), 330f, ToggleUpperGrid);
         }
 
         private static Transform FindEditorRoot(Canvas canvas)
