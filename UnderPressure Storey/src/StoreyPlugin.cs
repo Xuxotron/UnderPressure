@@ -21,6 +21,7 @@ namespace UnderPressure.Storey
         private void Awake()
         {
             Log = Logger;
+            StoreyRuntime.Register();
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll(Assembly.GetExecutingAssembly());
             Logger.LogInfo(PluginName + " " + PluginVersion + " cargado.");
@@ -29,6 +30,7 @@ namespace UnderPressure.Storey
         private void OnDestroy()
         {
             StoreyRuntime.Destroy(true);
+            StoreyRuntime.Unregister();
             UnderPressure.StoreyMapRegistry.Clear();
             _harmony?.UnpatchSelf();
             _harmony = null;
