@@ -542,6 +542,7 @@ namespace UnderPressure.Editor
             return new ScenarioMapFormat.Plot
             {
                 index = index,
+                storey = UnderPressure.StoreyMapRegistry.GetStorey(definition),
                 nameTerm = definition.NameLocalised.Term,
                 cost = definition.Cost,
                 color = definition.Color,
@@ -569,6 +570,7 @@ namespace UnderPressure.Editor
             return new ScenarioMapFormat.Plot
             {
                 index = source.index,
+                storey = source.storey,
                 nameTerm = source.nameTerm ?? "",
                 cost = source.cost,
                 color = source.color,
@@ -1222,6 +1224,7 @@ namespace UnderPressure.Editor
                 var filename = "plot_" + i.ToString("D2");
                 var plot = ClonePlotSettings(plotSettings[i]);
                 plot.index = i;
+                plot.storey = UnderPressure.StoreyMapRegistry.GetStorey(definition);
                 if (string.IsNullOrEmpty(plot.nameTerm))
                     plot.nameTerm = definition.NameLocalised.Term;
                 plot.baseItems = SaveLiveItems(worldPlots[i], HospitalPlotLayer.Base);

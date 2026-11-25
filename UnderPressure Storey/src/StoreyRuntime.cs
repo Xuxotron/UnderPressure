@@ -233,6 +233,14 @@ namespace UnderPressure.Storey
             _upper.GridRoot.SetActive(!_upper.GridRoot.activeSelf);
         }
 
+        internal static void BindPlotRow(PlotSelectionItem row, HospitalPlot plot)
+        {
+            if (row == null || plot == null) return;
+            var control = row.GetComponent<StoreyPlotRowControl>() ??
+                row.gameObject.AddComponent<StoreyPlotRowControl>();
+            control.Bind(row, plot);
+        }
+
         internal static void AttachToolbar(EditHospitalMenu menu, Level level)
         {
             if (menu == null || !Ensure(level)) return;
@@ -329,6 +337,70 @@ namespace UnderPressure.Storey
         }
     }
 
+    internal sealed class StoreyPlotRowControl : MonoBehaviour
+    {
+        private Button _button;
+        private TMP_Text _arrow;
+
+        internal void Bind(PlotSelectionItem row, HospitalPlot plot)
+        {
+            if (_button == null) Create(row);
+            Position(row);
+            _arrow.text = UnderPressure.StoreyMapRegistry.GetStorey(plot) ==
+                          UnderPressure.StoreyMapRegistry.UpperStorey ? "↑" : "↓";
+            // El control se conserva, pero no debe ejecutar el antiguo traslado visual.
+            _button.interactable = false;
+        }
+
+        private void Create(PlotSelectionItem row)
+        {
+            var root = new GameObject("UP Atajo de planta", typeof(RectTransform),
+                typeof(Button));
+            root.transform.SetParent(row.transform, false);
+            _button = root.GetComponent<Button>();
+            var sound = root.AddComponent<ButtonSFX>();
+            sound.AudioEvent = ButtonSFX.ButtonAudioEvent.Default;
+
+            var arrowObject = new GameObject("Flecha", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            arrowObject.transform.SetParent(root.transform, false);
+            var arrowRect = (RectTransform)arrowObject.transform;
+            arrowRect.anchorMin = Vector2.zero;
+            arrowRect.anchorMax = Vector2.one;
+            arrowRect.offsetMin = Vector2.zero;
+            arrowRect.offsetMax = Vector2.zero;
+            _arrow = arrowObject.GetComponent<TextMeshProUGUI>();
+            var label = AccessTools.Field(typeof(PlotSelectionItem), "_text")?
+                .GetValue(row) as TMP_Text;
+            if (label != null) _arrow.font = label.font;
+            _arrow.fontSize = 16f;
+            _arrow.fontStyle = FontStyles.Bold;
+            _arrow.alignment = TextAlignmentOptions.Center;
+            _arrow.color = Color.white;
+            _arrow.raycastTarget = true;
+            _button.targetGraphic = _arrow;
+        }
+
+        private void Position(PlotSelectionItem row)
+        {
+            var toggle = AccessTools.Field(typeof(PlotSelectionItem), "_toggleState")?
+                .GetValue(row) as Toggle;
+            var toggleRect = toggle?.transform as RectTransform;
+            var rect = _button?.transform as RectTransform;
+            if (toggleRect == null || rect == null) return;
+            rect.SetParent(row.transform, false);
+            rect.SetAsLastSibling();
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, .5f);
+            rect.pivot = new Vector2(0f, .5f);
+            rect.anchoredPosition = new Vector2(toggleRect.anchoredPosition.x - 17f, 0f);
+            rect.sizeDelta = new Vector2(16f, toggleRect.rect.height);
+            rect.localScale = Vector3.one;
+            var layout = _button.GetComponent<LayoutElement>() ??
+                _button.gameObject.AddComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+        }
+    }
+
     [HarmonyPatch(typeof(WorldState), MethodType.Constructor,
         new[] { typeof(WorldState.Config), typeof(Level), typeof(Metagame),
             typeof(VisualManager), typeof(Material), typeof(RoomItemVisualEdit.Config) })]
@@ -365,6 +437,15 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(EditHospitalMenu __instance, Level __0) =>
             StoreyRuntime.AttachToolbar(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(PlotSelectionItem), "Setup")]
+    [HarmonyAfter("artef.twopointhospital.underpressure.editor")]
+    [HarmonyPriority(Priority.Last)]
+    internal static class StoreyPlotRowPatch
+    {
+        private static void Postfix(PlotSelectionItem __instance, HospitalPlot __0) =>
+            StoreyRuntime.BindPlotRow(__instance, __0);
     }
 
     [HarmonyPatch(typeof(Level), "Destroy")]

@@ -29,6 +29,7 @@ namespace UnderPressure.Storey
         private void OnDestroy()
         {
             StoreyRuntime.Destroy(true);
+            UnderPressure.StoreyMapRegistry.Clear();
             _harmony?.UnpatchSelf();
             _harmony = null;
         }
