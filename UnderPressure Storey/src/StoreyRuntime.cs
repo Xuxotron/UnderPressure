@@ -105,6 +105,7 @@ namespace UnderPressure.Storey
                 PlotStoreys[plot] = _lower;
                 if (plot.HospitalMap != null) MapStoreys[plot.HospitalMap] = _lower;
             }
+            DisablePlotShellLighting();
             if (!TryGetBounds(_lower.State, out var bounds)) return false;
             BuildVectorGrid(_lower, bounds);
 
@@ -439,6 +440,15 @@ namespace UnderPressure.Storey
                 new object[] { map.Room });
         }
 
+        private static void DisablePlotShellLighting()
+        {
+            foreach (var plot in PlotOrder)
+                if (plot?.HospitalMap != null) RemoveFromSharedLighting(plot.HospitalMap);
+        }
+
+        internal static bool IsPlotShell(Room room) =>
+            _lower != null && room?.FloorPlan?.HospitalMap?.Plot != null;
+
         private static void RefreshRowArrows()
         {
             foreach (var control in Resources.FindObjectsOfTypeAll<StoreyPlotRowControl>())
@@ -661,6 +671,12 @@ namespace UnderPressure.Storey
     internal static class StoreyLightingIsolationPatch
     {
         private static bool Prefix() => !StoreyRuntime.Constructing;
+    }
+
+    [HarmonyPatch(typeof(RoomLightingManager), "BuildRoom")]
+    internal static class StoreyPlotShellLightingPatch
+    {
+        private static bool Prefix(Room __0) => !StoreyRuntime.IsPlotShell(__0);
     }
 
     [HarmonyPatch(typeof(HospitalMap), "RemoveTerrainDetailMeshes")]
