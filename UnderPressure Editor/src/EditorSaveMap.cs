@@ -542,7 +542,6 @@ namespace UnderPressure.Editor
             return new ScenarioMapFormat.Plot
             {
                 index = index,
-                storey = UnderPressure.Storey.StoreyApi.GetStorey(definition),
                 nameTerm = definition.NameLocalised.Term,
                 cost = definition.Cost,
                 color = definition.Color,
@@ -570,7 +569,6 @@ namespace UnderPressure.Editor
             return new ScenarioMapFormat.Plot
             {
                 index = source.index,
-                storey = source.storey,
                 nameTerm = source.nameTerm ?? "",
                 cost = source.cost,
                 color = source.color,
@@ -1785,7 +1783,6 @@ namespace UnderPressure.Editor
         {
             if (before == null || after == null ||
                 before.index != after.index ||
-                before.storey != after.storey ||
                 !string.Equals(before.nameTerm ?? "", after.nameTerm ?? "", StringComparison.Ordinal) ||
                 before.cost != after.cost ||
                 !SameColor(before.color, after.color) ||
@@ -4390,10 +4387,6 @@ rect.pivot = new Vector2(1f, 1f);
             // interfaz. No salir de Escenario si NO se ha escogido otra parcela.
             var changed = !ReferenceEquals(_selectedPlot, plot);
             _selectedPlot = plot;
-            if (plot != null)
-                UnderPressure.Storey.StoreyApi.SetCursorStorey(
-                    _level?.CursorManager,
-                    UnderPressure.Storey.StoreyApi.GetStorey(plot));
             if (changed || ScenarioLandscape.IsActive || ScenarioTraffic.IsActive)
             {
                 ScenarioEditorScene.Deselect();
