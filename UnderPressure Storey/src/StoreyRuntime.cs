@@ -15,7 +15,6 @@ namespace UnderPressure.Storey
         internal readonly Level Level;
         internal readonly BuildEvents Events;
         internal readonly GameObject Root;
-        internal readonly GameObject ContentRoot;
         internal readonly GameObject GridRoot;
         internal WorldState State;
 
@@ -25,10 +24,6 @@ namespace UnderPressure.Storey
             Events = events;
             Root = new GameObject("UnderPressure Storey " + index);
             Root.transform.position = new Vector3(0f, index * 2f, 0f);
-
-            ContentRoot = new GameObject("World Content");
-            ContentRoot.transform.SetParent(Root.transform, false);
-            ContentRoot.SetActive(false);
 
             GridRoot = new GameObject("Vector Grid");
             GridRoot.transform.SetParent(Root.transform, false);
@@ -44,14 +39,12 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(Level), "_metagame");
         private static readonly FieldInfo LevelBuildEvents =
             AccessTools.Field(typeof(Level), "_buildEvents");
-        private static readonly FieldInfo VisualState =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_worldState");
-        private static readonly FieldInfo VisualContainer =
-            AccessTools.Field(typeof(RoomFloorPlanVisual), "_container");
+        private static readonly FieldInfo PlotMap =
+            AccessTools.Field(typeof(HospitalPlot), "_hospitalMap");
+        private static readonly FieldInfo StateNavMesh =
+            AccessTools.Field(typeof(WorldState), "_navMesh");
         private static readonly Dictionary<Level, WorldState.Config> Configs =
             new Dictionary<Level, WorldState.Config>();
-        private static readonly Dictionary<WorldState, StoreyInstance> Storeys =
-            new Dictionary<WorldState, StoreyInstance>();
 
         private static StoreyInstance _lower;
         private static StoreyInstance _upper;
@@ -68,9 +61,6 @@ namespace UnderPressure.Storey
             Configs[level] = config;
         }
 
-        internal static bool IsUpper(WorldState state) =>
-            state != null && _upper != null && ReferenceEquals(_upper.State, state);
-
         internal static bool Ensure(Level level)
         {
             if (_upper != null && ReferenceEquals(_upper.Level, level)) return true;
@@ -83,7 +73,8 @@ namespace UnderPressure.Storey
 
             Destroy(false);
             _lower = new StoreyInstance(level, null, 0) { State = level.WorldState };
-            BuildVectorGrid(_lower);
+            if (!TryGetBounds(_lower.State, out var bounds)) return false;
+            BuildVectorGrid(_lower, bounds);
 
             var isolatedEvents = new BuildEvents();
             var upper = new StoreyInstance(level, isolatedEvents, 1);
@@ -93,17 +84,22 @@ namespace UnderPressure.Storey
             try
             {
                 LevelBuildEvents.SetValue(level, isolatedEvents);
+                var upperConfig = CloneConfig.Invoke(source, null) as WorldState.Config;
+                upperConfig.HospitalPlots =
+                    new List<FullInspector.SharedInstance<HospitalPlotDefinition>>();
+                if (source.HospitalPlots != null && source.HospitalPlots.Count > 0)
+                    upperConfig.HospitalPlots.Add(source.HospitalPlots[0]);
                 var state = new WorldState(
-                    CloneConfig.Invoke(source, null) as WorldState.Config,
+                    upperConfig,
                     level,
                     LevelMetagame.GetValue(level) as Metagame,
                     level.VisualManager,
                     level.Config.GetDataViewManagerConfig().ValueMaterial,
                     level.Config.GetBuildingLogicConfig().RoomItemEditConfig);
                 upper.State = state;
-                Storeys.Add(state, upper);
                 _upper = upper;
-                BuildVectorGrid(upper);
+                RemoveUpperSeed();
+                BuildVectorGrid(upper, bounds);
                 StoreyPlugin.Log?.LogInfo(
                     "Segundo WorldState creado; rejillas vectoriales en Y=0 e Y=2.");
                 return true;
@@ -125,9 +121,25 @@ namespace UnderPressure.Storey
             }
         }
 
-        private static void BuildVectorGrid(StoreyInstance storey)
+        private static void RemoveUpperSeed()
         {
-            if (!TryGetBounds(storey.State, out var bounds)) return;
+            if (_upper?.State == null || _upper.State.HospitalPlots.Count == 0) return;
+            var seed = _upper.State.HospitalPlots[0];
+            _upper.State.HospitalPlots.RemoveAt(0);
+            if (seed.HospitalMap != null)
+            {
+                _upper.State.DestroyHospitalMap(seed.HospitalMap);
+                PlotMap.SetValue(seed, null);
+            }
+            seed.Destroy();
+            var navMesh = StateNavMesh.GetValue(_upper.State) as TH20.NavMesh;
+            navMesh?.Destroy();
+            StateNavMesh.SetValue(_upper.State, null);
+            _upper.State.ExteriorState = default(BoolArray2D);
+        }
+
+        private static void BuildVectorGrid(StoreyInstance storey, GridBounds bounds)
+        {
             var minX = bounds.Min.X;
             var minZ = bounds.Min.Y;
             var maxX = bounds.Max.X;
@@ -208,17 +220,6 @@ namespace UnderPressure.Storey
             _gridMaterial.renderQueue = 3000;
             return _gridMaterial;
         }
-
-        internal static Transform ContentRootFor(RoomFloorPlanVisual visual)
-        {
-            if (_constructing != null) return _constructing.ContentRoot.transform;
-            var state = VisualState.GetValue(visual) as WorldState;
-            return state != null && Storeys.TryGetValue(state, out var storey)
-                ? storey.ContentRoot.transform : null;
-        }
-
-        internal static Transform ConstructingContentRoot() =>
-            _constructing?.ContentRoot.transform;
 
         internal static void ToggleLowerGrid()
         {
@@ -303,7 +304,6 @@ namespace UnderPressure.Storey
             _constructing = null;
             if (upper != null)
             {
-                Storeys.Remove(upper.State);
                 var normalEvents = upper.Level?.BuildEvents;
                 try
                 {
@@ -343,67 +343,19 @@ namespace UnderPressure.Storey
     [HarmonyPatch(typeof(WorldState), "CalculateLighting")]
     internal static class StoreyLightingIsolationPatch
     {
-        private static bool Prefix(WorldState __instance) =>
-            !StoreyRuntime.Constructing && !StoreyRuntime.IsUpper(__instance);
+        private static bool Prefix() => !StoreyRuntime.Constructing;
     }
 
     [HarmonyPatch(typeof(WorldState), "BuildRoom")]
     internal static class StoreyRoomBuildIsolationPatch
     {
-        private static bool Prefix(WorldState __instance) =>
-            !StoreyRuntime.Constructing && !StoreyRuntime.IsUpper(__instance);
+        private static bool Prefix() => !StoreyRuntime.Constructing;
     }
 
     [HarmonyPatch(typeof(HospitalMap), "RemoveTerrainDetailMeshes")]
     internal static class StoreyTerrainIsolationPatch
     {
         private static bool Prefix() => !StoreyRuntime.Constructing;
-    }
-
-    [HarmonyPatch(typeof(RoomFloorPlanVisual), "UpdateFromRoom")]
-    internal static class StoreyContentRootPatch
-    {
-        private static void Prefix(RoomFloorPlanVisual __instance)
-        {
-            var root = StoreyRuntime.ContentRootFor(__instance);
-            var container = AccessTools.Field(typeof(RoomFloorPlanVisual), "_container")?
-                .GetValue(__instance) as Transform;
-            if (root != null && container != null && container.parent == root)
-                container.SetParent(null, true);
-        }
-
-        private static void Postfix(RoomFloorPlanVisual __instance)
-        {
-            var root = StoreyRuntime.ContentRootFor(__instance);
-            var container = AccessTools.Field(typeof(RoomFloorPlanVisual), "_container")?
-                .GetValue(__instance) as Transform;
-            if (root != null && container != null) container.SetParent(root, false);
-        }
-    }
-
-    [HarmonyPatch(typeof(HospitalPlotFootprintPerimeter), MethodType.Constructor,
-        new[] { typeof(GameObject[]), typeof(float), typeof(bool) })]
-    internal static class StoreyPerimeterRootPatch
-    {
-        private static void Postfix(HospitalPlotFootprintPerimeter __instance)
-        {
-            var root = StoreyRuntime.ConstructingContentRoot();
-            var ownRoot = AccessTools.Field(typeof(HospitalPlotFootprintPerimeter), "_root")?
-                .GetValue(__instance) as Transform;
-            if (root != null && ownRoot != null) ownRoot.SetParent(root, false);
-        }
-    }
-
-    [HarmonyPatch(typeof(HospitalMap), "CreateDemolishRoot")]
-    internal static class StoreyDemolishRootPatch
-    {
-        private static void Postfix(HospitalMap __instance)
-        {
-            var root = StoreyRuntime.ConstructingContentRoot();
-            var ownRoot = AccessTools.Field(typeof(HospitalMap), "_demolishRoot")?
-                .GetValue(__instance) as Transform;
-            if (root != null && ownRoot != null) ownRoot.SetParent(root, false);
-        }
     }
 
     [HarmonyPatch(typeof(EditHospitalMenu), "Setup")]
