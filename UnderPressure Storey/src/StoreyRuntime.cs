@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using TH20;
 using TMPro;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
@@ -38,22 +36,6 @@ namespace UnderPressure.Storey
         }
     }
 
-    internal sealed class StoreyPlotRecord
-    {
-        internal int Index;
-        internal readonly HospitalPlotDefinition Definition;
-        internal HospitalPlot Plot;
-        internal StoreyInstance Storey;
-
-        internal StoreyPlotRecord(int index, HospitalPlot plot, StoreyInstance storey)
-        {
-            Index = index;
-            Plot = plot;
-            Definition = plot.Definition;
-            Storey = storey;
-        }
-    }
-
     internal static class StoreyRuntime
     {
         private static readonly MethodInfo CloneConfig =
@@ -66,67 +48,18 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(RoomFloorPlanVisual), "_worldState");
         private static readonly FieldInfo VisualContainer =
             AccessTools.Field(typeof(RoomFloorPlanVisual), "_container");
-        private static readonly FieldInfo PlotMap =
-            AccessTools.Field(typeof(HospitalPlot), "_hospitalMap");
-        private static readonly FieldInfo PlotBought =
-            AccessTools.Field(typeof(HospitalPlot), "_bought");
-        private static readonly FieldInfo PlotState =
-            AccessTools.Field(typeof(HospitalPlot), "_state");
-        private static readonly FieldInfo PlotTimeLeft =
-            AccessTools.Field(typeof(HospitalPlot), "_timeLeftToBuild");
-        private static readonly FieldInfo PlotTilesBuilt =
-            AccessTools.Field(typeof(HospitalPlot), "_tilesBuilt");
-        private static readonly FieldInfo PlotHiddenLayers =
-            AccessTools.Field(typeof(HospitalPlot), "_hiddenLayers");
-        private static readonly MethodInfo PlotRefresh =
-            AccessTools.Method(typeof(HospitalPlot), "RefreshHospitalMap");
-        private static readonly FieldInfo PlotSelectionPlot =
-            AccessTools.Field(typeof(PlotSelectionItem), "_plot");
-        private static readonly FieldInfo CursorSelectedPlot =
-            AccessTools.Field(typeof(CursorEditHospital), "_hospitalPlot");
-        private static readonly FieldInfo CursorPreviews =
-            AccessTools.Field(typeof(CursorEditHospital), "_tileMapPreview");
-        private static readonly MethodInfo CursorCreatePreview =
-            AccessTools.Method(typeof(CursorEditHospital), "CreateTilemapPreview");
-        private static readonly FieldInfo StateNavMesh =
-            AccessTools.Field(typeof(WorldState), "_navMesh");
-        private static readonly FieldInfo StateBuiltMaps =
-            AccessTools.Field(typeof(WorldState), "_builtHospitalMaps");
-        private static readonly FieldInfo StateAnchor =
-            AccessTools.Field(typeof(WorldState), "<Anchor>k__BackingField");
-        private static readonly FieldInfo NativeNavMeshData =
-            AccessTools.Field(typeof(TH20.NavMesh), "_navMeshData");
-        private static readonly FieldInfo NativeNavMeshInstance =
-            AccessTools.Field(typeof(TH20.NavMesh), "_navMeshDataInstance");
-        private static readonly MethodInfo NavMeshUpdateFromMap =
-            AccessTools.Method(typeof(TH20.NavMesh), "UpdateFromHospitalMap");
         private static readonly Dictionary<Level, WorldState.Config> Configs =
             new Dictionary<Level, WorldState.Config>();
         private static readonly Dictionary<WorldState, StoreyInstance> Storeys =
             new Dictionary<WorldState, StoreyInstance>();
-        private static readonly List<StoreyPlotRecord> PlotRecords =
-            new List<StoreyPlotRecord>();
 
         private static StoreyInstance _lower;
         private static StoreyInstance _upper;
         private static StoreyInstance _constructing;
         private static GameObject _toolbar;
         private static Material _gridMaterial;
-        private static EditHospitalMenu _menu;
-        private static bool _refreshing;
 
         internal static bool Constructing => _constructing != null;
-
-        internal static void Register()
-        {
-            UnderPressure.StoreyMapRegistry.RegisterRuntime(
-                GetAllPlots, GetWorld, Refresh, OnPlotAdded, OnPlotRemoved);
-        }
-
-        internal static void Unregister()
-        {
-            UnderPressure.StoreyMapRegistry.UnregisterRuntime();
-        }
 
         internal static void CaptureConfig(WorldState.Config config, Level level)
         {
@@ -150,15 +83,7 @@ namespace UnderPressure.Storey
 
             Destroy(false);
             _lower = new StoreyInstance(level, null, 0) { State = level.WorldState };
-            _lower.ContentRoot.SetActive(true);
-            Storeys.Add(_lower.State, _lower);
-            for (var index = 0; index < level.WorldState.HospitalPlots.Count; ++index)
-                PlotRecords.Add(new StoreyPlotRecord(
-                    index, level.WorldState.HospitalPlots[index], _lower));
-            AttachExistingContent(_lower);
-            if (!TryGetBounds(_lower.State, out var fullBounds))
-                return false;
-            BuildVectorGrid(_lower, fullBounds);
+            BuildVectorGrid(_lower);
 
             var isolatedEvents = new BuildEvents();
             var upper = new StoreyInstance(level, isolatedEvents, 1);
@@ -168,12 +93,8 @@ namespace UnderPressure.Storey
             try
             {
                 LevelBuildEvents.SetValue(level, isolatedEvents);
-                var upperConfig = CloneConfig.Invoke(source, null) as WorldState.Config;
-                upperConfig.HospitalPlots = new List<FullInspector.SharedInstance<HospitalPlotDefinition>>();
-                if (source.HospitalPlots != null && source.HospitalPlots.Count > 0)
-                    upperConfig.HospitalPlots.Add(source.HospitalPlots[0]);
                 var state = new WorldState(
-                    upperConfig,
+                    CloneConfig.Invoke(source, null) as WorldState.Config,
                     level,
                     LevelMetagame.GetValue(level) as Metagame,
                     level.VisualManager,
@@ -182,14 +103,9 @@ namespace UnderPressure.Storey
                 upper.State = state;
                 Storeys.Add(state, upper);
                 _upper = upper;
-                RemoveUpperSeed();
-                BuildVectorGrid(upper, fullBounds);
-                foreach (var record in PlotRecords.ToArray())
-                    if (UnderPressure.StoreyMapRegistry.GetStorey(record.Definition) ==
-                        UnderPressure.StoreyMapRegistry.UpperStorey)
-                        MovePlot(record, upper);
+                BuildVectorGrid(upper);
                 StoreyPlugin.Log?.LogInfo(
-                    "Segundo WorldState creado; parcelas separadas entre Y=0 e Y=2.");
+                    "Segundo WorldState creado; rejillas vectoriales en Y=0 e Y=2.");
                 return true;
             }
             catch (Exception exception)
@@ -209,8 +125,9 @@ namespace UnderPressure.Storey
             }
         }
 
-        private static void BuildVectorGrid(StoreyInstance storey, GridBounds bounds)
+        private static void BuildVectorGrid(StoreyInstance storey)
         {
+            if (!TryGetBounds(storey.State, out var bounds)) return;
             var minX = bounds.Min.X;
             var minZ = bounds.Min.Y;
             var maxX = bounds.Max.X;
@@ -272,307 +189,6 @@ namespace UnderPressure.Storey
             return found;
         }
 
-        private static void RemoveUpperSeed()
-        {
-            if (_upper?.State == null || _upper.State.HospitalPlots.Count == 0) return;
-            var seed = _upper.State.HospitalPlots[0];
-            _upper.State.HospitalPlots.RemoveAt(0);
-            if (seed.HospitalMap != null)
-            {
-                _upper.State.DestroyHospitalMap(seed.HospitalMap);
-                PlotMap.SetValue(seed, null);
-            }
-            seed.Destroy();
-            var navMesh = StateNavMesh.GetValue(_upper.State) as TH20.NavMesh;
-            if (navMesh != null) navMesh.Destroy();
-            StateNavMesh.SetValue(_upper.State, null);
-            _upper.State.ExteriorState = default(BoolArray2D);
-            _upper.ContentRoot.SetActive(false);
-        }
-
-        private static void AttachExistingContent(StoreyInstance storey)
-        {
-            if (storey?.State == null) return;
-            foreach (var plot in storey.State.HospitalPlots)
-                AttachPlotContent(plot, storey);
-        }
-
-        private static void AttachPlotContent(HospitalPlot plot, StoreyInstance storey)
-        {
-            var map = plot?.HospitalMap;
-            if (map == null || storey == null) return;
-            var visual = map.RoomVisual;
-            var container = visual == null ? null : VisualContainer.GetValue(visual) as Transform;
-            if (container != null && container.parent != storey.ContentRoot.transform)
-                container.SetParent(storey.ContentRoot.transform, true);
-            var perimeter = map.FootprintPerimeter;
-            var perimeterRoot = perimeter == null ? null :
-                AccessTools.Field(typeof(HospitalPlotFootprintPerimeter), "_root")?
-                    .GetValue(perimeter) as Transform;
-            if (perimeterRoot != null && perimeterRoot.parent != storey.ContentRoot.transform)
-                perimeterRoot.SetParent(storey.ContentRoot.transform, true);
-            var demolishRoot = AccessTools.Field(typeof(HospitalMap), "_demolishRoot")?
-                .GetValue(map) as Transform;
-            if (demolishRoot != null && demolishRoot.parent != storey.ContentRoot.transform)
-                demolishRoot.SetParent(storey.ContentRoot.transform, true);
-        }
-
-        private static IList<HospitalPlot> GetAllPlots(Level level)
-        {
-            if (level == null || _lower == null || !ReferenceEquals(_lower.Level, level))
-                return level?.WorldState?.HospitalPlots ?? (IList<HospitalPlot>)new HospitalPlot[0];
-            return PlotRecords.OrderBy(record => record.Index)
-                .Select(record => record.Plot).ToList();
-        }
-
-        private static WorldState GetWorld(HospitalPlot plot)
-        {
-            var record = PlotRecords.FirstOrDefault(item => ReferenceEquals(item.Plot, plot));
-            return record?.Storey?.State;
-        }
-
-        private static void OnPlotAdded(Level level, HospitalPlot plot)
-        {
-            if (plot == null || _lower == null || !ReferenceEquals(_lower.Level, level) ||
-                PlotRecords.Any(record => ReferenceEquals(record.Plot, plot))) return;
-            var nextIndex = PlotRecords.Count == 0 ? 0 :
-                PlotRecords.Max(record => record.Index) + 1;
-            PlotRecords.Add(new StoreyPlotRecord(nextIndex, plot, _lower));
-            UnderPressure.StoreyMapRegistry.SetStorey(
-                plot.Definition, UnderPressure.StoreyMapRegistry.GroundStorey);
-            AttachPlotContent(plot, _lower);
-        }
-
-        private static void OnPlotRemoved(Level level, HospitalPlot plot)
-        {
-            if (plot == null || _lower == null || !ReferenceEquals(_lower.Level, level)) return;
-            var record = PlotRecords.FirstOrDefault(item => ReferenceEquals(item.Plot, plot));
-            if (record == null) return;
-            var removedStorey = record.Storey;
-            PlotRecords.Remove(record);
-            var ordered = PlotRecords.OrderBy(item => item.Index).ToArray();
-            for (var index = 0; index < ordered.Length; ++index)
-                ordered[index].Index = index;
-            if (ReferenceEquals(removedStorey, _upper) &&
-                removedStorey.State.HospitalPlots.Count == 0)
-                removedStorey.ContentRoot.SetActive(false);
-            RefreshRowArrows();
-        }
-
-        private static void Refresh(Level level)
-        {
-            if (_refreshing || level == null) return;
-            _refreshing = true;
-            try
-            {
-                var menu = _menu;
-                var lowerGrid = _lower?.GridRoot.activeSelf ?? false;
-                var upperGrid = _upper?.GridRoot.activeSelf ?? false;
-                Destroy(false);
-                if (!Ensure(level)) return;
-                _lower.GridRoot.SetActive(lowerGrid);
-                _upper.GridRoot.SetActive(upperGrid);
-                if (menu != null) AttachToolbar(menu, level);
-            }
-            finally
-            {
-                _refreshing = false;
-            }
-        }
-
-        internal static void TogglePlot(HospitalPlot plot)
-        {
-            var record = PlotRecords.FirstOrDefault(item => ReferenceEquals(item.Plot, plot));
-            if (record == null || _lower == null || _upper == null) return;
-            MovePlot(record, ReferenceEquals(record.Storey, _upper) ? _lower : _upper);
-        }
-
-        private static void MovePlot(StoreyPlotRecord record, StoreyInstance target)
-        {
-            if (record?.Plot == null || target?.State == null ||
-                ReferenceEquals(record.Storey, target)) return;
-            var source = record.Storey;
-            var level = target.Level;
-            var oldPlot = record.Plot;
-            var wasVisible = oldPlot.IsVisible();
-            var bought = PlotBought.GetValue(oldPlot);
-            var state = PlotState.GetValue(oldPlot);
-            var timeLeft = PlotTimeLeft.GetValue(oldPlot);
-            var tilesBuilt = PlotTilesBuilt.GetValue(oldPlot);
-            var hiddenLayers = PlotHiddenLayers.GetValue(oldPlot) as bool[];
-            hiddenLayers = hiddenLayers == null ? null : (bool[])hiddenLayers.Clone();
-
-            CursorEditHospital cursor = null;
-            level.CursorManager?.TryGetActiveMode(out cursor);
-            var selected = cursor == null ? null : CursorSelectedPlot.GetValue(cursor) as HospitalPlot;
-            var wasSelected = ReferenceEquals(selected, oldPlot);
-            var normalEvents = level.BuildEvents;
-            HospitalPlot replacement = null;
-            try
-            {
-                LevelBuildEvents.SetValue(level, target.Events ?? normalEvents);
-                _constructing = ReferenceEquals(target, _upper) ? target : null;
-                replacement = new HospitalPlot(record.Definition, target.State, level);
-                var insertion = PlotRecords.Count(item => item.Index < record.Index &&
-                    ReferenceEquals(item.Storey, target));
-                target.State.HospitalPlots.Insert(insertion, replacement);
-                PlotBought.SetValue(replacement, bought);
-                PlotState.SetValue(replacement, state);
-                PlotTimeLeft.SetValue(replacement, timeLeft);
-                PlotTilesBuilt.SetValue(replacement, tilesBuilt);
-                if (hiddenLayers != null) PlotHiddenLayers.SetValue(replacement, hiddenLayers);
-                PlotRefresh.Invoke(replacement, new object[] { false, true });
-                replacement.SetVisible(wasVisible);
-                AttachPlotContent(replacement, target);
-                // Validar el grafo de destino antes de retirar la instancia original.
-                RebuildNavigation(target);
-
-                LevelBuildEvents.SetValue(level, source.Events ?? normalEvents);
-                source.State.HospitalPlots.Remove(oldPlot);
-                if (oldPlot.HospitalMap != null)
-                {
-                    source.State.DestroyHospitalMap(oldPlot.HospitalMap);
-                    PlotMap.SetValue(oldPlot, null);
-                }
-                oldPlot.Destroy();
-
-                record.Plot = replacement;
-                record.Storey = target;
-                UnderPressure.StoreyMapRegistry.SetStorey(record.Definition,
-                    ReferenceEquals(target, _upper)
-                        ? UnderPressure.StoreyMapRegistry.UpperStorey
-                        : UnderPressure.StoreyMapRegistry.GroundStorey);
-                target.ContentRoot.SetActive(true);
-                if (ReferenceEquals(source, _upper) && source.State.HospitalPlots.Count == 0)
-                    source.ContentRoot.SetActive(false);
-                try
-                {
-                    RebuildNavigation(source);
-                }
-                catch (Exception navigationException)
-                {
-                    StoreyPlugin.Log?.LogError(
-                        "La parcela cambió de planta, pero falló la actualización del grafo de origen: " +
-                        navigationException);
-                }
-            }
-            catch (Exception exception)
-            {
-                if (replacement != null && !ReferenceEquals(record.Plot, replacement))
-                {
-                    try
-                    {
-                        LevelBuildEvents.SetValue(level, target.Events ?? normalEvents);
-                        target.State.HospitalPlots.Remove(replacement);
-                        if (replacement.HospitalMap != null)
-                        {
-                            target.State.DestroyHospitalMap(replacement.HospitalMap);
-                            PlotMap.SetValue(replacement, null);
-                        }
-                        replacement.Destroy();
-                    }
-                    catch (Exception rollbackException)
-                    {
-                        StoreyPlugin.Log?.LogError(
-                            "No se pudo retirar la parcela incompleta: " + rollbackException);
-                    }
-                }
-                StoreyPlugin.Log?.LogError("No se pudo cambiar la parcela de planta: " + exception);
-                throw;
-            }
-            finally
-            {
-                _constructing = null;
-                LevelBuildEvents.SetValue(level, normalEvents);
-            }
-
-            RebindRows(oldPlot, replacement);
-            RebindCursorPreview(cursor, oldPlot, replacement, target);
-            if (wasSelected)
-                level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(replacement);
-            RefreshRowArrows();
-        }
-
-        private static void RebindRows(HospitalPlot oldPlot, HospitalPlot replacement)
-        {
-            foreach (var row in Resources.FindObjectsOfTypeAll<PlotSelectionItem>())
-            {
-                if (!ReferenceEquals(PlotSelectionPlot.GetValue(row), oldPlot)) continue;
-                PlotSelectionPlot.SetValue(row, replacement);
-                var control = row.GetComponent<StoreyPlotRowControl>();
-                control?.Bind(row, replacement);
-            }
-        }
-
-        private static void RebindCursorPreview(CursorEditHospital cursor,
-            HospitalPlot oldPlot, HospitalPlot replacement, StoreyInstance target)
-        {
-            var previews = cursor == null ? null :
-                CursorPreviews.GetValue(cursor) as Dictionary<HospitalPlot, GameObject>;
-            if (previews == null || CursorCreatePreview == null) return;
-            if (previews.TryGetValue(oldPlot, out var oldPreview))
-            {
-                previews.Remove(oldPlot);
-                if (oldPreview != null) UnityEngine.Object.Destroy(oldPreview);
-            }
-            CursorCreatePreview.Invoke(cursor, new object[] { replacement });
-            if (previews.TryGetValue(replacement, out var preview) && preview != null)
-                preview.transform.SetParent(target.Root.transform, false);
-        }
-
-        private static void RefreshRowArrows()
-        {
-            foreach (var control in Resources.FindObjectsOfTypeAll<StoreyPlotRowControl>())
-                control.RefreshArrow();
-        }
-
-        private static void RebuildNavigation(StoreyInstance storey)
-        {
-            if (storey?.State == null) return;
-            var existing = StateNavMesh.GetValue(storey.State) as TH20.NavMesh;
-            var built = StateBuiltMaps.GetValue(storey.State) as List<HospitalMap>;
-            if (built == null || built.Count == 0)
-            {
-                existing?.Destroy();
-                StateNavMesh.SetValue(storey.State, null);
-                return;
-            }
-            var first = built[0];
-            var anchor = first.Anchor;
-            var previousAnchor = StateAnchor.GetValue(storey.State);
-            var navMesh = new TH20.NavMesh(
-                first.FloorPlan.Width(), first.FloorPlan.Height(), anchor, 0);
-            try
-            {
-                StateAnchor.SetValue(storey.State, anchor);
-                StateNavMesh.SetValue(storey.State, navMesh);
-                foreach (var map in built)
-                    NavMeshUpdateFromMap.Invoke(navMesh, new object[] { anchor, map });
-                storey.State.UpdateNavigation();
-                PlaceNavMesh(storey, navMesh);
-                existing?.Destroy();
-            }
-            catch
-            {
-                navMesh.Destroy();
-                StateNavMesh.SetValue(storey.State, existing);
-                StateAnchor.SetValue(storey.State, previousAnchor);
-                throw;
-            }
-        }
-
-        private static void PlaceNavMesh(StoreyInstance storey, TH20.NavMesh navMesh)
-        {
-            if (storey == null || navMesh == null || ReferenceEquals(storey, _lower)) return;
-            var data = NativeNavMeshData.GetValue(navMesh) as NavMeshData;
-            if (data == null) return;
-            var current = (NavMeshDataInstance)NativeNavMeshInstance.GetValue(navMesh);
-            if (current.valid) UnityEngine.AI.NavMesh.RemoveNavMeshData(current);
-            var placed = UnityEngine.AI.NavMesh.AddNavMeshData(
-                data, storey.Root.transform.position, Quaternion.identity);
-            NativeNavMeshInstance.SetValue(navMesh, placed);
-        }
-
         private static Material GetGridMaterial()
         {
             if (_gridMaterial != null) return _gridMaterial;
@@ -619,7 +235,6 @@ namespace UnderPressure.Storey
         internal static void AttachToolbar(EditHospitalMenu menu, Level level)
         {
             if (menu == null || !Ensure(level)) return;
-            _menu = menu;
             if (_toolbar != null) UnityEngine.Object.Destroy(_toolbar);
             var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
                 .GetValue(menu) as Button;
@@ -681,14 +296,8 @@ namespace UnderPressure.Storey
         {
             if (_toolbar != null) UnityEngine.Object.Destroy(_toolbar);
             _toolbar = null;
-            if (_lower != null)
-            {
-                DetachExistingContent(_lower);
-                Storeys.Remove(_lower.State);
-                UnityEngine.Object.Destroy(_lower.Root);
-            }
+            if (_lower != null) UnityEngine.Object.Destroy(_lower.Root);
             _lower = null;
-            PlotRecords.Clear();
             var upper = _upper;
             _upper = null;
             _constructing = null;
@@ -716,114 +325,7 @@ namespace UnderPressure.Storey
             }
             if (_gridMaterial != null) UnityEngine.Object.Destroy(_gridMaterial);
             _gridMaterial = null;
-            if (clearConfigs)
-            {
-                Configs.Clear();
-                UnderPressure.StoreyMapRegistry.Clear();
-                _menu = null;
-            }
-        }
-
-        private static void DetachExistingContent(StoreyInstance storey)
-        {
-            if (storey?.State == null) return;
-            foreach (var plot in storey.State.HospitalPlots)
-            {
-                var map = plot?.HospitalMap;
-                var visual = map?.RoomVisual;
-                var container = visual == null ? null :
-                    VisualContainer.GetValue(visual) as Transform;
-                if (container != null && container.parent == storey.ContentRoot.transform)
-                    container.SetParent(null, true);
-                var perimeter = map?.FootprintPerimeter;
-                var perimeterRoot = perimeter == null ? null :
-                    AccessTools.Field(typeof(HospitalPlotFootprintPerimeter), "_root")?
-                        .GetValue(perimeter) as Transform;
-                if (perimeterRoot != null && perimeterRoot.parent == storey.ContentRoot.transform)
-                    perimeterRoot.SetParent(null, true);
-                var demolishRoot = map == null ? null :
-                    AccessTools.Field(typeof(HospitalMap), "_demolishRoot")?
-                        .GetValue(map) as Transform;
-                if (demolishRoot != null && demolishRoot.parent == storey.ContentRoot.transform)
-                    demolishRoot.SetParent(null, true);
-            }
-        }
-    }
-
-    internal sealed class StoreyPlotRowControl : MonoBehaviour
-    {
-        private HospitalPlot _plot;
-        private Button _button;
-        private TMP_Text _arrow;
-
-        internal void Bind(PlotSelectionItem row, HospitalPlot plot)
-        {
-            _plot = plot;
-            if (_button == null) Create(row);
-            Position(row);
-            RefreshArrow();
-        }
-
-        internal void RefreshArrow()
-        {
-            if (_arrow == null) return;
-            _arrow.text = UnderPressure.StoreyMapRegistry.GetStorey(_plot) ==
-                          UnderPressure.StoreyMapRegistry.UpperStorey
-                ? "↑" : "↓";
-        }
-
-        private void Create(PlotSelectionItem row)
-        {
-            var root = new GameObject("UP Atajo de planta", typeof(RectTransform),
-                typeof(Button));
-            root.transform.SetParent(row.transform, false);
-            _button = root.GetComponent<Button>();
-            var sound = root.AddComponent<ButtonSFX>();
-            sound.AudioEvent = ButtonSFX.ButtonAudioEvent.Default;
-            _button.onClick.AddListener(() => StoreyRuntime.TogglePlot(_plot));
-
-            var arrowObject = new GameObject("Flecha", typeof(RectTransform),
-                typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-            arrowObject.transform.SetParent(root.transform, false);
-            var arrowRect = (RectTransform)arrowObject.transform;
-            arrowRect.anchorMin = Vector2.zero;
-            arrowRect.anchorMax = Vector2.one;
-            arrowRect.offsetMin = Vector2.zero;
-            arrowRect.offsetMax = Vector2.zero;
-            _arrow = arrowObject.GetComponent<TextMeshProUGUI>();
-            var label = AccessTools.Field(typeof(PlotSelectionItem), "_text")?
-                .GetValue(row) as TMP_Text;
-            if (label != null) _arrow.font = label.font;
-            _arrow.fontSize = 16f;
-            _arrow.fontStyle = FontStyles.Bold;
-            _arrow.alignment = TextAlignmentOptions.Center;
-            _arrow.color = Color.white;
-            _arrow.raycastTarget = true;
-            _button.targetGraphic = _arrow;
-        }
-
-        private void Position(PlotSelectionItem row)
-        {
-            var toggle = AccessTools.Field(typeof(PlotSelectionItem), "_toggleState")?
-                .GetValue(row) as Toggle;
-            var toggleRect = toggle?.transform as RectTransform;
-            var rect = _button?.transform as RectTransform;
-            if (toggleRect == null || rect == null) return;
-            rect.SetParent(row.transform, false);
-            rect.SetAsLastSibling();
-            rect.anchorMin = rect.anchorMax = new Vector2(0f, .5f);
-            rect.pivot = new Vector2(0f, .5f);
-            rect.anchoredPosition = new Vector2(toggleRect.anchoredPosition.x - 17f, 0f);
-            rect.sizeDelta = new Vector2(16f, toggleRect.rect.height);
-            rect.localScale = Vector3.one;
-            var layout = _button.GetComponent<LayoutElement>() ??
-                _button.gameObject.AddComponent<LayoutElement>();
-            layout.ignoreLayout = true;
-        }
-
-        private void OnDestroy()
-        {
-            _button?.onClick.RemoveAllListeners();
+            if (clearConfigs) Configs.Clear();
         }
     }
 
@@ -911,20 +413,6 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(EditHospitalMenu __instance, Level __0) =>
             StoreyRuntime.AttachToolbar(__instance, __0);
-    }
-
-    [HarmonyPatch(typeof(PlotSelectionItem), "Setup")]
-    [HarmonyAfter("artef.twopointhospital.underpressure.editor")]
-    [HarmonyPriority(Priority.Last)]
-    internal static class StoreyPlotRowPatch
-    {
-        private static void Postfix(PlotSelectionItem __instance, HospitalPlot __0)
-        {
-            if (__instance == null || __0 == null) return;
-            var control = __instance.GetComponent<StoreyPlotRowControl>() ??
-                __instance.gameObject.AddComponent<StoreyPlotRowControl>();
-            control.Bind(__instance, __0);
-        }
     }
 
     [HarmonyPatch(typeof(Level), "Destroy")]
