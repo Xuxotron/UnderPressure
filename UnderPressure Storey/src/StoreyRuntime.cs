@@ -338,8 +338,7 @@ namespace UnderPressure.Storey
         }
     }
 
-    [HarmonyPatch(typeof(HospitalPlotFootprintPerimeter), MethodType.Constructor,
-        new[] { typeof(GameObject[]), typeof(float), typeof(bool) })]
+    [HarmonyPatch(typeof(HospitalPlotFootprintPerimeter), MethodType.Constructor)]
     internal static class StoreyBindPerimeterPatch
     {
         private static void Postfix(HospitalPlotFootprintPerimeter __instance)
