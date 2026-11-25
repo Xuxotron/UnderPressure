@@ -449,7 +449,7 @@ namespace UnderPressure.Storey
 
         internal static void AttachToolbar(EditHospitalMenu menu, Level level)
         {
-            if (menu == null || !Ensure(level)) return;
+            if (menu == null || level == null) return;
             if (_toolbar != null) UnityEngine.Object.Destroy(_toolbar);
             var template = AccessTools.Field(typeof(EditHospitalMenu), "_quitButton")?
                 .GetValue(menu) as Button;
@@ -467,6 +467,13 @@ namespace UnderPressure.Storey
                 "storey.view.lower_grid"), 110f, ToggleLowerGrid);
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
                 "storey.view.upper_grid"), 330f, ToggleUpperGrid);
+        }
+
+        internal static void InitialiseAfterNativeCursor(Level level)
+        {
+            if (!Ensure(level))
+                StoreyPlugin.Log?.LogError(
+                    "El segundo WorldState no pudo iniciarse después del cursor nativo.");
         }
 
         private static Transform FindEditorRoot(Canvas canvas)
@@ -657,6 +664,15 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(EditHospitalMenu __instance, Level __0) =>
             StoreyRuntime.AttachToolbar(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(CursorEditHospital), MethodType.Constructor,
+        new[] { typeof(CursorManager), typeof(Level), typeof(CursorEditHospital.Config) })]
+    [HarmonyPriority(Priority.Last)]
+    internal static class StoreyEditorCursorReadyPatch
+    {
+        private static void Postfix(Level __1) =>
+            StoreyRuntime.InitialiseAfterNativeCursor(__1);
     }
 
     [HarmonyPatch(typeof(PlotSelectionItem), "Setup")]
