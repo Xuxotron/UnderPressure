@@ -321,18 +321,6 @@ namespace UnderPressure.Storey
         {
             if (level == null || _lower == null || !ReferenceEquals(_lower.Level, level))
                 return level?.WorldState?.HospitalPlots ?? (IList<HospitalPlot>)new HospitalPlot[0];
-            // Durante Load(), el Editor sustituye primero las parcelas del WorldState
-            // inferior y después solicita reconstruir sus controles. Hasta que Refresh()
-            // sincronice ambos planos, nunca devolver referencias del registro anterior.
-            var currentLower = level.WorldState?.HospitalPlots;
-            var recordedLower = PlotRecords
-                .Where(record => ReferenceEquals(record.Storey, _lower))
-                .OrderBy(record => record.Index)
-                .Select(record => record.Plot)
-                .ToArray();
-            if (currentLower == null || currentLower.Count != recordedLower.Length ||
-                !currentLower.SequenceEqual(recordedLower))
-                return currentLower ?? (IList<HospitalPlot>)new HospitalPlot[0];
             return PlotRecords.OrderBy(record => record.Index)
                 .Select(record => record.Plot).ToList();
         }
