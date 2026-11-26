@@ -18,8 +18,14 @@ namespace UnderPressure
         private static Action<HospitalPlot> _toggleHandler;
         private static Action<Level> _refreshHandler;
         private static Action<Level> _activateGroundHandler;
+        private static Func<Level, int> _activeStoreyProvider;
+        private static Action<Level, int> _activateStoreyHandler;
         private static Action<Level, HospitalPlot> _plotAddedHandler;
         private static Action<Level, HospitalPlot> _plotRemovedHandler;
+
+        public static event Action<Level, int> ActiveStoreyChanged;
+
+        public static bool RuntimeAvailable => _activateStoreyHandler != null;
 
         public static void SetStorey(HospitalPlotDefinition definition, int storey)
         {
@@ -47,6 +53,14 @@ namespace UnderPressure
         public static void Toggle(HospitalPlot plot) => _toggleHandler?.Invoke(plot);
         public static void Refresh(Level level) => _refreshHandler?.Invoke(level);
         public static void ActivateGround(Level level) => _activateGroundHandler?.Invoke(level);
+        public static int GetActiveStorey(Level level) =>
+            _activeStoreyProvider?.Invoke(level) ?? GroundStorey;
+        public static void ActivateStorey(Level level, int storey) =>
+            _activateStoreyHandler?.Invoke(level, storey == UpperStorey
+                ? UpperStorey : GroundStorey);
+        public static void NotifyActiveStoreyChanged(Level level, int storey) =>
+            ActiveStoreyChanged?.Invoke(level, storey == UpperStorey
+                ? UpperStorey : GroundStorey);
         public static void NotifyPlotAdded(Level level, HospitalPlot plot) =>
             _plotAddedHandler?.Invoke(level, plot);
         public static void NotifyPlotRemoved(Level level, HospitalPlot plot)
@@ -58,6 +72,7 @@ namespace UnderPressure
         public static void RegisterRuntime(Func<Level, IList<HospitalPlot>> plotProvider,
             Func<HospitalPlot, WorldState> worldProvider, Action<HospitalPlot> toggleHandler,
             Action<Level> refreshHandler, Action<Level> activateGroundHandler,
+            Func<Level, int> activeStoreyProvider, Action<Level, int> activateStoreyHandler,
             Action<Level, HospitalPlot> plotAddedHandler,
             Action<Level, HospitalPlot> plotRemovedHandler)
         {
@@ -66,6 +81,8 @@ namespace UnderPressure
             _toggleHandler = toggleHandler;
             _refreshHandler = refreshHandler;
             _activateGroundHandler = activateGroundHandler;
+            _activeStoreyProvider = activeStoreyProvider;
+            _activateStoreyHandler = activateStoreyHandler;
             _plotAddedHandler = plotAddedHandler;
             _plotRemovedHandler = plotRemovedHandler;
         }
@@ -77,6 +94,8 @@ namespace UnderPressure
             _toggleHandler = null;
             _refreshHandler = null;
             _activateGroundHandler = null;
+            _activeStoreyProvider = null;
+            _activateStoreyHandler = null;
             _plotAddedHandler = null;
             _plotRemovedHandler = null;
         }

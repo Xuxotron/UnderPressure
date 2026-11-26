@@ -449,6 +449,8 @@ editor.objectives.result.research_points,Research points,Puntos de investigació
 editor.objectives.result.unlock_room,Unlock room,Desbloquear sala,Déverrouiller la salle,Raum freischalten,Sblocca stanza,Desbloquear sala
 storey.view.lower_grid,View lower grid,Ver rejilla inferior,View lower grid,View lower grid,View lower grid,View lower grid
 storey.view.upper_grid,View upper grid,Ver rejilla superior,View upper grid,View upper grid,View upper grid,View upper grid
+storey.active.lower,Ground floor,Planta baja,Rez-de-chaussée,Erdgeschoss,Piano terra,Piso térreo
+storey.active.upper,Second floor,Segunda planta,Premier étage,Obergeschoss,Primo piano,Primeiro andar
 storey.elevator.name,Elevator,Ascensor,Elevator,Elevator,Elevator,Elevator
 storey.elevator.description,Connects the lower and upper storeys.,Conecta las plantas inferior y superior.,Connects the lower and upper storeys.,Connects the lower and upper storeys.,Connects the lower and upper storeys.,Connects the lower and upper storeys.
 storey.elevator.invalid_other_storey,An elevator requires a free purchased tile on both storeys.,El ascensor necesita una baldosa comprada y libre en ambas plantas.,An elevator requires a free purchased tile on both storeys.,An elevator requires a free purchased tile on both storeys.,An elevator requires a free purchased tile on both storeys.,An elevator requires a free purchased tile on both storeys.

@@ -67,6 +67,14 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
         private static readonly FieldInfo ItemCursorWorldState =
             AccessTools.Field(typeof(CursorEditHospitalItem), "_worldState");
+        private static readonly FieldInfo SelectCursorWorldState =
+            AccessTools.Field(typeof(CursorSelect), "_worldState");
+        private static readonly FieldInfo SelectCursorBuildEvents =
+            AccessTools.Field(typeof(CursorSelect), "_buildEvents");
+        private static readonly FieldInfo CursorManagerMode =
+            AccessTools.Field(typeof(CursorManager), "_mode");
+        private static readonly FieldInfo CursorManagerModeStack =
+            AccessTools.Field(typeof(CursorManager), "_modeStack");
         private static readonly FieldInfo CursorWorldPosition =
             AccessTools.Field(typeof(CursorManager), "_worldPosition");
         private static readonly FieldInfo CursorWorldPositionSmoothed =
@@ -105,7 +113,8 @@ namespace UnderPressure.Storey
         internal static bool Constructing => _constructing != null;
 
         internal static void Register() => UnderPressure.StoreyMapRegistry.RegisterRuntime(
-            GetPlots, GetWorld, TogglePlot, Refresh, ActivateGround, OnPlotAdded, OnPlotRemoved);
+            GetPlots, GetWorld, TogglePlot, Refresh, ActivateGround, GetActiveStorey,
+            ActivateStorey, OnPlotAdded, OnPlotRemoved);
 
         internal static void Unregister() => UnderPressure.StoreyMapRegistry.UnregisterRuntime();
 
@@ -348,6 +357,19 @@ namespace UnderPressure.Storey
             if (_lower != null && ReferenceEquals(_lower.Level, level)) Activate(_lower);
         }
 
+        private static int GetActiveStorey(Level level) =>
+            _active != null && ReferenceEquals(_active.Level, level) &&
+            ReferenceEquals(_active, _upper)
+                ? UnderPressure.StoreyMapRegistry.UpperStorey
+                : UnderPressure.StoreyMapRegistry.GroundStorey;
+
+        private static void ActivateStorey(Level level, int storey)
+        {
+            if (!Ensure(level)) return;
+            Activate(storey == UnderPressure.StoreyMapRegistry.UpperStorey
+                ? _upper : _lower);
+        }
+
         private static void OnPlotAdded(Level level, HospitalPlot plot)
         {
             if (plot == null || _active == null || !ReferenceEquals(_active.Level, level)) return;
@@ -386,20 +408,44 @@ namespace UnderPressure.Storey
         private static void Activate(StoreyInstance storey)
         {
             if (storey?.State == null || storey.Level == null) return;
+            var changed = !ReferenceEquals(_active, storey);
             _active = storey;
             LevelWorldState.SetValue(storey.Level, storey.State);
             LevelBuildEvents.SetValue(storey.Level, storey.Events);
-            if (storey.Level.CursorManager != null &&
-                storey.Level.CursorManager.TryGetActiveMode<CursorEditHospital>(out var cursor))
-                CursorWorldState.SetValue(cursor, storey.State);
-            if (storey.Level.CursorManager != null &&
-                storey.Level.CursorManager.TryGetActiveMode<CursorEditHospitalItem>(
-                    out var itemCursor))
+            SynchronizeCursorModes(storey);
+            storey.Level.CursorManager?.SetPlaneOffset(0f);
+            if (changed)
             {
+                var index = ReferenceEquals(storey, _upper)
+                    ? UnderPressure.StoreyMapRegistry.UpperStorey
+                    : UnderPressure.StoreyMapRegistry.GroundStorey;
+                UnderPressure.StoreyMapRegistry.NotifyActiveStoreyChanged(storey.Level, index);
+                StoreyPlugin.Log?.LogInfo("Plano lógico activo: " + index + ".");
+            }
+        }
+
+        private static void SynchronizeCursorModes(StoreyInstance storey)
+        {
+            var manager = storey?.Level?.CursorManager;
+            if (manager == null) return;
+            var modes = new List<TH20.CursorMode>();
+            var active = CursorManagerMode.GetValue(manager) as TH20.CursorMode;
+            if (active != null) modes.Add(active);
+            if (CursorManagerModeStack.GetValue(manager) is IEnumerable<TH20.CursorMode> stack)
+                modes.AddRange(stack.Where(mode => mode != null && !modes.Contains(mode)));
+            foreach (var mode in modes)
+            {
+                if (mode is CursorSelect select)
+                {
+                    SelectCursorWorldState.SetValue(select, storey.State);
+                    SelectCursorBuildEvents.SetValue(select, storey.Events);
+                }
+                if (mode is CursorEditHospital cursor)
+                    CursorWorldState.SetValue(cursor, storey.State);
+                if (!(mode is CursorEditHospitalItem itemCursor)) continue;
                 ItemCursorWorldState.SetValue(itemCursor, storey.State);
                 BindItemCursor(itemCursor, storey.Events);
             }
-            storey.Level.CursorManager?.SetPlaneOffset(0f);
         }
 
         private static void BindItemCursor(CursorEditHospitalItem cursor, BuildEvents target)
@@ -679,6 +725,13 @@ namespace UnderPressure.Storey
             if (_active?.Root != null) offset += _active.Root.transform.position.y;
         }
 
+        internal static float PlotSelectionPlane(float nativeHeight, WorldState state)
+        {
+            var storey = GetStorey(state);
+            return nativeHeight + (storey?.Root != null
+                ? storey.Root.transform.position.y : 0f);
+        }
+
         internal static void ApplyActiveCursorHeight(CursorManager manager)
         {
             if (manager == null || _active?.Root == null) return;
@@ -771,9 +824,9 @@ namespace UnderPressure.Storey
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = Vector2.zero;
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
-                "storey.view.lower_grid"), 110f, ToggleLowerGrid);
+                "storey.view.lower_grid"), -250f, ToggleLowerGrid);
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
-                "storey.view.upper_grid"), 330f, ToggleUpperGrid);
+                "storey.view.upper_grid"), -30f, ToggleUpperGrid);
         }
 
         private static Transform FindEditorRoot(Canvas canvas)
@@ -1103,6 +1156,33 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(CursorManager __instance) =>
             StoreyRuntime.ApplyActiveCursorHeight(__instance);
+    }
+
+    [HarmonyPatch(typeof(CursorSelectionHelpers), nameof(CursorSelectionHelpers.GetPlot))]
+    internal static class StoreyPlotSelectionPlanePatch
+    {
+        private static readonly FieldInfo FootprintHeight =
+            AccessTools.Field(typeof(HospitalPlotDefinition), "FootprintYOffset");
+        private static readonly MethodInfo Replacement =
+            AccessTools.Method(typeof(StoreyRuntime), nameof(StoreyRuntime.PlotSelectionPlane));
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> source)
+        {
+            var codes = source.ToList();
+            var replaced = false;
+            for (var index = 0; index < codes.Count; ++index)
+            {
+                if (codes[index].opcode != OpCodes.Ldfld ||
+                    !Equals(codes[index].operand, FootprintHeight)) continue;
+                codes.Insert(index + 1, new CodeInstruction(OpCodes.Ldarg_0));
+                codes.Insert(index + 2, new CodeInstruction(OpCodes.Call, Replacement));
+                replaced = true;
+                break;
+            }
+            if (!replaced) throw new InvalidOperationException(
+                "No se localizó la altura nativa del plano de selección de parcelas.");
+            return codes;
+        }
     }
 
     [HarmonyPatch(typeof(RoomLightingManager), "RegenerateInteriorVolumeLights")]

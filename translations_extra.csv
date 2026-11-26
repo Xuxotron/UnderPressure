@@ -447,6 +447,8 @@ editor.objectives.result.money,Деньги,Pieniądze,돈,钱,錢
 editor.objectives.result.reputation,Репутация,Reputacja,평판,声誉,聲譽
 editor.objectives.result.research_points,Очки исследования,Punkty badawcze,연구 포인트,研究要点,研究要點
 editor.objectives.result.unlock_room,Разблокировать комнату,Odblokuj pokój,방 잠금 해제,解锁房间,解鎖房間
+storey.active.lower,Нижний этаж,Parter,아래층,底层,底層
+storey.active.upper,Второй этаж,Pierwsze piętro,위층,二层,二層
 storey.elevator.name,Лифт,Winda,엘리베이터,电梯,電梯
 storey.elevator.description,Соединяет нижний и верхний этажи.,Łączy dolną i górną kondygnację.,아래층과 위층을 연결합니다.,连接下层和上层。,連接下層和上層。
 storey.elevator.invalid_other_storey,Для лифта нужна свободная купленная клетка на обоих этажах.,Winda wymaga wolnego zakupionego pola na obu kondygnacjach.,엘리베이터는 양쪽 층에 구매한 빈 타일이 필요합니다.,电梯需要上下两层都有已购买的空闲地块。,電梯需要上下兩層都有已購買的空閒地塊。
