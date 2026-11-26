@@ -440,14 +440,6 @@ namespace UnderPressure.Storey
             HospitalMap newMap = null;
             try
             {
-                _constructing = target;
-                LevelBuildEvents.SetValue(level, target.Events);
-                newMap = target.State.CreateHospitalMap(plot, false);
-                MapStoreys[newMap] = target;
-                AttachMapVisuals(newMap, target);
-                if (plot.Built) target.State.SetBuiltHospitalMap(newMap);
-                else target.State.SetUnbuiltHospitalPlot(newMap);
-
                 _constructing = source;
                 LevelBuildEvents.SetValue(level, source.Events);
                 if (oldMap != null)
@@ -455,11 +447,25 @@ namespace UnderPressure.Storey
                     if (ReferenceEquals(source, _upper)) RemoveFromSharedLighting(oldMap);
                     MapStoreys.Remove(oldMap);
                     source.State.DestroyHospitalMap(oldMap);
+                    PlotMap.SetValue(plot, null);
                 }
                 source.State.HospitalPlots.Remove(plot);
                 PlotWorldState.SetValue(plot, target.State);
-                PlotMap.SetValue(plot, newMap);
                 if (!target.State.HospitalPlots.Contains(plot)) target.State.HospitalPlots.Add(plot);
+
+                // HospitalPlot.RefreshHospitalMap destruye y desvincula el mapa anterior
+                // antes de construir el siguiente. Mantener dos HospitalMap de la misma
+                // parcela a la vez deja vivos dos juegos de LandscapeRoomItem y la
+                // destruccion tardia del origen elimina los visuales recien reconstruidos.
+                _constructing = target;
+                LevelBuildEvents.SetValue(level, target.Events);
+                newMap = target.State.CreateHospitalMap(plot, false);
+                PlotMap.SetValue(plot, newMap);
+                MapStoreys[newMap] = target;
+                AttachMapVisuals(newMap, target);
+                if (plot.Built) target.State.SetBuiltHospitalMap(newMap);
+                else target.State.SetUnbuiltHospitalPlot(newMap);
+
                 PlotStoreys[plot] = target;
                 UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
                     ReferenceEquals(target, _upper) ? 1 : 0);
@@ -470,7 +476,7 @@ namespace UnderPressure.Storey
             }
             catch (Exception exception)
             {
-                StoreyPlugin.Log?.LogError("No se pudo trasladar la parcela sin destruir el origen: " + exception);
+                StoreyPlugin.Log?.LogError("No se pudo trasladar la parcela; se reconstruira en su planta de origen: " + exception);
                 if (newMap != null)
                 {
                     try
@@ -485,6 +491,33 @@ namespace UnderPressure.Storey
                         StoreyPlugin.Log?.LogError("No se pudo limpiar el mapa destino fallido: " + cleanup);
                     }
                     MapStoreys.Remove(newMap);
+                }
+                PlotMap.SetValue(plot, null);
+                target.State.HospitalPlots.Remove(plot);
+                PlotWorldState.SetValue(plot, source.State);
+                if (!source.State.HospitalPlots.Contains(plot)) source.State.HospitalPlots.Add(plot);
+                try
+                {
+                    _constructing = source;
+                    LevelBuildEvents.SetValue(level, source.Events);
+                    var restoredMap = source.State.CreateHospitalMap(plot, false);
+                    PlotMap.SetValue(plot, restoredMap);
+                    MapStoreys[restoredMap] = source;
+                    AttachMapVisuals(restoredMap, source);
+                    if (plot.Built) source.State.SetBuiltHospitalMap(restoredMap);
+                    else source.State.SetUnbuiltHospitalPlot(restoredMap);
+                    PlotStoreys[plot] = source;
+                    UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
+                        ReferenceEquals(source, _upper) ? 1 : 0);
+                    RecalculateWorldLighting();
+                    RefreshRowArrows();
+                    if (select) level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plot);
+                }
+                catch (Exception restoreException)
+                {
+                    StoreyPlugin.Log?.LogError(
+                        "No se pudo reconstruir la parcela en su planta de origen: " +
+                        restoreException);
                 }
                 Activate(source);
             }
