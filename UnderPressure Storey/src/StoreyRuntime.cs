@@ -119,6 +119,8 @@ namespace UnderPressure.Storey
         internal static bool Ensure(Level level)
         {
             if (_upper != null && ReferenceEquals(_upper.Level, level)) return true;
+            StoreyPlugin.Log?.LogInfo(
+                "Inicializando los WorldState de plantas para el nivel activo.");
             if (level == null || !Configs.TryGetValue(level, out var source))
             {
                 StoreyPlugin.Log?.LogError(
@@ -173,8 +175,15 @@ namespace UnderPressure.Storey
                              UnderPressure.StoreyMapRegistry.GetStorey(plot) == 1).ToArray())
                     MovePlot(plot, _upper, false);
                 ElevatorRuntime.Initialise(level, _lower, _upper);
+                var lowerPlots = PlotOrder.Count(plot =>
+                    PlotStoreys.TryGetValue(plot, out var storey) &&
+                    ReferenceEquals(storey, _lower));
+                var upperPlots = PlotOrder.Count(plot =>
+                    PlotStoreys.TryGetValue(plot, out var storey) &&
+                    ReferenceEquals(storey, _upper));
                 StoreyPlugin.Log?.LogInfo(
-                    "Segundo WorldState creado; rejillas vectoriales en Y=0 e Y=2.");
+                    "Segundo WorldState creado; parcelas inferiores=" + lowerPlots +
+                    ", superiores=" + upperPlots + ".");
                 return true;
             }
             catch (Exception exception)
@@ -1150,5 +1159,18 @@ namespace UnderPressure.Storey
     internal static class StoreyDestroyPatch
     {
         private static void Prefix() => StoreyRuntime.Destroy(true);
+    }
+
+    [HarmonyPatch(typeof(Metagame), "OnLevelLoaded")]
+    [HarmonyAfter("artef.twopointhospital.underpressure.editor")]
+    [HarmonyPriority(Priority.Last)]
+    internal static class StoreyLevelLoadedPatch
+    {
+        private static void Postfix(Level __0)
+        {
+            if (StoreyRuntime.Ensure(__0))
+                StoreyPlugin.Log?.LogInfo(
+                    "Segundo WorldState inicializado al completar la carga jugable del nivel.");
+        }
     }
 }

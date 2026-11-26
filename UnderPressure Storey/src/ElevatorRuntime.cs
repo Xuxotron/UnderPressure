@@ -348,6 +348,9 @@ namespace UnderPressure.Storey
             if (lower?.Root != null)
                 _driver = lower.Root.AddComponent<ElevatorRouteDriver>();
             RebuildPairs();
+            StoreyPlugin.Log?.LogInfo(
+                "Ascensores inicializados sobre dos WorldState; parejas restauradas=" +
+                (Pairs.Count / 2) + ".");
         }
 
         internal static void Destroy()
@@ -436,8 +439,15 @@ namespace UnderPressure.Storey
         private static void OnRoomItemPlaced(RoomItem item, FloorPlan plan)
         {
             if (_pairedOperation || !ElevatorDefinition.IsElevator(item)) return;
+            var sourceStorey = StoreyRuntime.GetStorey(item);
+            StoreyPlugin.Log?.LogInfo(
+                "Colocación de ascensor recibida en planta " +
+                (ReferenceEquals(sourceStorey, _upper) ? "superior" : "inferior") +
+                ", posición=" + item.WorldPosition + ".");
             if (!ValidateCounterpart(item))
             {
+                StoreyPlugin.Log?.LogWarning(
+                    "Ascensor rechazado: la misma celda no es válida en el otro WorldState.");
                 DestroyItem(item);
                 return;
             }
@@ -476,6 +486,10 @@ namespace UnderPressure.Storey
                     return;
                 }
                 Link(item, counterpart);
+                StoreyPlugin.Log?.LogInfo(
+                    "Pareja de ascensores creada entre ambos WorldState en posición XZ=" +
+                    item.WorldPosition.x.ToString("F2") + "," +
+                    item.WorldPosition.z.ToString("F2") + ".");
             }
             finally
             {
