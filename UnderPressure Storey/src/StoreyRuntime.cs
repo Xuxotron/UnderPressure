@@ -53,6 +53,12 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
         private static readonly FieldInfo ItemCursorWorldState =
             AccessTools.Field(typeof(CursorEditHospitalItem), "_worldState");
+        private static readonly FieldInfo CursorWorldPosition =
+            AccessTools.Field(typeof(CursorManager), "_worldPosition");
+        private static readonly FieldInfo CursorWorldPositionSmoothed =
+            AccessTools.Field(typeof(CursorManager), "_worldPositionSmoothed");
+        private static readonly FieldInfo CursorVisualisation =
+            AccessTools.Field(typeof(CursorManager), "_visualisation");
         private static readonly FieldInfo HospitalMapDemolishRoot =
             AccessTools.Field(typeof(HospitalMap), "_demolishRoot");
         private static readonly FieldInfo HospitalMapFootprintPerimeter =
@@ -582,6 +588,27 @@ namespace UnderPressure.Storey
             if (_active?.Root != null) offset += _active.Root.transform.position.y;
         }
 
+        internal static void ApplyActiveCursorHeight(CursorManager manager)
+        {
+            if (manager == null || _active?.Root == null) return;
+            var height = _active.Root.transform.position.y;
+            if (Mathf.Approximately(height, 0f)) return;
+
+            var worldPosition = (Vector3)CursorWorldPosition.GetValue(manager);
+            worldPosition.y = height;
+            CursorWorldPosition.SetValue(manager, worldPosition);
+
+            var smoothedPosition = (Vector3)CursorWorldPositionSmoothed.GetValue(manager);
+            smoothedPosition.y = height;
+            CursorWorldPositionSmoothed.SetValue(manager, smoothedPosition);
+
+            var visualisation = CursorVisualisation.GetValue(manager) as GameObject;
+            if (visualisation == null) return;
+            var visualPosition = visualisation.transform.position;
+            visualPosition.y = smoothedPosition.y;
+            visualisation.transform.position = visualPosition;
+        }
+
         internal static Vector3 FloorPlanWorldOrigin(FloorPlan floorPlan)
         {
             var anchor = floorPlan.Anchor;
@@ -945,6 +972,13 @@ namespace UnderPressure.Storey
     {
         private static void Prefix(ref float __0) =>
             StoreyRuntime.ApplyActivePlaneHeight(ref __0);
+    }
+
+    [HarmonyPatch(typeof(CursorManager), "UpdateCursorPosition")]
+    internal static class StoreyCursorPositionPatch
+    {
+        private static void Postfix(CursorManager __instance) =>
+            StoreyRuntime.ApplyActiveCursorHeight(__instance);
     }
 
     [HarmonyPatch(typeof(RoomLightingManager), "RegenerateInteriorVolumeLights")]
