@@ -49,6 +49,20 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(Level), "_worldState");
         private static readonly FieldInfo PlotWorldState =
             AccessTools.Field(typeof(HospitalPlot), "_worldState");
+        private static readonly FieldInfo HospitalMapWorldState =
+            AccessTools.Field(typeof(HospitalMap), "_worldState");
+        private static readonly FieldInfo StateUnbuiltHospitalMaps =
+            AccessTools.Field(typeof(WorldState), "_unbuiltHospitalMaps");
+        private static readonly FieldInfo RoomVisualWorldState =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_worldState");
+        private static readonly FieldInfo RoomVisualBuildEvents =
+            AccessTools.Field(typeof(RoomFloorPlanVisual), "_buildEvents");
+        private static readonly FieldInfo RoomItemVisualBuildEvents =
+            AccessTools.Field(typeof(RoomItemVisual), "_buidEvents");
+        private static readonly MethodInfo RoomRegisterEvents =
+            AccessTools.Method(typeof(Room), "RegisterEvents");
+        private static readonly MethodInfo RoomUnregisterEvents =
+            AccessTools.Method(typeof(Room), "UnregisterEvents");
         private static readonly FieldInfo CursorWorldState =
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
         private static readonly FieldInfo ItemCursorWorldState =
@@ -436,36 +450,11 @@ namespace UnderPressure.Storey
                 !PlotStoreys.TryGetValue(plot, out var source) || ReferenceEquals(source, target))
                 return;
             var level = source.Level;
-            var oldMap = plot.HospitalMap;
-            HospitalMap newMap = null;
+            var map = plot.HospitalMap;
+            if (map == null) return;
             try
             {
-                _constructing = source;
-                LevelBuildEvents.SetValue(level, source.Events);
-                if (oldMap != null)
-                {
-                    if (ReferenceEquals(source, _upper)) RemoveFromSharedLighting(oldMap);
-                    MapStoreys.Remove(oldMap);
-                    source.State.DestroyHospitalMap(oldMap);
-                    PlotMap.SetValue(plot, null);
-                }
-                source.State.HospitalPlots.Remove(plot);
-                PlotWorldState.SetValue(plot, target.State);
-                if (!target.State.HospitalPlots.Contains(plot)) target.State.HospitalPlots.Add(plot);
-
-                // HospitalPlot.RefreshHospitalMap destruye y desvincula el mapa anterior
-                // antes de construir el siguiente. Mantener dos HospitalMap de la misma
-                // parcela a la vez deja vivos dos juegos de LandscapeRoomItem y la
-                // destruccion tardia del origen elimina los visuales recien reconstruidos.
-                _constructing = target;
-                LevelBuildEvents.SetValue(level, target.Events);
-                newMap = target.State.CreateHospitalMap(plot, false);
-                PlotMap.SetValue(plot, newMap);
-                MapStoreys[newMap] = target;
-                AttachMapVisuals(newMap, target);
-                if (plot.Built) target.State.SetBuiltHospitalMap(newMap);
-                else target.State.SetUnbuiltHospitalPlot(newMap);
-
+                TransferMapOwnership(plot, map, source, target);
                 PlotStoreys[plot] = target;
                 UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
                     ReferenceEquals(target, _upper) ? 1 : 0);
@@ -476,55 +465,114 @@ namespace UnderPressure.Storey
             }
             catch (Exception exception)
             {
-                StoreyPlugin.Log?.LogError("No se pudo trasladar la parcela; se reconstruira en su planta de origen: " + exception);
-                if (newMap != null)
-                {
-                    try
-                    {
-                        _constructing = target;
-                        LevelBuildEvents.SetValue(level, target.Events);
-                        RemoveFromSharedLighting(newMap);
-                        target.State.DestroyHospitalMap(newMap);
-                    }
-                    catch (Exception cleanup)
-                    {
-                        StoreyPlugin.Log?.LogError("No se pudo limpiar el mapa destino fallido: " + cleanup);
-                    }
-                    MapStoreys.Remove(newMap);
-                }
-                PlotMap.SetValue(plot, null);
-                target.State.HospitalPlots.Remove(plot);
-                PlotWorldState.SetValue(plot, source.State);
-                if (!source.State.HospitalPlots.Contains(plot)) source.State.HospitalPlots.Add(plot);
+                StoreyPlugin.Log?.LogError(
+                    "No se pudo transferir la parcela sin reconstruirla: " + exception);
                 try
                 {
-                    _constructing = source;
-                    LevelBuildEvents.SetValue(level, source.Events);
-                    var restoredMap = source.State.CreateHospitalMap(plot, false);
-                    PlotMap.SetValue(plot, restoredMap);
-                    MapStoreys[restoredMap] = source;
-                    AttachMapVisuals(restoredMap, source);
-                    if (plot.Built) source.State.SetBuiltHospitalMap(restoredMap);
-                    else source.State.SetUnbuiltHospitalPlot(restoredMap);
+                    TransferMapOwnership(plot, map, target, source);
                     PlotStoreys[plot] = source;
                     UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
                         ReferenceEquals(source, _upper) ? 1 : 0);
-                    RecalculateWorldLighting();
-                    RefreshRowArrows();
-                    if (select) level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plot);
                 }
                 catch (Exception restoreException)
                 {
                     StoreyPlugin.Log?.LogError(
-                        "No se pudo reconstruir la parcela en su planta de origen: " +
+                        "No se pudo devolver la propiedad del mapa a su planta de origen: " +
                         restoreException);
                 }
                 Activate(source);
+                RefreshRowArrows();
+                if (select) level.HospitalEditEvents.OnSelectHospitalPlot?.Invoke(plot);
             }
             finally
             {
                 _constructing = null;
             }
+        }
+
+        private static void TransferMapOwnership(HospitalPlot plot, HospitalMap map,
+            StoreyInstance source, StoreyInstance target)
+        {
+            if (plot == null || map == null || source?.State == null || target?.State == null)
+                throw new ArgumentNullException(nameof(map));
+
+            var level = source.Level;
+            var rooms = source.State.AllRooms.Concat(target.State.AllRooms)
+                .Where(room => room?.FloorPlan != null &&
+                               ReferenceEquals(room.FloorPlan.HospitalMap, map))
+                .Concat(map.Room == null ? Enumerable.Empty<Room>() : new[] { map.Room })
+                .Distinct().ToArray();
+            var floorPlans = rooms.Select(room => room.FloorPlan)
+                .Concat(map.FloorPlan == null
+                    ? Enumerable.Empty<FloorPlan>() : new[] { map.FloorPlan })
+                .Concat(map.CorridorFloorPlan == null
+                    ? Enumerable.Empty<FloorPlan>() : new[] { map.CorridorFloorPlan })
+                .Where(floorPlan => floorPlan != null).Distinct().ToArray();
+            var roomItems = floorPlans.SelectMany(floorPlan => floorPlan.Items)
+                .Distinct().ToArray();
+
+            // Las salas se suscriben al BuildEvents que Level expone al registrarlas.
+            // Retirarlas de ambos contextos hace la operacion repetible y permite
+            // devolver el mismo mapa al origen si falla cualquier registro posterior.
+            foreach (var events in new[] { source.Events, target.Events }.Distinct())
+            {
+                LevelBuildEvents.SetValue(level, events);
+                foreach (var room in rooms) RoomUnregisterEvents.Invoke(room, null);
+            }
+
+            source.State.HospitalMaps.Remove(map);
+            target.State.HospitalMaps.Remove(map);
+            GetUnbuiltHospitalMaps(source.State).Remove(map);
+            GetUnbuiltHospitalMaps(target.State).Remove(map);
+            source.State.HospitalPlots.Remove(plot);
+            target.State.HospitalPlots.Remove(plot);
+            foreach (var room in rooms)
+            {
+                source.State.AllRooms.Remove(room);
+                target.State.AllRooms.Remove(room);
+            }
+            foreach (var item in roomItems)
+            {
+                source.State.RemoveNeedSatisfyingRoomItem(item);
+                target.State.RemoveNeedSatisfyingRoomItem(item);
+            }
+
+            PlotWorldState.SetValue(plot, target.State);
+            HospitalMapWorldState.SetValue(map, target.State);
+            target.State.HospitalPlots.Add(plot);
+            foreach (var room in rooms) target.State.AllRooms.Add(room);
+            foreach (var item in roomItems) target.State.AddNeedSatisfyingRoomItem(item);
+
+            MapStoreys[map] = target;
+            AttachMapVisuals(map, target);
+            foreach (var room in rooms) RebindRoomVisual(room.FloorPlanVisual, target);
+
+            _constructing = target;
+            LevelWorldState.SetValue(level, target.State);
+            LevelBuildEvents.SetValue(level, target.Events);
+            foreach (var room in rooms) RoomRegisterEvents.Invoke(room, null);
+            if (plot.Built) target.State.SetBuiltHospitalMap(map);
+            else target.State.SetUnbuiltHospitalPlot(map);
+
+            source.State.UpdateNavigation();
+            source.State.CalculateLighting();
+        }
+
+        private static List<HospitalMap> GetUnbuiltHospitalMaps(WorldState state) =>
+            StateUnbuiltHospitalMaps.GetValue(state) as List<HospitalMap> ??
+            throw new MissingFieldException(typeof(WorldState).FullName,
+                "_unbuiltHospitalMaps");
+
+        private static void RebindRoomVisual(RoomFloorPlanVisual visual,
+            StoreyInstance target)
+        {
+            if (visual == null) return;
+            RoomVisualWorldState.SetValue(visual, target.State);
+            RoomVisualBuildEvents.SetValue(visual, target.Events);
+            AttachRoot(visual.GameObject?.transform, target);
+            foreach (var itemVisual in visual.RoomItems)
+                if (itemVisual != null)
+                    RoomItemVisualBuildEvents.SetValue(itemVisual, target.Events);
         }
 
         private static void RemoveFromSharedLighting(HospitalMap map)
