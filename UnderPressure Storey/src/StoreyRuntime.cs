@@ -53,6 +53,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
         private static readonly FieldInfo ItemCursorWorldState =
             AccessTools.Field(typeof(CursorEditHospitalItem), "_worldState");
+        private static readonly FieldInfo StateBuiltHospitalMaps =
+            AccessTools.Field(typeof(WorldState), "_builtHospitalMaps");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
         private static readonly FieldInfo RoomLightConfig =
@@ -534,7 +536,31 @@ namespace UnderPressure.Storey
             var anchor = _lower.State.Anchor;
             var lowerOrigin = new Vector3(anchor.X * GridCoord.CellSize, 0f,
                 anchor.Y * GridCoord.CellSize);
-            manager.RegenerateExteriorVolumeLights(lowerState, lowerOrigin);
+            var coveredState = (bool[,])lowerState.Clone();
+            var upperMaps = StateBuiltHospitalMaps.GetValue(_upper?.State) as
+                List<HospitalMap>;
+            if (upperMaps != null)
+            {
+                foreach (var map in upperMaps)
+                {
+                    if (map?.Plot?.Definition == null || map.Plot.Definition.InstaBuild)
+                        continue;
+                    var indoor = map.IndoorState;
+                    if (indoor == null ||
+                        indoor.GetLength(0) != coveredState.GetLength(0) ||
+                        indoor.GetLength(1) != coveredState.GetLength(1))
+                    {
+                        StoreyPlugin.Log?.LogError(
+                            "Las matrices de iluminación de ambos pisos no coinciden.");
+                        manager.RegenerateExteriorVolumeLights(lowerState, lowerOrigin);
+                        return;
+                    }
+                    for (var x = 0; x < indoor.GetLength(0); ++x)
+                        for (var y = 0; y < indoor.GetLength(1); ++y)
+                            if (indoor[x, y]) coveredState[x, y] = false;
+                }
+            }
+            manager.RegenerateExteriorVolumeLights(coveredState, lowerOrigin);
         }
 
         internal static float ShadowCastingFloorY(RoomLightingManager manager,
