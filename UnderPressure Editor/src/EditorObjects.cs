@@ -2109,21 +2109,25 @@ namespace UnderPressure.Editor
             owner = null;
             selected = null;
             var camera = Camera.main;
-            var plot = _selection;
-            if (camera == null || plot == null || !plot.IsVisible()) return false;
+            var plots = UnderPressure.StoreyMapRegistry.GetPlots(_level);
+            if (camera == null || plots == null) return false;
             var ray = camera.ScreenPointToRay(mouse);
             var nearest = float.PositiveInfinity;
-            var items = plot.HospitalMap?.FloorPlan?.LandscapeItems;
-            if (items == null) return false;
-            foreach (var item in items)
+            foreach (var plot in plots)
             {
-                if (item?.Visual == null || item.Visual.GameObject == null ||
-                    !item.Visual.GameObject.activeInHierarchy) continue;
-                float distance;
-                if (!item.Visual.RayCast(ray, out distance) || distance >= nearest) continue;
-                owner = plot;
-                selected = item;
-                nearest = distance;
+                if (plot == null || !plot.IsVisible()) continue;
+                var items = plot.HospitalMap?.FloorPlan?.LandscapeItems;
+                if (items == null) continue;
+                foreach (var item in items)
+                {
+                    if (item?.Visual == null || item.Visual.GameObject == null ||
+                        !item.Visual.GameObject.activeInHierarchy) continue;
+                    float distance;
+                    if (!item.Visual.RayCast(ray, out distance) || distance >= nearest) continue;
+                    owner = plot;
+                    selected = item;
+                    nearest = distance;
+                }
             }
             return selected != null;
         }
@@ -2139,8 +2143,8 @@ namespace UnderPressure.Editor
             if (!CtrlDown && !_ctrlDragging) _ctrlHoverLocked = false;
             UpdateCtrlObjectHover();
             if (_ctrlDragging || (CtrlDown && !OverUi())) UpdateCtrlRectangle();
-            // Mayus clona y Alt mueve, pero nunca deben alcanzar objetos de una
-            // parcela distinta de la seleccionada.
+            // Mayus clona y Alt mueve desde cualquier parcela visible; el destino
+            // sigue siendo siempre la parcela seleccionada por el usuario.
             if ((Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ||
                  Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) &&
                 !CtrlDown && !OverUi() &&
