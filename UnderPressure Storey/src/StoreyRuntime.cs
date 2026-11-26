@@ -172,6 +172,7 @@ namespace UnderPressure.Storey
                 foreach (var plot in PlotOrder.Where(plot =>
                              UnderPressure.StoreyMapRegistry.GetStorey(plot) == 1).ToArray())
                     MovePlot(plot, _upper, false);
+                ElevatorRuntime.Initialise(level, _lower, _upper);
                 StoreyPlugin.Log?.LogInfo(
                     "Segundo WorldState creado; rejillas vectoriales en Y=0 e Y=2.");
                 return true;
@@ -806,6 +807,7 @@ namespace UnderPressure.Storey
 
         internal static void Destroy(bool clearConfigs)
         {
+            ElevatorRuntime.Destroy();
             var lower = _lower;
             var upper = _upper;
             if (lower?.Level != null && lower.State != null)
@@ -860,6 +862,38 @@ namespace UnderPressure.Storey
             if (_gridMaterial != null) UnityEngine.Object.Destroy(_gridMaterial);
             _gridMaterial = null;
             if (clearConfigs) Configs.Clear();
+        }
+
+        internal static StoreyInstance GetStorey(WorldState state)
+        {
+            if (ReferenceEquals(state, _lower?.State)) return _lower;
+            if (ReferenceEquals(state, _upper?.State)) return _upper;
+            return null;
+        }
+
+        internal static StoreyInstance GetStorey(RoomItem item) =>
+            GetStorey(item?.FloorPlan?.WorldState);
+
+        internal static StoreyInstance GetOtherStorey(StoreyInstance storey)
+        {
+            if (ReferenceEquals(storey, _lower)) return _upper;
+            if (ReferenceEquals(storey, _upper)) return _lower;
+            return null;
+        }
+
+        internal static void RunInStorey(StoreyInstance storey, Action action)
+        {
+            if (storey == null || action == null) return;
+            var previous = _active;
+            try
+            {
+                Activate(storey);
+                action();
+            }
+            finally
+            {
+                if (previous != null) Activate(previous);
+            }
         }
     }
 

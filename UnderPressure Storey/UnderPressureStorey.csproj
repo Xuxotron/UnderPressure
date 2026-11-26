@@ -16,9 +16,12 @@
     <ProjectReference Include="..\UnderPressure Base\UnderPressure.csproj" />
     <Reference Include="Assembly-CSharp"><HintPath>..\Libs\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(GameOutputPath)..\TPH_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BehaviourDesignerRuntime"><HintPath>$(GameOutputPath)..\TPH_Data\Managed\BehaviourDesignerRuntime.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>..\Libs\0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>..\Libs\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>..\Libs\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UI"><HintPath>..\Libs\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UIModule"><HintPath>$(GameOutputPath)..\TPH_Data\Managed\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.TextMeshPro"><HintPath>..\Libs\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
