@@ -102,6 +102,10 @@ namespace UnderPressure.Storey
             new Dictionary<HospitalPlot, StoreyInstance>();
         private static readonly Dictionary<HospitalMap, StoreyInstance> MapStoreys =
             new Dictionary<HospitalMap, StoreyInstance>();
+        private static readonly Dictionary<RoomItemVisual, bool> HiddenItemVisuals =
+            new Dictionary<RoomItemVisual, bool>();
+        private static readonly Dictionary<CharacterVisual, bool> HiddenCharacterVisuals =
+            new Dictionary<CharacterVisual, bool>();
 
         private static StoreyInstance _lower;
         private static StoreyInstance _upper;
@@ -111,6 +115,13 @@ namespace UnderPressure.Storey
         private static Material _gridMaterial;
 
         internal static bool Constructing => _constructing != null;
+
+        internal struct LevelContext
+        {
+            internal WorldState State;
+            internal BuildEvents Events;
+            internal StoreyInstance Constructing;
+        }
 
         internal static void Register() => UnderPressure.StoreyMapRegistry.RegisterRuntime(
             GetPlots, GetWorld, TogglePlot, Refresh, ActivateGround, GetActiveStorey,
@@ -184,6 +195,8 @@ namespace UnderPressure.Storey
                              UnderPressure.StoreyMapRegistry.GetStorey(plot) == 1).ToArray())
                     MovePlot(plot, _upper, false);
                 ElevatorRuntime.Initialise(level, _lower, _upper);
+                StoreyPlugin.Log?.LogInfo(
+                    "Simulacion simultanea activada: ambos WorldState se actualizaran siempre.");
                 var lowerPlots = PlotOrder.Count(plot =>
                     PlotStoreys.TryGetValue(plot, out var storey) &&
                     ReferenceEquals(storey, _lower));
@@ -410,10 +423,16 @@ namespace UnderPressure.Storey
             if (storey?.State == null || storey.Level == null) return;
             var changed = !ReferenceEquals(_active, storey);
             _active = storey;
-            LevelWorldState.SetValue(storey.Level, storey.State);
-            LevelBuildEvents.SetValue(storey.Level, storey.Events);
+            // El Level conserva siempre el mundo inferior como contexto de simulacion.
+            // La planta activa solo determina la interaccion y la representacion visual.
+            if (_lower?.State != null)
+            {
+                LevelWorldState.SetValue(storey.Level, _lower.State);
+                LevelBuildEvents.SetValue(storey.Level, _lower.Events);
+            }
             SynchronizeCursorModes(storey);
             storey.Level.CursorManager?.SetPlaneOffset(0f);
+            RefreshVisualStorey();
             if (changed)
             {
                 var index = ReferenceEquals(storey, _upper)
@@ -421,6 +440,135 @@ namespace UnderPressure.Storey
                     : UnderPressure.StoreyMapRegistry.GroundStorey;
                 UnderPressure.StoreyMapRegistry.NotifyActiveStoreyChanged(storey.Level, index);
                 StoreyPlugin.Log?.LogInfo("Plano lógico activo: " + index + ".");
+            }
+        }
+
+        internal static void EnterStoreyContext(StoreyInstance storey,
+            out LevelContext previous)
+        {
+            previous = default(LevelContext);
+            if (storey?.Level == null || storey.State == null) return;
+            previous.State = LevelWorldState.GetValue(storey.Level) as WorldState;
+            previous.Events = LevelBuildEvents.GetValue(storey.Level) as BuildEvents;
+            previous.Constructing = _constructing;
+            LevelWorldState.SetValue(storey.Level, storey.State);
+            LevelBuildEvents.SetValue(storey.Level, storey.Events);
+            _constructing = storey;
+        }
+
+        internal static void ExitStoreyContext(Level level, LevelContext previous)
+        {
+            if (level == null) return;
+            LevelWorldState.SetValue(level, previous.State ?? _lower?.State);
+            LevelBuildEvents.SetValue(level, previous.Events ?? _lower?.Events);
+            _constructing = previous.Constructing;
+        }
+
+        internal static void EnterActiveInteractionContext(Level level,
+            out LevelContext previous)
+        {
+            var storey = _active != null && ReferenceEquals(_active.Level, level)
+                ? _active : _lower;
+            EnterStoreyContext(storey, out previous);
+        }
+
+        internal static void EnterActiveInteractionContext(out LevelContext previous) =>
+            EnterActiveInteractionContext(_lower?.Level, out previous);
+
+        internal static void ExitCurrentContext(LevelContext previous) =>
+            ExitStoreyContext(_lower?.Level, previous);
+
+        internal static void EnterRoomContext(Room room, Level level,
+            out LevelContext previous)
+        {
+            var storey = GetStorey(room?.FloorPlan?.WorldState) ?? _lower;
+            if (storey == null || !ReferenceEquals(storey.Level, level))
+            {
+                previous = default(LevelContext);
+                return;
+            }
+            EnterStoreyContext(storey, out previous);
+        }
+
+        internal static void EnterPlotContext(HospitalPlot plot,
+            out LevelContext previous)
+        {
+            if (plot != null && PlotStoreys.TryGetValue(plot, out var storey))
+                EnterStoreyContext(storey, out previous);
+            else previous = default(LevelContext);
+        }
+
+        internal static void UpdateUpperWorld(Level level)
+        {
+            if (_upper?.State == null || level == null ||
+                !ReferenceEquals(_upper.Level, level) ||
+                level.MetagameMap == null || level.MetagameMap.IsVisible) return;
+            EnterStoreyContext(_upper, out var previous);
+            try
+            {
+                _upper.State.Update(GameTime.deltaTime);
+            }
+            finally
+            {
+                ExitStoreyContext(level, previous);
+            }
+        }
+
+        internal static void RefreshVisualStorey()
+        {
+            if (_lower?.State == null || _upper?.State == null || _active == null) return;
+            RefreshItemVisibility(_lower, ReferenceEquals(_active, _lower));
+            RefreshItemVisibility(_upper, ReferenceEquals(_active, _upper));
+            RefreshCharacterVisibility();
+        }
+
+        private static void RefreshItemVisibility(StoreyInstance storey, bool visible)
+        {
+            foreach (var room in storey.State.AllRooms)
+            {
+                var visuals = room?.FloorPlanVisual?.RoomItems;
+                if (visuals == null) continue;
+                foreach (var visual in visuals)
+                {
+                    if (visual == null) continue;
+                    if (!visible)
+                    {
+                        if (!HiddenItemVisuals.ContainsKey(visual))
+                            HiddenItemVisuals[visual] = visual.ActiveSelf;
+                        if (visual.ActiveSelf) visual.SetActive(false);
+                    }
+                    else if (HiddenItemVisuals.TryGetValue(visual, out var wasActive))
+                    {
+                        visual.SetActive(wasActive);
+                        HiddenItemVisuals.Remove(visual);
+                    }
+                }
+            }
+        }
+
+        private static void RefreshCharacterVisibility()
+        {
+            var characters = _lower?.Level?.CharacterManager?.AllCharacters;
+            if (characters == null) return;
+            var activeUpper = ReferenceEquals(_active, _upper);
+            foreach (var character in characters)
+            {
+                var visual = character?.Visual;
+                if (visual == null) continue;
+                var characterUpper = character.Position.y >=
+                                     UnderPressure.StoreyMapRegistry.StoreyHeight * .5f;
+                var visible = characterUpper == activeUpper;
+                if (!visible)
+                {
+                    if (!HiddenCharacterVisuals.ContainsKey(visual))
+                        HiddenCharacterVisuals[visual] = visual.IsActive();
+                    if (visual.IsActive()) visual.SetActive(false);
+                }
+                else if (HiddenCharacterVisuals.TryGetValue(visual, out var wasActive))
+                {
+                    visual.SetActive(wasActive);
+                    HiddenCharacterVisuals.Remove(visual);
+                }
             }
         }
 
@@ -870,6 +1018,7 @@ namespace UnderPressure.Storey
         internal static void Destroy(bool clearConfigs)
         {
             ElevatorRuntime.Destroy();
+            RestoreHiddenVisuals();
             var lower = _lower;
             var upper = _upper;
             if (lower?.Level != null && lower.State != null)
@@ -926,6 +1075,16 @@ namespace UnderPressure.Storey
             if (clearConfigs) Configs.Clear();
         }
 
+        private static void RestoreHiddenVisuals()
+        {
+            foreach (var pair in HiddenItemVisuals.ToArray())
+                if (pair.Key != null) pair.Key.SetActive(pair.Value);
+            HiddenItemVisuals.Clear();
+            foreach (var pair in HiddenCharacterVisuals.ToArray())
+                if (pair.Key != null) pair.Key.SetActive(pair.Value);
+            HiddenCharacterVisuals.Clear();
+        }
+
         internal static StoreyInstance GetStorey(WorldState state)
         {
             if (ReferenceEquals(state, _lower?.State)) return _lower;
@@ -946,15 +1105,14 @@ namespace UnderPressure.Storey
         internal static void RunInStorey(StoreyInstance storey, Action action)
         {
             if (storey == null || action == null) return;
-            var previous = _active;
+            EnterStoreyContext(storey, out var previous);
             try
             {
-                Activate(storey);
                 action();
             }
             finally
             {
-                if (previous != null) Activate(previous);
+                ExitStoreyContext(storey.Level, previous);
             }
         }
     }
@@ -1156,6 +1314,60 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(CursorManager __instance) =>
             StoreyRuntime.ApplyActiveCursorHeight(__instance);
+    }
+
+    [HarmonyPatch(typeof(CursorManager), "Update")]
+    internal static class StoreyCursorInteractionContextPatch
+    {
+        private static void Prefix(out StoreyRuntime.LevelContext __state) =>
+            StoreyRuntime.EnterActiveInteractionContext(out __state);
+
+        private static Exception Finalizer(StoreyRuntime.LevelContext __state,
+            Exception __exception)
+        {
+            StoreyRuntime.ExitCurrentContext(__state);
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch(typeof(SelectMenuHospitalPlot), "Setup")]
+    internal static class StoreyPlotMenuContextPatch
+    {
+        private static void Prefix(Room __0, Level __1,
+            out StoreyRuntime.LevelContext __state) =>
+            StoreyRuntime.EnterRoomContext(__0, __1, out __state);
+
+        private static Exception Finalizer(Level __1, StoreyRuntime.LevelContext __state,
+            Exception __exception)
+        {
+            StoreyRuntime.ExitStoreyContext(__1, __state);
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch(typeof(HospitalPlot), nameof(HospitalPlot.Buy))]
+    internal static class StoreyPlotPurchaseContextPatch
+    {
+        private static void Prefix(HospitalPlot __instance,
+            out StoreyRuntime.LevelContext __state) =>
+            StoreyRuntime.EnterPlotContext(__instance, out __state);
+
+        private static Exception Finalizer(StoreyRuntime.LevelContext __state,
+            Exception __exception)
+        {
+            StoreyRuntime.ExitCurrentContext(__state);
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch(typeof(Level), "Update")]
+    internal static class StoreyParallelWorldUpdatePatch
+    {
+        private static void Postfix(Level __instance)
+        {
+            StoreyRuntime.UpdateUpperWorld(__instance);
+            StoreyRuntime.RefreshVisualStorey();
+        }
     }
 
     [HarmonyPatch(typeof(CursorSelectionHelpers), nameof(CursorSelectionHelpers.GetPlot))]
