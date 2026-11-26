@@ -51,6 +51,12 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(HospitalPlot), "_worldState");
         private static readonly FieldInfo CursorWorldState =
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
+        private static readonly FieldInfo ItemCursorWorldState =
+            AccessTools.Field(typeof(CursorEditHospitalItem), "_worldState");
+        private static readonly FieldInfo BuildEventsWorldState =
+            AccessTools.Field(typeof(BuildEvents), "_worldState");
+        private static readonly FieldInfo StateBuiltHospitalMaps =
+            AccessTools.Field(typeof(WorldState), "_builtHospitalMaps");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
         private static readonly FieldInfo RoomLightConfig =
@@ -114,14 +120,15 @@ namespace UnderPressure.Storey
             if (!TryGetBounds(_lower.State, out var bounds)) return false;
             BuildVectorGrid(_lower, bounds);
 
-            var isolatedEvents = new BuildEvents();
-            var upper = new StoreyInstance(level, isolatedEvents, 1);
             var normalEvents = level.BuildEvents;
+            // BuildEvents es el controlador nativo del nivel, no parte del mapa.
+            // Compartirlo conserva todos sus suscriptores al cambiar de WorldState.
+            var upper = new StoreyInstance(level, normalEvents, 1);
             var savedPostConstruct = level.PostConstruct;
             _constructing = upper;
             try
             {
-                LevelBuildEvents.SetValue(level, isolatedEvents);
+                LevelBuildEvents.SetValue(level, normalEvents);
                 var upperConfig = CloneConfig.Invoke(source, null) as WorldState.Config;
                 upperConfig.HospitalPlots =
                     new List<FullInspector.SharedInstance<HospitalPlotDefinition>>();
@@ -356,9 +363,14 @@ namespace UnderPressure.Storey
             _active = storey;
             LevelWorldState.SetValue(storey.Level, storey.State);
             LevelBuildEvents.SetValue(storey.Level, storey.Events);
+            BuildEventsWorldState.SetValue(storey.Events, storey.State);
             if (storey.Level.CursorManager != null &&
                 storey.Level.CursorManager.TryGetActiveMode<CursorEditHospital>(out var cursor))
                 CursorWorldState.SetValue(cursor, storey.State);
+            if (storey.Level.CursorManager != null &&
+                storey.Level.CursorManager.TryGetActiveMode<CursorEditHospitalItem>(
+                    out var itemCursor))
+                ItemCursorWorldState.SetValue(itemCursor, storey.State);
             storey.Level.CursorManager?.SetPlaneOffset(
                 ReferenceEquals(storey, _upper) ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f);
         }
@@ -477,7 +489,25 @@ namespace UnderPressure.Storey
             var anchor = _lower.State.Anchor;
             var lowerOrigin = new Vector3(anchor.X * GridCoord.CellSize, 0f,
                 anchor.Y * GridCoord.CellSize);
-            manager.RegenerateExteriorVolumeLights(lowerState, lowerOrigin);
+            var coveredState = (bool[,])lowerState.Clone();
+            var upperMaps = StateBuiltHospitalMaps?.GetValue(_upper?.State) as
+                List<HospitalMap>;
+            if (upperMaps != null)
+            {
+                foreach (var map in upperMaps)
+                {
+                    if (map?.Plot?.Definition == null || map.Plot.Definition.InstaBuild)
+                        continue;
+                    var indoor = map.IndoorState;
+                    if (indoor == null) continue;
+                    var width = Math.Min(coveredState.GetLength(0), indoor.GetLength(0));
+                    var height = Math.Min(coveredState.GetLength(1), indoor.GetLength(1));
+                    for (var x = 0; x < width; ++x)
+                        for (var y = 0; y < height; ++y)
+                            if (indoor[x, y]) coveredState[x, y] = false;
+                }
+            }
+            manager.RegenerateExteriorVolumeLights(coveredState, lowerOrigin);
         }
 
         internal static float ShadowCastingFloorY(RoomLightingManager manager,
