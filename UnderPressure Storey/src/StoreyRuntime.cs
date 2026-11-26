@@ -368,6 +368,38 @@ namespace UnderPressure.Storey
             if (plot != null && PlotStoreys.TryGetValue(plot, out var storey)) Activate(storey);
         }
 
+        internal static bool BeginUpperItemPlacement(object closure)
+        {
+            if (closure == null || _lower?.Events == null || _upper?.State == null)
+                return true;
+            var closureType = closure.GetType();
+            var menu = AccessTools.Field(closureType, "<>4__this")?.GetValue(closure) as
+                LandscapeObjectsMenu;
+            var definition = AccessTools.Field(closureType, "item")?.GetValue(closure) as
+                IRoomItemDefinition;
+            var floorPlan = AccessTools.Field(typeof(LandscapeObjectsMenu), "_floorPlan")?
+                .GetValue(menu) as FloorPlan;
+            if (definition == null || floorPlan == null || GetStorey(floorPlan) != 1)
+                return true;
+
+            var level = _upper.Level;
+            var previousEvents = level.BuildEvents;
+            try
+            {
+                // El controlador inferior es el controlador nativo completo del
+                // editor. true conserva el FloorPlan superior recibido en vez de
+                // sustituirlo por HospitalMaps[0] del WorldState inferior.
+                LevelBuildEvents.SetValue(level, _lower.Events);
+                _lower.Events.OnStopRoomAutoFlow?.Invoke();
+                _lower.Events.OnBeginItemPlacement?.Invoke(definition, floorPlan, true);
+            }
+            finally
+            {
+                LevelBuildEvents.SetValue(level, previousEvents);
+            }
+            return false;
+        }
+
         internal static void TogglePlot(HospitalPlot plot)
         {
             if (plot == null || !PlotStoreys.TryGetValue(plot, out var source) ||
@@ -778,6 +810,20 @@ namespace UnderPressure.Storey
     {
         private static void Prefix(HospitalPlot __0) => StoreyRuntime.ActivatePlot(__0);
         private static void Postfix() => StoreyRuntime.RegenerateInteriorLighting();
+    }
+
+    [HarmonyPatch]
+    internal static class StoreyUpperItemPlacementPatch
+    {
+        private static MethodBase TargetMethod()
+        {
+            var closure = AccessTools.Inner(typeof(LandscapeObjectsMenu),
+                "<>c__DisplayClass13_0");
+            return AccessTools.Method(closure, "<Update>b__0");
+        }
+
+        private static bool Prefix(object __instance) =>
+            StoreyRuntime.BeginUpperItemPlacement(__instance);
     }
 
     [HarmonyPatch(typeof(GridCoord), nameof(GridCoord.GridCoordToWorldPosition),
