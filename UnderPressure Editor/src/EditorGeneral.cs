@@ -74,42 +74,6 @@ namespace UnderPressure.Editor
                 EditorLocalization.Get("editor.toolbar.settings"), ToggleSettingsPanel);
         }
 
-        private void EnsureStoreyToolbarButton(Button template)
-        {
-            if (_storeyToggle != null || template == null ||
-                !StoreyMapRegistry.RuntimeAvailable) return;
-            _storeyToggle = CloneButton(template, _root, "UP Storey Toolbar Button",
-                string.Empty, ToggleActiveStorey);
-        }
-
-        private void ToggleActiveStorey()
-        {
-            if (_level == null || !StoreyMapRegistry.RuntimeAvailable) return;
-            var target = StoreyMapRegistry.GetActiveStorey(_level) ==
-                         StoreyMapRegistry.UpperStorey
-                ? StoreyMapRegistry.GroundStorey
-                : StoreyMapRegistry.UpperStorey;
-            StoreyMapRegistry.ActivateStorey(_level, target);
-        }
-
-        private void OnActiveStoreyChanged(Level level, int storey)
-        {
-            if (!ReferenceEquals(level, _level)) return;
-            RefreshStoreyToolbarButton();
-        }
-
-        private void RefreshStoreyToolbarButton()
-        {
-            if (_storeyToggle == null || _level == null) return;
-            var upper = StoreyMapRegistry.GetActiveStorey(_level) ==
-                        StoreyMapRegistry.UpperStorey;
-            var text = _storeyToggle.GetComponentInChildren<TMP_Text>(true);
-            if (text != null)
-                text.text = EditorLocalization.Get(upper
-                    ? "storey.active.upper" : "storey.active.lower");
-            SetSelected(_storeyToggle, upper);
-        }
-
         private void ToggleSettingsPanel()
         {
             if (_settingsOverlay != null && _settingsOverlay.activeSelf)

@@ -85,7 +85,6 @@ namespace UnderPressure.Editor
         private Button _objectsToggle;
         private Button _historyToggle;
         private Button _terrainToggle;
-        private Button _storeyToggle;
         private RectTransform _leftDivider;
         private RectTransform _rightDivider;
         private GameObject _topBackground;
@@ -560,8 +559,6 @@ namespace UnderPressure.Editor
             _active = this;
             _menu = menu;
             _level = level;
-            StoreyMapRegistry.ActiveStoreyChanged -= OnActiveStoreyChanged;
-            StoreyMapRegistry.ActiveStoreyChanged += OnActiveStoreyChanged;
             _storage = storage;
             _canvas = menu.GetComponentInParent<Canvas>();
             _canvasRect = _canvas.transform as RectTransform;
@@ -583,9 +580,6 @@ namespace UnderPressure.Editor
                 _root.SetAsLastSibling();
                 BuildChrome(template);
             }
-
-            EnsureStoreyToolbarButton(template);
-            RefreshStoreyToolbarButton();
 
             _objectsToggle = storage.ObjectsButton;
             ScenarioEditorHistory.SetDockVisible(false);
@@ -1197,16 +1191,13 @@ namespace UnderPressure.Editor
             var build = _storage?.BuildButton;
             var traffic = _storage?.TrafficButton;
             var camera = _storage?.CameraButton;
-            var storey = _storeyToggle;
             var settings = _settingsToggle;
-            if (build == null && traffic == null && camera == null && storey == null &&
-                settings == null)
+            if (build == null && traffic == null && camera == null && settings == null)
                 return;
             var centralWidth = Mathf.Max(1f, canvasWidth - PanelWidth * 2f);
             var gap = 8f;
             var cameraWidth = camera != null ? 40f : 0f;
             var standardCount = (build != null || traffic != null ? 1 : 0) +
-                (storey != null ? 1 : 0) +
                 (settings != null ? 1 : 0);
             var gapCount = Mathf.Max(0, standardCount + (camera != null ? 1 : 0) - 1);
             var buttonWidth = Mathf.Min(208f, (centralWidth - cameraWidth -
@@ -1231,8 +1222,6 @@ namespace UnderPressure.Editor
             }
 
             PlaceToolbarButton(camera, cameraX, cameraWidth, true);
-            if (storey != null)
-                PlaceToolbarButton(storey, right - buttonWidth - gap, buttonWidth, false);
             PlaceToolbarButton(settings, right, buttonWidth, false);
             toolbarHost.SetAsLastSibling();
         }
@@ -1648,7 +1637,6 @@ namespace UnderPressure.Editor
 
         private void ReleaseUi()
         {
-            StoreyMapRegistry.ActiveStoreyChanged -= OnActiveStoreyChanged;
             if (ReferenceEquals(_active, this)) _active = null;
             if (_closing) return;
             _closing = true;

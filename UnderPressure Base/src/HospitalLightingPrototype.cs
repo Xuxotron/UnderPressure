@@ -1031,40 +1031,42 @@ namespace UnderPressure
             HospitalLightingPrototype.TrackPatient(__instance);
     }
 
-    // Purpose: Adds a HUD button that toggles the prototype shadow ceiling.
+    // Botón ingame de planta: conserva íntegramente el control nativo del buzón.
     [HarmonyPatch(typeof(MessagesMenu), "Setup")]
-    internal static class ShadowCeilingToggleButtonPatch
+    internal static class StoreyToggleButtonPatch
     {
-        private static void Postfix(MessagesMenu __instance)
+        private static void Postfix(MessagesMenu __instance, Level __0)
         {
             if (__instance == null) return;
-            var controller = __instance.GetComponent<ShadowCeilingToggleButton>();
+            var controller = __instance.GetComponent<StoreyToggleButton>();
             if (controller == null)
-                controller = __instance.gameObject.AddComponent<ShadowCeilingToggleButton>();
-            controller.Initialise(__instance);
+                controller = __instance.gameObject.AddComponent<StoreyToggleButton>();
+            controller.Initialise(__instance, __0);
         }
     }
 
-    internal sealed class ShadowCeilingToggleButton : MonoBehaviour
+    internal sealed class StoreyToggleButton : MonoBehaviour
     {
         private static readonly System.Reflection.FieldInfo InboxButtonField =
             AccessTools.Field(typeof(MessagesMenu), "_inboxButton");
 
+        private Level _level;
         private DynamicButton _button;
         private ButtonAnimator _animator;
-        private bool _lastRoofState;
+        private int _lastStorey = -1;
         private bool _lastInteractable;
 
-        internal void Initialise(MessagesMenu menu)
+        internal void Initialise(MessagesMenu menu, Level level)
         {
             if (_button != null || menu == null) return;
             var inboxButton = InboxButtonField?.GetValue(menu) as DynamicButton;
             if (inboxButton == null || inboxButton.transform.parent == null) return;
 
+            _level = level;
             _button = Instantiate(inboxButton, inboxButton.transform.parent);
-            _button.name = "Under Pressure - Shadow Ceiling Toggle";
+            _button.name = "Under Pressure - Storey Toggle";
             _button.onPrimaryDown.RemoveAllListeners();
-            _button.onPrimaryDown.AddListener(ToggleRoof);
+            _button.onPrimaryDown.AddListener(ToggleStorey);
 
             var sourceRect = inboxButton.transform as RectTransform;
             var buttonRect = _button.transform as RectTransform;
@@ -1077,36 +1079,45 @@ namespace UnderPressure
             var tooltip = _button.GetComponentInChildren<TooltipSpawner>(true);
             if (tooltip != null)
                 tooltip.SetDataProvider(value => value.Text =
-                    HospitalLightingPrototype.ShadowCeilingVisible
-                        ? "Ocultar malla del falso techo"
-                        : "Mostrar malla del falso techo");
+                    ModLocalization.Get(StoreyMapRegistry.GetActiveStorey(_level) ==
+                                        StoreyMapRegistry.UpperStorey
+                        ? "storey.switch.lower" : "storey.switch.upper"));
 
             _animator = _button.GetComponentInChildren<ButtonAnimator>(true);
+            StoreyMapRegistry.ActiveStoreyChanged -= OnActiveStoreyChanged;
+            StoreyMapRegistry.ActiveStoreyChanged += OnActiveStoreyChanged;
             RefreshVisual(true);
         }
 
-        private void ToggleRoof()
+        private void ToggleStorey()
         {
-            HospitalLightingPrototype.ToggleShadowCeilingVisibility();
-            RefreshVisual(true);
+            if (_level == null || !StoreyMapRegistry.RuntimeAvailable) return;
+            var target = StoreyMapRegistry.GetActiveStorey(_level) ==
+                         StoreyMapRegistry.UpperStorey
+                ? StoreyMapRegistry.GroundStorey
+                : StoreyMapRegistry.UpperStorey;
+            StoreyMapRegistry.ActivateStorey(_level, target);
         }
 
-        private void Update()
+        private void OnActiveStoreyChanged(Level level, int storey)
         {
-            RefreshVisual(false);
+            if (ReferenceEquals(level, _level)) RefreshVisual(false);
         }
+
+        private void OnDestroy() =>
+            StoreyMapRegistry.ActiveStoreyChanged -= OnActiveStoreyChanged;
 
         private void RefreshVisual(bool force)
         {
             if (_button == null) return;
-            var roofState = HospitalLightingPrototype.ShadowCeilingVisible;
-            var interactable = HospitalLightingPrototype.Enabled;
-            if (!force && roofState == _lastRoofState && interactable == _lastInteractable) return;
-            _lastRoofState = roofState;
+            var storey = StoreyMapRegistry.GetActiveStorey(_level);
+            var interactable = StoreyMapRegistry.RuntimeAvailable;
+            if (!force && storey == _lastStorey && interactable == _lastInteractable) return;
+            _lastStorey = storey;
             _lastInteractable = interactable;
             _button.interactable = interactable;
             if (_animator != null)
-                _animator.CurrentState = roofState && interactable
+                _animator.CurrentState = storey == StoreyMapRegistry.UpperStorey && interactable
                     ? ButtonAnimator.State.Selected
                     : ButtonAnimator.State.Selectable;
         }

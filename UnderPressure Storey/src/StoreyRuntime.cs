@@ -824,9 +824,9 @@ namespace UnderPressure.Storey
             rect.anchoredPosition = Vector2.zero;
             rect.sizeDelta = Vector2.zero;
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
-                "storey.view.lower_grid"), -250f, ToggleLowerGrid);
+                "storey.view.lower_grid"), 110f, ToggleLowerGrid);
             AddButton(template, rect, UnderPressure.ModLocalization.Get(
-                "storey.view.upper_grid"), -30f, ToggleUpperGrid);
+                "storey.view.upper_grid"), 330f, ToggleUpperGrid);
         }
 
         private static Transform FindEditorRoot(Canvas canvas)
