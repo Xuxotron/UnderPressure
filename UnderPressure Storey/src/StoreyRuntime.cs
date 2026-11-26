@@ -51,6 +51,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(HospitalPlot), "_worldState");
         private static readonly FieldInfo CursorWorldState =
             AccessTools.Field(typeof(CursorEditHospital), "_worldState");
+        private static readonly FieldInfo ItemCursorWorldState =
+            AccessTools.Field(typeof(CursorEditHospitalItem), "_worldState");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
         private static readonly FieldInfo RoomLightConfig =
@@ -136,6 +138,9 @@ namespace UnderPressure.Storey
                     level.Config.GetBuildingLogicConfig().RoomItemEditConfig);
                 upper.State = state;
                 _upper = upper;
+                LevelWorldState.SetValue(level, state);
+                isolatedEvents.Initialise(level);
+                LevelWorldState.SetValue(level, _lower.State);
                 RemoveUpperSeed();
                 BuildVectorGrid(upper, bounds);
                 Activate(_lower);
@@ -359,6 +364,13 @@ namespace UnderPressure.Storey
             if (storey.Level.CursorManager != null &&
                 storey.Level.CursorManager.TryGetActiveMode<CursorEditHospital>(out var cursor))
                 CursorWorldState.SetValue(cursor, storey.State);
+            if (storey.Level.CursorManager != null &&
+                storey.Level.CursorManager.TryGetActiveMode<CursorEditHospitalItem>(
+                    out var itemCursor))
+            {
+                ItemCursorWorldState.SetValue(itemCursor, storey.State);
+                BindItemCursor(itemCursor);
+            }
             storey.Level.CursorManager?.SetPlaneOffset(
                 ReferenceEquals(storey, _upper) ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f);
         }
@@ -366,6 +378,51 @@ namespace UnderPressure.Storey
         internal static void ActivatePlot(HospitalPlot plot)
         {
             if (plot != null && PlotStoreys.TryGetValue(plot, out var storey)) Activate(storey);
+        }
+
+        internal static void BindItemCursor(CursorEditHospitalItem cursor)
+        {
+            if (cursor == null) return;
+            BindItemCursor(cursor, _lower?.Events, true);
+            BindItemCursor(cursor, _upper?.Events, true);
+        }
+
+        internal static void UnbindItemCursor(CursorEditHospitalItem cursor)
+        {
+            if (cursor == null) return;
+            BindItemCursor(cursor, _lower?.Events, false);
+            BindItemCursor(cursor, _upper?.Events, false);
+        }
+
+        private static void BindItemCursor(CursorEditHospitalItem cursor,
+            BuildEvents events, bool add)
+        {
+            if (events == null) return;
+            BindCursorEvent(events, nameof(BuildEvents.OnRoomItemAdded), cursor,
+                "OnRoomItemAdded", add);
+            BindCursorEvent(events, nameof(BuildEvents.OnRoomItemPlaced), cursor,
+                "OnRoomItemAdded", add);
+            BindCursorEvent(events, nameof(BuildEvents.OnBeginItemEdit), cursor,
+                "OnBeginItemEdit", add);
+            BindCursorEvent(events, nameof(BuildEvents.OnRoomItemDestroyed), cursor,
+                "OnRoomItemDestroyed", add);
+            BindCursorEvent(events, nameof(BuildEvents.OnMoveRoomEnd), cursor,
+                "OnMoveRoomEnd", add);
+        }
+
+        private static void BindCursorEvent(BuildEvents events, string fieldName,
+            CursorEditHospitalItem cursor, string methodName, bool add)
+        {
+            var field = AccessTools.Field(typeof(BuildEvents), fieldName);
+            var method = AccessTools.Method(typeof(CursorEditHospitalItem), methodName);
+            if (field == null || method == null) throw new MissingMemberException(
+                typeof(CursorEditHospitalItem).FullName, methodName);
+            var handler = Delegate.CreateDelegate(field.FieldType, cursor, method);
+            var current = field.GetValue(events) as Delegate;
+            var contains = current?.GetInvocationList().Contains(handler) == true;
+            if (add && !contains) current = Delegate.Combine(current, handler);
+            else if (!add && contains) current = Delegate.Remove(current, handler);
+            field.SetValue(events, current);
         }
 
         internal static void TogglePlot(HospitalPlot plot)
@@ -597,6 +654,7 @@ namespace UnderPressure.Storey
                     if (upper.Level != null)
                         LevelBuildEvents.SetValue(upper.Level, upper.Events);
                     upper.State?.Destroy();
+                    upper.Events?.Destroy();
                 }
                 catch (Exception exception)
                 {
@@ -778,6 +836,20 @@ namespace UnderPressure.Storey
     {
         private static void Prefix(HospitalPlot __0) => StoreyRuntime.ActivatePlot(__0);
         private static void Postfix() => StoreyRuntime.RegenerateInteriorLighting();
+    }
+
+    [HarmonyPatch(typeof(CursorEditHospitalItem), MethodType.Constructor)]
+    internal static class StoreyItemCursorCreatePatch
+    {
+        private static void Postfix(CursorEditHospitalItem __instance) =>
+            StoreyRuntime.BindItemCursor(__instance);
+    }
+
+    [HarmonyPatch(typeof(CursorEditHospitalItem), nameof(CursorEditHospitalItem.Destroy))]
+    internal static class StoreyItemCursorDestroyPatch
+    {
+        private static void Postfix(CursorEditHospitalItem __instance) =>
+            StoreyRuntime.UnbindItemCursor(__instance);
     }
 
     [HarmonyPatch(typeof(GridCoord), nameof(GridCoord.GridCoordToWorldPosition),
