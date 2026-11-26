@@ -708,13 +708,6 @@ namespace UnderPressure.Storey
         }
     }
 
-    [HarmonyPatch(typeof(Metagame), "RestoreFromSave")]
-    internal static class ElevatorMetagameRestorePatch
-    {
-        private static void Postfix(Metagame __instance) =>
-            ElevatorDefinition.Ensure(__instance);
-    }
-
     [HarmonyPatch(typeof(WorldState), MethodType.Constructor,
         new[] { typeof(WorldState.Config), typeof(Level), typeof(Metagame),
             typeof(VisualManager), typeof(Material), typeof(RoomItemVisualEdit.Config) })]
