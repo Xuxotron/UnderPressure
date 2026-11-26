@@ -102,10 +102,10 @@ namespace UnderPressure.Storey
             new Dictionary<HospitalPlot, StoreyInstance>();
         private static readonly Dictionary<HospitalMap, StoreyInstance> MapStoreys =
             new Dictionary<HospitalMap, StoreyInstance>();
-        private static readonly Dictionary<RoomItemVisual, bool> HiddenItemVisuals =
-            new Dictionary<RoomItemVisual, bool>();
-        private static readonly Dictionary<CharacterVisual, bool> HiddenCharacterVisuals =
-            new Dictionary<CharacterVisual, bool>();
+        private static readonly Dictionary<Renderer, bool> HiddenRenderers =
+            new Dictionary<Renderer, bool>();
+        private static readonly Dictionary<Character, bool> CharacterStoreys =
+            new Dictionary<Character, bool>();
 
         private static StoreyInstance _lower;
         private static StoreyInstance _upper;
@@ -517,58 +517,71 @@ namespace UnderPressure.Storey
         internal static void RefreshVisualStorey()
         {
             if (_lower?.State == null || _upper?.State == null || _active == null) return;
-            RefreshItemVisibility(_lower, ReferenceEquals(_active, _lower));
-            RefreshItemVisibility(_upper, ReferenceEquals(_active, _upper));
-            RefreshCharacterVisibility();
+            RefreshStoreyRenderers(_lower, ReferenceEquals(_active, _lower));
+            RefreshStoreyRenderers(_upper, ReferenceEquals(_active, _upper));
+            RefreshCharacterVisibility(true);
         }
 
-        private static void RefreshItemVisibility(StoreyInstance storey, bool visible)
+        private static void RefreshStoreyRenderers(StoreyInstance storey, bool visible)
         {
+            if (storey?.Root == null) return;
+            foreach (var renderer in storey.Root.GetComponentsInChildren<Renderer>(true))
+                SetRendererVisibility(renderer, visible);
             foreach (var room in storey.State.AllRooms)
             {
-                var visuals = room?.FloorPlanVisual?.RoomItems;
-                if (visuals == null) continue;
-                foreach (var visual in visuals)
-                {
-                    if (visual == null) continue;
-                    if (!visible)
-                    {
-                        if (!HiddenItemVisuals.ContainsKey(visual))
-                            HiddenItemVisuals[visual] = visual.ActiveSelf;
-                        if (visual.ActiveSelf) visual.SetActive(false);
-                    }
-                    else if (HiddenItemVisuals.TryGetValue(visual, out var wasActive))
-                    {
-                        visual.SetActive(wasActive);
-                        HiddenItemVisuals.Remove(visual);
-                    }
-                }
+                var root = room?.FloorPlanVisual?.GameObject;
+                if (root == null) continue;
+                foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+                    SetRendererVisibility(renderer, visible);
             }
         }
 
-        private static void RefreshCharacterVisibility()
+        internal static void RefreshMovingCharacterVisibility() =>
+            RefreshCharacterVisibility(false);
+
+        private static void RefreshCharacterVisibility(bool force)
         {
             var characters = _lower?.Level?.CharacterManager?.AllCharacters;
             if (characters == null) return;
             var activeUpper = ReferenceEquals(_active, _upper);
             foreach (var character in characters)
             {
-                var visual = character?.Visual;
-                if (visual == null) continue;
+                var gameObject = character?.GameObject;
+                if (gameObject == null) continue;
                 var characterUpper = character.Position.y >=
                                      UnderPressure.StoreyMapRegistry.StoreyHeight * .5f;
+                if (!force && CharacterStoreys.TryGetValue(character, out var previousUpper) &&
+                    previousUpper == characterUpper) continue;
+                CharacterStoreys[character] = characterUpper;
                 var visible = characterUpper == activeUpper;
-                if (!visible)
-                {
-                    if (!HiddenCharacterVisuals.ContainsKey(visual))
-                        HiddenCharacterVisuals[visual] = visual.IsActive();
-                    if (visual.IsActive()) visual.SetActive(false);
-                }
-                else if (HiddenCharacterVisuals.TryGetValue(visual, out var wasActive))
-                {
-                    visual.SetActive(wasActive);
-                    HiddenCharacterVisuals.Remove(visual);
-                }
+                foreach (var renderer in gameObject.GetComponentsInChildren<Renderer>(true))
+                    SetRendererVisibility(renderer, visible);
+            }
+        }
+
+        internal static void RefreshItemVisual(RoomItemVisual visual, RoomItem item)
+        {
+            var storey = GetStorey(item);
+            var root = visual?.GameObject;
+            if (storey == null || root == null || _active == null) return;
+            var visible = ReferenceEquals(storey, _active);
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+                SetRendererVisibility(renderer, visible);
+        }
+
+        private static void SetRendererVisibility(Renderer renderer, bool visible)
+        {
+            if (renderer == null) return;
+            if (!visible)
+            {
+                if (!HiddenRenderers.ContainsKey(renderer))
+                    HiddenRenderers[renderer] = renderer.enabled;
+                if (renderer.enabled) renderer.enabled = false;
+            }
+            else if (HiddenRenderers.TryGetValue(renderer, out var wasEnabled))
+            {
+                renderer.enabled = wasEnabled;
+                HiddenRenderers.Remove(renderer);
             }
         }
 
@@ -838,9 +851,40 @@ namespace UnderPressure.Storey
             FloorPlan floorPlan)
         {
             var map = floorPlan?.HospitalMap;
-            if (visual == null || map == null ||
-                !MapStoreys.TryGetValue(map, out var storey)) return;
+            if (visual == null || map == null) return;
+            if (!MapStoreys.TryGetValue(map, out var storey))
+            {
+                var plot = map.Plot;
+                if (plot == null || !PlotStoreys.TryGetValue(plot, out storey)) return;
+                MapStoreys[map] = storey;
+            }
             AttachRoot(visual.GameObject?.transform, storey);
+            foreach (var renderer in visual.GameObject?.GetComponentsInChildren<Renderer>(true) ??
+                                     new Renderer[0])
+                SetRendererVisibility(renderer, ReferenceEquals(storey, _active));
+        }
+
+        internal static void RegisterRebuiltPlotMap(HospitalPlot plot)
+        {
+            if (plot == null || !PlotStoreys.TryGetValue(plot, out var storey)) return;
+            var map = plot.HospitalMap;
+            if (map == null) return;
+            foreach (var stale in MapStoreys.Where(pair =>
+                         !ReferenceEquals(pair.Key, map) &&
+                         ReferenceEquals(pair.Key?.Plot, plot)).Select(pair => pair.Key).ToArray())
+                MapStoreys.Remove(stale);
+            var changed = !MapStoreys.TryGetValue(map, out var registered) ||
+                          !ReferenceEquals(registered, storey);
+            MapStoreys[map] = storey;
+            AttachMapVisuals(map, storey);
+            foreach (var room in storey.State.AllRooms.Where(room =>
+                         ReferenceEquals(room?.FloorPlan?.HospitalMap, map)))
+                RebindRoomVisual(room.FloorPlanVisual, storey);
+            RefreshStoreyRenderers(storey, ReferenceEquals(storey, _active));
+            if (changed)
+                StoreyPlugin.Log?.LogInfo(
+                    "HospitalMap reconstruido y registrado en planta " +
+                    (ReferenceEquals(storey, _upper) ? "superior" : "inferior") + ".");
         }
 
         internal static void NormalizeFootprint(HospitalPlotFootprintPerimeter perimeter)
@@ -1077,12 +1121,10 @@ namespace UnderPressure.Storey
 
         private static void RestoreHiddenVisuals()
         {
-            foreach (var pair in HiddenItemVisuals.ToArray())
-                if (pair.Key != null) pair.Key.SetActive(pair.Value);
-            HiddenItemVisuals.Clear();
-            foreach (var pair in HiddenCharacterVisuals.ToArray())
-                if (pair.Key != null) pair.Key.SetActive(pair.Value);
-            HiddenCharacterVisuals.Clear();
+            foreach (var pair in HiddenRenderers.ToArray())
+                if (pair.Key != null) pair.Key.enabled = pair.Value;
+            HiddenRenderers.Clear();
+            CharacterStoreys.Clear();
         }
 
         internal static StoreyInstance GetStorey(WorldState state)
@@ -1295,6 +1337,20 @@ namespace UnderPressure.Storey
             StoreyRuntime.NormalizeRoomVisual(__instance, __0);
     }
 
+    [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
+    internal static class StoreyRoomItemVisualPatch
+    {
+        private static void Postfix(RoomItemVisual __instance, RoomItem __0) =>
+            StoreyRuntime.RefreshItemVisual(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(HospitalPlot), "RefreshHospitalMap")]
+    internal static class StoreyRebuiltPlotMapPatch
+    {
+        private static void Postfix(HospitalPlot __instance) =>
+            StoreyRuntime.RegisterRebuiltPlotMap(__instance);
+    }
+
     [HarmonyPatch(typeof(HospitalPlotFootprintPerimeter), "Refresh")]
     internal static class StoreyFootprintRootPatch
     {
@@ -1366,7 +1422,7 @@ namespace UnderPressure.Storey
         private static void Postfix(Level __instance)
         {
             StoreyRuntime.UpdateUpperWorld(__instance);
-            StoreyRuntime.RefreshVisualStorey();
+            StoreyRuntime.RefreshMovingCharacterVisibility();
         }
     }
 
