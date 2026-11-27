@@ -320,20 +320,24 @@ namespace UnderPressure.Storey
             new Dictionary<Character, RouteRequest>();
         private static readonly HashSet<Character> InternalNavigation =
             new HashSet<Character>();
-        private static readonly Dictionary<Character, float> NativeAgentOffsets =
-            new Dictionary<Character, float>();
         private static readonly Dictionary<Character, StoreyInstance> CharacterStoreys =
             new Dictionary<Character, StoreyInstance>();
+        private static readonly Dictionary<RoomItem, StoreyInstance> ElevatorStoreys =
+            new Dictionary<RoomItem, StoreyInstance>();
         private static readonly HashSet<Character> RouteFailureLogged =
             new HashSet<Character>();
         private static readonly FieldInfo NavPathCharacter =
             AccessTools.Field(typeof(NavPath), "_character");
-        private static readonly FieldInfo NavPathAgent =
-            AccessTools.Field(typeof(NavPath), "_navMeshAgent");
-        private static readonly FieldInfo NavPathEndPosition =
-            AccessTools.Field(typeof(NavPath), "_endPosition");
         private static readonly FieldInfo RoomBuildingNavMeshHospitalMap =
             AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
+        private static readonly FieldInfo NavMeshCanReachPath =
+            AccessTools.Field(typeof(TH20.NavMesh), "_canReachPath");
+        private static readonly FieldInfo NavMeshWorldBounds =
+            AccessTools.Field(typeof(TH20.NavMesh), "_worldNavBounds");
+        private static readonly FieldInfo NavMeshAreaLookup =
+            AccessTools.Field(typeof(TH20.NavMesh), "_areaLookup");
+        private static readonly MethodInfo BuildNavMeshAreaLookup =
+            AccessTools.Method(typeof(NavMeshHelpers), "BuildNavMeshAreaLookup");
         private static readonly MethodInfo DestroyRoomItem =
             AccessTools.Method(typeof(BuildEvents), "RoomItemDestroy");
         private static readonly MethodInfo StartItemPlacement =
@@ -390,8 +394,8 @@ namespace UnderPressure.Storey
             }
             Routes.Clear();
             InternalNavigation.Clear();
-            NativeAgentOffsets.Clear();
             CharacterStoreys.Clear();
+            ElevatorStoreys.Clear();
             RouteFailureLogged.Clear();
             Pairs.Clear();
             RequiredPlots.Clear();
@@ -521,7 +525,7 @@ namespace UnderPressure.Storey
                     DestroyItem(item);
                     return;
                 }
-                Link(item, counterpart);
+                Link(item, sourceStorey, counterpart, targetStorey);
                 ResolveRequiredPlots();
                 StoreyPlugin.Log?.LogInfo(
                     "Pareja de ascensores creada entre ambos WorldState en posición XZ=" +
@@ -558,11 +562,14 @@ namespace UnderPressure.Storey
                 DestroyRoomItem.Invoke(storey.Events, new object[] { item }));
         }
 
-        private static void Link(RoomItem first, RoomItem second)
+        private static void Link(RoomItem first, StoreyInstance firstStorey,
+            RoomItem second, StoreyInstance secondStorey)
         {
             if (first == null || second == null) return;
             Pairs[first] = second;
             Pairs[second] = first;
+            ElevatorStoreys[first] = firstStorey;
+            ElevatorStoreys[second] = secondStorey;
         }
 
         private static void Unlink(RoomItem item)
@@ -570,6 +577,8 @@ namespace UnderPressure.Storey
             if (item == null || !Pairs.TryGetValue(item, out var pair)) return;
             Pairs.Remove(item);
             Pairs.Remove(pair);
+            ElevatorStoreys.Remove(item);
+            ElevatorStoreys.Remove(pair);
         }
 
         private static void RebuildPairs()
@@ -596,7 +605,7 @@ namespace UnderPressure.Storey
                 }
                 if (match == null) continue;
                 used.Add(match);
-                Link(lower, match);
+                Link(lower, _lower, match, _upper);
             }
         }
 
@@ -627,7 +636,7 @@ namespace UnderPressure.Storey
             foreach (var pair in Pairs)
             {
                 var item = pair.Key;
-                if (!ReferenceEquals(StoreyRuntime.GetStorey(item), _upper) ||
+                if (!ReferenceEquals(GetElevatorStorey(item), _upper) ||
                     !ReferenceEquals(item?.FloorPlan?.HospitalMap, map) ||
                     item.HasBeenDestroyed() || pair.Value == null ||
                     pair.Value.HasBeenDestroyed() || FirstInteraction(item) == null ||
@@ -737,7 +746,7 @@ namespace UnderPressure.Storey
         {
             if (_pairedOperation || !ElevatorDefinition.IsElevator(item) ||
                 !Pairs.TryGetValue(item, out var pair)) return true;
-            var upperItem = ReferenceEquals(StoreyRuntime.GetStorey(item), _upper)
+            var upperItem = ReferenceEquals(GetElevatorStorey(item), _upper)
                 ? item : pair;
             var map = upperItem?.FloorPlan?.HospitalMap;
             if (map?.Plot == null || !map.Plot.Bought || !map.Plot.Built ||
@@ -770,8 +779,8 @@ namespace UnderPressure.Storey
             var targetNavMesh = targetStorey.State.NavMesh;
             foreach (var pair in Pairs)
             {
-                if (!ReferenceEquals(StoreyRuntime.GetStorey(pair.Key), sourceStorey) ||
-                    !ReferenceEquals(StoreyRuntime.GetStorey(pair.Value), targetStorey)) continue;
+                if (!ReferenceEquals(GetElevatorStorey(pair.Key), sourceStorey) ||
+                    !ReferenceEquals(GetElevatorStorey(pair.Value), targetStorey)) continue;
                 ++candidates;
                 var sourceInteraction = FirstInteraction(pair.Key);
                 var targetInteraction = FirstInteraction(pair.Value);
@@ -835,33 +844,9 @@ namespace UnderPressure.Storey
             return true;
         }
 
-        internal static bool PrepareNavigation(NavPath path, ref Vector3 destination,
-            float rotation, INavPathResult callback, float arrivalDistance,
-            out Vector3? logicalDestination)
-        {
-            logicalDestination = null;
-            if (TryRoute(path, destination, rotation, callback, arrivalDistance))
-                return false;
-
-            var character = NavPathCharacter.GetValue(path) as Character;
-            var sourceStorey = GetCharacterStorey(character);
-            var targetStorey = GetTargetStorey(callback, destination);
-            if (character == null || !ReferenceEquals(sourceStorey, _upper) ||
-                !ReferenceEquals(targetStorey, _upper)) return true;
-
-            logicalDestination = new Vector3(destination.x,
-                global::UnderPressure.StoreyMapRegistry.StoreyHeight, destination.z);
-            destination.y = 0f;
-            ApplyCharacterStorey(character, _upper);
-            return true;
-        }
-
-        internal static void RestoreLogicalDestination(NavPath path,
-            Vector3? logicalDestination)
-        {
-            if (!logicalDestination.HasValue) return;
-            NavPathEndPosition.SetValue(path, logicalDestination.Value);
-        }
+        internal static bool PrepareNavigation(NavPath path, Vector3 destination,
+            float rotation, INavPathResult callback, float arrivalDistance) =>
+            !TryRoute(path, destination, rotation, callback, arrivalDistance);
 
         internal static void TickRoutes()
         {
@@ -919,16 +904,14 @@ namespace UnderPressure.Storey
             var targetInteraction = FirstInteraction(request.Target);
             if (targetInteraction == null) return;
             var target = targetInteraction.WorldStartPosition;
-            ApplyCharacterStorey(character, StoreyRuntime.GetStorey(request.Target));
-            var navigationTarget = target;
-            navigationTarget.y = 0f;
-            character.NavPath.Warp(navigationTarget);
+            ApplyCharacterStorey(character, GetElevatorStorey(request.Target));
+            character.NavPath.Warp(target);
             character.Position = target;
             character.Rotation = targetInteraction.StartRotation;
             request.Transferred = true;
             StoreyPlugin.Log?.LogInfo(
                 "Ascensor transferido a " + target +
-                " manteniendo el agente sobre la malla local Y=0.");
+                " sobre la malla física de su planta.");
         }
 
         private static void CancelRoute(RouteRequest request, EPathStatus status)
@@ -956,19 +939,11 @@ namespace UnderPressure.Storey
             if (staff == null) return;
             var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
             ApplyCharacterStorey(staff, position.y >= height * .5f ? _upper : _lower);
+            staff.NavPath?.Warp(position);
+            staff.Position = position;
             StoreyPlugin.Log?.LogInfo("Empleado colocado en planta " +
                                      (position.y >= height * .5f ? "superior" : "inferior") +
                                      ".");
-        }
-
-        internal static void NormalizeWarp(NavPath path, ref Vector3 position)
-        {
-            var character = NavPathCharacter.GetValue(path) as Character;
-            if (character == null ||
-                !CharacterStoreys.TryGetValue(character, out var registered) ||
-                !ReferenceEquals(registered, _upper)) return;
-            ApplyCharacterStorey(character, _upper);
-            position.y = 0f;
         }
 
         private static StoreyInstance GetCharacterStorey(Character character)
@@ -976,11 +951,7 @@ namespace UnderPressure.Storey
             if (character == null) return null;
             if (CharacterStoreys.TryGetValue(character, out var registered))
                 return registered;
-            var navPath = character.NavPath;
-            var agent = navPath == null ? null : NavPathAgent.GetValue(navPath) as
-                UnityEngine.AI.NavMeshAgent;
             var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
-            if (agent != null && agent.baseOffset >= height * .5f) return _upper;
             return character.Position.y >= height * .5f ? _upper : _lower;
         }
 
@@ -1001,22 +972,39 @@ namespace UnderPressure.Storey
             StoreyInstance storey)
         {
             if (character == null || storey == null) return;
-            var navPath = character.NavPath;
-            var agent = navPath == null ? null : NavPathAgent.GetValue(navPath) as
-                UnityEngine.AI.NavMeshAgent;
-            if (agent != null)
-            {
-                var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
-                if (!NativeAgentOffsets.TryGetValue(character, out var nativeOffset))
-                {
-                    nativeOffset = agent.baseOffset >= height * .5f
-                        ? agent.baseOffset - height : agent.baseOffset;
-                    NativeAgentOffsets[character] = nativeOffset;
-                }
-                agent.baseOffset = nativeOffset +
-                                   (ReferenceEquals(storey, _upper) ? height : 0f);
-            }
             CharacterStoreys[character] = storey;
+        }
+
+        private static StoreyInstance GetElevatorStorey(RoomItem item)
+        {
+            if (item != null && ElevatorStoreys.TryGetValue(item, out var registered))
+                return registered;
+            return StoreyRuntime.GetStorey(item);
+        }
+
+        internal static bool CanReachOnNavigation(TH20.NavMesh navMesh,
+            Vector3 start, Vector3 end)
+        {
+            var height = StoreyRuntime.NavigationHeight(navMesh);
+            start.y = height;
+            end.y = height;
+            if (!UnityEngine.AI.NavMesh.SamplePosition(start, out _, .25f, -1) ||
+                !UnityEngine.AI.NavMesh.SamplePosition(end, out _, .25f, -1)) return false;
+            var path = NavMeshCanReachPath.GetValue(navMesh) as UnityEngine.AI.NavMeshPath;
+            if (path == null) return false;
+            UnityEngine.AI.NavMesh.CalculatePath(start, end, -1, path);
+            return path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete;
+        }
+
+        internal static void RebuildAreaLookupAtStoreyHeight(TH20.NavMesh navMesh,
+            float lookupHeight)
+        {
+            var bounds = (Bounds)NavMeshWorldBounds.GetValue(navMesh);
+            var center = bounds.center;
+            center.y = StoreyRuntime.NavigationHeight(navMesh);
+            var lookup = BuildNavMeshAreaLookup.Invoke(null,
+                new object[] { center, lookupHeight });
+            NavMeshAreaLookup.SetValue(navMesh, lookup);
         }
 
         private static float HorizontalDistance(Vector3 first, Vector3 second)
@@ -1084,7 +1072,14 @@ namespace UnderPressure.Storey
     [HarmonyPatch(typeof(RoomBuildingNavMesh), "ValidPosition")]
     internal static class StoreyRoomNavPositionPatch
     {
-        private static void Prefix(ref Vector3 __0) => __0.y = 0f;
+        private static readonly FieldInfo HospitalMap =
+            AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
+
+        private static void Prefix(RoomBuildingNavMesh __instance, ref Vector3 __0)
+        {
+            var map = HospitalMap.GetValue(__instance) as TH20.HospitalMap;
+            __0.y = StoreyRuntime.NavigationHeight(map?.FloorPlan?.WorldState);
+        }
     }
 
     [HarmonyPatch(typeof(BuildEvents), "CursorDeleteObject")]
@@ -1113,20 +1108,32 @@ namespace UnderPressure.Storey
         new[] { typeof(Vector3), typeof(float), typeof(INavPathResult), typeof(float) })]
     internal static class ElevatorNavigationPatch
     {
-        private static bool Prefix(NavPath __instance, ref Vector3 __0, float __1,
-            INavPathResult __2, float __3, out Vector3? __state) =>
-            ElevatorRuntime.PrepareNavigation(__instance, ref __0, __1, __2, __3,
-                out __state);
-
-        private static void Postfix(NavPath __instance, Vector3? __state) =>
-            ElevatorRuntime.RestoreLogicalDestination(__instance, __state);
+        private static bool Prefix(NavPath __instance, Vector3 __0, float __1,
+            INavPathResult __2, float __3) =>
+            ElevatorRuntime.PrepareNavigation(__instance, __0, __1, __2, __3);
     }
 
-    [HarmonyPatch(typeof(NavPath), "WarpInternal")]
-    internal static class ElevatorWarpPatch
+    [HarmonyPatch(typeof(TH20.NavMesh), nameof(TH20.NavMesh.CanReach))]
+    internal static class StoreyCanReachPatch
     {
-        private static void Prefix(NavPath __instance, ref Vector3 __0) =>
-            ElevatorRuntime.NormalizeWarp(__instance, ref __0);
+        private static bool Prefix(TH20.NavMesh __instance, Vector3 __0,
+            Vector3 __1, ref bool __result)
+        {
+            if (!StoreyRuntime.IsUpperNavigation(__instance)) return true;
+            __result = ElevatorRuntime.CanReachOnNavigation(__instance, __0, __1);
+            return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(TH20.NavMesh), "UpdateNavmeshIslandIDs")]
+    internal static class StoreyNavMeshAreaLookupPatch
+    {
+        private static bool Prefix(TH20.NavMesh __instance, float __0)
+        {
+            if (!StoreyRuntime.IsUpperNavigation(__instance)) return true;
+            ElevatorRuntime.RebuildAreaLookupAtStoreyHeight(__instance, __0);
+            return false;
+        }
     }
 
     [HarmonyPatch(typeof(StaffPickedUpState), "Finished")]

@@ -45,6 +45,10 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(HospitalPlot), "_hospitalMap");
         private static readonly FieldInfo StateNavMesh =
             AccessTools.Field(typeof(WorldState), "_navMesh");
+        private static readonly FieldInfo NavMeshData =
+            AccessTools.Field(typeof(TH20.NavMesh), "_navMeshData");
+        private static readonly FieldInfo NavMeshDataInstance =
+            AccessTools.Field(typeof(TH20.NavMesh), "_navMeshDataInstance");
         private static readonly FieldInfo LevelWorldState =
             AccessTools.Field(typeof(Level), "_worldState");
         private static readonly FieldInfo BuildEventsWorldState =
@@ -116,6 +120,8 @@ namespace UnderPressure.Storey
             new Dictionary<Renderer, bool>();
         private static readonly Dictionary<Character, bool> CharacterVisibility =
             new Dictionary<Character, bool>();
+        private static readonly HashSet<UnityEngine.AI.NavMeshData> RaisedNavigationData =
+            new HashSet<UnityEngine.AI.NavMeshData>();
 
         private static StoreyInstance _lower;
         private static StoreyInstance _upper;
@@ -208,6 +214,7 @@ namespace UnderPressure.Storey
                 foreach (var plot in PlotOrder.Where(plot =>
                              UnderPressure.StoreyMapRegistry.GetStorey(plot) == 1).ToArray())
                     MovePlot(plot, _upper, false);
+                EnsureUpperNavigationHeight();
                 ElevatorRuntime.Initialise(level, _lower, _upper);
                 StoreyPlugin.Log?.LogInfo(
                     "Simulacion simultanea activada: ambos WorldState se actualizaran siempre.");
@@ -926,6 +933,40 @@ namespace UnderPressure.Storey
 
             source.State.UpdateNavigation();
             source.State.CalculateLighting();
+            EnsureUpperNavigationHeight();
+        }
+
+        internal static bool IsUpperNavigation(TH20.NavMesh navMesh) =>
+            navMesh != null && _upper?.State != null &&
+            ReferenceEquals(StateNavMesh.GetValue(_upper.State), navMesh);
+
+        internal static float NavigationHeight(TH20.NavMesh navMesh) =>
+            IsUpperNavigation(navMesh)
+                ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
+
+        internal static float NavigationHeight(WorldState state) =>
+            ReferenceEquals(GetStorey(state), _upper)
+                ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
+
+        private static void EnsureUpperNavigationHeight()
+        {
+            var navMesh = _upper?.State == null
+                ? null : StateNavMesh.GetValue(_upper.State) as TH20.NavMesh;
+            if (navMesh == null) return;
+            var data = NavMeshData.GetValue(navMesh) as UnityEngine.AI.NavMeshData;
+            if (data == null || !RaisedNavigationData.Add(data)) return;
+
+            var current = (UnityEngine.AI.NavMeshDataInstance)
+                NavMeshDataInstance.GetValue(navMesh);
+            if (current.valid) current.Remove();
+            var position = data.position + Vector3.up *
+                UnderPressure.StoreyMapRegistry.StoreyHeight;
+            var raised = UnityEngine.AI.NavMesh.AddNavMeshData(
+                data, position, data.rotation);
+            NavMeshDataInstance.SetValue(navMesh, raised);
+            StoreyPlugin.Log?.LogInfo(
+                "Malla de navegación superior instalada físicamente a " +
+                UnderPressure.StoreyMapRegistry.StoreyHeight.ToString("F2") + " m.");
         }
 
         private static List<HospitalMap> GetUnbuiltHospitalMaps(WorldState state) =>
@@ -1301,6 +1342,7 @@ namespace UnderPressure.Storey
             PlotOrder.Clear();
             PlotStoreys.Clear();
             MapStoreys.Clear();
+            RaisedNavigationData.Clear();
             _upper = null;
             _constructing = null;
             if (upper != null)
