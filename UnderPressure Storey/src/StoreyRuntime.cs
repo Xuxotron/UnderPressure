@@ -93,6 +93,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(HospitalMap), "_footprintPerimeter");
         private static readonly FieldInfo FootprintPerimeterRoot =
             AccessTools.Field(typeof(HospitalPlotFootprintPerimeter), "_root");
+        private static readonly FieldInfo RoomItemEditGameObject =
+            AccessTools.Field(typeof(RoomItemVisualEdit), "_gameObject");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
         private static readonly FieldInfo LightingBuiltRooms =
@@ -697,6 +699,19 @@ namespace UnderPressure.Storey
                           !item.HasBeenPurchased;
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
                 SetRendererVisibility(renderer, visible);
+        }
+
+        internal static void AlignRoomItemEditVisual(RoomItemVisualEdit visual,
+            RoomItem item)
+        {
+            if (visual == null || item?.FloorPlan == null) return;
+            var root = RoomItemEditGameObject.GetValue(visual) as GameObject;
+            var parent = root?.transform.parent;
+            if (parent == null) return;
+
+            var localPosition = root.transform.localPosition;
+            localPosition.y = item.FloorPlan.GetAnchorWorldPos().y - parent.position.y;
+            root.transform.localPosition = localPosition;
         }
 
         private static void SetRendererVisibility(Renderer renderer, bool visible)
@@ -1554,6 +1569,13 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(RoomItemVisual __instance, RoomItem __0) =>
             StoreyRuntime.RefreshItemVisual(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(RoomItemVisualEdit), "UpdateFrom")]
+    internal static class StoreyRoomItemEditVisualPatch
+    {
+        private static void Postfix(RoomItemVisualEdit __instance, RoomItem __0) =>
+            StoreyRuntime.AlignRoomItemEditVisual(__instance, __0);
     }
 
     [HarmonyPatch(typeof(HospitalPlot), "RefreshHospitalMap")]
