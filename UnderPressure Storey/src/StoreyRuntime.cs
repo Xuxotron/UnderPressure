@@ -522,25 +522,6 @@ namespace UnderPressure.Storey
                     "Construccion nativa en plano superior: " + operation + ".");
         }
 
-        internal static void ResolveActivePlacementFloorPlan(ref FloorPlan floorPlan)
-        {
-            var storey = _active;
-            if (floorPlan == null || storey?.State == null || storey.Level == null ||
-                ReferenceEquals(floorPlan.WorldState, storey.State)) return;
-
-            var cursorPosition = storey.Level.CursorManager?.WorldPosition ??
-                                 floorPlan.GetAnchorWorldPos();
-            var room = storey.State.GetRoomAtWorldCoord(cursorPosition, true, true) ??
-                       storey.State.GetRoomAtWorldCoord(floorPlan.Anchor, true, true);
-            var activeFloorPlan = room?.FloorPlan;
-            if (activeFloorPlan == null) return;
-
-            StoreyPlugin.Log?.LogInfo(
-                "Plano de colocacion corregido al WorldState activo: " +
-                (ReferenceEquals(storey, _upper) ? "superior" : "inferior") + ".");
-            floorPlan = activeFloorPlan;
-        }
-
         internal static void ExitCurrentContext(LevelContext previous) =>
             ExitStoreyContext(_lower?.Level, previous);
 
@@ -1708,14 +1689,6 @@ namespace UnderPressure.Storey
             StoreyRuntime.ExitCurrentContext(__state);
             return __exception;
         }
-    }
-
-    [HarmonyPatch(typeof(BuildEvents), "StartItemPlacement")]
-    [HarmonyPriority(Priority.First)]
-    internal static class StoreyItemPlacementFloorPlanPatch
-    {
-        private static void Prefix(ref FloorPlan __1) =>
-            StoreyRuntime.ResolveActivePlacementFloorPlan(ref __1);
     }
 
     [HarmonyPatch(typeof(SelectMenuHospitalPlot), "Setup")]
