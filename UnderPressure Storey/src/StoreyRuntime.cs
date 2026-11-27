@@ -47,6 +47,12 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(WorldState), "_navMesh");
         private static readonly FieldInfo LevelWorldState =
             AccessTools.Field(typeof(Level), "_worldState");
+        private static readonly FieldInfo BuildEventsWorldState =
+            AccessTools.Field(typeof(BuildEvents), "_worldState");
+        private static readonly FieldInfo BuildingLogicWorldState =
+            AccessTools.Field(typeof(BuildingLogic), "_worldState");
+        private static readonly FieldInfo BuildingLogicBuildEvents =
+            AccessTools.Field(typeof(BuildingLogic), "_buildEvents");
         private static readonly FieldInfo PlotWorldState =
             AccessTools.Field(typeof(HospitalPlot), "_worldState");
         private static readonly FieldInfo HospitalMapWorldState =
@@ -122,6 +128,9 @@ namespace UnderPressure.Storey
         {
             internal WorldState State;
             internal BuildEvents Events;
+            internal WorldState EventsState;
+            internal WorldState BuildingState;
+            internal BuildEvents BuildingEvents;
             internal StoreyInstance Constructing;
         }
 
@@ -166,14 +175,16 @@ namespace UnderPressure.Storey
             if (!TryGetBounds(_lower.State, out var bounds)) return false;
             BuildVectorGrid(_lower, bounds);
 
-            var isolatedEvents = new BuildEvents();
-            var upper = new StoreyInstance(level, isolatedEvents, 1);
             var normalEvents = level.BuildEvents;
+            // BuildEvents pertenece al nivel y contiene los suscriptores de la interfaz
+            // nativa. Los dos WorldState comparten ese bus; el contexto cambia solamente
+            // el mundo sobre el que ejecuta cada operacion.
+            var upper = new StoreyInstance(level, normalEvents, 1);
             var savedPostConstruct = level.PostConstruct;
             _constructing = upper;
             try
             {
-                LevelBuildEvents.SetValue(level, isolatedEvents);
+                LevelBuildEvents.SetValue(level, normalEvents);
                 var upperConfig = CloneConfig.Invoke(source, null) as WorldState.Config;
                 upperConfig.HospitalPlots =
                     new List<FullInspector.SharedInstance<HospitalPlotDefinition>>();
@@ -189,7 +200,6 @@ namespace UnderPressure.Storey
                 upper.State = state;
                 _upper = upper;
                 LevelWorldState.SetValue(level, state);
-                isolatedEvents.Initialise(level);
                 RemoveUpperSeed();
                 BuildVectorGrid(upper, bounds);
                 Activate(_lower);
@@ -217,7 +227,6 @@ namespace UnderPressure.Storey
                 DetachLowerMapVisuals();
                 UnityEngine.Object.Destroy(_lower.Root);
                 UnityEngine.Object.Destroy(upper.Root);
-                isolatedEvents.Destroy();
                 _lower = null;
                 return false;
             }
@@ -436,6 +445,7 @@ namespace UnderPressure.Storey
                 LevelWorldState.SetValue(storey.Level, _lower.State);
                 LevelBuildEvents.SetValue(storey.Level, _lower.Events);
             }
+            SynchronizeBuildingLogic(storey);
             SynchronizeCursorModes(storey);
             storey.Level.CursorManager?.SetPlaneOffset(0f);
             RefreshVisualStorey();
@@ -456,9 +466,16 @@ namespace UnderPressure.Storey
             if (storey?.Level == null || storey.State == null) return;
             previous.State = LevelWorldState.GetValue(storey.Level) as WorldState;
             previous.Events = LevelBuildEvents.GetValue(storey.Level) as BuildEvents;
+            previous.EventsState = BuildEventsWorldState.GetValue(storey.Events) as WorldState;
+            var buildingLogic = storey.Level.BuildingLogic;
+            previous.BuildingState = BuildingLogicWorldState.GetValue(buildingLogic) as WorldState;
+            previous.BuildingEvents = BuildingLogicBuildEvents.GetValue(buildingLogic) as BuildEvents;
             previous.Constructing = _constructing;
             LevelWorldState.SetValue(storey.Level, storey.State);
             LevelBuildEvents.SetValue(storey.Level, storey.Events);
+            BuildEventsWorldState.SetValue(storey.Events, storey.State);
+            BuildingLogicWorldState.SetValue(buildingLogic, storey.State);
+            BuildingLogicBuildEvents.SetValue(buildingLogic, storey.Events);
             _constructing = storey;
         }
 
@@ -467,6 +484,16 @@ namespace UnderPressure.Storey
             if (level == null) return;
             LevelWorldState.SetValue(level, previous.State ?? _lower?.State);
             LevelBuildEvents.SetValue(level, previous.Events ?? _lower?.Events);
+            var events = previous.Events ?? _lower?.Events;
+            if (events != null)
+                BuildEventsWorldState.SetValue(events, previous.EventsState ?? _lower?.State);
+            if (level.BuildingLogic != null)
+            {
+                BuildingLogicWorldState.SetValue(level.BuildingLogic,
+                    previous.BuildingState ?? _active?.State ?? _lower?.State);
+                BuildingLogicBuildEvents.SetValue(level.BuildingLogic,
+                    previous.BuildingEvents ?? _lower?.Events);
+            }
             _constructing = previous.Constructing;
         }
 
@@ -480,6 +507,18 @@ namespace UnderPressure.Storey
 
         internal static void EnterActiveInteractionContext(out LevelContext previous) =>
             EnterActiveInteractionContext(_lower?.Level, out previous);
+
+        internal static void EnterConstructionContext(string operation,
+            out LevelContext previous)
+        {
+            EnterActiveInteractionContext(out previous);
+            if (ReferenceEquals(_active, _upper) &&
+                (operation == "TransitionToNewRoomState" ||
+                 operation == "TransitionToCopyRoomTemplateBlueprintState" ||
+                 operation == "StartItemPlacement"))
+                StoreyPlugin.Log?.LogInfo(
+                    "Construccion nativa en plano superior: " + operation + ".");
+        }
 
         internal static void ExitCurrentContext(LevelContext previous) =>
             ExitStoreyContext(_lower?.Level, previous);
@@ -698,6 +737,14 @@ namespace UnderPressure.Storey
                 ItemCursorWorldState.SetValue(itemCursor, storey.State);
                 BindItemCursor(itemCursor, storey.Events);
             }
+        }
+
+        private static void SynchronizeBuildingLogic(StoreyInstance storey)
+        {
+            var buildingLogic = storey?.Level?.BuildingLogic;
+            if (buildingLogic == null || storey.State == null || storey.Events == null) return;
+            BuildingLogicWorldState.SetValue(buildingLogic, storey.State);
+            BuildingLogicBuildEvents.SetValue(buildingLogic, storey.Events);
         }
 
         private static void BindItemCursor(CursorEditHospitalItem cursor, BuildEvents target)
@@ -1250,7 +1297,6 @@ namespace UnderPressure.Storey
                     if (upper.Level != null)
                         LevelBuildEvents.SetValue(upper.Level, upper.Events);
                     upper.State?.Destroy();
-                    upper.Events?.Destroy();
                 }
                 catch (Exception exception)
                 {
@@ -1543,6 +1589,77 @@ namespace UnderPressure.Storey
     {
         private static void Prefix(out StoreyRuntime.LevelContext __state) =>
             StoreyRuntime.EnterActiveInteractionContext(out __state);
+
+        private static Exception Finalizer(StoreyRuntime.LevelContext __state,
+            Exception __exception)
+        {
+            StoreyRuntime.ExitCurrentContext(__state);
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch]
+    internal static class StoreyBuildingLogicContextPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            var names = new[]
+            {
+                "TransitionToNewRoomState",
+                "TransitionToEditRoomBlueprintState",
+                "TransitionToCopyRoomBlueprintState",
+                "TransitionToEditRoomObjectsState",
+                "StartEditingRoomObject",
+                "StopEditingRoomObject",
+                "TransitionToCopyRoomTemplateBlueprintState",
+                "TransitionToNullState",
+                "ApplyRoomChanges",
+                "ChangeRoomBuildMode",
+                "TryAcceptRoomChanges",
+                "AcceptRoomChanges"
+            };
+            foreach (var name in names)
+            {
+                var method = AccessTools.Method(typeof(BuildingLogic), name);
+                if (method != null) yield return method;
+            }
+        }
+
+        private static void Prefix(MethodBase __originalMethod,
+            out StoreyRuntime.LevelContext __state) =>
+            StoreyRuntime.EnterConstructionContext(__originalMethod.Name, out __state);
+
+        private static Exception Finalizer(StoreyRuntime.LevelContext __state,
+            Exception __exception)
+        {
+            StoreyRuntime.ExitCurrentContext(__state);
+            return __exception;
+        }
+    }
+
+    [HarmonyPatch]
+    internal static class StoreyBuildEventsContextPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            var names = new[]
+            {
+                "StartItemPlacement",
+                "StartItemEdit",
+                "BeginItemEditBuildMode",
+                "MoveRoom",
+                "RoomItemDestroy"
+            };
+            foreach (var name in names)
+            {
+                var method = AccessTools.Method(typeof(BuildEvents), name);
+                if (method != null) yield return method;
+            }
+        }
+
+        private static void Prefix(MethodBase __originalMethod,
+            out StoreyRuntime.LevelContext __state) =>
+            StoreyRuntime.EnterConstructionContext(__originalMethod.Name, out __state);
 
         private static Exception Finalizer(StoreyRuntime.LevelContext __state,
             Exception __exception)
