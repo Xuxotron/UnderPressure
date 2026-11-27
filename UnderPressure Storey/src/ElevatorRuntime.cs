@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using BehaviorDesigner.Runtime.Tasks;
 using FullInspector;
@@ -321,11 +322,25 @@ namespace UnderPressure.Storey
             new HashSet<Character>();
         private static readonly FieldInfo NavPathCharacter =
             AccessTools.Field(typeof(NavPath), "_character");
+        private static readonly FieldInfo RoomBuildingNavMeshHospitalMap =
+            AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
         private static readonly MethodInfo DestroyRoomItem =
             AccessTools.Method(typeof(BuildEvents), "RoomItemDestroy");
+        private static readonly MethodInfo StartItemPlacement =
+            AccessTools.Method(typeof(BuildEvents), "StartItemPlacement");
         private static readonly LocalisedString InvalidOtherStorey =
             global::UnderPressure.ModLocalization.Create(
                 "storey.elevator.invalid_other_storey");
+        private static readonly LocalisedString ElevatorRequired =
+            global::UnderPressure.ModLocalization.Create(
+                "storey.elevator.required");
+        private static readonly LocalisedString LastElevatorRequired =
+            global::UnderPressure.ModLocalization.Create(
+                "storey.elevator.last_required");
+        private static readonly List<HospitalPlot> RequiredPlots =
+            new List<HospitalPlot>();
+        private static readonly HashSet<HospitalPlot> RequiredPlotNotified =
+            new HashSet<HospitalPlot>();
 
         private static Level _level;
         private static StoreyInstance _lower;
@@ -344,10 +359,11 @@ namespace UnderPressure.Storey
             ElevatorDefinition.AddToWorld(lower?.State);
             ElevatorDefinition.AddToWorld(upper?.State);
             Bind(lower?.Events, true);
-            Bind(upper?.Events, true);
+            if (!ReferenceEquals(upper?.Events, lower?.Events)) Bind(upper?.Events, true);
             if (lower?.Root != null)
                 _driver = lower.Root.AddComponent<ElevatorRouteDriver>();
             RebuildPairs();
+            QueueMissingRequiredPlots();
             StoreyPlugin.Log?.LogInfo(
                 "Ascensores inicializados sobre dos WorldState; parejas restauradas=" +
                 (Pairs.Count / 2) + ".");
@@ -356,7 +372,7 @@ namespace UnderPressure.Storey
         internal static void Destroy()
         {
             Bind(_lower?.Events, false);
-            Bind(_upper?.Events, false);
+            if (!ReferenceEquals(_upper?.Events, _lower?.Events)) Bind(_upper?.Events, false);
             foreach (var route in new List<RouteRequest>(Routes.Values))
             {
                 route.Controller?.Destroy();
@@ -365,6 +381,8 @@ namespace UnderPressure.Storey
             Routes.Clear();
             InternalNavigation.Clear();
             Pairs.Clear();
+            RequiredPlots.Clear();
+            RequiredPlotNotified.Clear();
             if (_driver != null) UnityEngine.Object.Destroy(_driver);
             _driver = null;
             _level = null;
@@ -380,13 +398,18 @@ namespace UnderPressure.Storey
             {
                 events.OnRoomItemPlaced += OnRoomItemPlaced;
                 events.OnRoomItemDestroyed += OnRoomItemDestroyed;
+                events.OnHospitalPlotBuilt += OnHospitalPlotBuilt;
             }
             else
             {
                 events.OnRoomItemPlaced -= OnRoomItemPlaced;
                 events.OnRoomItemDestroyed -= OnRoomItemDestroyed;
+                events.OnHospitalPlotBuilt -= OnHospitalPlotBuilt;
             }
         }
+
+        private static void OnHospitalPlotBuilt(HospitalPlot plot) =>
+            QueueRequiredPlot(plot);
 
         internal static bool ValidateCounterpart(RoomItem item)
         {
@@ -486,6 +509,7 @@ namespace UnderPressure.Storey
                     return;
                 }
                 Link(item, counterpart);
+                ResolveRequiredPlots();
                 StoreyPlugin.Log?.LogInfo(
                     "Pareja de ascensores creada entre ambos WorldState en posición XZ=" +
                     item.WorldPosition.x.ToString("F2") + "," +
@@ -563,6 +587,155 @@ namespace UnderPressure.Storey
             }
         }
 
+        private static void QueueMissingRequiredPlots()
+        {
+            if (_upper?.State?.HospitalPlots == null) return;
+            foreach (var plot in _upper.State.HospitalPlots)
+                QueueRequiredPlot(plot);
+        }
+
+        private static void QueueRequiredPlot(HospitalPlot plot)
+        {
+            if (!IsUpperPlot(plot) || !plot.Bought || !plot.Built ||
+                HasUpperAccess(plot.HospitalMap) || RequiredPlots.Contains(plot)) return;
+            RequiredPlots.Add(plot);
+            StoreyPlugin.Log?.LogInfo(
+                "La parcela superior construida requiere su primer ascensor: " +
+                plot.Definition + ".");
+        }
+
+        private static bool IsUpperPlot(HospitalPlot plot) =>
+            ReferenceEquals(StoreyRuntime.GetStorey(
+                plot?.HospitalMap?.FloorPlan?.WorldState), _upper);
+
+        private static IEnumerable<RoomItem> UpperAccessItems(HospitalMap map)
+        {
+            if (map == null) yield break;
+            foreach (var pair in Pairs)
+            {
+                var item = pair.Key;
+                if (!ReferenceEquals(StoreyRuntime.GetStorey(item), _upper) ||
+                    !ReferenceEquals(item?.FloorPlan?.HospitalMap, map) ||
+                    item.HasBeenDestroyed() || pair.Value == null ||
+                    pair.Value.HasBeenDestroyed() || FirstInteraction(item) == null ||
+                    FirstInteraction(pair.Value) == null) continue;
+                yield return item;
+            }
+        }
+
+        private static bool HasUpperAccess(HospitalMap map) =>
+            UpperAccessItems(map).Any();
+
+        private static List<Vector3> UpperAccessPositions(HospitalMap map) =>
+            UpperAccessItems(map)
+                .Select(FirstInteraction)
+                .Where(interaction => interaction != null)
+                .Select(interaction => interaction.WorldStartPosition)
+                .ToList();
+
+        private static void ResolveRequiredPlots()
+        {
+            for (var index = RequiredPlots.Count - 1; index >= 0; --index)
+            {
+                var plot = RequiredPlots[index];
+                if (plot != null && plot.Bought && plot.Built &&
+                    !HasUpperAccess(plot.HospitalMap)) continue;
+                RequiredPlots.RemoveAt(index);
+                if (plot != null) RequiredPlotNotified.Remove(plot);
+            }
+        }
+
+        private static void TickRequiredPlacement()
+        {
+            ResolveRequiredPlots();
+            if (RequiredPlots.Count == 0 || _level == null ||
+                _level.HospitalHUDManager == null ||
+                _level.HospitalHUDManager.ShowingPauseMenu ||
+                _level.BuildingLogic == null ||
+                _level.BuildingLogic.CurrentState != BuildingLogic.State.Null) return;
+
+            if (_level.CursorManager.TryGetActiveMode<CursorRoomItem>(out var activeItem))
+                return;
+
+            var plot = RequiredPlots[0];
+            var plan = plot?.HospitalMap?.FloorPlan;
+            if (plan == null) return;
+            StoreyRuntime.ActivatePlot(plot);
+            StoreyRuntime.RunInStorey(_upper, () =>
+                StartItemPlacement.Invoke(_upper.Events,
+                    new object[] { ElevatorDefinition.Definition, plan, true }));
+            if (!RequiredPlotNotified.Add(plot)) return;
+            _level.InWorldMessages?.ShowMessage(ElevatorRequired.ToString(),
+                plan.GetAnchorWorldPos() + Vector3.up, 4f,
+                InWorldMessages.MessageType.Info);
+        }
+
+        internal static void UseUpperAccessAsEntrance(RoomItem item,
+            ObjectInteraction interaction, RoomBuildingNavMesh navMesh,
+            ref Vector3? entrance)
+        {
+            if (!ReferenceEquals(StoreyRuntime.GetStorey(item), _upper) ||
+                interaction == null) return;
+            var positions = UpperAccessPositions(item.FloorPlan?.HospitalMap);
+            if (positions.Count == 0) return;
+            var start = interaction.WorldStartPosition;
+            foreach (var position in positions)
+                if (navMesh == null || navMesh.CanReach(start, position))
+                {
+                    entrance = position;
+                    return;
+                }
+            entrance = positions[0];
+        }
+
+        internal static void RestoreUpperAccessConnectivity(RoomBuildingNavMesh navMesh)
+        {
+            var map = RoomBuildingNavMeshHospitalMap.GetValue(navMesh) as HospitalMap;
+            if (!ReferenceEquals(StoreyRuntime.GetStorey(map?.FloorPlan?.WorldState), _upper))
+                return;
+            var invalidItems = navMesh.InvalidItems;
+            if (invalidItems == null || invalidItems.Count == 0) return;
+            foreach (var item in invalidItems.ToArray())
+                if (HasValidUpperAccessPath(navMesh, item)) invalidItems.Remove(item);
+        }
+
+        private static bool HasValidUpperAccessPath(RoomBuildingNavMesh navMesh,
+            RoomItem item)
+        {
+            if (item?.FloorPlan == null) return false;
+            var accessPositions = UpperAccessPositions(item.FloorPlan.HospitalMap);
+            if (accessPositions.Count == 0) return false;
+            var required = item.Definition.MinValidInteractions;
+            var valid = 0;
+            foreach (var interaction in item.Interactions)
+            {
+                if (interaction.Definition.IgnoreRoomCheck)
+                {
+                    --required;
+                    continue;
+                }
+                if (accessPositions.Any(position =>
+                        navMesh.CanReach(interaction.WorldStartPosition, position))) ++valid;
+            }
+            return valid >= Math.Max(0, required);
+        }
+
+        internal static bool CanRemove(RoomItem item, bool showMessage)
+        {
+            if (_pairedOperation || !ElevatorDefinition.IsElevator(item) ||
+                !Pairs.TryGetValue(item, out var pair)) return true;
+            var upperItem = ReferenceEquals(StoreyRuntime.GetStorey(item), _upper)
+                ? item : pair;
+            var map = upperItem?.FloorPlan?.HospitalMap;
+            if (map?.Plot == null || !map.Plot.Bought || !map.Plot.Built ||
+                UpperAccessItems(map).Count() > 1) return true;
+            if (showMessage)
+                _level?.InWorldMessages?.ShowMessage(LastElevatorRequired.ToString(),
+                    item.WorldPosition + Vector3.up, 4f,
+                    InWorldMessages.MessageType.Info);
+            return false;
+        }
+
         internal static bool TryRoute(NavPath path, Vector3 destination, float rotation,
             INavPathResult callback, float arrivalDistance)
         {
@@ -581,6 +754,8 @@ namespace UnderPressure.Storey
             RoomItem source = null;
             RoomItem target = null;
             var best = float.MaxValue;
+            var sourceNavMesh = sourceStorey.State.NavMesh;
+            var targetNavMesh = targetStorey.State.NavMesh;
             foreach (var pair in Pairs)
             {
                 if (!ReferenceEquals(StoreyRuntime.GetStorey(pair.Key), sourceStorey) ||
@@ -588,6 +763,10 @@ namespace UnderPressure.Storey
                 var sourceInteraction = FirstInteraction(pair.Key);
                 var targetInteraction = FirstInteraction(pair.Value);
                 if (sourceInteraction == null || targetInteraction == null) continue;
+                if (!sourceNavMesh.CanReach(character.Position,
+                        sourceInteraction.WorldStartPosition) ||
+                    !targetNavMesh.CanReach(targetInteraction.WorldStartPosition,
+                        destination)) continue;
                 var score = HorizontalDistance(character.Position,
                                 sourceInteraction.WorldStartPosition) +
                             HorizontalDistance(destination, targetInteraction.WorldStartPosition);
@@ -627,6 +806,7 @@ namespace UnderPressure.Storey
 
         internal static void TickRoutes()
         {
+            TickRequiredPlacement();
             if (Routes.Count == 0) return;
             foreach (var request in new List<RouteRequest>(Routes.Values))
             {
@@ -739,6 +919,41 @@ namespace UnderPressure.Storey
             if (!ElevatorDefinition.IsElevator(item)) return;
             __result = __result && ElevatorRuntime.ValidateCounterpart(item);
         }
+    }
+
+    [HarmonyPatch(typeof(InteractionAlgorithms), "ValidateInteractionStart",
+        new[]
+        {
+            typeof(ItemValidateMode), typeof(RoomItem), typeof(Vector3?),
+            typeof(ObjectInteraction), typeof(WorldState),
+            typeof(RoomBuildingNavMesh), typeof(Vector3)
+        })]
+    internal static class ElevatorInteractionEntranceValidationPatch
+    {
+        private static void Prefix(RoomItem __1, ref Vector3? __2,
+            ObjectInteraction __3, RoomBuildingNavMesh __5) =>
+            ElevatorRuntime.UseUpperAccessAsEntrance(__1, __3, __5, ref __2);
+    }
+
+    [HarmonyPatch(typeof(RoomBuildingNavMesh), "ValidateConnectivity")]
+    internal static class ElevatorRoomConnectivityPatch
+    {
+        private static void Postfix(RoomBuildingNavMesh __instance) =>
+            ElevatorRuntime.RestoreUpperAccessConnectivity(__instance);
+    }
+
+    [HarmonyPatch(typeof(BuildEvents), "CursorDeleteObject")]
+    internal static class ElevatorCursorDeletePatch
+    {
+        private static bool Prefix(ICursorSelectable __0) =>
+            !(__0 is RoomItem item) || ElevatorRuntime.CanRemove(item, true);
+    }
+
+    [HarmonyPatch(typeof(BuildEvents), "RoomItemDestroy")]
+    internal static class ElevatorDestroyGuardPatch
+    {
+        private static bool Prefix(RoomItem __0) =>
+            ElevatorRuntime.CanRemove(__0, false);
     }
 
     [HarmonyPatch(typeof(ObjectInteraction), "StartInteraction")]

@@ -452,3 +452,5 @@ storey.switch.upper,Перейти на второй этаж,Przejdź na pierws
 storey.elevator.name,Лифт,Winda,엘리베이터,电梯,電梯
 storey.elevator.description,Соединяет нижний и верхний этажи.,Łączy dolną i górną kondygnację.,아래층과 위층을 연결합니다.,连接下层和上层。,連接下層和上層。
 storey.elevator.invalid_other_storey,Для лифта нужна свободная купленная клетка на обоих этажах.,Winda wymaga wolnego zakupionego pola na obu kondygnacjach.,엘리베이터는 양쪽 층에 구매한 빈 타일이 필요합니다.,电梯需要上下两层都有已购买的空闲地块。,電梯需要上下兩層都有已購買的空閒地塊。
+storey.elevator.required,Разместите лифт, чтобы открыть эту верхнюю зону.,Umieść windę, aby otworzyć tę górną parcelę.,위층 부지를 사용하려면 엘리베이터를 배치하세요.,放置电梯以启用这块上层地块。,放置電梯以啟用這塊上層地塊。
+storey.elevator.last_required,Нельзя удалить последний лифт, обслуживающий верхнюю зону.,Nie można usunąć ostatniej windy obsługującej górną parcelę.,위층 부지를 연결하는 마지막 엘리베이터는 제거할 수 없습니다.,无法移除连接上层地块的最后一部电梯。,無法移除連接上層地塊的最後一部電梯。
