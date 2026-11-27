@@ -320,8 +320,14 @@ namespace UnderPressure.Storey
             new Dictionary<Character, RouteRequest>();
         private static readonly HashSet<Character> InternalNavigation =
             new HashSet<Character>();
+        private static readonly Dictionary<Character, float> NativeAgentOffsets =
+            new Dictionary<Character, float>();
         private static readonly FieldInfo NavPathCharacter =
             AccessTools.Field(typeof(NavPath), "_character");
+        private static readonly FieldInfo NavPathAgent =
+            AccessTools.Field(typeof(NavPath), "_navMeshAgent");
+        private static readonly FieldInfo NavPathEndPosition =
+            AccessTools.Field(typeof(NavPath), "_endPosition");
         private static readonly FieldInfo RoomBuildingNavMeshHospitalMap =
             AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
         private static readonly MethodInfo DestroyRoomItem =
@@ -380,6 +386,7 @@ namespace UnderPressure.Storey
             }
             Routes.Clear();
             InternalNavigation.Clear();
+            NativeAgentOffsets.Clear();
             Pairs.Clear();
             RequiredPlots.Clear();
             RequiredPlotNotified.Clear();
@@ -801,7 +808,38 @@ namespace UnderPressure.Storey
             {
                 InternalNavigation.Remove(character);
             }
+            StoreyPlugin.Log?.LogInfo(
+                "Ruta entre plantas iniciada: " +
+                (ReferenceEquals(sourceStorey, _upper) ? "superior" : "inferior") +
+                " -> " +
+                (ReferenceEquals(targetStorey, _upper) ? "superior" : "inferior") +
+                ", destino=" + destination + ".");
             return true;
+        }
+
+        internal static bool PrepareNavigation(NavPath path, ref Vector3 destination,
+            float rotation, INavPathResult callback, float arrivalDistance,
+            out Vector3? logicalDestination)
+        {
+            logicalDestination = null;
+            if (TryRoute(path, destination, rotation, callback, arrivalDistance))
+                return false;
+
+            var character = NavPathCharacter.GetValue(path) as Character;
+            var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
+            if (character == null || character.Position.y < height * .5f ||
+                destination.y < height * .5f) return true;
+
+            logicalDestination = destination;
+            destination.y = 0f;
+            return true;
+        }
+
+        internal static void RestoreLogicalDestination(NavPath path,
+            Vector3? logicalDestination)
+        {
+            if (!logicalDestination.HasValue) return;
+            NavPathEndPosition.SetValue(path, logicalDestination.Value);
         }
 
         internal static void TickRoutes()
@@ -845,6 +883,9 @@ namespace UnderPressure.Storey
                 {
                     InternalNavigation.Remove(request.Character);
                 }
+                StoreyPlugin.Log?.LogInfo(
+                    "Ruta entre plantas reanudada hacia el destino original " +
+                    request.Destination + ".");
             }
         }
 
@@ -857,10 +898,32 @@ namespace UnderPressure.Storey
             var targetInteraction = FirstInteraction(request.Target);
             if (targetInteraction == null) return;
             var target = targetInteraction.WorldStartPosition;
-            character.NavPath.Warp(target);
+            var agent = NavPathAgent.GetValue(character.NavPath) as
+                UnityEngine.AI.NavMeshAgent;
+            if (agent != null)
+            {
+                if (!NativeAgentOffsets.ContainsKey(character))
+                {
+                    var currentStoreyHeight = character.Position.y >=
+                                             global::UnderPressure.StoreyMapRegistry
+                                                 .StoreyHeight * .5f
+                        ? global::UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
+                    NativeAgentOffsets[character] = agent.baseOffset - currentStoreyHeight;
+                }
+                var targetHeight = ReferenceEquals(
+                    StoreyRuntime.GetStorey(request.Target), _upper)
+                    ? global::UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
+                agent.baseOffset = NativeAgentOffsets[character] + targetHeight;
+            }
+            var navigationTarget = target;
+            navigationTarget.y = 0f;
+            character.NavPath.Warp(navigationTarget);
             character.Position = target;
             character.Rotation = targetInteraction.StartRotation;
             request.Transferred = true;
+            StoreyPlugin.Log?.LogInfo(
+                "Ascensor transferido a " + target +
+                " manteniendo el agente sobre la malla local Y=0.");
         }
 
         private static void CancelRoute(RouteRequest request, EPathStatus status)
@@ -942,6 +1005,12 @@ namespace UnderPressure.Storey
             ElevatorRuntime.RestoreUpperAccessConnectivity(__instance);
     }
 
+    [HarmonyPatch(typeof(RoomBuildingNavMesh), "ValidPosition")]
+    internal static class StoreyRoomNavPositionPatch
+    {
+        private static void Prefix(ref Vector3 __0) => __0.y = 0f;
+    }
+
     [HarmonyPatch(typeof(BuildEvents), "CursorDeleteObject")]
     internal static class ElevatorCursorDeletePatch
     {
@@ -968,8 +1037,12 @@ namespace UnderPressure.Storey
         new[] { typeof(Vector3), typeof(float), typeof(INavPathResult), typeof(float) })]
     internal static class ElevatorNavigationPatch
     {
-        private static bool Prefix(NavPath __instance, Vector3 __0, float __1,
-            INavPathResult __2, float __3) =>
-            !ElevatorRuntime.TryRoute(__instance, __0, __1, __2, __3);
+        private static bool Prefix(NavPath __instance, ref Vector3 __0, float __1,
+            INavPathResult __2, float __3, out Vector3? __state) =>
+            ElevatorRuntime.PrepareNavigation(__instance, ref __0, __1, __2, __3,
+                out __state);
+
+        private static void Postfix(NavPath __instance, Vector3? __state) =>
+            ElevatorRuntime.RestoreLogicalDestination(__instance, __state);
     }
 }
