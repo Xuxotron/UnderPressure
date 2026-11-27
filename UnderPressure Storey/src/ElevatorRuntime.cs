@@ -322,10 +322,6 @@ namespace UnderPressure.Storey
             new HashSet<Character>();
         private static readonly Dictionary<Character, float> NativeAgentOffsets =
             new Dictionary<Character, float>();
-        private static readonly Dictionary<Character, StoreyInstance> CharacterStoreys =
-            new Dictionary<Character, StoreyInstance>();
-        private static readonly HashSet<Character> RouteFailureLogged =
-            new HashSet<Character>();
         private static readonly FieldInfo NavPathCharacter =
             AccessTools.Field(typeof(NavPath), "_character");
         private static readonly FieldInfo NavPathAgent =
@@ -391,8 +387,6 @@ namespace UnderPressure.Storey
             Routes.Clear();
             InternalNavigation.Clear();
             NativeAgentOffsets.Clear();
-            CharacterStoreys.Clear();
-            RouteFailureLogged.Clear();
             Pairs.Clear();
             RequiredPlots.Clear();
             RequiredPlotNotified.Clear();
@@ -755,33 +749,31 @@ namespace UnderPressure.Storey
             var character = NavPathCharacter.GetValue(path) as Character;
             if (character == null || InternalNavigation.Contains(character) || Pairs.Count == 0)
                 return false;
-            var sourceStorey = GetCharacterStorey(character);
-            var targetStorey = GetTargetStorey(callback, destination);
+            var sourceStorey = character.Position.y >=
+                               global::UnderPressure.StoreyMapRegistry.StoreyHeight * .5f
+                ? _upper : _lower;
+            var targetStorey = destination.y >=
+                               global::UnderPressure.StoreyMapRegistry.StoreyHeight * .5f
+                ? _upper : _lower;
             if (sourceStorey == null || targetStorey == null ||
                 ReferenceEquals(sourceStorey, targetStorey)) return false;
 
             RoomItem source = null;
             RoomItem target = null;
             var best = float.MaxValue;
-            var candidates = 0;
-            var sourceReachable = 0;
-            var targetReachable = 0;
             var sourceNavMesh = sourceStorey.State.NavMesh;
             var targetNavMesh = targetStorey.State.NavMesh;
             foreach (var pair in Pairs)
             {
                 if (!ReferenceEquals(StoreyRuntime.GetStorey(pair.Key), sourceStorey) ||
                     !ReferenceEquals(StoreyRuntime.GetStorey(pair.Value), targetStorey)) continue;
-                ++candidates;
                 var sourceInteraction = FirstInteraction(pair.Key);
                 var targetInteraction = FirstInteraction(pair.Value);
                 if (sourceInteraction == null || targetInteraction == null) continue;
                 if (!sourceNavMesh.CanReach(character.Position,
-                        sourceInteraction.WorldStartPosition)) continue;
-                ++sourceReachable;
-                if (!targetNavMesh.CanReach(targetInteraction.WorldStartPosition,
+                        sourceInteraction.WorldStartPosition) ||
+                    !targetNavMesh.CanReach(targetInteraction.WorldStartPosition,
                         destination)) continue;
-                ++targetReachable;
                 var score = HorizontalDistance(character.Position,
                                 sourceInteraction.WorldStartPosition) +
                             HorizontalDistance(destination, targetInteraction.WorldStartPosition);
@@ -790,17 +782,7 @@ namespace UnderPressure.Storey
                 source = pair.Key;
                 target = pair.Value;
             }
-            if (source == null || target == null)
-            {
-                if (RouteFailureLogged.Add(character))
-                    StoreyPlugin.Log?.LogWarning(
-                        "No se encontró una ruta de ascensor válida: candidatas=" + candidates +
-                        ", accesibles en origen=" + sourceReachable +
-                        ", accesibles en destino=" + targetReachable +
-                        ", destino=" + destination + ".");
-                return false;
-            }
-            RouteFailureLogged.Remove(character);
+            if (source == null || target == null) return false;
 
             if (Routes.TryGetValue(character, out var previous))
                 CancelRoute(previous, EPathStatus.Interrupted);
@@ -844,15 +826,12 @@ namespace UnderPressure.Storey
                 return false;
 
             var character = NavPathCharacter.GetValue(path) as Character;
-            var sourceStorey = GetCharacterStorey(character);
-            var targetStorey = GetTargetStorey(callback, destination);
-            if (character == null || !ReferenceEquals(sourceStorey, _upper) ||
-                !ReferenceEquals(targetStorey, _upper)) return true;
+            var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
+            if (character == null || character.Position.y < height * .5f ||
+                destination.y < height * .5f) return true;
 
-            logicalDestination = new Vector3(destination.x,
-                global::UnderPressure.StoreyMapRegistry.StoreyHeight, destination.z);
+            logicalDestination = destination;
             destination.y = 0f;
-            ApplyCharacterStorey(character, _upper);
             return true;
         }
 
@@ -919,7 +898,23 @@ namespace UnderPressure.Storey
             var targetInteraction = FirstInteraction(request.Target);
             if (targetInteraction == null) return;
             var target = targetInteraction.WorldStartPosition;
-            ApplyCharacterStorey(character, StoreyRuntime.GetStorey(request.Target));
+            var agent = NavPathAgent.GetValue(character.NavPath) as
+                UnityEngine.AI.NavMeshAgent;
+            if (agent != null)
+            {
+                if (!NativeAgentOffsets.ContainsKey(character))
+                {
+                    var currentStoreyHeight = character.Position.y >=
+                                             global::UnderPressure.StoreyMapRegistry
+                                                 .StoreyHeight * .5f
+                        ? global::UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
+                    NativeAgentOffsets[character] = agent.baseOffset - currentStoreyHeight;
+                }
+                var targetHeight = ReferenceEquals(
+                    StoreyRuntime.GetStorey(request.Target), _upper)
+                    ? global::UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
+                agent.baseOffset = NativeAgentOffsets[character] + targetHeight;
+            }
             var navigationTarget = target;
             navigationTarget.y = 0f;
             character.NavPath.Warp(navigationTarget);
@@ -946,73 +941,6 @@ namespace UnderPressure.Storey
             foreach (var interaction in item.Interactions)
                 if (ElevatorDefinition.IsElevator(interaction)) return interaction;
             return null;
-        }
-
-        internal static bool IsCharacterUpper(Character character) =>
-            ReferenceEquals(GetCharacterStorey(character), _upper);
-
-        internal static void PlaceStaffOnStorey(Staff staff, Vector3 position)
-        {
-            if (staff == null) return;
-            var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
-            ApplyCharacterStorey(staff, position.y >= height * .5f ? _upper : _lower);
-            StoreyPlugin.Log?.LogInfo("Empleado colocado en planta " +
-                                     (position.y >= height * .5f ? "superior" : "inferior") +
-                                     ".");
-        }
-
-        internal static void NormalizeWarp(NavPath path, ref Vector3 position)
-        {
-            var character = NavPathCharacter.GetValue(path) as Character;
-            if (character == null || !IsCharacterUpper(character)) return;
-            ApplyCharacterStorey(character, _upper);
-            position.y = 0f;
-        }
-
-        private static StoreyInstance GetCharacterStorey(Character character)
-        {
-            if (character == null) return null;
-            if (CharacterStoreys.TryGetValue(character, out var registered))
-                return registered;
-            var agent = NavPathAgent.GetValue(character.NavPath) as
-                UnityEngine.AI.NavMeshAgent;
-            var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
-            if (agent != null && agent.baseOffset >= height * .5f) return _upper;
-            return character.Position.y >= height * .5f ? _upper : _lower;
-        }
-
-        private static StoreyInstance GetTargetStorey(INavPathResult callback,
-            Vector3 destination)
-        {
-            if (callback is InteractionController controller)
-            {
-                var interactionStorey = StoreyRuntime.GetStorey(
-                    controller.Interaction?.ParentRoomItem);
-                if (interactionStorey != null) return interactionStorey;
-            }
-            return destination.y >= global::UnderPressure.StoreyMapRegistry.StoreyHeight * .5f
-                ? _upper : _lower;
-        }
-
-        private static void ApplyCharacterStorey(Character character,
-            StoreyInstance storey)
-        {
-            if (character == null || storey == null) return;
-            var agent = NavPathAgent.GetValue(character.NavPath) as
-                UnityEngine.AI.NavMeshAgent;
-            if (agent != null)
-            {
-                var height = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
-                if (!NativeAgentOffsets.TryGetValue(character, out var nativeOffset))
-                {
-                    nativeOffset = agent.baseOffset >= height * .5f
-                        ? agent.baseOffset - height : agent.baseOffset;
-                    NativeAgentOffsets[character] = nativeOffset;
-                }
-                agent.baseOffset = nativeOffset +
-                                   (ReferenceEquals(storey, _upper) ? height : 0f);
-            }
-            CharacterStoreys[character] = storey;
         }
 
         private static float HorizontalDistance(Vector3 first, Vector3 second)
@@ -1116,24 +1044,5 @@ namespace UnderPressure.Storey
 
         private static void Postfix(NavPath __instance, Vector3? __state) =>
             ElevatorRuntime.RestoreLogicalDestination(__instance, __state);
-    }
-
-    [HarmonyPatch(typeof(NavPath), "WarpInternal")]
-    internal static class ElevatorWarpPatch
-    {
-        private static void Prefix(NavPath __instance, ref Vector3 __0) =>
-            ElevatorRuntime.NormalizeWarp(__instance, ref __0);
-    }
-
-    [HarmonyPatch(typeof(StaffPickedUpState), "Finished")]
-    internal static class StoreyStaffPlacementPatch
-    {
-        private static void Postfix(StaffPickedUpState __instance, bool __result,
-            Vector3 ____desiredPosition)
-        {
-            if (__result)
-                ElevatorRuntime.PlaceStaffOnStorey(__instance.GetOwner<Staff>(),
-                    ____desiredPosition);
-        }
     }
 }

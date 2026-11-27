@@ -679,7 +679,8 @@ namespace UnderPressure.Storey
         {
             if (character == null || _lower?.State == null || _upper?.State == null)
                 return true;
-            var characterUpper = ElevatorRuntime.IsCharacterUpper(character);
+            var characterUpper = character.Position.y >=
+                                 UnderPressure.StoreyMapRegistry.StoreyHeight * .5f;
             var storey = characterUpper ? _upper : _lower;
             var map = storey.State.GetHospitalMapAtWorldPosition(character.Position);
             if (map == null || !HasOtherStoreyAt(map, storey)) return true;
