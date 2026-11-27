@@ -89,6 +89,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(HospitalPlotFootprintPerimeter), "_root");
         private static readonly MethodInfo LightingRoomDeleted =
             AccessTools.Method(typeof(RoomLightingManager), "OnRoomDeleted");
+        private static readonly FieldInfo LightingBuiltRooms =
+            AccessTools.Field(typeof(RoomLightingManager), "_builtRooms");
         private static readonly FieldInfo RoomLightConfig =
             AccessTools.Field(typeof(RoomLightingManager), "_config");
         private static readonly FieldInfo RoomLightHeight =
@@ -388,7 +390,11 @@ namespace UnderPressure.Storey
             if (plot == null || _active == null || !ReferenceEquals(_active.Level, level)) return;
             if (!PlotOrder.Contains(plot)) PlotOrder.Add(plot);
             PlotStoreys[plot] = _active;
-            if (plot.HospitalMap != null) MapStoreys[plot.HospitalMap] = _active;
+            if (plot.HospitalMap != null)
+            {
+                MapStoreys[plot.HospitalMap] = _active;
+                SynchronizePlotShellLighting(plot.HospitalMap, _active);
+            }
             UnderPressure.StoreyMapRegistry.SetStorey(plot.Definition,
                 ReferenceEquals(_active, _upper) ? 1 : 0);
         }
@@ -855,6 +861,7 @@ namespace UnderPressure.Storey
             foreach (var room in rooms) RoomRegisterEvents.Invoke(room, null);
             if (plot.Built) target.State.SetBuiltHospitalMap(map);
             else target.State.SetUnbuiltHospitalPlot(map);
+            SynchronizePlotShellLighting(map, target);
 
             source.State.UpdateNavigation();
             source.State.CalculateLighting();
@@ -882,6 +889,28 @@ namespace UnderPressure.Storey
             if (map?.Room == null || _lower?.Level?.VisualManager?.RoomLightingManager == null) return;
             LightingRoomDeleted.Invoke(_lower.Level.VisualManager.RoomLightingManager,
                 new object[] { map.Room });
+        }
+
+        private static void SynchronizePlotShellLighting(HospitalMap map,
+            StoreyInstance storey)
+        {
+            var manager = _lower?.Level?.VisualManager?.RoomLightingManager;
+            var room = map?.Room;
+            var floorPlan = room?.FloorPlan;
+            if (manager == null || floorPlan == null) return;
+            var registered = LightingBuiltRooms.GetValue(manager) as List<FloorPlan>;
+            if (registered == null) return;
+
+            var contains = registered.Contains(floorPlan);
+            if (ReferenceEquals(storey, _upper))
+            {
+                // La sala-base de una parcela representa el exterior y no debe crear
+                // un volumen interior sobre la planta inferior ni duplicar la luz arriba.
+                if (contains) RemoveFromSharedLighting(map);
+                return;
+            }
+
+            if (!contains && map.Plot?.Built == true) manager.BuildRoom(room);
         }
 
         private static void RefreshRowArrows()
@@ -932,6 +961,43 @@ namespace UnderPressure.Storey
             root.localPosition = local;
         }
 
+        internal static void SetStoreyWorldPosition(Transform value,
+            Vector3 logicalPosition)
+        {
+            if (value == null) return;
+            var upperRoot = _upper?.Root?.transform;
+            var lowerRoot = _lower?.Root?.transform;
+            var root = upperRoot != null &&
+                       (ReferenceEquals(value, upperRoot) || value.IsChildOf(upperRoot))
+                ? upperRoot
+                : lowerRoot != null &&
+                  (ReferenceEquals(value, lowerRoot) || value.IsChildOf(lowerRoot))
+                    ? lowerRoot : null;
+            value.position = root == null ? logicalPosition : root.TransformPoint(logicalPosition);
+        }
+
+        internal static IEnumerable<CodeInstruction> ConvertCorridorWorldPositions(
+            IEnumerable<CodeInstruction> source)
+        {
+            var nativeSetter = AccessTools.PropertySetter(typeof(Transform),
+                nameof(Transform.position));
+            var replacement = AccessTools.Method(typeof(StoreyRuntime),
+                nameof(SetStoreyWorldPosition));
+            var replaced = false;
+            foreach (var code in source)
+            {
+                if (code.Calls(nativeSetter))
+                {
+                    code.opcode = OpCodes.Call;
+                    code.operand = replacement;
+                    replaced = true;
+                }
+                yield return code;
+            }
+            if (!replaced) throw new InvalidOperationException(
+                "No se encontró la asignación nativa de posición de muros interiores.");
+        }
+
         internal static void NormalizeRoomVisual(RoomFloorPlanVisual visual,
             FloorPlan floorPlan)
         {
@@ -963,6 +1029,7 @@ namespace UnderPressure.Storey
             foreach (var room in storey.State.AllRooms.Where(room =>
                          ReferenceEquals(room?.FloorPlan?.HospitalMap, map)))
                 RebindRoomVisual(room.FloorPlanVisual, storey);
+            SynchronizePlotShellLighting(map, storey);
             RefreshMapRenderers(map, storey);
             if (changed)
                 StoreyPlugin.Log?.LogInfo(
@@ -1418,6 +1485,22 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(RoomFloorPlanVisual __instance, FloorPlan __0) =>
             StoreyRuntime.NormalizeRoomVisual(__instance, __0);
+    }
+
+    [HarmonyPatch]
+    internal static class StoreyCorridorWallPositionPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(CorridorWallsVisual),
+                "CreateWallObjects");
+            yield return AccessTools.Method(typeof(CorridorWallsVisual),
+                "AddPillarObject");
+        }
+
+        private static IEnumerable<CodeInstruction> Transpiler(
+            IEnumerable<CodeInstruction> source) =>
+            StoreyRuntime.ConvertCorridorWorldPositions(source);
     }
 
     [HarmonyPatch(typeof(RoomItemVisual), "UpdateFrom")]
