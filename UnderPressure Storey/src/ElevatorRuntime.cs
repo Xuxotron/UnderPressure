@@ -330,6 +330,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(NavPath), "_character");
         private static readonly FieldInfo RoomBuildingNavMeshHospitalMap =
             AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
+        private static readonly FieldInfo InteractionStartSocket =
+            AccessTools.Field(typeof(ObjectInteraction), "_startSocket");
         private static readonly FieldInfo NavMeshCanReachPath =
             AccessTools.Field(typeof(TH20.NavMesh), "_canReachPath");
         private static readonly FieldInfo NavMeshWorldBounds =
@@ -931,6 +933,47 @@ namespace UnderPressure.Storey
             return null;
         }
 
+        internal static void CorrectStartPosition(ObjectInteraction interaction,
+            ref Vector3 position)
+        {
+            if (!ElevatorDefinition.IsElevator(interaction)) return;
+            var socket = InteractionStartSocket.GetValue(interaction) as Transform;
+            position = socket == null ? Vector3.zero : socket.localPosition;
+        }
+
+        internal static void CorrectWorldStartPosition(ObjectInteraction interaction,
+            ref Vector3 position)
+        {
+            if (!ElevatorDefinition.IsElevator(interaction)) return;
+            var item = interaction.ParentRoomItem;
+            var socket = InteractionStartSocket.GetValue(interaction) as Transform;
+            if (item == null)
+            {
+                position = Vector3.zero;
+                return;
+            }
+            var local = socket == null ? Vector3.zero : socket.localPosition;
+            position = Quaternion.Euler(0f, item.WorldRotation, 0f) * local +
+                       item.WorldPosition;
+        }
+
+        internal static void CorrectStartRotation(ObjectInteraction interaction,
+            ref Quaternion rotation)
+        {
+            if (!ElevatorDefinition.IsElevator(interaction)) return;
+            var socket = InteractionStartSocket.GetValue(interaction) as Transform;
+            rotation = socket == null ? Quaternion.identity : socket.localRotation;
+        }
+
+        internal static void CorrectWorldStartRotation(ObjectInteraction interaction,
+            ref float rotation)
+        {
+            if (!ElevatorDefinition.IsElevator(interaction)) return;
+            var socket = InteractionStartSocket.GetValue(interaction) as Transform;
+            rotation = (socket == null ? 0f : socket.localEulerAngles.y) +
+                       (interaction.ParentRoomItem?.WorldRotation ?? 0f);
+        }
+
         internal static bool IsCharacterUpper(Character character) =>
             ReferenceEquals(GetCharacterStorey(character), _upper);
 
@@ -1097,6 +1140,34 @@ namespace UnderPressure.Storey
         private static void Postfix(ObjectInteraction __instance, Character __0,
             bool __result) =>
             ElevatorRuntime.OnInteractionStarted(__instance, __0, __result);
+    }
+
+    [HarmonyPatch(typeof(ObjectInteraction), "get_StartPosition")]
+    internal static class ElevatorStartPositionPatch
+    {
+        private static void Postfix(ObjectInteraction __instance, ref Vector3 __result) =>
+            ElevatorRuntime.CorrectStartPosition(__instance, ref __result);
+    }
+
+    [HarmonyPatch(typeof(ObjectInteraction), "get_WorldStartPosition")]
+    internal static class ElevatorWorldStartPositionPatch
+    {
+        private static void Postfix(ObjectInteraction __instance, ref Vector3 __result) =>
+            ElevatorRuntime.CorrectWorldStartPosition(__instance, ref __result);
+    }
+
+    [HarmonyPatch(typeof(ObjectInteraction), "get_StartRotation")]
+    internal static class ElevatorStartRotationPatch
+    {
+        private static void Postfix(ObjectInteraction __instance, ref Quaternion __result) =>
+            ElevatorRuntime.CorrectStartRotation(__instance, ref __result);
+    }
+
+    [HarmonyPatch(typeof(ObjectInteraction), "get_WorldStartRotation")]
+    internal static class ElevatorWorldStartRotationPatch
+    {
+        private static void Postfix(ObjectInteraction __instance, ref float __result) =>
+            ElevatorRuntime.CorrectWorldStartRotation(__instance, ref __result);
     }
 
     [HarmonyPatch(typeof(NavPath), "MoveTo",
