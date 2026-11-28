@@ -1343,6 +1343,8 @@ namespace UnderPressure.Editor
     internal static class ScenarioCareerMapLoader
     {
         private const int PlotSaveIdBase = 9113000;
+        private const int RuntimeLevelConfigSaveId = 9112000;
+        private const int RuntimeWorldConfigSaveId = 9112001;
         private static FieldInfo AssetIdsField =>
             AccessTools.Field(typeof(SaveSystem), "_assetIDs");
         private static readonly string[] SerializerFields =
@@ -1368,6 +1370,8 @@ namespace UnderPressure.Editor
         private static bool _originalLandscapeSuppressed;
         private static bool _loggedMissingBaseVisuals;
         private static LevelConfig _base;
+        private static LevelConfig _runtimeLevelConfig;
+        private static WorldState.Config _runtimeWorldConfig;
         private static string _path;
         private static bool _active;
         private static ScenarioMapFormat.LoadedMap _map;
@@ -1451,6 +1455,8 @@ namespace UnderPressure.Editor
                 if (asset != null) UnityEngine.Object.Destroy(asset);
             RuntimeScenarioAssets.Clear();
             _base = null;
+            _runtimeLevelConfig = null;
+            _runtimeWorldConfig = null;
             _path = null;
             _map = null;
             _active = false;
@@ -1593,6 +1599,8 @@ namespace UnderPressure.Editor
             if (header.availableRoomsConfigured)
                 ScenarioEditorStorage.ApplyAvailableRoomsToConfig(
                     clone, header.availableRooms, RuntimeScenarioAssets);
+            _runtimeLevelConfig = clone;
+            RegisterRuntimeSaveObject(RuntimeLevelConfigSaveId, clone);
             config = clone;
         }
 
@@ -1690,6 +1698,20 @@ namespace UnderPressure.Editor
             RegisteredSaveAssets.Add(id, value);
         }
 
+        private static void RegisterRuntimeSaveObject(int id, object value)
+        {
+            if (value == null || _registeredSaveSystem == null)
+                throw new InvalidOperationException(
+                    "No esta disponible el mapa de IDs del guardado en ejecución.");
+            var mapping = AssetIdsField?.GetValue(_registeredSaveSystem) as
+                BiDictionary<int, object>;
+            if (mapping == null)
+                throw new InvalidOperationException(
+                    "No esta disponible el mapa de IDs del guardado en ejecución.");
+            RegisterSaveObject(mapping, id, value);
+            RefreshSerializerMappings(_registeredSaveSystem, mapping);
+        }
+
         private static void UnregisterSaveAssets()
         {
             var saveSystem = _registeredSaveSystem;
@@ -1731,6 +1753,8 @@ namespace UnderPressure.Editor
                 var cloned = (WorldState.Config)CloneMethod.Invoke(config, null);
                 cloned.HospitalPlots = _plotAssets.Wrappers
                     .ConvertAll<FullInspector.SharedInstance<HospitalPlotDefinition>>(item => item);
+                _runtimeWorldConfig = cloned;
+                RegisterRuntimeSaveObject(RuntimeWorldConfigSaveId, cloned);
                 // RoomFloorPlanVisual no crea los VISUALES de la capa Base
                 // cuando este flag es false (valor nativo de muchos hospitales).
                 // La escena original los contiene precocinados para el juego base,
