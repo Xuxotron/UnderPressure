@@ -314,6 +314,32 @@ namespace UnderPressure.Storey
             internal bool Transferred;
         }
 
+        private sealed class StaffRoomRoute : INavPathResult
+        {
+            private readonly Job _job;
+            private readonly Staff _staff;
+
+            internal StaffRoomRoute(Job job, Staff staff)
+            {
+                _job = job;
+                _staff = staff;
+            }
+
+            public void OnStartPath()
+            {
+            }
+
+            public void OnPathComplete(EPathStatus status)
+            {
+                if (_job == null || _staff == null || _staff.HasBeenDestroyed()) return;
+                var succeeded = status == EPathStatus.Success &&
+                                ReferenceEquals(_staff.CurrentJob, _job);
+                JobArrivedAtRoom.Invoke(_job, new object[] { _staff, succeeded });
+                StoreyPlugin.Log?.LogInfo(
+                    "Traslado de empleado a sala superior completado: " + status + ".");
+            }
+        }
+
         private static readonly Dictionary<RoomItem, RoomItem> Pairs =
             new Dictionary<RoomItem, RoomItem>();
         private static readonly Dictionary<Character, RouteRequest> Routes =
@@ -332,8 +358,6 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
         private static readonly FieldInfo InteractionStartSocket =
             AccessTools.Field(typeof(ObjectInteraction), "_startSocket");
-        private static readonly FieldInfo MoveToTargetObject =
-            AccessTools.Field(typeof(TH20.BTA.MoveTo), "_targetObject");
         private static readonly FieldInfo NavMeshCanReachPath =
             AccessTools.Field(typeof(TH20.NavMesh), "_canReachPath");
         private static readonly FieldInfo NavMeshWorldBounds =
@@ -346,6 +370,8 @@ namespace UnderPressure.Storey
             AccessTools.Method(typeof(BuildEvents), "RoomItemDestroy");
         private static readonly MethodInfo StartItemPlacement =
             AccessTools.Method(typeof(BuildEvents), "StartItemPlacement");
+        private static readonly MethodInfo JobArrivedAtRoom =
+            AccessTools.Method(typeof(Job), "ArrivedAtRoom");
         private static readonly LocalisedString InvalidOtherStorey =
             global::UnderPressure.ModLocalization.Create(
                 "storey.elevator.invalid_other_storey");
@@ -998,6 +1024,31 @@ namespace UnderPressure.Storey
             position.y = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
         }
 
+        internal static bool TryRouteStaffToRoom(Job job, Staff staff, Room room)
+        {
+            if (job == null || staff == null || room?.FloorPlan == null ||
+                !room.Definition.IsHospitalOrBay) return false;
+            var sourceStorey = GetCharacterStorey(staff);
+            var targetStorey = StoreyRuntime.GetStorey(room.FloorPlan.WorldState);
+            if (sourceStorey == null || targetStorey == null ||
+                ReferenceEquals(sourceStorey, targetStorey)) return false;
+
+            var destination = Pairs.Keys
+                .Where(item => ReferenceEquals(GetElevatorStorey(item), targetStorey) &&
+                               ReferenceEquals(item?.FloorPlan?.HospitalMap,
+                                   room.FloorPlan.HospitalMap))
+                .Select(FirstInteraction)
+                .Where(interaction => interaction != null)
+                .Select(interaction => interaction.WorldStartPosition)
+                .FirstOrDefault();
+            if (destination == default(Vector3)) return false;
+
+            staff.NavPath.MoveTo(destination, new StaffRoomRoute(job, staff), .1f);
+            StoreyPlugin.Log?.LogInfo(
+                "Empleado enviado primero al ascensor para acceder a su sala de trabajo.");
+            return true;
+        }
+
         private static StoreyInstance GetCharacterStorey(Character character)
         {
             if (character == null) return null;
@@ -1015,13 +1066,6 @@ namespace UnderPressure.Storey
                 var interactionStorey = StoreyRuntime.GetStorey(
                     controller.Interaction?.ParentRoomItem);
                 if (interactionStorey != null) return interactionStorey;
-            }
-            if (callback is TH20.BTA.MoveTo moveTo)
-            {
-                var target = MoveToTargetObject.GetValue(moveTo) as
-                    TH20.BT_Types.SharedItemRef;
-                var itemStorey = StoreyRuntime.GetStorey(target?.Get);
-                if (itemStorey != null) return itemStorey;
             }
             return destination.y >= global::UnderPressure.StoreyMapRegistry.StoreyHeight * .5f
                 ? _upper : _lower;
@@ -1253,5 +1297,12 @@ namespace UnderPressure.Storey
             StoreyRuntime.ExitStoreyContext(____level, __state);
             return __exception;
         }
+    }
+
+    [HarmonyPatch(typeof(Job), "GotoRoom")]
+    internal static class StoreyStaffJobRoomRoutePatch
+    {
+        private static bool Prefix(Job __instance, Staff __0, Room __1) =>
+            !ElevatorRuntime.TryRouteStaffToRoom(__instance, __0, __1);
     }
 }

@@ -81,6 +81,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(CursorSelect), "_worldState");
         private static readonly FieldInfo SelectCursorBuildEvents =
             AccessTools.Field(typeof(CursorSelect), "_buildEvents");
+        private static readonly FieldInfo StaffCursorWorldState =
+            AccessTools.Field(typeof(CursorStaffHeld), "_worldState");
         private static readonly FieldInfo CursorManagerMode =
             AccessTools.Field(typeof(CursorManager), "_mode");
         private static readonly FieldInfo CursorManagerModeStack =
@@ -754,6 +756,8 @@ namespace UnderPressure.Storey
                 }
                 if (mode is CursorEditHospital cursor)
                     CursorWorldState.SetValue(cursor, storey.State);
+                if (mode is CursorStaffHeld staffCursor)
+                    StaffCursorWorldState.SetValue(staffCursor, storey.State);
                 if (!(mode is CursorEditHospitalItem itemCursor)) continue;
                 ItemCursorWorldState.SetValue(itemCursor, storey.State);
                 BindItemCursor(itemCursor, storey.Events);
