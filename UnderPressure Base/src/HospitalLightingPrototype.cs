@@ -1072,8 +1072,9 @@ namespace UnderPressure
             var buttonRect = _button.transform as RectTransform;
             if (sourceRect != null && buttonRect != null)
             {
-                var verticalSpacing = Mathf.Max(sourceRect.rect.height, 44f) + 8f;
-                buttonRect.anchoredPosition = sourceRect.anchoredPosition + Vector2.up * verticalSpacing;
+                var horizontalSpacing = Mathf.Max(sourceRect.rect.width, 44f) + 8f;
+                buttonRect.anchoredPosition = sourceRect.anchoredPosition +
+                                              Vector2.left * horizontalSpacing;
             }
 
             var tooltip = _button.GetComponentInChildren<TooltipSpawner>(true);

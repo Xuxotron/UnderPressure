@@ -948,11 +948,12 @@ namespace UnderPressure.Storey
             ReferenceEquals(GetStorey(state), _upper)
                 ? UnderPressure.StoreyMapRegistry.StoreyHeight : 0f;
 
-        private static void EnsureUpperNavigationHeight()
+        internal static void EnsureUpperNavigationHeight(TH20.NavMesh updated = null)
         {
             var navMesh = _upper?.State == null
                 ? null : StateNavMesh.GetValue(_upper.State) as TH20.NavMesh;
-            if (navMesh == null) return;
+            if (navMesh == null || updated != null && !ReferenceEquals(navMesh, updated))
+                return;
             var data = NavMeshData.GetValue(navMesh) as UnityEngine.AI.NavMeshData;
             if (data == null || !RaisedNavigationData.Add(data)) return;
 
@@ -1587,6 +1588,13 @@ namespace UnderPressure.Storey
     {
         private static void Postfix(RoomFloorPlanVisual __instance, FloorPlan __0) =>
             StoreyRuntime.NormalizeRoomVisual(__instance, __0);
+    }
+
+    [HarmonyPatch(typeof(TH20.NavMesh), "UpdateFromRooms")]
+    internal static class StoreyNavigationHeightPatch
+    {
+        private static void Postfix(TH20.NavMesh __instance) =>
+            StoreyRuntime.EnsureUpperNavigationHeight(__instance);
     }
 
     [HarmonyPatch]

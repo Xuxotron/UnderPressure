@@ -1072,14 +1072,9 @@ namespace UnderPressure.Storey
     [HarmonyPatch(typeof(RoomBuildingNavMesh), "ValidPosition")]
     internal static class StoreyRoomNavPositionPatch
     {
-        private static readonly FieldInfo HospitalMap =
-            AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
-
-        private static void Prefix(RoomBuildingNavMesh __instance, ref Vector3 __0)
-        {
-            var map = HospitalMap.GetValue(__instance) as TH20.HospitalMap;
-            __0.y = StoreyRuntime.NavigationHeight(map?.FloorPlan?.WorldState);
-        }
+        // RoomBuildingNavMesh es una malla temporal y local que el juego construye
+        // siempre en Y=0, también cuando valida objetos de la planta superior.
+        private static void Prefix(ref Vector3 __0) => __0.y = 0f;
     }
 
     [HarmonyPatch(typeof(BuildEvents), "CursorDeleteObject")]
