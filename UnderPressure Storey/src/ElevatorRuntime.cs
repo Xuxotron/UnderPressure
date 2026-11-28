@@ -1265,6 +1265,9 @@ namespace UnderPressure.Storey
     [HarmonyPatch(typeof(StaffPickedUpState), "Finished")]
     internal static class StoreyStaffPlacementPatch
     {
+        private static void Prefix(ref Vector3 ____desiredPosition)
+            => ElevatorRuntime.ProjectStaffPositionToActiveStorey(ref ____desiredPosition);
+
         private static void Postfix(StaffPickedUpState __instance, bool __result,
             Vector3 ____desiredPosition)
         {
