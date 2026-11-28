@@ -332,6 +332,8 @@ namespace UnderPressure.Storey
             AccessTools.Field(typeof(RoomBuildingNavMesh), "_hospitalMap");
         private static readonly FieldInfo InteractionStartSocket =
             AccessTools.Field(typeof(ObjectInteraction), "_startSocket");
+        private static readonly FieldInfo MoveToTargetObject =
+            AccessTools.Field(typeof(TH20.BTA.MoveTo), "_targetObject");
         private static readonly FieldInfo NavMeshCanReachPath =
             AccessTools.Field(typeof(TH20.NavMesh), "_canReachPath");
         private static readonly FieldInfo NavMeshWorldBounds =
@@ -989,6 +991,13 @@ namespace UnderPressure.Storey
                                      ".");
         }
 
+        internal static void ProjectStaffPositionToActiveStorey(ref Vector3 position)
+        {
+            if (_level == null || global::UnderPressure.StoreyMapRegistry.GetActiveStorey(
+                    _level) != global::UnderPressure.StoreyMapRegistry.UpperStorey) return;
+            position.y = global::UnderPressure.StoreyMapRegistry.StoreyHeight;
+        }
+
         private static StoreyInstance GetCharacterStorey(Character character)
         {
             if (character == null) return null;
@@ -1006,6 +1015,13 @@ namespace UnderPressure.Storey
                 var interactionStorey = StoreyRuntime.GetStorey(
                     controller.Interaction?.ParentRoomItem);
                 if (interactionStorey != null) return interactionStorey;
+            }
+            if (callback is TH20.BTA.MoveTo moveTo)
+            {
+                var target = MoveToTargetObject.GetValue(moveTo) as
+                    TH20.BT_Types.SharedItemRef;
+                var itemStorey = StoreyRuntime.GetStorey(target?.Get);
+                if (itemStorey != null) return itemStorey;
             }
             return destination.y >= global::UnderPressure.StoreyMapRegistry.StoreyHeight * .5f
                 ? _upper : _lower;
@@ -1211,6 +1227,31 @@ namespace UnderPressure.Storey
             if (__result)
                 ElevatorRuntime.PlaceStaffOnStorey(__instance.GetOwner<Staff>(),
                     ____desiredPosition);
+        }
+    }
+
+    [HarmonyPatch(typeof(StaffPickedUpState), "SetPosition")]
+    internal static class StoreyStaffHeldPositionPatch
+    {
+        private static void Prefix(ref Vector3 __0) =>
+            ElevatorRuntime.ProjectStaffPositionToActiveStorey(ref __0);
+    }
+
+    [HarmonyPatch(typeof(CursorStaffHeld), "CursorUpdate")]
+    internal static class StoreyStaffCursorContextPatch
+    {
+        private static void Prefix(Level ____level, ref WorldState ____worldState,
+            out StoreyRuntime.LevelContext __state)
+        {
+            StoreyRuntime.EnterActiveInteractionContext(____level, out __state);
+            ____worldState = ____level?.WorldState;
+        }
+
+        private static Exception Finalizer(Level ____level,
+            StoreyRuntime.LevelContext __state, Exception __exception)
+        {
+            StoreyRuntime.ExitStoreyContext(____level, __state);
+            return __exception;
         }
     }
 }
